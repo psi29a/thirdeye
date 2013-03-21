@@ -12,7 +12,7 @@ add_executable(openaddlauncher
 
 target_link_libraries(openaddlauncher
     ${Boost_LIBRARIES}
-    components
+#    components
 )
 
 if(DPKG_PROGRAM)

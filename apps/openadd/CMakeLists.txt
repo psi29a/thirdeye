@@ -27,7 +27,7 @@ add_executable(openadd
 
 target_link_libraries(openadd
     ${Boost_LIBRARIES}
-    components
+#    components
 )
 
 # Fix for not visible pthreads functions for linker with glibc 2.15
