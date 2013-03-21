@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=OpenADD Launcher
+GenericName=Role Playing Game
+Comment=An engine replacement for SSI's role playing game engine
+TryExec=openaddlauncher
+Exec=openaddlauncher
+Icon=openadd
+Categories=Game;RolePlaying;
+Name[en_US]=OpenADD

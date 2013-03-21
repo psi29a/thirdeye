@@ -12,7 +12,9 @@ set (OPENADD_VERSION_RELEASE 0)
 set (OPENADD_VERSION "${OPENADD_VERSION_MAJOR}.${OPENADD_VERSION_MINOR}.${OPENADD_VERSION_RELEASE}")
 
 # Doxygen main page
-configure_file ("${OPENADD_SOURCE_DIR}/docs/mainpage.hpp.cmake" "${OPENADD_SOURCE_DIR}/docs/mainpage.hpp")
+configure_file ("${OpenADD_SOURCE_DIR}/docs/mainpage.hpp.cmake" "${OpenADD_SOURCE_DIR}/docs/mainpage.hpp")
+
+message(STATUS "TEST: ${OpenADD_SOURCE_DIR}")
 
 # Are we building statically?
 option(BOOST_STATIC "Link static build of Boost into the binaries" FALSE)
@@ -75,35 +77,26 @@ include_directories("."
 link_directories(${Boost_LIBRARY_DIRS}})
 
 if (APPLE)
-    configure_file(${OPENADD_SOURCE_DIR}/files/mac/Info.plist
+    configure_file(${OpenADD_SOURCE_DIR}/files/mac/Info.plist
         "${APP_BUNDLE_DIR}/Contents/Info.plist")
 
-    configure_file(${OPENADD_SOURCE_DIR}/files/mac/OPENADD.icns
+    configure_file(${OpenADD_SOURCE_DIR}/files/mac/OPENADD.icns
         "${APP_BUNDLE_DIR}/Contents/Resources/OPENADD.icns" COPYONLY)
 endif (APPLE)
 
 # Set up DEBUG define
 set_directory_properties(PROPERTIES COMPILE_DEFINITIONS_DEBUG DEBUG=1)
 
-
 # Specify build paths
 if (APPLE)
 	set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${APP_BUNDLE_DIR}/Contents/MacOS")
 else (APPLE)
-	set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${OPENADD_BINARY_DIR}")
+	set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${OpenADD_BINARY_DIR}")
 endif (APPLE)
 
-# Other files
-configure_file(${OPENADD_SOURCE_DIR}/files/settings-default.cfg
-    "${OPENADD_BINARY_DIR}/settings-default.cfg")
-configure_file(${OPENADD_SOURCE_DIR}/files/openadd.cfg.local
-    "${OPENADD_BINARY_DIR}/openadd.cfg")
-configure_file(${OPENADD_SOURCE_DIR}/files/openadd.cfg
-    "${OPENADD_BINARY_DIR}/openadd.cfg.install")
-
 if (NOT WIN32 AND NOT APPLE)
-    configure_file(${OPENADD_SOURCE_DIR}/files/OpenADD.desktop
-        "${OPENADD_BINARY_DIR}/OpenADD.desktop")
+    configure_file(${OpenADD_SOURCE_DIR}/files/OpenADD.desktop
+        "${OpenADD_BINARY_DIR}/OpenADD.desktop")
 endif()
 
 # Compiler settings
@@ -132,15 +125,11 @@ if(DPKG_PROGRAM)
     endif()
 
     #Install icon and desktop file
-    INSTALL(FILES "${OPENADD_BINARY_DIR}/OpenADD.desktop" DESTINATION "share/applications/" PERMISSIONS OWNER_READ OWNER_WRITE GROUP_READ WORLD_READ COMPONENT "OpenADD")
-    INSTALL(FILES "${OPENADD_SOURCE_DIR}/apps/launcher/resources/images/OpenADD.png" DESTINATION "share/pixmaps/" PERMISSIONS OWNER_READ OWNER_WRITE GROUP_READ WORLD_READ COMPONENT "OpenADD")
-
-    #Install global configuration files
-    INSTALL(FILES "${OPENADD_BINARY_DIR}/settings-default.cfg" DESTINATION "../etc/OpenADD/" PERMISSIONS OWNER_READ OWNER_WRITE GROUP_READ WORLD_READ COMPONENT "OpenADD")
-    INSTALL(FILES "${OPENADD_BINARY_DIR}/OpenADD.cfg.install" DESTINATION "../etc/OpenADD/" RENAME "OpenADD.cfg" PERMISSIONS OWNER_READ OWNER_WRITE GROUP_READ WORLD_READ COMPONENT "OpenADD")
+    INSTALL(FILES "${OpenADD_BINARY_DIR}/OpenADD.desktop" DESTINATION "share/applications/" PERMISSIONS OWNER_READ OWNER_WRITE GROUP_READ WORLD_READ COMPONENT "OpenADD")
+    INSTALL(FILES "${OpenADD_SOURCE_DIR}/apps/launcher/resources/images/OpenADD.png" DESTINATION "share/pixmaps/" PERMISSIONS OWNER_READ OWNER_WRITE GROUP_READ WORLD_READ COMPONENT "OpenADD")
 
     #Install resources
-    INSTALL(DIRECTORY "${OPENADD_BINARY_DIR}/resources" DESTINATION "share/games/OpenADD/" FILE_PERMISSIONS OWNER_READ GROUP_READ WORLD_READ COMPONENT "Resources")
+    INSTALL(DIRECTORY "${OpenADD_BINARY_DIR}/resources" DESTINATION "share/games/OpenADD/" FILE_PERMISSIONS OWNER_READ GROUP_READ WORLD_READ COMPONENT "Resources")
     INSTALL(DIRECTORY DESTINATION "share/games/OpenADD/data/" COMPONENT "Resources")
 
     SET(CPACK_GENERATOR "DEB")
@@ -167,17 +156,15 @@ if(DPKG_PROGRAM)
 endif(DPKG_PROGRAM)
 
 if(WIN32)
-    FILE(GLOB dll_files "${OPENADD_BINARY_DIR}/Release/*.dll")
+    FILE(GLOB dll_files "${OpenADD_BINARY_DIR}/Release/*.dll")
     INSTALL(FILES ${dll_files} DESTINATION ".")
-    INSTALL(FILES "${OPENADD_BINARY_DIR}/OpenADD.cfg.install" DESTINATION "." RENAME "OpenADD.cfg")
     INSTALL(FILES
-        "${OPENADD_SOURCE_DIR}/README.md"
-        "${OPENADD_SOURCE_DIR}/GPL3.txt"
-        "${OPENADD_BINARY_DIR}/settings-default.cfg"
-        "${OPENADD_BINARY_DIR}/Release/openaddlauncher.exe"
-        "${OPENADD_BINARY_DIR}/Release/openadd.exe"
+        "${OpenADD_SOURCE_DIR}/README.md"
+        "${OpenADD_SOURCE_DIR}/GPL3.txt"
+        "${OpenADD_BINARY_DIR}/Release/openaddlauncher.exe"
+        "${OpenADD_BINARY_DIR}/Release/openadd.exe"
         DESTINATION ".")
-    INSTALL(DIRECTORY "${OPENADD_BINARY_DIR}/resources" DESTINATION ".")
+    INSTALL(DIRECTORY "${OpenADD_BINARY_DIR}/resources" DESTINATION ".")
 
     SET(CPACK_GENERATOR "NSIS")
     SET(CPACK_PACKAGE_NAME "OPENADD")
@@ -192,24 +179,24 @@ if(WIN32)
         !insertmacro MUI_STARTMENU_GETFOLDER Application $MUI_TEMP
         Delete \\\"$SMPROGRAMS\\\\$MUI_TEMP\\\\Readme.lnk\\\"
         ")
-    SET(CPACK_RESOURCE_FILE_README "${OPENADD_SOURCE_DIR}/README.md")
-    SET(CPACK_PACKAGE_DESCRIPTION_FILE "${OPENADD_SOURCE_DIR}/README.md")
+    SET(CPACK_RESOURCE_FILE_README "${OpenADD_SOURCE_DIR}/README.md")
+    SET(CPACK_PACKAGE_DESCRIPTION_FILE "${OpenADD_SOURCE_DIR}/README.md")
     SET(CPACK_NSIS_EXECUTABLES_DIRECTORY ".")
     SET(CPACK_NSIS_DISPLAY_NAME "OPENADD ${OPENADD_VERSION}")
     SET(CPACK_NSIS_HELP_LINK "http:\\\\\\\\www.mindwerks.net")
     SET(CPACK_NSIS_URL_INFO_ABOUT "http:\\\\\\\\www.mindwerks.net")
     SET(CPACK_NSIS_INSTALLED_ICON_NAME "openaddlauncher.exe")
-    SET(CPACK_NSIS_MUI_ICON "${OPENADD_SOURCE_DIR}/apps/launcher/resources/images/openadd.ico")
-    SET(CPACK_NSIS_MUI_UNIICON "${OPENADD_SOURCE_DIR}/apps/launcher/resources/images/openadd.ico")
-    SET(CPACK_PACKAGE_ICON "${OPENADD_SOURCE_DIR}\\\\files\\\\openadd.bmp")
+    SET(CPACK_NSIS_MUI_ICON "${OpenADD_SOURCE_DIR}/apps/launcher/resources/images/openadd.ico")
+    SET(CPACK_NSIS_MUI_UNIICON "${OpenADD_SOURCE_DIR}/apps/launcher/resources/images/openadd.ico")
+    SET(CPACK_PACKAGE_ICON "${OpenADD_SOURCE_DIR}\\\\files\\\\openadd.bmp")
 
-    SET(VCREDIST32 "${OPENADD_BINARY_DIR}/vcredist_x86.exe")
+    SET(VCREDIST32 "${OpenADD_BINARY_DIR}/vcredist_x86.exe")
     if(EXISTS ${VCREDIST32})
         INSTALL(FILES ${VCREDIST32} DESTINATION "redist")
         SET(CPACK_NSIS_EXTRA_INSTALL_COMMANDS "ExecWait '\\\"$INSTDIR\\\\redist\\\\vcredist_x86.exe\\\" /q'" )
     endif(EXISTS ${VCREDIST32})
 
-    SET(VCREDIST64 "${OPENADD_BINARY_DIR}/vcredist_x64.exe")
+    SET(VCREDIST64 "${OpenADD_BINARY_DIR}/vcredist_x64.exe")
     if(EXISTS ${VCREDIST64})
         INSTALL(FILES ${VCREDIST64} DESTINATION "redist")
         SET(CPACK_NSIS_EXTRA_INSTALL_COMMANDS "ExecWait '\\\"$INSTDIR\\\\redist\\\\vcredist_x64.exe\\\" /q'" )
@@ -323,9 +310,7 @@ if (APPLE)
     set(INSTALL_SUBDIR OPENADD)
 
     install(DIRECTORY "${APP_BUNDLE_DIR}" USE_SOURCE_PERMISSIONS DESTINATION "${INSTALL_SUBDIR}" COMPONENT Runtime)
-    install(DIRECTORY "${OPENADD_BINARY_DIR}/resources" DESTINATION "${INSTALL_SUBDIR}" COMPONENT Runtime)
-    install(FILES "${OPENADD_BINARY_DIR}/openadd.cfg.install" RENAME "openadd.cfg" DESTINATION "${INSTALL_SUBDIR}" COMPONENT Runtime)
-    install(FILES "${OPENADD_BINARY_DIR}/settings-default.cfg" DESTINATION "${INSTALL_SUBDIR}" COMPONENT Runtime)
+    install(DIRECTORY "${OpenADD_BINARY_DIR}/resources" DESTINATION "${INSTALL_SUBDIR}" COMPONENT Runtime)
 
     set(CPACK_GENERATOR "DragNDrop")
     set(CPACK_PACKAGE_VERSION ${OPENADD_VERSION})
@@ -410,22 +395,18 @@ if (NOT WIN32 AND NOT DPKG_PROGRAM AND NOT APPLE)
     set(ICONDIR "${DATAROOTDIR}/pixmaps" CACHE PATH "Set icon dir")
 
     # Install binaries
-    INSTALL(PROGRAMS "${OPENADD_BINARY_DIR}/openadd" DESTINATION "${BINDIR}" )
+    INSTALL(PROGRAMS "${OpenADD_BINARY_DIR}/openadd" DESTINATION "${BINDIR}" )
     IF(BUILD_LAUNCHER)
-        INSTALL(PROGRAMS "${OPENADD_BINARY_DIR}/openaddlauncher" DESTINATION "${BINDIR}" )
+        INSTALL(PROGRAMS "${OpenADD_BINARY_DIR}/openaddlauncher" DESTINATION "${BINDIR}" )
     ENDIF(BUILD_LAUNCHER)
 
     # Install icon and .desktop
-    INSTALL(FILES "${OPENADD_SOURCE_DIR}/apps/launcher/resources/images/openadd.png" DESTINATION "${ICONDIR}")
-    INSTALL(FILES "${OPENADD_BINARY_DIR}/OpenADD.desktop" DESTINATION "${DATAROOTDIR}/applications")
-
-    # Install global configuration files
-    INSTALL(FILES "${OPENADD_BINARY_DIR}/openadd.cfg.install" DESTINATION "${SYSCONFDIR}" RENAME "openadd.cfg" )
-    INSTALL(FILES "${OPENADD_BINARY_DIR}/settings-default.cfg" DESTINATION "${SYSCONFDIR}" )
+    INSTALL(FILES "${OpenADD_SOURCE_DIR}/apps/launcher/resources/images/openadd.png" DESTINATION "${ICONDIR}")
+    INSTALL(FILES "${OpenADD_BINARY_DIR}/OpenADD.desktop" DESTINATION "${DATAROOTDIR}/applications")
 
     # Install resources
-    INSTALL(DIRECTORY "${OPENADD_BINARY_DIR}/resources" DESTINATION "${DATADIR}" )
+    INSTALL(DIRECTORY "${OpenADD_BINARY_DIR}/resources" DESTINATION "${DATADIR}" )
     IF(BUILD_LAUNCHER)
-        INSTALL(FILES "${OPENADD_BINARY_DIR}/launcher.qss" DESTINATION "${DATADIR}/resources" )
+        INSTALL(FILES "${OpenADD_BINARY_DIR}/launcher.qss" DESTINATION "${DATADIR}/resources" )
     ENDIF(BUILD_LAUNCHER)
 endif(NOT WIN32 AND NOT DPKG_PROGRAM AND NOT APPLE)
