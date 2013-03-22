@@ -85,6 +85,11 @@ struct FixedPath
         return mLocalPath;
     }
 
+    const boost::filesystem::path& getGlobalDataPath() const
+    {
+        return mGlobalDataPath;
+    }
+
     private:
         PathType mPath;
 

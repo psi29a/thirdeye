@@ -37,7 +37,6 @@ ConfigurationManager::~ConfigurationManager()
 
 void ConfigurationManager::setupTokensMapping()
 {
-    mTokensMapping.insert(std::make_pair(gameToken, &FixedPath<>::getInstallPath));
     mTokensMapping.insert(std::make_pair(localToken, &FixedPath<>::getLocalPath));
     mTokensMapping.insert(std::make_pair(userToken, &FixedPath<>::getUserPath));
     mTokensMapping.insert(std::make_pair(globalToken, &FixedPath<>::getGlobalDataPath));
@@ -145,16 +144,6 @@ const boost::filesystem::path& ConfigurationManager::getLocalPath() const
 const boost::filesystem::path& ConfigurationManager::getGlobalDataPath() const
 {
     return mFixedPath.getGlobalDataPath();
-}
-
-const boost::filesystem::path& ConfigurationManager::getCachePath() const
-{
-    return mFixedPath.getCachePath();
-}
-
-const boost::filesystem::path& ConfigurationManager::getInstallPath() const
-{
-    return mFixedPath.getInstallPath();
 }
 
 const boost::filesystem::path& ConfigurationManager::getLogPath() const

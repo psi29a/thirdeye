@@ -29,14 +29,14 @@ cmake_minimum_required(VERSION 2.6)
 set(LIBDIR ${CMAKE_SOURCE_DIR}/libs)
 
 # Platform specific variables
-## Location of morrowind data files
+## Location of game data files
 if(DPKG_PROGRAM)
-    set(MORROWIND_DATA_FILES "/usr/share/games/openadd/data/" CACHE PATH "Location of OpenADD data files")
+    set(GAME_DATA_FILES "/usr/share/games/openadd/data/" CACHE PATH "Location of OpenADD data files")
 else()
     if (APPLE)
-        set(MORROWIND_DATA_FILES "./data" CACHE PATH "Location of OpenADD data files")
+        set(GAME_DATA_FILES "./data" CACHE PATH "Location of OpenADD data files")
     else()
-        set(MORROWIND_DATA_FILES "data" CACHE PATH "Location of OpenADD data files")
+        set(GAME_DATA_FILES "data" CACHE PATH "Location of OpenADD data files")
     endif(APPLE)
 endif(DPKG_PROGRAM)
 

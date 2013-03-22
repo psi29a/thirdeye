@@ -41,7 +41,7 @@ inline boost::filesystem::path lexical_cast<boost::filesystem::path, std::string
  * \retval true - Everything goes OK
  * \retval false - Error
  */
-bool parseOptions (int argc, char** argv, bool engine, bool cfgMgr)
+bool parseOptions (int argc, char** argv, bool engine, Files::ConfigurationManager& cfgMgr)
 {
     // Create a local alias for brevity
     namespace bpo = boost::program_options;
@@ -83,7 +83,7 @@ bool parseOptions (int argc, char** argv, bool engine, bool cfgMgr)
     bpo::store(valid_opts, variables);
     bpo::notify(variables);
 
-    //cfgMgr.readConfiguration(variables, desc);
+    cfgMgr.readConfiguration(variables, desc);
 
     bool run = true;
 
@@ -109,12 +109,11 @@ int main(int argc, char**argv)
 {
     try
     {
-    	/*
+
         Files::ConfigurationManager cfgMgr;
-        OMW::Engine engine(cfgMgr);
-		*/
+        //OMW::Engine engine(cfgMgr);
+
     	bool engine = true;
-    	bool cfgMgr = true;
 
         if (parseOptions(argc, argv, engine, cfgMgr))
         {
