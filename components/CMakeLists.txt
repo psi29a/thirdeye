@@ -1,10 +1,11 @@
 project (Components)
 
 # source files
-#add_component_dir (settings settings )
-
-#add_component_dir (to_utf8 to_utf8 )
-
+add_component_dir (files
+    linuxpath windowspath macospath fixedpath multidircollection collections fileops configurationmanager
+    filelibrary lowlevelfile
+    )
+    
 # Fix for not visible pthreads functions for linker with glibc 2.15
 #if (UNIX AND NOT APPLE)
 #target_link_libraries(components ${CMAKE_THREAD_LIBS_INIT})
