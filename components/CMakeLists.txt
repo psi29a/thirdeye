@@ -10,6 +10,10 @@ add_component_dir (misc
     stringops
     )
 
+add_component_dir (utils
+    fileread
+    )
+
 add_library(components STATIC ${COMPONENT_FILES} ${MOC_SRCS})
     
 target_link_libraries(components ${Boost_LIBRARIES})

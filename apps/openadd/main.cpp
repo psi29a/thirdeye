@@ -1,6 +1,7 @@
 #include <iostream>
 
 #include <components/files/configurationmanager.hpp>
+#include <components/utils/fileread.hpp>
 
 #if defined(_WIN32) && !defined(_CONSOLE)
 #include <boost/iostreams/concepts.hpp>
@@ -102,6 +103,16 @@ bool parseOptions (int argc, char** argv, bool engine, Files::ConfigurationManag
     if (!run)
         return false;
 
+    /*
+    // startup-settings
+	engine.setGame(variables["game"].as<std::string>());
+	engine.setGameData(variables["game-data"].as<bool>());
+
+	// other settings
+	engine.setDebugMode(variables["debug"].as<bool>());
+	engine.setSoundUsage(!variables["nosound"].as<bool>());
+	*/
+
     return true;
 }
 
@@ -117,8 +128,12 @@ int main(int argc, char**argv)
 
         if (parseOptions(argc, argv, engine, cfgMgr))
         {
+        	boost::filesystem3::path cpsPath = "/opt/eob2/PLAYFLD.CPS";
+        	boost::filesystem3::path palPath = "/opt/eob2/SILVER.PAL";
+        	std::cout << cpsPath << std::endl;
+        	std::cout << Utils::loadCPS(cpsPath, palPath) << std::endl;
             //engine.go();
-        	std::cout << "hello openadd" << std::endl;
+        	std::cout << "End of Data..." << std::endl;
         }
     }
     catch (std::exception &e)
