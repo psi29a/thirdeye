@@ -131,8 +131,14 @@ int main(int argc, char**argv)
         	boost::filesystem3::path cpsPath = "/opt/eob2/PLAYFLD.CPS";
         	boost::filesystem3::path palPath = "/opt/eob2/SILVER.PAL";
         	std::cout << cpsPath << std::endl;
-        	std::cout << Utils::loadCPS(cpsPath, palPath) << std::endl;
+
+        	unsigned long* palette;
+        	palette = Utils::getPAL(palPath);
+        	//std::cout << palette[255] << std::endl;
             //engine.go();
+
+        	std::cout << Utils::getCPS(cpsPath, palPath)<< std::endl;
+
         	std::cout << "End of Data..." << std::endl;
         }
     }
