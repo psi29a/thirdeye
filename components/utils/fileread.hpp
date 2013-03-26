@@ -3,7 +3,7 @@
 
 namespace Utils
 {
-	bool loadCPS(boost::filesystem3::path, boost::filesystem3::path);
+	bool loadCPS(boost::filesystem3::path, boost::filesystem3::path, bool transparency=false, bool sprite=false);
 	unsigned long createRGB(int, int, int);
 }
 

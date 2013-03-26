@@ -64,7 +64,7 @@ endif()
 
 ## find boost without components so we can use Boost_VERSION
 find_package(Boost REQUIRED)
-set(BOOST_COMPONENTS system filesystem program_options thread)
+set(BOOST_COMPONENTS system filesystem program_options thread iostreams)
 
 find_package(Boost REQUIRED COMPONENTS ${BOOST_COMPONENTS})
 
