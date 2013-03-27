@@ -11,7 +11,7 @@ add_component_dir (misc
     )
 
 add_component_dir (utils
-    fileread
+    fileread format40 format80
     )
 
 add_library(components STATIC ${COMPONENT_FILES} ${MOC_SRCS})

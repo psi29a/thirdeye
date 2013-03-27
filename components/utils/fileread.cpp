@@ -1,11 +1,10 @@
 #include <iostream>
 #include <stdio.h>
 
-#include <boost/filesystem.hpp>
-#include <boost/iostreams/stream.hpp>
-//#include <boost/interprocess/file_mapping.hpp>
-//#include <boost/interprocess/mapped_region.hpp>
-#include <boost/iostreams/device/mapped_file.hpp>
+#include "fileread.hpp"
+#include "format80.hpp"
+
+#include <boost/typeof/typeof.hpp>
 
 namespace Utils
 {
@@ -33,7 +32,7 @@ unsigned long createRGB(int r, int g, int b)
     return ((r & 0xff) << 16) + ((g & 0xff) << 8) + (b & 0xff);
 }
 
-bool getCPS(boost::filesystem3::path cpsPath, boost::filesystem3::path palPath, bool transparency=false, bool sprite=false )
+bool getCPS(boost::filesystem3::path cpsPath, boost::filesystem3::path palPath, bool transparency, bool sprite)
 {
 	/*
 	 * This kind of file contains images. Usually are 320x200 pixel in size,
@@ -44,8 +43,10 @@ bool getCPS(boost::filesystem3::path cpsPath, boost::filesystem3::path palPath, 
 	 * the header and the palette.
 	 */
 
-	uint16_t image[IMAGE_SIZE];
-	uint16_t test[IMAGE_SIZE];
+	uint8_t cImage[IMAGE_SIZE];
+	uint8_t uImage[IMAGE_SIZE];
+	uint16_t uImageSize;
+	//unsigned long palette;
 
 	if (boost::filesystem::exists(boost::filesystem::path(cpsPath)) == false)
 		return false;
@@ -58,11 +59,9 @@ bool getCPS(boost::filesystem3::path cpsPath, boost::filesystem3::path palPath, 
 	}
 	uint8_t *byteCPS = (uint8_t *)sCPS.data();
 
-	if (byteCPS[2] == FORMAT_80)
-		std::cout << "I'm format 80" << std::endl;
-
-	if(byteCPS[2] != 0x04)
-		printf("no valid CPS file: %s\n", cpsPath.string().c_str());
+	// Debug
+	//if(byteCPS[2] != FORMAT_80)
+	//	printf("no valid CPS file: %s\n", cpsPath.string().c_str());
 
 	// What compression type is used
 	// TODO: break this out to own function to get type of compression
@@ -73,25 +72,20 @@ bool getCPS(boost::filesystem3::path cpsPath, boost::filesystem3::path palPath, 
 
 	// Extract our image data which begins 10 bytes in
 	for(int i=10; i<IMAGE_SIZE; i++)
-		image[i-10] = byteCPS[i];
+		cImage[i-10] = byteCPS[i];
 
-	// try to bit shift it instead?
-	 //http://stackoverflow.com/questions/29437/whats-the-best-way-to-shift-an-array-of-bytes-by-12-bits
-	// *test = *byteCPS << 20;
+	// Decode Format80 data
+	uImageSize = decodeFormat80(cImage , uImage , IMAGE_SIZE);
 
-	printf(" image has this %x\n", image[0]);
-	printf(" test has this %x\n", test[0]);
-
-
-	// handle transparency: when RGB is Black, set to White
-//	if(!sprite && transparency && palette[counter] == 0)
-//		palette[counter] = createRGB(255, 255, 255);
+//	std::cout << "Size: " << uImageSize << std::endl;
+//	for(int i=10; i<IMAGE_SIZE; i++)
+//		printf(" Byte has this %x\n", uImage[i]);
 
 
 	return true;
 }
 
-unsigned long* getPAL(boost::filesystem3::path palPath ){
+unsigned long getPAL(boost::filesystem3::path palPath, bool transparency, bool sprite){
 	const uint PALETTE_FILE_SIZE = 768;
 	unsigned long palette[256];
 
@@ -118,6 +112,10 @@ unsigned long* getPAL(boost::filesystem3::path palPath ){
 		// Bitshift from 8 bits to 6 bits that is which is our palette size
 		palette[counter++] = createRGB(bytePAL[i]<<2, bytePAL[i+1]<<2, bytePAL[i+3]<<2);
 
+		// Handle our black transparency and replace it with white
+		if(!sprite && transparency && palette[counter-1] == 0)
+			palette[counter-1] = createRGB(255, 255, 255);
+
 		// Debug information
 		//uint8_t temp = 0;
 		//temp = bytePAL[i];
@@ -130,7 +128,7 @@ unsigned long* getPAL(boost::filesystem3::path palPath ){
 	// Close our connections to files
 	sPAL.close();
 
-	return palette;
+	return *palette;
 }
 
 }
