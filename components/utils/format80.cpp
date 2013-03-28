@@ -1,4 +1,6 @@
 #include "format80.hpp"
+#include <stdio.h>
+#include <string.h>
 
 namespace Utils
 {
@@ -14,6 +16,8 @@ uint16_t decodeFormat80(uint8_t *dest, uint8_t *source, uint16_t destLength)
 {
 	uint8_t *start = dest;
 	uint8_t *end = dest + destLength;
+
+	//printf("@Byte: %i-- Compressed: %x to Uncompressed %x\n",i, source[i], dest[i])
 
 	while (dest != end) {
 		uint8_t flag;

@@ -4,7 +4,7 @@
 #include "fileread.hpp"
 #include "format80.hpp"
 
-#include <boost/typeof/typeof.hpp>
+#include "intarray2bmp.hpp"
 
 namespace Utils
 {
@@ -27,12 +27,7 @@ struct CPSEOB1Header {
     unsigned short PaletteSize;
 };
 
-unsigned long createRGB(int r, int g, int b)
-{
-    return ((r & 0xff) << 16) + ((g & 0xff) << 8) + (b & 0xff);
-}
-
-bool getCPS(boost::filesystem3::path cpsPath, boost::filesystem3::path palPath, bool transparency, bool sprite)
+uint8_t * getImageFromCPS(boost::filesystem3::path cpsPath, boost::filesystem3::path palPath, bool transparency, bool sprite)
 {
 	/*
 	 * This kind of file contains images. Usually are 320x200 pixel in size,
@@ -43,16 +38,19 @@ bool getCPS(boost::filesystem3::path cpsPath, boost::filesystem3::path palPath, 
 	 * the header and the palette.
 	 */
 
-	uint8_t cImage[IMAGE_SIZE];
-	uint8_t uImage[IMAGE_SIZE];
+	uint8_t cImage[IMAGE_SIZE] = {};
+	uint8_t uImage[IMAGE_SIZE] = {};
+	uint16_t fileSize;
 	uint16_t uImageSize;
 	//unsigned long palette;
 
-	if (boost::filesystem::exists(boost::filesystem::path(cpsPath)) == false)
+	if (boost::filesystem::exists(cpsPath) == false)
 		return false;
 
+	fileSize = boost::filesystem::file_size(cpsPath);
+
 	boost::iostreams::mapped_file_source sCPS;
-	sCPS.open(cpsPath.string().c_str(), boost::filesystem::file_size(cpsPath));
+	sCPS.open(cpsPath.string().c_str(), fileSize);
 	if (!sCPS.is_open()){
 		std::cout << "Could not open CPS file: " << cpsPath << std::endl;
 		return false;
@@ -71,25 +69,25 @@ bool getCPS(boost::filesystem3::path cpsPath, boost::filesystem3::path palPath, 
 	}
 
 	// Extract our image data which begins 10 bytes in
-	for(int i=10; i<IMAGE_SIZE; i++)
+	for(int i=10; i<fileSize+10; i++)
 		cImage[i-10] = byteCPS[i];
 
 	// Decode Format80 data
-	uImageSize = decodeFormat80(cImage , uImage , IMAGE_SIZE);
+	uImageSize = decodeFormat80(uImage, cImage, IMAGE_SIZE);
 
 //	std::cout << "Size: " << uImageSize << std::endl;
-//	for(int i=10; i<IMAGE_SIZE; i++)
-//		printf(" Byte has this %x\n", uImage[i]);
+//	for(int i=1; i<IMAGE_SIZE; i++)
+//		printf("@Byte: %i-- Compressed: %x to Uncompressed %x\n",i, cImage[i], uImage[i]);
 
-
-	return true;
+	intarray2bmp<uint8_t>( cpsPath.filename().string()+".bmp", uImage, 200, 320, 0x00, 0xFF);
+	return uImage;
 }
 
-unsigned long getPAL(boost::filesystem3::path palPath, bool transparency, bool sprite){
+rgb * getPaletteFromPAL(boost::filesystem3::path palPath, bool transparency, bool sprite){
 	const uint PALETTE_FILE_SIZE = 768;
-	unsigned long palette[256];
+	rgb palette[256];
 
-	if (boost::filesystem::exists(boost::filesystem::path(palPath)) == false)
+	if (boost::filesystem::exists(palPath) == false)
 		return NULL;
 
 	if(boost::filesystem::file_size(palPath) != PALETTE_FILE_SIZE)
@@ -110,11 +108,14 @@ unsigned long getPAL(boost::filesystem3::path palPath, bool transparency, bool s
 	for(uint i=0; i<PALETTE_FILE_SIZE; i+=3)
 	{
 		// Bitshift from 8 bits to 6 bits that is which is our palette size
-		palette[counter++] = createRGB(bytePAL[i]<<2, bytePAL[i+1]<<2, bytePAL[i+3]<<2);
+		palette[counter].r = bytePAL[i]   << 2;
+		palette[counter].g = bytePAL[i+1] << 2;
+		palette[counter].b = bytePAL[i+3] << 2;
+    	//printf("%i convert from %i to rgb: %i %i %i\n", counter-1, palette[counter-1], bytePAL[i]<<2, bytePAL[i+1]<<2, bytePAL[i+3]<<2);
 
 		// Handle our black transparency and replace it with white
-		if(!sprite && transparency && palette[counter-1] == 0)
-			palette[counter-1] = createRGB(255, 255, 255);
+//		if(!sprite && transparency && palette[counter-1] == 0)
+//			palette[counter] = rgb2Long(255, 255, 255);
 
 		// Debug information
 		//uint8_t temp = 0;
@@ -123,12 +124,13 @@ unsigned long getPAL(boost::filesystem3::path palPath, bool transparency, bool s
 		//printf(" Byte %d has this %x\n",i, bytePAL[i]);
 		//std::cout << i << " <-> " << (uint16_t)temp << std::endl;
 		//std::cout << colorcount-1 << " : " << currentPalette[colorcount-1] << std::endl;
+		counter++;
 	}
 
 	// Close our connections to files
 	sPAL.close();
 
-	return *palette;
+	return palette;
 }
 
 }

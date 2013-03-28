@@ -1,3 +1,5 @@
+#include <SDL2/SDL.h> // temp
+
 #include <iostream>
 
 #include <components/files/configurationmanager.hpp>
@@ -129,12 +131,120 @@ int main(int argc, char**argv)
         if (parseOptions(argc, argv, engine, cfgMgr))
         {
         	boost::filesystem3::path cpsPath = "/opt/eob2/PLAYFLD.CPS";
+        	boost::filesystem3::path decorate = "/opt/eob2/DECORATE.CPS";
+        	boost::filesystem3::path thrown = "/opt/eob2/THROWN.CPS";
         	boost::filesystem3::path palPath = "/opt/eob2/SILVER.PAL";
-        	std::cout << cpsPath << std::endl;
-        	Utils::getPAL(palPath);
+
             //engine.go();
 
-        	std::cout << Utils::getCPS(cpsPath, palPath)<< std::endl;
+        	uint8_t * CPSimage;
+        	CPSimage = Utils::getImageFromCPS(cpsPath, palPath);
+        	printf("cpsByte %x\n", CPSimage[555]);
+
+            SDL_Init(SDL_INIT_VIDEO);
+            SDL_Window* displayWindow;
+            SDL_Renderer* displayRenderer;
+            SDL_RendererInfo displayRendererInfo;
+
+            // Create the window where we will draw.
+            displayWindow = SDL_CreateWindow("SDL_RenderClear",
+                            SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
+                            320, 200,
+                            SDL_WINDOW_SHOWN);
+
+            // We must call SDL_CreateRenderer in order for draw calls to affect this window.
+            displayRenderer = SDL_CreateRenderer(displayWindow, -1, SDL_RENDERER_SOFTWARE);
+            SDL_GetRendererInfo(displayRenderer, &displayRendererInfo);
+            //TODO: Check that we have OpenGL /
+            if ((displayRendererInfo.flags & SDL_RENDERER_ACCELERATED) == 0 ||
+                (displayRendererInfo.flags & SDL_RENDERER_TARGETTEXTURE) == 0) {
+                //TODO: Handle this. We have no render surface and not accelerated. /
+            }
+
+
+            SDL_Color sdlColors[256] = {};
+            //SDL_Palette *sdlPalette;
+            SDL_PixelFormat *sdlFormat;
+        	SDL_Surface *sdlSurface;
+
+        	// grab palette and convert to SDLPalette
+        	Utils::rgb * palette;
+        	palette = Utils::getPaletteFromPAL(palPath);
+        	unsigned long test;
+        	for(int i=0;i<256;i++)
+        	{
+        		sdlColors[i].r = palette[i].r;
+        		sdlColors[i].g = palette[i].g;
+        		sdlColors[i].b = palette[i].b;
+        		test = Utils::testing(sdlColors[i].r, sdlColors[i].g, sdlColors[i].b );
+            	printf("%i rgb: %i %i %i == %i or %i\n", i, sdlColors[i].r, sdlColors[i].g, sdlColors[i].b, sdlColors[i], test);
+        	}
+
+        	printf("cpsByte %x\n", CPSimage[555]);
+
+        	//sdlImage = SDL_CreateRGBSurfaceFrom(CPSimage, 320, 200, 8, 8*2, 0, 0, 0, 0);
+        	//sdlFormat = sdlImage->format;
+        	//SDL_SetPaletteColors(sdlFormat->palette, sdlColors, 0, 256);
+
+        	//sdlColors
+        	//SDL_Texture *tex;
+        	//tex = SDL_CreateTextureFromSurface(displayRenderer, sdlImage);
+            //SDL_RenderClear(displayRenderer);
+            //SDL_RenderCopy(displayRenderer, tex, NULL, NULL);
+            //SDL_RenderPresent(displayRenderer);
+
+        	//ApplySurface(0, 0, background, renderer);
+
+        	sdlSurface = SDL_CreateRGBSurface(SDL_SWSURFACE, 320, 200, 8, 0,0,0,0);
+        	sdlFormat = sdlSurface->format;
+        	// blitting temp image to destination surface
+        	SDL_SetPaletteColors(sdlFormat->palette, sdlColors, 0, 256);
+        	/*
+        	SDL_Rect dstrect;
+        	int offsetX = 0;
+        	int offsetY = 0;
+        	int width = 320;
+        	int height = 200;
+        	SDL_Rect rcSrc = { offsetX, offsetY, width, height };
+        	SDL_Rect rcDst = { 0, 0, width, height };
+        	SDL_BlitSurface(sdlImage, &rcSrc, sdlImage, &rcDst );
+        	SDL_FreeSurface(sdlImage);
+        	SDL_UpdateWindowSurfaceRects(displayWindow...)
+        	 *
+        	 */
+        	SDL_Rect dstrect;
+
+        	int count = 0;
+        	for(int h=0; h<200; h++)
+        	{
+        		for(int w=0; w<320; w++)
+        		{
+        			dstrect.h = 1; dstrect.w = 1; dstrect.x = w; dstrect.y = h;
+        			SDL_FillRect(sdlSurface, &dstrect, CPSimage[count]);
+        			//printf("I - %i cpsByte %x\n", count, CPSimage[count]);
+        			SDL_RenderFillRect(displayRenderer, &dstrect);
+        			count++;
+        		}
+        	}
+
+        	// dump to texture
+        	//SDL_Texture *sdlTexture = SDL_CreateTextureFromSurface(displayRenderer, sdlSurface);
+
+//        	SDL_UpdateWindowSurfaceRects(displayWindow, &dstrect, 1);
+//        	SDL_UpdateWindowSurface(displayWindow);
+
+    		// clear the screen
+    		//SDL_RenderClear(displayRenderer);
+    		// copy the texture to the rendering context
+    		//SDL_RenderCopy(displayRenderer, sdlTexture, NULL, &dstrect);
+    		// flip the backbuffer
+    		// this means that everything that we prepared behind the screens is actually shown
+    		SDL_RenderPresent(displayRenderer);
+
+            SDL_Delay(2000);
+            SDL_Quit();
+
+            printf("cpsByte %x\n", CPSimage[555]);
 
         	std::cout << "End of Data..." << std::endl;
         }

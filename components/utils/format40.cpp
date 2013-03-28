@@ -1,5 +1,8 @@
 #include "format40.hpp"
 
+namespace Utils
+{
+
 /**
  * Decode a memory fragment which is encoded with 'format40'.
  * @param dst The place the decoded fragment will be loaded.
@@ -61,4 +64,6 @@ void Format40_Decode(uint8_t *dst, uint8_t *src)
 			continue;
 		}
 	}
+}
+
 }

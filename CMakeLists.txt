@@ -65,7 +65,6 @@ endif()
 ## find boost without components so we can use Boost_VERSION
 find_package(Boost REQUIRED)
 set(BOOST_COMPONENTS system filesystem program_options thread iostreams)
-
 find_package(Boost REQUIRED COMPONENTS ${BOOST_COMPONENTS})
 
 include_directories("."
@@ -75,6 +74,11 @@ include_directories("."
 )
 
 link_directories(${Boost_LIBRARY_DIRS}})
+
+# Find SDL2
+Find_package(SDL2)
+include_directories(${SDL2_INCLUDE_DIR})
+link_directories(${SDL2_LIBRARY})
 
 if (APPLE)
     configure_file(${OpenADD_SOURCE_DIR}/files/mac/Info.plist

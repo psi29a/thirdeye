@@ -27,6 +27,7 @@ add_executable(openadd
 
 target_link_libraries(openadd
     ${Boost_LIBRARIES}
+    ${SDL2_LIBRARY}
     components
 )
 
