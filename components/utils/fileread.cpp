@@ -9,6 +9,10 @@
 namespace Utils
 {
 
+unsigned long testing(uint8_t r, uint8_t g, uint8_t b){
+	return (b << 24 | g << 16 | r << 8);
+}
+
 // Compression type based.
 const uint8_t UNCOMPRESSED 	= 0x00;
 const uint8_t CRUNCH_1 		= 0x01;
@@ -105,13 +109,15 @@ rgb * getPaletteFromPAL(boost::filesystem3::path palPath, bool transparency, boo
 	}
 	uint16_t counter = 0;
 	uint8_t *bytePAL = (uint8_t *)sPAL.data();
+	unsigned long test;
 	for(uint i=0; i<PALETTE_FILE_SIZE; i+=3)
 	{
 		// Bitshift from 8 bits to 6 bits that is which is our palette size
 		palette[counter].r = bytePAL[i]   << 2;
 		palette[counter].g = bytePAL[i+1] << 2;
 		palette[counter].b = bytePAL[i+3] << 2;
-    	//printf("%i convert from %i to rgb: %i %i %i\n", counter-1, palette[counter-1], bytePAL[i]<<2, bytePAL[i+1]<<2, bytePAL[i+3]<<2);
+		//test = testing(palette[counter].r, palette[counter].g, palette[counter].b );
+    	//printf("%u convert from %u to rgb: %u %u %u == %u\n", counter, palette[counter], bytePAL[i]<<2, bytePAL[i+1]<<2, bytePAL[i+3]<<2, test);
 
 		// Handle our black transparency and replace it with white
 //		if(!sprite && transparency && palette[counter-1] == 0)

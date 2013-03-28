@@ -17,9 +17,6 @@ struct rgb {
   uint8_t b;
 };
 
-unsigned long testing(uint8_t r, uint8_t g, uint8_t b){
-	return r << 24 | g << 16 | b << 8;
-}
 /*
 #define RGBTOONE(r,g,b) (((r) & 224) + (((g) & 224)>>3) + (((b) & 192)>>6))
 

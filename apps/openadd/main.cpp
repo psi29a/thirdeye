@@ -145,6 +145,8 @@ int main(int argc, char**argv)
             SDL_Window* displayWindow;
             SDL_Renderer* displayRenderer;
             SDL_RendererInfo displayRendererInfo;
+            SDL_PixelFormat *sdlFormat;
+        	SDL_Surface *sdlSurface;
 
             // Create the window where we will draw.
             displayWindow = SDL_CreateWindow("SDL_RenderClear",
@@ -155,91 +157,68 @@ int main(int argc, char**argv)
             // We must call SDL_CreateRenderer in order for draw calls to affect this window.
             displayRenderer = SDL_CreateRenderer(displayWindow, -1, SDL_RENDERER_SOFTWARE);
             SDL_GetRendererInfo(displayRenderer, &displayRendererInfo);
-            //TODO: Check that we have OpenGL /
-            if ((displayRendererInfo.flags & SDL_RENDERER_ACCELERATED) == 0 ||
-                (displayRendererInfo.flags & SDL_RENDERER_TARGETTEXTURE) == 0) {
-                //TODO: Handle this. We have no render surface and not accelerated. /
-            }
-
+        	sdlSurface = SDL_CreateRGBSurface(SDL_SWSURFACE, 320, 200, 8, 0,0,0,0);
+        	sdlFormat = sdlSurface->format;
 
             SDL_Color sdlColors[256] = {};
-            //SDL_Palette *sdlPalette;
-            SDL_PixelFormat *sdlFormat;
-        	SDL_Surface *sdlSurface;
-
         	// grab palette and convert to SDLPalette
-        	Utils::rgb * palette;
-        	palette = Utils::getPaletteFromPAL(palPath);
-        	unsigned long test;
+        	Utils::rgb * palette = Utils::getPaletteFromPAL(palPath);
         	for(int i=0;i<256;i++)
         	{
         		sdlColors[i].r = palette[i].r;
         		sdlColors[i].g = palette[i].g;
         		sdlColors[i].b = palette[i].b;
-        		test = Utils::testing(sdlColors[i].r, sdlColors[i].g, sdlColors[i].b );
-            	printf("%i rgb: %i %i %i == %i or %i\n", i, sdlColors[i].r, sdlColors[i].g, sdlColors[i].b, sdlColors[i], test);
+            	//printf("%u rgb: %u %u %u == %u %u %u\n", i, sdlColors[i].r, sdlColors[i].g, sdlColors[i].b, palette[i].r, palette[i].g, palette[i].b);
         	}
+            SDL_SetPaletteColors(sdlFormat->palette, sdlColors, 0, 256);
 
-        	printf("cpsByte %x\n", CPSimage[555]);
-
-        	//sdlImage = SDL_CreateRGBSurfaceFrom(CPSimage, 320, 200, 8, 8*2, 0, 0, 0, 0);
-        	//sdlFormat = sdlImage->format;
-        	//SDL_SetPaletteColors(sdlFormat->palette, sdlColors, 0, 256);
-
-        	//sdlColors
-        	//SDL_Texture *tex;
-        	//tex = SDL_CreateTextureFromSurface(displayRenderer, sdlImage);
-            //SDL_RenderClear(displayRenderer);
-            //SDL_RenderCopy(displayRenderer, tex, NULL, NULL);
-            //SDL_RenderPresent(displayRenderer);
-
-        	//ApplySurface(0, 0, background, renderer);
-
-        	sdlSurface = SDL_CreateRGBSurface(SDL_SWSURFACE, 320, 200, 8, 0,0,0,0);
-        	sdlFormat = sdlSurface->format;
         	// blitting temp image to destination surface
-        	SDL_SetPaletteColors(sdlFormat->palette, sdlColors, 0, 256);
-        	/*
-        	SDL_Rect dstrect;
-        	int offsetX = 0;
-        	int offsetY = 0;
-        	int width = 320;
-        	int height = 200;
-        	SDL_Rect rcSrc = { offsetX, offsetY, width, height };
-        	SDL_Rect rcDst = { 0, 0, width, height };
-        	SDL_BlitSurface(sdlImage, &rcSrc, sdlImage, &rcDst );
-        	SDL_FreeSurface(sdlImage);
-        	SDL_UpdateWindowSurfaceRects(displayWindow...)
-        	 *
-        	 */
-        	SDL_Rect dstrect;
 
+
+        	SDL_Rect dstrect;
         	int count = 0;
         	for(int h=0; h<200; h++)
         	{
         		for(int w=0; w<320; w++)
         		{
         			dstrect.h = 1; dstrect.w = 1; dstrect.x = w; dstrect.y = h;
+        			//SDL_RenderDrawRect(displayRenderer, &dstrect);
         			SDL_FillRect(sdlSurface, &dstrect, CPSimage[count]);
         			//printf("I - %i cpsByte %x\n", count, CPSimage[count]);
-        			SDL_RenderFillRect(displayRenderer, &dstrect);
+        			//SDL_RenderFillRect(displayRenderer, &dstrect);
         			count++;
         		}
         	}
 
-        	// dump to texture
-        	//SDL_Texture *sdlTexture = SDL_CreateTextureFromSurface(displayRenderer, sdlSurface);
+        	SDL_Surface *images[256];
+        	images[0] = SDL_CreateRGBSurface(SDL_SWSURFACE, 320, 200, 32, 0, 0, 0, 0);
+        	SDL_Rect rcSrc = { 0, 0, 320, 200 };
+        	SDL_Rect rcDst = { 0, 0, 320, 200 };
+        	SDL_BlitSurface(sdlSurface, NULL, images[0], NULL );
 
-//        	SDL_UpdateWindowSurfaceRects(displayWindow, &dstrect, 1);
-//        	SDL_UpdateWindowSurface(displayWindow);
+            // Select the color for drawing. It is set to red here.
+            //SDL_SetRenderDrawColor(displayRenderer, sdlColors[1].r, sdlColors[1].r, sdlColors[1].r, 255);
 
-    		// clear the screen
-    		//SDL_RenderClear(displayRenderer);
-    		// copy the texture to the rendering context
-    		//SDL_RenderCopy(displayRenderer, sdlTexture, NULL, &dstrect);
-    		// flip the backbuffer
-    		// this means that everything that we prepared behind the screens is actually shown
-    		SDL_RenderPresent(displayRenderer);
+        	// loadIMG
+        	SDL_Surface *bmp;
+        	bmp = SDL_LoadBMP("../artifacts/PLAYFLD.CPS.bmp");
+            if (bmp == NULL){
+                std::cout << SDL_GetError() << std::endl;
+                return 1;
+            }
+
+        	SDL_Texture *tex;
+        	tex = SDL_CreateTextureFromSurface(displayRenderer, bmp);
+        	SDL_FreeSurface(bmp);
+
+            // Clear the entire screen to our selected color.
+            SDL_RenderClear(displayRenderer);
+
+            SDL_RenderCopy(displayRenderer, tex, NULL, NULL);
+
+            // Up until now everything was drawn behind the scenes.
+            // This will show the new, red contents of the window.
+            SDL_RenderPresent(displayRenderer);
 
             SDL_Delay(2000);
             SDL_Quit();
