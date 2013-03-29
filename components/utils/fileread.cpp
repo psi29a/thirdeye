@@ -20,9 +20,6 @@ const uint8_t FORMAT_2 		= 0x02;
 const uint8_t FORMAT_3 		= 0x03;
 const uint8_t FORMAT_80 	= 0x04;
 
-// A 320x200 image where 1 byte is 1 pixel on PC
-const uint16_t IMAGE_SIZE = 64000;
-
 // CPS begins with an header, it is used for compressed file
 struct CPSEOB1Header {
     unsigned short FileSize;
@@ -31,7 +28,7 @@ struct CPSEOB1Header {
     unsigned short PaletteSize;
 };
 
-uint8_t * getImageFromCPS(boost::filesystem3::path cpsPath, boost::filesystem3::path palPath, bool transparency, bool sprite)
+bool getImageFromCPS(uint8_t *uImage, boost::filesystem3::path cpsPath, boost::filesystem3::path palPath, bool transparency, bool sprite)
 {
 	/*
 	 * This kind of file contains images. Usually are 320x200 pixel in size,
@@ -42,8 +39,7 @@ uint8_t * getImageFromCPS(boost::filesystem3::path cpsPath, boost::filesystem3::
 	 * the header and the palette.
 	 */
 
-	uint8_t cImage[IMAGE_SIZE] = {};
-	uint8_t uImage[IMAGE_SIZE] = {};
+	uint8_t cImage[EOB2_IMAGE_SIZE] = {};
 	uint16_t fileSize;
 	uint16_t uImageSize;
 	//unsigned long palette;
@@ -77,7 +73,7 @@ uint8_t * getImageFromCPS(boost::filesystem3::path cpsPath, boost::filesystem3::
 		cImage[i-10] = byteCPS[i];
 
 	// Decode Format80 data
-	uImageSize = decodeFormat80(uImage, cImage, IMAGE_SIZE);
+	uImageSize = decodeFormat80(uImage, cImage, EOB2_IMAGE_SIZE);
 
 //	std::cout << "Size: " << uImageSize << std::endl;
 //	for(int i=1; i<IMAGE_SIZE; i++)
@@ -87,17 +83,15 @@ uint8_t * getImageFromCPS(boost::filesystem3::path cpsPath, boost::filesystem3::
 	return uImage;
 }
 
-rgb * getPaletteFromPAL(boost::filesystem3::path palPath, bool transparency, bool sprite){
-	const uint PALETTE_FILE_SIZE = 768;
-	rgb palette[256];
+bool getPaletteFromPAL(rgb *palette, boost::filesystem3::path palPath, bool transparency, bool sprite){
 
 	if (boost::filesystem::exists(palPath) == false)
-		return NULL;
+		return false;
 
-	if(boost::filesystem::file_size(palPath) != PALETTE_FILE_SIZE)
+	if(boost::filesystem::file_size(palPath) != EOB2_PALETTE_FILE_SIZE)
 	{
 		std::cout << "Not a valid PAL file: " << palPath << std::endl;
-		return NULL;
+		return false;
 	}
 
 	// open palette for reading
@@ -105,30 +99,29 @@ rgb * getPaletteFromPAL(boost::filesystem3::path palPath, bool transparency, boo
 	sPAL.open(palPath.string().c_str(), boost::filesystem::file_size(palPath));
 	if (!sPAL.is_open()){
 		std::cout << "Could not open PAL file: " << palPath << std::endl;
-		return NULL;
+		return false;
 	}
 	uint16_t counter = 0;
 	uint8_t *bytePAL = (uint8_t *)sPAL.data();
 	unsigned long test;
-	for(uint i=0; i<PALETTE_FILE_SIZE; i+=3)
+	for(uint i=0; i<EOB2_PALETTE_FILE_SIZE; i+=3)
 	{
 		// Bitshift from 8 bits to 6 bits that is which is our palette size
 		palette[counter].r = bytePAL[i]   << 2;
 		palette[counter].g = bytePAL[i+1] << 2;
 		palette[counter].b = bytePAL[i+3] << 2;
-		//test = testing(palette[counter].r, palette[counter].g, palette[counter].b );
-    	//printf("%u convert from %u to rgb: %u %u %u == %u\n", counter, palette[counter], bytePAL[i]<<2, bytePAL[i+1]<<2, bytePAL[i+3]<<2, test);
+    	//printf("%u convert from %u to rgb: %u %u %u\n", counter, palette[counter], bytePAL[i]<<2, bytePAL[i+1]<<2, bytePAL[i+3]<<2);
 
 		// Handle our black transparency and replace it with white
-//		if(!sprite && transparency && palette[counter-1] == 0)
-//			palette[counter] = rgb2Long(255, 255, 255);
+		if(!sprite && transparency && palette[counter].r == 0 && palette[counter].g == 0 && palette[counter].b == 0){
+			palette[counter].r = 255;
+			palette[counter].g = 255;
+			palette[counter].b = 255;
+			printf("yup\n");
+		}
 
 		// Debug information
-		//uint8_t temp = 0;
-		//temp = bytePAL[i];
-		//temp = bytePAL[i]<<2;
 		//printf(" Byte %d has this %x\n",i, bytePAL[i]);
-		//std::cout << i << " <-> " << (uint16_t)temp << std::endl;
 		//std::cout << colorcount-1 << " : " << currentPalette[colorcount-1] << std::endl;
 		counter++;
 	}
@@ -136,7 +129,7 @@ rgb * getPaletteFromPAL(boost::filesystem3::path palPath, bool transparency, boo
 	// Close our connections to files
 	sPAL.close();
 
-	return palette;
+	return true;
 }
 
 }
