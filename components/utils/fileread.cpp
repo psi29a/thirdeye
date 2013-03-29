@@ -83,7 +83,7 @@ bool getImageFromCPS(uint8_t *uImage, boost::filesystem3::path cpsPath, boost::f
 	return uImage;
 }
 
-bool getPaletteFromPAL(rgb *palette, boost::filesystem3::path palPath, bool transparency, bool sprite){
+bool getPaletteFromPAL(SDL_Palette *palette, boost::filesystem3::path palPath, bool transparency, bool sprite){
 
 	if (boost::filesystem::exists(palPath) == false)
 		return false;
@@ -103,21 +103,19 @@ bool getPaletteFromPAL(rgb *palette, boost::filesystem3::path palPath, bool tran
 	}
 	uint16_t counter = 0;
 	uint8_t *bytePAL = (uint8_t *)sPAL.data();
-	unsigned long test;
 	for(uint i=0; i<EOB2_PALETTE_FILE_SIZE; i+=3)
 	{
 		// Bitshift from 8 bits to 6 bits that is which is our palette size
-		palette[counter].r = bytePAL[i]   << 2;
-		palette[counter].g = bytePAL[i+1] << 2;
-		palette[counter].b = bytePAL[i+3] << 2;
-    	//printf("%u convert from %u to rgb: %u %u %u\n", counter, palette[counter], bytePAL[i]<<2, bytePAL[i+1]<<2, bytePAL[i+3]<<2);
+		palette->colors[counter].r = bytePAL[i]   << 2;
+		palette->colors[counter].g = bytePAL[i+1] << 2;
+		palette->colors[counter].b = bytePAL[i+3] << 2;
+    	//printf("%u convert from ? to rgb: %u %u %u\n", counter, bytePAL[i]<<2, bytePAL[i+1]<<2, bytePAL[i+3]<<2);
 
 		// Handle our black transparency and replace it with white
-		if(!sprite && transparency && palette[counter].r == 0 && palette[counter].g == 0 && palette[counter].b == 0){
-			palette[counter].r = 255;
-			palette[counter].g = 255;
-			palette[counter].b = 255;
-			printf("yup\n");
+		if(!sprite && transparency && palette->colors[counter].r == 0 && palette->colors[counter].g == 0 && palette->colors[counter].b == 0){
+			palette->colors[counter].r = 255;
+			palette->colors[counter].g = 255;
+			palette->colors[counter].b = 255;
 		}
 
 		// Debug information

@@ -3,7 +3,7 @@
 
 #include <boost/filesystem.hpp>
 #include <boost/iostreams/device/mapped_file.hpp>
-#include "color.hpp"
+#include <SDL2/SDL.h>
 
 namespace Utils
 {
@@ -11,7 +11,7 @@ namespace Utils
 	const uint16_t EOB2_PALETTE_FILE_SIZE = 768; 	// Palette is alwa
 
 	bool getImageFromCPS(uint8_t *, boost::filesystem3::path, boost::filesystem3::path, bool=false, bool=false);
-	bool getPaletteFromPAL(rgb *, boost::filesystem3::path, bool=false, bool=false);
+	bool getPaletteFromPAL(SDL_Palette *, boost::filesystem3::path, bool=false, bool=false);
 }
 
 #endif /* COMPONENTS_UTILS_FILEREAD_HPP */

@@ -162,19 +162,11 @@ int main(int argc, char**argv)
             displayRenderer = SDL_CreateRenderer(displayWindow, -1, SDL_RENDERER_SOFTWARE);
             SDL_GetRendererInfo(displayRenderer, &displayRendererInfo);
         	sdlSurface = SDL_CreateRGBSurface(SDL_SWSURFACE, 320, 200, 8, 0, 0, 0, 0);
-        	sdlFormat = sdlSurface->format;
 
-            SDL_Color sdlColors[256] = {};
-            Utils::rgb palette[256];
-        	Utils::getPaletteFromPAL(palette, palPath); // grab palette and convert to SDLPalette
-        	for(int i=0;i<256;i++)
-        	{
-        		sdlColors[i].r = palette[i].r;
-        		sdlColors[i].g = palette[i].g;
-        		sdlColors[i].b = palette[i].b;
-            	//printf("%u rgb: %u %u %u == %u %u %u\n", i, sdlColors[i].r, sdlColors[i].g, sdlColors[i].b, palette[i].r, palette[i].g, palette[i].b);
-        	}
-        	SDL_SetPaletteColors(sdlFormat->palette, sdlColors, 0, 256);
+            //SDL_Color sdlColors[256] = {};
+            SDL_Palette* sdlPalette = SDL_AllocPalette(256);
+        	Utils::getPaletteFromPAL(sdlPalette, palPath, true); // grab palette and convert to SDLPalette
+        	SDL_SetPaletteColors(sdlSurface->format->palette, sdlPalette->colors, 0, 256);
 
         	SDL_Rect dstrect;
         	int count = 0;
@@ -205,7 +197,7 @@ int main(int argc, char**argv)
             // This will show the new, red contents of the window.
             SDL_RenderPresent(displayRenderer);
 
-            SDL_Delay(2000);
+            SDL_Delay(5000);
             SDL_Quit();
 
             printf("cpsByte %x\n", CPSimage[555]);
