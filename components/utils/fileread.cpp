@@ -9,10 +9,6 @@
 namespace Utils
 {
 
-unsigned long testing(uint8_t r, uint8_t g, uint8_t b){
-	return (b << 24 | g << 16 | r << 8);
-}
-
 // Compression type based.
 const uint8_t UNCOMPRESSED 	= 0x00;
 const uint8_t CRUNCH_1 		= 0x01;
@@ -123,6 +119,9 @@ bool getPaletteFromPAL(SDL_Palette *palette, boost::filesystem3::path palPath, b
 		//std::cout << colorcount-1 << " : " << currentPalette[colorcount-1] << std::endl;
 		counter++;
 	}
+	palette->colors[255].r = 1;
+	palette->colors[255].g = 1;
+	palette->colors[255].b = 1;
 
 	// Close our connections to files
 	sPAL.close();

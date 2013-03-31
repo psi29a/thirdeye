@@ -130,17 +130,22 @@ int main(int argc, char**argv)
 
         if (parseOptions(argc, argv, engine, cfgMgr))
         {
-        	boost::filesystem3::path cpsPath = "/opt/eob2/PLAYFLD.CPS";
-        	//boost::filesystem3::path cpsPath = "/opt/eob2/DECORATE.CPS";
-        	//boost::filesystem3::path cpsPath = "/opt/eob2/THROWN.CPS";
-        	boost::filesystem3::path palPath = "/opt/eob2/SILVER.PAL";
+
+        	boost::filesystem3::path playfldCPSPath = "/opt/eob2/PLAYFLD.CPS";
+        	boost::filesystem3::path decorateCPSPath = "/opt/eob2/DECORATE.CPS";
+        	boost::filesystem3::path thrownCPSPath = "/opt/eob2/THROWN.CPS";
+        	boost::filesystem3::path silverPALPath = "/opt/eob2/SILVER.PAL";
 
             //engine.go();
 
-        	//uint8_t * CPSimage[64000];
-        	uint8_t CPSimage[Utils::EOB2_IMAGE_SIZE] = {};
-        	Utils::getImageFromCPS(CPSimage, cpsPath, palPath, true);
-        	printf("cpsByte %x\n", CPSimage[555]);
+
+        	uint8_t playfldImage[Utils::EOB2_IMAGE_SIZE] = {};
+        	Utils::getImageFromCPS(playfldImage, playfldCPSPath, silverPALPath, true);
+        	uint8_t decorateImage[Utils::EOB2_IMAGE_SIZE] = {};
+        	Utils::getImageFromCPS(decorateImage, decorateCPSPath, silverPALPath, true);
+        	uint8_t thrownImage[Utils::EOB2_IMAGE_SIZE] = {};
+        	Utils::getImageFromCPS(thrownImage, thrownCPSPath, silverPALPath, true);
+        	//printf("cpsByte %x\n", playfldImage[555]);
 //      	for(int i=1; i<64000; i++)
 //      		printf("@Byte: %i-- CPSImage: %x\n",i, CPSimage[i]);
 
@@ -150,7 +155,11 @@ int main(int argc, char**argv)
             SDL_Renderer* displayRenderer;
             SDL_RendererInfo displayRendererInfo;
             SDL_PixelFormat *sdlFormat;
-        	SDL_Surface *sdlSurface;
+            SDL_Surface *sdlSurface;
+
+        	// SDL Surfaces
+        	SDL_Surface *images[512];
+        	int imageCounter;
 
             // Create the window where we will draw.
             displayWindow = SDL_CreateWindow("SDL_RenderClear",
@@ -159,14 +168,18 @@ int main(int argc, char**argv)
                             SDL_WINDOW_SHOWN);
 
             // We must call SDL_CreateRenderer in order for draw calls to affect this window.
-            displayRenderer = SDL_CreateRenderer(displayWindow, -1, SDL_RENDERER_SOFTWARE);
+            displayRenderer = SDL_CreateRenderer(displayWindow, -1, 0);
             SDL_GetRendererInfo(displayRenderer, &displayRendererInfo);
         	sdlSurface = SDL_CreateRGBSurface(SDL_SWSURFACE, 320, 200, 8, 0, 0, 0, 0);
 
-            //SDL_Color sdlColors[256] = {};
+        	// Set palette for surface
             SDL_Palette* sdlPalette = SDL_AllocPalette(256);
-        	Utils::getPaletteFromPAL(sdlPalette, palPath, true); // grab palette and convert to SDLPalette
+        	Utils::getPaletteFromPAL(sdlPalette, silverPALPath, true); // grab palette and convert to SDLPalette
         	SDL_SetPaletteColors(sdlSurface->format->palette, sdlPalette->colors, 0, 256);
+
+
+        	//temp
+        	bool sprite = false;
 
         	SDL_Rect dstrect;
         	int count = 0;
@@ -175,8 +188,39 @@ int main(int argc, char**argv)
         		for(int w=0; w<320; w++)
         		{
         			dstrect.h = 1; dstrect.w = 1; dstrect.x = w; dstrect.y = h;
-        			SDL_FillRect(sdlSurface, &dstrect, CPSimage[count++]);
-        			//printf("I - %u cpsByte %x\n", count, CPSimage[count]);
+        			if(sprite && sdlPalette->colors[playfldImage[count]].r == 0 && sdlPalette->colors[playfldImage[count]].g == 0 && sdlPalette->colors[playfldImage[count]].b == 0)
+					{
+						bool rightfree = true, leftfree = true, topfree = true, bottomfree = true;
+
+						for(int x=1; x<=8; x++)
+						{
+							if(count - x >= 0 && count - x <= 63999)
+								if(sdlPalette->colors[playfldImage[count - x]].r != 0 || sdlPalette->colors[playfldImage[count - x]].g != 0 || sdlPalette->colors[playfldImage[count - x]].b != 0)
+									leftfree = false;
+							if(count + x >= 0 && count + x <= 63999)
+								if(sdlPalette->colors[playfldImage[count + x]].r != 0 || sdlPalette->colors[playfldImage[count + x]].g != 0 || sdlPalette->colors[playfldImage[count + x]].b != 0)
+									rightfree = false;
+						}
+						for(int x=1; x<=32; x++)
+						{
+							if(count - (320*x) >= 0 && count - (320*x) <= 63999)
+								if(sdlPalette->colors[playfldImage[count - (320*x)]].r != 0 || sdlPalette->colors[playfldImage[count - (320*x)]].g != 0 || sdlPalette->colors[playfldImage[count - (320*x)]].b != 0)
+									topfree = false;
+							if(count + (320*x) >= 0 && count + (320*x) <= 63999)
+								if(sdlPalette->colors[playfldImage[count + (320*x)]].r != 0 || sdlPalette->colors[playfldImage[count + (320*x)]].g != 0 || sdlPalette->colors[playfldImage[count + (320*x)]].b != 0)
+									bottomfree = false;
+						}
+
+						if(!rightfree && !leftfree && !topfree && !bottomfree)
+							SDL_FillRect(sdlSurface, &dstrect, 255);
+						else
+							SDL_FillRect(sdlSurface, &dstrect, playfldImage[count]);
+					}
+					else
+						SDL_FillRect(sdlSurface, &dstrect, playfldImage[count]);
+        			count++;
+
+        			//printf("I - %u cpsByte %x\n", count, playfldImage[count]);
         		}
         	}
 
@@ -200,7 +244,7 @@ int main(int argc, char**argv)
             SDL_Delay(5000);
             SDL_Quit();
 
-            printf("cpsByte %x\n", CPSimage[555]);
+            //printf("cpsByte %x\n", playfldImage[555]);
 
         	std::cout << "End of Data..." << std::endl;
         }

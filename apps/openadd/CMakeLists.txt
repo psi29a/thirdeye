@@ -5,13 +5,13 @@ configure_file ("${CMAKE_CURRENT_SOURCE_DIR}/config.hpp.cmake" "${CMAKE_CURRENT_
 # local files
 set(GAME
     main.cpp
-#    engine.cpp
+    engine.cpp
 )
 
-#set(GAME_HEADER
-#    engine.hpp
-#    config.hpp
-#)
+set(GAME_HEADER
+    engine.hpp
+    config.hpp
+)
 source_group(game FILES ${GAME} ${GAME_HEADER})
 
 # Main executable
