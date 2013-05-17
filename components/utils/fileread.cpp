@@ -104,7 +104,7 @@ bool getPaletteFromPAL(SDL_Palette *palette, boost::filesystem3::path palPath, b
 		// Bitshift from 8 bits to 6 bits that is which is our palette size
 		palette->colors[counter].r = bytePAL[i]   << 2;
 		palette->colors[counter].g = bytePAL[i+1] << 2;
-		palette->colors[counter].b = bytePAL[i+3] << 2;
+		palette->colors[counter].b = bytePAL[i+2] << 2;
     	//printf("%u convert from ? to rgb: %u %u %u\n", counter, bytePAL[i]<<2, bytePAL[i+1]<<2, bytePAL[i+3]<<2);
 
 		// Handle our black transparency and replace it with white
@@ -116,7 +116,7 @@ bool getPaletteFromPAL(SDL_Palette *palette, boost::filesystem3::path palPath, b
 
 		// Debug information
 		//printf(" Byte %d has this %x\n",i, bytePAL[i]);
-		//std::cout << colorcount-1 << " : " << currentPalette[colorcount-1] << std::endl;
+		//printf("%u colour: %u,%u,%u\n", counter, palette->colors[counter].r, palette->colors[counter].g, palette->colors[counter].b);
 		counter++;
 	}
 	palette->colors[255].r = 1;
