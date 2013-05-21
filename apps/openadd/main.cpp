@@ -170,12 +170,13 @@ int main(int argc, char**argv)
             // We must call SDL_CreateRenderer in order for draw calls to affect this window.
             displayRenderer = SDL_CreateRenderer(displayWindow, -1, 0);
             SDL_GetRendererInfo(displayRenderer, &displayRendererInfo);
-        	sdlSurface = SDL_CreateRGBSurface(SDL_SWSURFACE, 320, 200, 8, 0, 0, 0, 0);
+        	sdlSurface = SDL_CreateRGBSurface(0, 320, 200, 8, 0, 0, 0, 0);
 
         	// Set palette for surface
             SDL_Palette* sdlPalette = SDL_AllocPalette(256);
         	Utils::getPaletteFromPAL(sdlPalette, silverPALPath, true); // grab palette and convert to SDLPalette
         	SDL_SetPaletteColors(sdlSurface->format->palette, sdlPalette->colors, 0, 256);
+        	SDL_SetColorKey( sdlSurface, SDL_TRUE, SDL_MapRGB(sdlSurface->format, 255, 255, 255) );
 
 
         	//temp
