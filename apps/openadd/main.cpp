@@ -3,7 +3,8 @@
 #include <iostream>
 
 #include <components/files/configurationmanager.hpp>
-#include <components/utils/fileread.hpp>
+#include <components/utils/fileread.hpp> // temp
+#include <components/games/eob2.hpp> // temp
 
 #if defined(_WIN32) && !defined(_CONSOLE)
 #include <boost/iostreams/concepts.hpp>

@@ -18,6 +18,10 @@ add_component_dir (media
     video
     )
     
+add_component_dir (games
+    eob2
+    )
+        
 add_library(components STATIC ${COMPONENT_FILES} ${MOC_SRCS})
     
 target_link_libraries(components ${Boost_LIBRARIES})
