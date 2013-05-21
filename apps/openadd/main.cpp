@@ -140,22 +140,18 @@ int main(int argc, char**argv)
 
 
         	uint8_t playfldImage[Utils::EOB2_IMAGE_SIZE] = {};
-        	Utils::getImageFromCPS(playfldImage, playfldCPSPath, silverPALPath, true);
+        	Utils::getImageFromCPS(playfldImage, playfldCPSPath);
         	uint8_t decorateImage[Utils::EOB2_IMAGE_SIZE] = {};
-        	Utils::getImageFromCPS(decorateImage, decorateCPSPath, silverPALPath, true);
+        	Utils::getImageFromCPS(decorateImage, decorateCPSPath);
         	uint8_t thrownImage[Utils::EOB2_IMAGE_SIZE] = {};
-        	Utils::getImageFromCPS(thrownImage, thrownCPSPath, silverPALPath, true);
-        	//printf("cpsByte %x\n", playfldImage[555]);
-//      	for(int i=1; i<64000; i++)
-//      		printf("@Byte: %i-- CPSImage: %x\n",i, CPSimage[i]);
-
+        	Utils::getImageFromCPS(thrownImage, thrownCPSPath);
 
             SDL_Init(SDL_INIT_VIDEO);
             SDL_Window* displayWindow;
             SDL_Renderer* displayRenderer;
             SDL_RendererInfo displayRendererInfo;
-            SDL_PixelFormat *sdlFormat;
             SDL_Surface *sdlSurface;
+            SDL_Surface *screen;
 
         	// SDL Surfaces
         	SDL_Surface *images[512];
@@ -172,11 +168,13 @@ int main(int argc, char**argv)
             SDL_GetRendererInfo(displayRenderer, &displayRendererInfo);
         	sdlSurface = SDL_CreateRGBSurface(0, 320, 200, 8, 0, 0, 0, 0);
 
+        	screen = SDL_CreateRGBSurface(0, 320, 200, 32, 0, 0, 0, 0);
+        	SDL_SetColorKey( screen, SDL_TRUE, SDL_MapRGB(screen->format, 255, 0, 255) );
+
         	// Set palette for surface
             SDL_Palette* sdlPalette = SDL_AllocPalette(256);
         	Utils::getPaletteFromPAL(sdlPalette, silverPALPath, true); // grab palette and convert to SDLPalette
         	SDL_SetPaletteColors(sdlSurface->format->palette, sdlPalette->colors, 0, 256);
-        	SDL_SetColorKey( sdlSurface, SDL_TRUE, SDL_MapRGB(sdlSurface->format, 255, 0, 255) );
 
 
         	//temp
@@ -226,11 +224,12 @@ int main(int argc, char**argv)
         	}
 
         	//Blit to rendering surface that is to be turned into a texture
-        	//SDL_Rect rcSrc = { posX,posY, width,height };
-        	//SDL_Rect rcDst = { 0,0, width,height };
+        	SDL_Rect rcSrc = { 0, 0, 320, 200 };
+        	SDL_Rect rcDst = { 0, 0, 320, 200 };
+        	SDL_BlitSurface(sdlSurface, NULL, screen, NULL);
 
         	SDL_Texture *tex;
-        	tex = SDL_CreateTextureFromSurface(displayRenderer, sdlSurface);
+        	tex = SDL_CreateTextureFromSurface(displayRenderer, screen);
 
             // Clear the entire screen to our selected color.
             SDL_RenderClear(displayRenderer);

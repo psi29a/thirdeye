@@ -4,8 +4,6 @@
 #include "fileread.hpp"
 #include "format80.hpp"
 
-#include "intarray2bmp.hpp"
-
 namespace Utils
 {
 
@@ -24,7 +22,7 @@ struct CPSEOB1Header {
     unsigned short PaletteSize;
 };
 
-bool getImageFromCPS(uint8_t *uImage, boost::filesystem3::path cpsPath, boost::filesystem3::path palPath, bool transparency, bool sprite)
+bool getImageFromCPS(uint8_t *uImage, boost::filesystem3::path cpsPath)
 {
 	/*
 	 * This kind of file contains images. Usually are 320x200 pixel in size,
@@ -38,7 +36,6 @@ bool getImageFromCPS(uint8_t *uImage, boost::filesystem3::path cpsPath, boost::f
 	uint8_t cImage[EOB2_IMAGE_SIZE] = {};
 	uint16_t fileSize;
 	uint16_t uImageSize;
-	//unsigned long palette;
 
 	if (boost::filesystem::exists(cpsPath) == false)
 		return false;
@@ -52,10 +49,6 @@ bool getImageFromCPS(uint8_t *uImage, boost::filesystem3::path cpsPath, boost::f
 		return false;
 	}
 	uint8_t *byteCPS = (uint8_t *)sCPS.data();
-
-	// Debug
-	//if(byteCPS[2] != FORMAT_80)
-	//	printf("no valid CPS file: %s\n", cpsPath.string().c_str());
 
 	// What compression type is used
 	// TODO: break this out to own function to get type of compression
@@ -75,8 +68,8 @@ bool getImageFromCPS(uint8_t *uImage, boost::filesystem3::path cpsPath, boost::f
 //	for(int i=1; i<IMAGE_SIZE; i++)
 //		printf("@Byte: %i-- Compressed: %x to Uncompressed %x\n",i, cImage[i], uImage[i]);
 
-	intarray2bmp<uint8_t>( cpsPath.filename().string()+".bmp", uImage, 200, 320, 0x00, 0xFF);
-	return uImage;
+	sCPS.close();
+	return true;
 }
 
 bool getPaletteFromPAL(SDL_Palette *palette, boost::filesystem3::path palPath, bool transparency, bool sprite){
@@ -105,7 +98,6 @@ bool getPaletteFromPAL(SDL_Palette *palette, boost::filesystem3::path palPath, b
 		palette->colors[counter].r = bytePAL[i]   << 2;
 		palette->colors[counter].g = bytePAL[i+1] << 2;
 		palette->colors[counter].b = bytePAL[i+2] << 2;
-    	//printf("%u convert from ? to rgb: %u %u %u\n", counter, bytePAL[i]<<2, bytePAL[i+1]<<2, bytePAL[i+3]<<2);
 
 		// Handle our black transparency and replace it with magenta
 		if(!sprite && transparency && palette->colors[counter].r == 0 && palette->colors[counter].g == 0 && palette->colors[counter].b == 0){
