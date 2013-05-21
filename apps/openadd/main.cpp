@@ -176,7 +176,7 @@ int main(int argc, char**argv)
             SDL_Palette* sdlPalette = SDL_AllocPalette(256);
         	Utils::getPaletteFromPAL(sdlPalette, silverPALPath, true); // grab palette and convert to SDLPalette
         	SDL_SetPaletteColors(sdlSurface->format->palette, sdlPalette->colors, 0, 256);
-        	SDL_SetColorKey( sdlSurface, SDL_TRUE, SDL_MapRGB(sdlSurface->format, 255, 255, 255) );
+        	SDL_SetColorKey( sdlSurface, SDL_TRUE, SDL_MapRGB(sdlSurface->format, 255, 0, 255) );
 
 
         	//temp

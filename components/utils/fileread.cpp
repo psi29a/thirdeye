@@ -107,10 +107,10 @@ bool getPaletteFromPAL(SDL_Palette *palette, boost::filesystem3::path palPath, b
 		palette->colors[counter].b = bytePAL[i+2] << 2;
     	//printf("%u convert from ? to rgb: %u %u %u\n", counter, bytePAL[i]<<2, bytePAL[i+1]<<2, bytePAL[i+3]<<2);
 
-		// Handle our black transparency and replace it with white
+		// Handle our black transparency and replace it with magenta
 		if(!sprite && transparency && palette->colors[counter].r == 0 && palette->colors[counter].g == 0 && palette->colors[counter].b == 0){
 			palette->colors[counter].r = 255;
-			palette->colors[counter].g = 255;
+			palette->colors[counter].g = 0;
 			palette->colors[counter].b = 255;
 		}
 
