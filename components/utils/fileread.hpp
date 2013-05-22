@@ -7,6 +7,7 @@
 
 namespace Utils
 {
+
 	const uint16_t EOB2_IMAGE_SIZE = 64000; 		// A 320x200 image where 1 byte is 1 pixel on PC
 	const uint16_t EOB2_PALETTE_FILE_SIZE = 768; 	// Palette is alwa
 

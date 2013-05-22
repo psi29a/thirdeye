@@ -3,7 +3,7 @@
 #include <iostream>
 
 #include <components/files/configurationmanager.hpp>
-#include <components/utils/fileread.hpp> // temp
+
 #include <components/games/eob2.hpp> // temp
 
 #if defined(_WIN32) && !defined(_CONSOLE)
@@ -132,31 +132,15 @@ int main(int argc, char**argv)
         if (parseOptions(argc, argv, engine, cfgMgr))
         {
 
-        	boost::filesystem3::path playfldCPSPath = "/opt/eob2/PLAYFLD.CPS";
-        	boost::filesystem3::path decorateCPSPath = "/opt/eob2/DECORATE.CPS";
-        	boost::filesystem3::path thrownCPSPath = "/opt/eob2/THROWN.CPS";
-        	boost::filesystem3::path silverPALPath = "/opt/eob2/SILVER.PAL";
+
 
             //engine.go();
-
-
-        	uint8_t playfldImage[Utils::EOB2_IMAGE_SIZE] = {};
-        	Utils::getImageFromCPS(playfldImage, playfldCPSPath);
-        	uint8_t decorateImage[Utils::EOB2_IMAGE_SIZE] = {};
-        	Utils::getImageFromCPS(decorateImage, decorateCPSPath);
-        	uint8_t thrownImage[Utils::EOB2_IMAGE_SIZE] = {};
-        	Utils::getImageFromCPS(thrownImage, thrownCPSPath);
 
             SDL_Init(SDL_INIT_VIDEO);
             SDL_Window* displayWindow;
             SDL_Renderer* displayRenderer;
             SDL_RendererInfo displayRendererInfo;
-            SDL_Surface *sdlSurface;
             SDL_Surface *screen;
-
-        	// SDL Surfaces
-        	SDL_Surface *images[512];
-        	int imageCounter;
 
             // Create the window where we will draw.
             displayWindow = SDL_CreateWindow("SDL_RenderClear",
@@ -167,67 +151,18 @@ int main(int argc, char**argv)
             // We must call SDL_CreateRenderer in order for draw calls to affect this window.
             displayRenderer = SDL_CreateRenderer(displayWindow, -1, 0);
             SDL_GetRendererInfo(displayRenderer, &displayRendererInfo);
-        	sdlSurface = SDL_CreateRGBSurface(0, 320, 200, 8, 0, 0, 0, 0);
 
         	screen = SDL_CreateRGBSurface(0, 320, 200, 32, 0, 0, 0, 0);
-        	SDL_SetColorKey( screen, SDL_TRUE, SDL_MapRGB(screen->format, 255, 0, 255) );
-
-        	// Set palette for surface
-            SDL_Palette* sdlPalette = SDL_AllocPalette(256);
-        	Utils::getPaletteFromPAL(sdlPalette, silverPALPath, true); // grab palette and convert to SDLPalette
-        	SDL_SetPaletteColors(sdlSurface->format->palette, sdlPalette->colors, 0, 256);
-
-
-        	//temp
-        	bool sprite = false;
-
-        	SDL_Rect dstrect;
-        	int count = 0;
-        	for(int h=0; h<200; h++)
-        	{
-        		for(int w=0; w<320; w++)
-        		{
-        			dstrect.h = 1; dstrect.w = 1; dstrect.x = w; dstrect.y = h;
-        			if(sprite && sdlPalette->colors[playfldImage[count]].r == 0 && sdlPalette->colors[playfldImage[count]].g == 0 && sdlPalette->colors[playfldImage[count]].b == 0)
-					{
-						bool rightfree = true, leftfree = true, topfree = true, bottomfree = true;
-
-						for(int x=1; x<=8; x++)
-						{
-							if(count - x >= 0 && count - x <= 63999)
-								if(sdlPalette->colors[playfldImage[count - x]].r != 0 || sdlPalette->colors[playfldImage[count - x]].g != 0 || sdlPalette->colors[playfldImage[count - x]].b != 0)
-									leftfree = false;
-							if(count + x >= 0 && count + x <= 63999)
-								if(sdlPalette->colors[playfldImage[count + x]].r != 0 || sdlPalette->colors[playfldImage[count + x]].g != 0 || sdlPalette->colors[playfldImage[count + x]].b != 0)
-									rightfree = false;
-						}
-						for(int x=1; x<=32; x++)
-						{
-							if(count - (320*x) >= 0 && count - (320*x) <= 63999)
-								if(sdlPalette->colors[playfldImage[count - (320*x)]].r != 0 || sdlPalette->colors[playfldImage[count - (320*x)]].g != 0 || sdlPalette->colors[playfldImage[count - (320*x)]].b != 0)
-									topfree = false;
-							if(count + (320*x) >= 0 && count + (320*x) <= 63999)
-								if(sdlPalette->colors[playfldImage[count + (320*x)]].r != 0 || sdlPalette->colors[playfldImage[count + (320*x)]].g != 0 || sdlPalette->colors[playfldImage[count + (320*x)]].b != 0)
-									bottomfree = false;
-						}
-
-						if(!rightfree && !leftfree && !topfree && !bottomfree)
-							SDL_FillRect(sdlSurface, &dstrect, 255);
-						else
-							SDL_FillRect(sdlSurface, &dstrect, playfldImage[count]);
-					}
-					else
-						SDL_FillRect(sdlSurface, &dstrect, playfldImage[count]);
-        			count++;
-
-        			//printf("I - %u cpsByte %x\n", count, playfldImage[count]);
-        		}
-        	}
+        	SDL_SetColorKey( screen, SDL_TRUE, SDL_MapRGB(screen->format, 255, 0, 255) ); // set magenta as our transparent colour
 
         	//Blit to rendering surface that is to be turned into a texture
         	SDL_Rect rcSrc = { 0, 0, 320, 200 };
         	SDL_Rect rcDst = { 0, 0, 320, 200 };
-        	SDL_BlitSurface(sdlSurface, NULL, screen, NULL);
+
+        	// create a surfaces
+        	SDL_Surface *images[256];
+        	Games::gameInit(images);
+        	SDL_BlitSurface(images[0], NULL, screen, NULL);
 
         	SDL_Texture *tex;
         	tex = SDL_CreateTextureFromSurface(displayRenderer, screen);
