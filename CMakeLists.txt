@@ -76,9 +76,8 @@ include_directories("."
 link_directories(${Boost_LIBRARY_DIRS}})
 
 # Find SDL2
-Find_package(SDL2)
+Find_package(SDL2 REQUIRED)
 include_directories(${SDL2_INCLUDE_DIR})
-link_directories(${SDL2_LIBRARY})
 
 if (APPLE)
     configure_file(${OpenADD_SOURCE_DIR}/files/mac/Info.plist
