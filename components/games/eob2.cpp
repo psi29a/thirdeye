@@ -5,9 +5,6 @@ namespace Games
 
 bool gameInit( SDL_Surface *sdlSurface[] )
 {
-	// load all images as surfaces
-	SDL_Surface *surface = SDL_CreateRGBSurface(0, 320, 200, 8, 0, 0, 0, 0);
-
 	boost::filesystem3::path playfldCPSPath = "/opt/eob2/PLAYFLD.CPS";
 	boost::filesystem3::path decorateCPSPath = "/opt/eob2/DECORATE.CPS";
 	boost::filesystem3::path thrownCPSPath = "/opt/eob2/THROWN.CPS";
@@ -20,11 +17,15 @@ bool gameInit( SDL_Surface *sdlSurface[] )
 	uint8_t thrownImage[Utils::EOB2_IMAGE_SIZE] = {};
 	Utils::getImageFromCPS(thrownImage, thrownCPSPath);
 
+	//SDL_Surface *surface = SDL_CreateRGBSurface(0, 320, 200, 8, 0, 0, 0, 0);
+	SDL_Surface *surface = SDL_CreateRGBSurfaceFrom(playfldImage, 320, 200, 8, 320, 0, 0, 0, 0);
+
+
 	// Set palette for surface
     SDL_Palette* sdlPalette = SDL_AllocPalette(256);
 	Utils::getPaletteFromPAL(sdlPalette, silverPALPath, true); // grab palette and convert to SDLPalette
 	SDL_SetPaletteColors(surface->format->palette, sdlPalette->colors, 0, 256);
-	drawImage(surface, sdlPalette, playfldImage);
+	//drawImage(surface, sdlPalette, playfldImage);
 
     sdlSurface[0] = surface;
 	return true;
