@@ -160,9 +160,11 @@ int main(int argc, char**argv)
         	SDL_Rect rcDst = { 0, 0, 320, 200 };
 
         	// create a surfaces
-        	SDL_Surface *images[256];
+        	SDL_Surface** images;
+        	images = new SDL_Surface*[256];
         	Games::gameInit(images);
         	SDL_BlitSurface(images[0], NULL, screen, NULL);
+        	//printf("%d - %d - %d", *images[0], *images[1], *images[2]);
 
         	SDL_Texture *tex;
         	tex = SDL_CreateTextureFromSurface(displayRenderer, screen);
