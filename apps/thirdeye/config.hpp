@@ -1,0 +1,9 @@
+#ifndef CONFIG_H
+#define CONFIG_H
+
+#define OPENADD_VERSION_MAJOR 
+#define OPENADD_VERSION_MINOR 
+#define OPENADD_VERSION_RELEASE 
+#define OPENADD_VERSION ""
+
+#endif
