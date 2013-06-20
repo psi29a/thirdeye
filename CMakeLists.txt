@@ -1,27 +1,27 @@
-project(OpenADD)
+project(Thirdeye)
 
 # Macros
 set(CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/cmake/)
-include (OpenADDMacros)
+include (ThirdeyeMacros)
 
 # Version
-set (OPENADD_VERSION_MAJOR 0)
-set (OPENADD_VERSION_MINOR 1)
-set (OPENADD_VERSION_RELEASE 0)
+set (THIRDEYE_VERSION_MAJOR 0)
+set (THIRDEYE_VERSION_MINOR 1)
+set (THIRDEYE_VERSION_RELEASE 0)
 
-set (OPENADD_VERSION "${OPENADD_VERSION_MAJOR}.${OPENADD_VERSION_MINOR}.${OPENADD_VERSION_RELEASE}")
+set (THIRDEYE_VERSION "${THIRDEYE_VERSION_MAJOR}.${THIRDEYE_VERSION_MINOR}.${THIRDEYE_VERSION_RELEASE}")
 
 # Doxygen main page
-configure_file ("${OpenADD_SOURCE_DIR}/docs/mainpage.hpp.cmake" "${OpenADD_SOURCE_DIR}/docs/mainpage.hpp")
+configure_file ("${Thirdeye_SOURCE_DIR}/docs/mainpage.hpp.cmake" "${Thirdeye_SOURCE_DIR}/docs/mainpage.hpp")
 
-message(STATUS "TEST: ${OpenADD_SOURCE_DIR}")
+message(STATUS "TEST: ${Thirdeye_SOURCE_DIR}")
 
 # Are we building statically?
 option(BOOST_STATIC "Link static build of Boost into the binaries" FALSE)
 option(SDL2_STATIC "Link static build of SDL into the binaries" FALSE)
 
 # Apps and tools
-option(BUILD_LAUNCHER "Build OpenADD Launcher" ON)
+option(BUILD_LAUNCHER "Build Thirdeye Launcher" ON)
 
 # We probably support older versions than this.
 cmake_minimum_required(VERSION 2.6)
@@ -32,12 +32,12 @@ set(LIBDIR ${CMAKE_SOURCE_DIR}/libs)
 # Platform specific variables
 ## Location of game data files
 if(DPKG_PROGRAM)
-    set(GAME_DATA_FILES "/usr/share/games/openadd/data/" CACHE PATH "Location of OpenADD data files")
+    set(GAME_DATA_FILES "/usr/share/games/thirdeye/data/" CACHE PATH "Location of Thirdeye data files")
 else()
     if (APPLE)
-        set(GAME_DATA_FILES "./data" CACHE PATH "Location of OpenADD data files")
+        set(GAME_DATA_FILES "./data" CACHE PATH "Location of Thirdeye data files")
     else()
-        set(GAME_DATA_FILES "data" CACHE PATH "Location of OpenADD data files")
+        set(GAME_DATA_FILES "data" CACHE PATH "Location of Thirdeye data files")
     endif(APPLE)
 endif(DPKG_PROGRAM)
 
@@ -81,11 +81,11 @@ Find_package(SDL2 REQUIRED)
 include_directories(${SDL2_INCLUDE_DIR})
 
 if (APPLE)
-    configure_file(${OpenADD_SOURCE_DIR}/files/mac/Info.plist
+    configure_file(${Thirdeye_SOURCE_DIR}/files/mac/Info.plist
         "${APP_BUNDLE_DIR}/Contents/Info.plist")
 
-    configure_file(${OpenADD_SOURCE_DIR}/files/mac/OPENADD.icns
-        "${APP_BUNDLE_DIR}/Contents/Resources/OPENADD.icns" COPYONLY)
+    configure_file(${Thirdeye_SOURCE_DIR}/files/mac/THIRDEYE.icns
+        "${APP_BUNDLE_DIR}/Contents/Resources/THIRDEYE.icns" COPYONLY)
 endif (APPLE)
 
 # Set up DEBUG define
@@ -95,12 +95,12 @@ set_directory_properties(PROPERTIES COMPILE_DEFINITIONS_DEBUG DEBUG=1)
 if (APPLE)
 	set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${APP_BUNDLE_DIR}/Contents/MacOS")
 else (APPLE)
-	set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${OpenADD_BINARY_DIR}")
+	set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${Thirdeye_BINARY_DIR}")
 endif (APPLE)
 
 if (NOT WIN32 AND NOT APPLE)
-    configure_file(${OpenADD_SOURCE_DIR}/files/OpenADD.desktop
-        "${OpenADD_BINARY_DIR}/OpenADD.desktop")
+    configure_file(${Thirdeye_SOURCE_DIR}/files/thirdeye.desktop
+        "${Thirdeye_BINARY_DIR}/thirdeye.desktop")
 endif()
 
 # Compiler settings
@@ -119,32 +119,32 @@ if(DPKG_PROGRAM)
 
     if(IS_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/.git")
         exec_program("git" ${CMAKE_CURRENT_SOURCE_DIR} ARGS "describe" OUTPUT_VARIABLE GIT_VERSION )
-        STRING(REGEX REPLACE "OPENADD-" "" VERSION_STRING "${GIT_VERSION}")
+        STRING(REGEX REPLACE "THIRDEYE-" "" VERSION_STRING "${GIT_VERSION}")
         exec_program("git" ARGS "config --get user.name" OUTPUT_VARIABLE GIT_NAME )
         exec_program("git" ARGS "config --get user.email" OUTPUT_VARIABLE GIT_EMAIL)
         set(PACKAGE_MAINTAINER "${GIT_NAME} <${GIT_EMAIL}>")
     else()
-        set(VERSION_STRING "${OPENADD_VERSION}")
+        set(VERSION_STRING "${THIRDEYE_VERSION}")
         set(PACKAGE_MAINTAINER "unknown")
     endif()
 
     #Install icon and desktop file
-    INSTALL(FILES "${OpenADD_BINARY_DIR}/OpenADD.desktop" DESTINATION "share/applications/" PERMISSIONS OWNER_READ OWNER_WRITE GROUP_READ WORLD_READ COMPONENT "OpenADD")
-    INSTALL(FILES "${OpenADD_SOURCE_DIR}/apps/launcher/resources/images/OpenADD.png" DESTINATION "share/pixmaps/" PERMISSIONS OWNER_READ OWNER_WRITE GROUP_READ WORLD_READ COMPONENT "OpenADD")
+    INSTALL(FILES "${Thirdeye_BINARY_DIR}/thirdeye.desktop" DESTINATION "share/applications/" PERMISSIONS OWNER_READ OWNER_WRITE GROUP_READ WORLD_READ COMPONENT "thirdeye")
+    INSTALL(FILES "${Thirdeye_SOURCE_DIR}/apps/launcher/resources/images/thirdeye.png" DESTINATION "share/pixmaps/" PERMISSIONS OWNER_READ OWNER_WRITE GROUP_READ WORLD_READ COMPONENT "thirdeye")
 
     #Install resources
-    INSTALL(DIRECTORY "${OpenADD_BINARY_DIR}/resources" DESTINATION "share/games/OpenADD/" FILE_PERMISSIONS OWNER_READ GROUP_READ WORLD_READ COMPONENT "Resources")
-    INSTALL(DIRECTORY DESTINATION "share/games/OpenADD/data/" COMPONENT "Resources")
+    INSTALL(DIRECTORY "${Thirdeye_BINARY_DIR}/resources" DESTINATION "share/games/thirdeye/" FILE_PERMISSIONS OWNER_READ GROUP_READ WORLD_READ COMPONENT "Resources")
+    INSTALL(DIRECTORY DESTINATION "share/games/thirdeye/data/" COMPONENT "Resources")
 
     SET(CPACK_GENERATOR "DEB")
-    SET(CPACK_PACKAGE_NAME "OpenADD")
+    SET(CPACK_PACKAGE_NAME "Thirdeye")
     SET(CPACK_DEBIAN_PACKAGE_HOMEPAGE "http://www.mindwerks.net")
     SET(CPACK_DEBIAN_PACKAGE_PRIORITY "optional")
     SET(CPACK_DEBIAN_PACKAGE_MAINTAINER "${PACKAGE_MAINTAINER}")
-    SET(CPACK_DEBIAN_PACKAGE_DESCRIPTION "OpenADD is an attempt at recreating the engine for the popular role-playing games produced by Strategic Simulations, Inc. You need to own and install the original games for OpenADD to work.")
-    SET(CPACK_DEBIAN_PACKAGE_NAME "OpenADD")
+    SET(CPACK_DEBIAN_PACKAGE_DESCRIPTION "Thirdeye is an attempt at recreating the engine for the popular role-playing games produced by Strategic Simulations, Inc. You need to own and install the original games for Thirdeye to work.")
+    SET(CPACK_DEBIAN_PACKAGE_NAME "Thirdeye")
     SET(CPACK_DEBIAN_PACKAGE_VERSION "${VERSION_STRING}")
-    SET(CPACK_PACKAGE_EXECUTABLES "openadd;OpenADD openaddlauncher;openADDLauncher")
+    SET(CPACK_PACKAGE_EXECUTABLES "thirdeye;Thirdeye thirdeyelauncher;ThirdeyeLauncher")
     SET(CPACK_DEBIAN_PACKAGE_DEPENDS "libc6 (>= 2.11.2), libstdc++6 (>= 4.4.5), libuuid1 (>= 2.17.2)")
     SET(CPACK_DEBIAN_PACKAGE_SECTION "Games")
     string(TOLOWER "${CPACK_PACKAGE_NAME}" CPACK_PACKAGE_NAME_LOWERCASE)
@@ -160,47 +160,47 @@ if(DPKG_PROGRAM)
 endif(DPKG_PROGRAM)
 
 if(WIN32)
-    FILE(GLOB dll_files "${OpenADD_BINARY_DIR}/Release/*.dll")
+    FILE(GLOB dll_files "${Thirdeye_BINARY_DIR}/Release/*.dll")
     INSTALL(FILES ${dll_files} DESTINATION ".")
     INSTALL(FILES
-        "${OpenADD_SOURCE_DIR}/README.md"
-        "${OpenADD_SOURCE_DIR}/GPL3.txt"
-        "${OpenADD_BINARY_DIR}/Release/openaddlauncher.exe"
-        "${OpenADD_BINARY_DIR}/Release/openadd.exe"
+        "${Thirdeye_SOURCE_DIR}/README.md"
+        "${Thirdeye_SOURCE_DIR}/GPL3.txt"
+        "${Thirdeye_BINARY_DIR}/Release/thirdeyelauncher.exe"
+        "${Thirdeye_BINARY_DIR}/Release/thirdeye.exe"
         DESTINATION ".")
-    INSTALL(DIRECTORY "${OpenADD_BINARY_DIR}/resources" DESTINATION ".")
+    INSTALL(DIRECTORY "${Thirdeye_BINARY_DIR}/resources" DESTINATION ".")
 
     SET(CPACK_GENERATOR "NSIS")
-    SET(CPACK_PACKAGE_NAME "OPENADD")
+    SET(CPACK_PACKAGE_NAME "THIRDEYE")
     SET(CPACK_PACKAGE_VENDOR "Mindwerks.net")
-    SET(CPACK_PACKAGE_VERSION ${OPENADD_VERSION})
-    SET(CPACK_PACKAGE_VERSION_MAJOR ${OPENADD_VERSION_MAJOR})
-    SET(CPACK_PACKAGE_VERSION_MINOR ${OPENADD_VERSION_MINOR})
-    SET(CPACK_PACKAGE_VERSION_PATCH ${OPENADD_VERSION_RELEASE})
-    SET(CPACK_PACKAGE_EXECUTABLES "openadd;OpenADD;openaddlauncher;OpenADD Launcher")
+    SET(CPACK_PACKAGE_VERSION ${THIRDEYE_VERSION})
+    SET(CPACK_PACKAGE_VERSION_MAJOR ${THIRDEYE_VERSION_MAJOR})
+    SET(CPACK_PACKAGE_VERSION_MINOR ${THIRDEYE_VERSION_MINOR})
+    SET(CPACK_PACKAGE_VERSION_PATCH ${THIRDEYE_VERSION_RELEASE})
+    SET(CPACK_PACKAGE_EXECUTABLES "thirdeye;Thirdeye;thirdeyelauncher;Thirdeye Launcher")
     SET(CPACK_NSIS_CREATE_ICONS_EXTRA "CreateShortCut '\$SMPROGRAMS\\\\$STARTMENU_FOLDER\\\\Readme.lnk' '\$INSTDIR\\\\README.md'")
     SET(CPACK_NSIS_DELETE_ICONS_EXTRA "
         !insertmacro MUI_STARTMENU_GETFOLDER Application $MUI_TEMP
         Delete \\\"$SMPROGRAMS\\\\$MUI_TEMP\\\\Readme.lnk\\\"
         ")
-    SET(CPACK_RESOURCE_FILE_README "${OpenADD_SOURCE_DIR}/README.md")
-    SET(CPACK_PACKAGE_DESCRIPTION_FILE "${OpenADD_SOURCE_DIR}/README.md")
+    SET(CPACK_RESOURCE_FILE_README "${Thirdeye_SOURCE_DIR}/README.md")
+    SET(CPACK_PACKAGE_DESCRIPTION_FILE "${Thirdeye_SOURCE_DIR}/README.md")
     SET(CPACK_NSIS_EXECUTABLES_DIRECTORY ".")
-    SET(CPACK_NSIS_DISPLAY_NAME "OPENADD ${OPENADD_VERSION}")
+    SET(CPACK_NSIS_DISPLAY_NAME "THIRDEYE ${THIRDEYE_VERSION}")
     SET(CPACK_NSIS_HELP_LINK "http:\\\\\\\\www.mindwerks.net")
     SET(CPACK_NSIS_URL_INFO_ABOUT "http:\\\\\\\\www.mindwerks.net")
-    SET(CPACK_NSIS_INSTALLED_ICON_NAME "openaddlauncher.exe")
-    SET(CPACK_NSIS_MUI_ICON "${OpenADD_SOURCE_DIR}/apps/launcher/resources/images/openadd.ico")
-    SET(CPACK_NSIS_MUI_UNIICON "${OpenADD_SOURCE_DIR}/apps/launcher/resources/images/openadd.ico")
-    SET(CPACK_PACKAGE_ICON "${OpenADD_SOURCE_DIR}\\\\files\\\\openadd.bmp")
+    SET(CPACK_NSIS_INSTALLED_ICON_NAME "thirdeyelauncher.exe")
+    SET(CPACK_NSIS_MUI_ICON "${Thirdeye_SOURCE_DIR}/apps/launcher/resources/images/thirdeye.ico")
+    SET(CPACK_NSIS_MUI_UNIICON "${Thirdeye_SOURCE_DIR}/apps/launcher/resources/images/thirdeye.ico")
+    SET(CPACK_PACKAGE_ICON "${Thirdeye_SOURCE_DIR}\\\\files\\\\thirdeye.bmp")
 
-    SET(VCREDIST32 "${OpenADD_BINARY_DIR}/vcredist_x86.exe")
+    SET(VCREDIST32 "${Thirdeye_BINARY_DIR}/vcredist_x86.exe")
     if(EXISTS ${VCREDIST32})
         INSTALL(FILES ${VCREDIST32} DESTINATION "redist")
         SET(CPACK_NSIS_EXTRA_INSTALL_COMMANDS "ExecWait '\\\"$INSTDIR\\\\redist\\\\vcredist_x86.exe\\\" /q'" )
     endif(EXISTS ${VCREDIST32})
 
-    SET(VCREDIST64 "${OpenADD_BINARY_DIR}/vcredist_x64.exe")
+    SET(VCREDIST64 "${Thirdeye_BINARY_DIR}/vcredist_x64.exe")
     if(EXISTS ${VCREDIST64})
         INSTALL(FILES ${VCREDIST64} DESTINATION "redist")
         SET(CPACK_NSIS_EXTRA_INSTALL_COMMANDS "ExecWait '\\\"$INSTDIR\\\\redist\\\\vcredist_x64.exe\\\" /q'" )
@@ -217,7 +217,7 @@ endif(WIN32)
 add_subdirectory (components)
 
 # Apps and tools
-add_subdirectory( apps/openadd )
+add_subdirectory( apps/thirdeye )
 
 if (BUILD_LAUNCHER)
    add_subdirectory( apps/launcher )
@@ -226,19 +226,19 @@ endif()
 if (WIN32)
   if (MSVC)
     if (USE_DEBUG_CONSOLE)
-      set_target_properties(OPENADD PROPERTIES LINK_FLAGS_DEBUG "/SUBSYSTEM:CONSOLE")
-      set_target_properties(OPENADD PROPERTIES LINK_FLAGS_RELWITHDEBINFO "/SUBSYSTEM:CONSOLE")
-      set_target_properties(OPENADD PROPERTIES COMPILE_DEFINITIONS_DEBUG "_CONSOLE")
+      set_target_properties(THIRDEYE PROPERTIES LINK_FLAGS_DEBUG "/SUBSYSTEM:CONSOLE")
+      set_target_properties(THIRDEYE PROPERTIES LINK_FLAGS_RELWITHDEBINFO "/SUBSYSTEM:CONSOLE")
+      set_target_properties(THIRDEYE PROPERTIES COMPILE_DEFINITIONS_DEBUG "_CONSOLE")
     else()
       # Turn off debug console, debug output will be written to visual studio output instead
-      set_target_properties(OPENADD PROPERTIES LINK_FLAGS_DEBUG "/SUBSYSTEM:WINDOWS")
-      set_target_properties(OPENADD PROPERTIES LINK_FLAGS_RELWITHDEBINFO "/SUBSYSTEM:WINDOWS")
+      set_target_properties(THIRDEYE PROPERTIES LINK_FLAGS_DEBUG "/SUBSYSTEM:WINDOWS")
+      set_target_properties(THIRDEYE PROPERTIES LINK_FLAGS_RELWITHDEBINFO "/SUBSYSTEM:WINDOWS")
     endif()
 
     # Release builds use the debug console
-    set_target_properties(OPENADD PROPERTIES LINK_FLAGS_RELEASE "/SUBSYSTEM:CONSOLE")
-    set_target_properties(OPENADD PROPERTIES COMPILE_DEFINITIONS_RELEASE "_CONSOLE")
-    set_target_properties(OPENADD PROPERTIES LINK_FLAGS_MINSIZEREL "/SUBSYSTEM:CONSOLE")
+    set_target_properties(THIRDEYE PROPERTIES LINK_FLAGS_RELEASE "/SUBSYSTEM:CONSOLE")
+    set_target_properties(THIRDEYE PROPERTIES COMPILE_DEFINITIONS_RELEASE "_CONSOLE")
+    set_target_properties(THIRDEYE PROPERTIES LINK_FLAGS_MINSIZEREL "/SUBSYSTEM:CONSOLE")
 
     # Play a bit with the warning levels
 
@@ -250,7 +250,7 @@ if (WIN32)
         # Not going to bother commenting them as they tend to warn on every standard library files
         4061 4263 4264 4266 4350 4371 4514 4548 4571 4610 4619 4623 4625 4626 4628 4640 4668 4710 4711 4820 4826 4917 4946
 
-        # Warnings that are thrown on standard libraries and not OpenADD
+        # Warnings that are thrown on standard libraries and not thirdeye
         4347 # Non-template function with same name and parameter count as template function
         4365 # Variable signed/unsigned mismatch
         4510 4512 # Unable to generate copy constructor/assignment operator as it's not public in the base
@@ -264,7 +264,7 @@ if (WIN32)
 		4251 # class 'XXXX' needs to have dll-interface to be used by clients of class 'YYYY'
 		4275 # non dll-interface struct 'XXXX' used as base for dll-interface class 'YYYY'
 
-        # OpenADD specific warnings
+        # thirdeye specific warnings
         4099 # Type mismatch, declared class or struct is defined with other type
         4100 # Unreferenced formal parameter (-Wunused-parameter)
         4127 # Conditional expression is constant
@@ -283,44 +283,44 @@ if (WIN32)
 
     set_target_properties(components PROPERTIES COMPILE_FLAGS ${WARNINGS})
     if (BUILD_LAUNCHER)
-		set_target_properties(openaddlauncher PROPERTIES COMPILE_FLAGS ${WARNINGS})
+		set_target_properties(thirdeyelauncher PROPERTIES COMPILE_FLAGS ${WARNINGS})
 	endif (BUILD_LAUNCHER)
-    set_target_properties(OPENADD PROPERTIES COMPILE_FLAGS ${WARNINGS})
+    set_target_properties(THIRDEYE PROPERTIES COMPILE_FLAGS ${WARNINGS})
   endif(MSVC)
 
   # Same for MinGW
   if (MINGW)
     if (USE_DEBUG_CONSOLE)
-      set_target_properties(OPENADD PROPERTIES LINK_FLAGS_DEBUG "-Wl,-subsystem,console")
-      set_target_properties(OPENADD PROPERTIES LINK_FLAGS_RELWITHDEBINFO "-Wl,-subsystem,console")
-      set_target_properties(OPENADD PROPERTIES COMPILE_DEFINITIONS_DEBUG "_CONSOLE")
+      set_target_properties(THIRDEYE PROPERTIES LINK_FLAGS_DEBUG "-Wl,-subsystem,console")
+      set_target_properties(THIRDEYE PROPERTIES LINK_FLAGS_RELWITHDEBINFO "-Wl,-subsystem,console")
+      set_target_properties(THIRDEYE PROPERTIES COMPILE_DEFINITIONS_DEBUG "_CONSOLE")
     else(USE_DEBUG_CONSOLE)
-      set_target_properties(OPENADD PROPERTIES LINK_FLAGS_DEBUG "-Wl,-subsystem,windows")
-      set_target_properties(OPENADD PROPERTIES LINK_FLAGS_RELWITHDEBINFO "-Wl,-subsystem,windows")
+      set_target_properties(THIRDEYE PROPERTIES LINK_FLAGS_DEBUG "-Wl,-subsystem,windows")
+      set_target_properties(THIRDEYE PROPERTIES LINK_FLAGS_RELWITHDEBINFO "-Wl,-subsystem,windows")
     endif(USE_DEBUG_CONSOLE)
 
-    set_target_properties(OPENADD PROPERTIES LINK_FLAGS_RELEASE "-Wl,-subsystem,console")
-    set_target_properties(OPENADD PROPERTIES LINK_FLAGS_MINSIZEREL "-Wl,-subsystem,console")
-    set_target_properties(OPENADD PROPERTIES COMPILE_DEFINITIONS_RELEASE "_CONSOLE")
+    set_target_properties(THIRDEYE PROPERTIES LINK_FLAGS_RELEASE "-Wl,-subsystem,console")
+    set_target_properties(THIRDEYE PROPERTIES LINK_FLAGS_MINSIZEREL "-Wl,-subsystem,console")
+    set_target_properties(THIRDEYE PROPERTIES COMPILE_DEFINITIONS_RELEASE "_CONSOLE")
   endif(MINGW)
 
   # TODO: At some point release builds should not use the console but rather write to a log file
-  #set_target_properties(OPENADD PROPERTIES LINK_FLAGS_RELEASE "/SUBSYSTEM:WINDOWS")
-  #set_target_properties(OPENADD PROPERTIES LINK_FLAGS_MINSIZEREL "/SUBSYSTEM:WINDOWS")
+  #set_target_properties(THIRDEYE PROPERTIES LINK_FLAGS_RELEASE "/SUBSYSTEM:WINDOWS")
+  #set_target_properties(THIRDEYE PROPERTIES LINK_FLAGS_MINSIZEREL "/SUBSYSTEM:WINDOWS")
 endif()
 
 # Apple bundling
 if (APPLE)
-    set(INSTALL_SUBDIR OPENADD)
+    set(INSTALL_SUBDIR THIRDEYE)
 
     install(DIRECTORY "${APP_BUNDLE_DIR}" USE_SOURCE_PERMISSIONS DESTINATION "${INSTALL_SUBDIR}" COMPONENT Runtime)
-    install(DIRECTORY "${OpenADD_BINARY_DIR}/resources" DESTINATION "${INSTALL_SUBDIR}" COMPONENT Runtime)
+    install(DIRECTORY "${Thirdeye_BINARY_DIR}/resources" DESTINATION "${INSTALL_SUBDIR}" COMPONENT Runtime)
 
     set(CPACK_GENERATOR "DragNDrop")
-    set(CPACK_PACKAGE_VERSION ${OPENADD_VERSION})
-    set(CPACK_PACKAGE_VERSION_MAJOR ${OPENADD_VERSION_MAJOR})
-    set(CPACK_PACKAGE_VERSION_MINOR ${OPENADD_VERSION_MINO})
-    set(CPACK_PACKAGE_VERSION_PATCH ${OPENADD_VERSION_RELEASE})
+    set(CPACK_PACKAGE_VERSION ${THIRDEYE_VERSION})
+    set(CPACK_PACKAGE_VERSION_MAJOR ${THIRDEYE_VERSION_MAJOR})
+    set(CPACK_PACKAGE_VERSION_MINOR ${THIRDEYE_VERSION_MINO})
+    set(CPACK_PACKAGE_VERSION_PATCH ${THIRDEYE_VERSION_RELEASE})
     set(APPS "\${CMAKE_INSTALL_PREFIX}/${INSTALL_SUBDIR}/${APP_BUNDLE_NAME}")
     set(PLUGINS "")
     set(ABSOLUTE_PLUGINS "")
@@ -352,7 +352,7 @@ if (APPLE)
         set(CMAKE_FIND_LIBRARY_SUFFIXES ${CMAKE_FIND_LIBRARY_SUFFIXES})
         set(CMAKE_SYSTEM_FRAMEWORK_PATH ${CMAKE_SYSTEM_FRAMEWORK_PATH})
 
-        set(OPENADD_RESOLVED_ITEMS \"\")
+        set(THIRDEYE_RESOLVED_ITEMS \"\")
 
         function(gp_resolve_item_override context item exepath dirs resolved_item_var resolved_var)
             if(item MATCHES \"@executable_path\" AND NOT \${\${resolved_var}})
@@ -392,25 +392,25 @@ if (NOT WIN32 AND NOT DPKG_PROGRAM AND NOT APPLE)
     # paths
     set(BINDIR "${CMAKE_INSTALL_PREFIX}/usr/bin" CACHE PATH "Where to install binaries")
     set(DATAROOTDIR "${CMAKE_INSTALL_PREFIX}/share" CACHE PATH "Sets the root of data directories to a non-default location")
-    set(DATADIR "${DATAROOTDIR}/openadd" CACHE PATH "Sets the OpenADD data directories to a non-default location")
-    set(DOCDIR "${DATAROOTDIR}/doc/openadd" CACHE PATH "Sets the doc directory to a non-default location.")
+    set(DATADIR "${DATAROOTDIR}/thirdeye" CACHE PATH "Sets the thirdeye data directories to a non-default location")
+    set(DOCDIR "${DATAROOTDIR}/doc/thirdeye" CACHE PATH "Sets the doc directory to a non-default location.")
     set(MANDIR "${DATAROOTDIR}/man" CACHE PATH "Where to install manpages")
-    set(SYSCONFDIR "${CMAKE_INSTALL_PREFIX}/etc/openadd" CACHE PATH "Set config dir")
+    set(SYSCONFDIR "${CMAKE_INSTALL_PREFIX}/etc/thirdeye" CACHE PATH "Set config dir")
     set(ICONDIR "${DATAROOTDIR}/pixmaps" CACHE PATH "Set icon dir")
 
     # Install binaries
-    INSTALL(PROGRAMS "${OpenADD_BINARY_DIR}/openadd" DESTINATION "${BINDIR}" )
+    INSTALL(PROGRAMS "${Thirdeye_BINARY_DIR}/thirdeye" DESTINATION "${BINDIR}" )
     IF(BUILD_LAUNCHER)
-        INSTALL(PROGRAMS "${OpenADD_BINARY_DIR}/openaddlauncher" DESTINATION "${BINDIR}" )
+        INSTALL(PROGRAMS "${Thirdeye_BINARY_DIR}/thirdeyelauncher" DESTINATION "${BINDIR}" )
     ENDIF(BUILD_LAUNCHER)
 
     # Install icon and .desktop
-    INSTALL(FILES "${OpenADD_SOURCE_DIR}/apps/launcher/resources/images/openadd.png" DESTINATION "${ICONDIR}")
-    INSTALL(FILES "${OpenADD_BINARY_DIR}/OpenADD.desktop" DESTINATION "${DATAROOTDIR}/applications")
+    INSTALL(FILES "${Thirdeye_SOURCE_DIR}/apps/launcher/resources/images/thirdeye.png" DESTINATION "${ICONDIR}")
+    INSTALL(FILES "${Thirdeye_BINARY_DIR}/thirdeye.desktop" DESTINATION "${DATAROOTDIR}/applications")
 
     # Install resources
-    INSTALL(DIRECTORY "${OpenADD_BINARY_DIR}/resources" DESTINATION "${DATADIR}" )
+    INSTALL(DIRECTORY "${Thirdeye_BINARY_DIR}/resources" DESTINATION "${DATADIR}" )
     IF(BUILD_LAUNCHER)
-        INSTALL(FILES "${OpenADD_BINARY_DIR}/launcher.qss" DESTINATION "${DATADIR}/resources" )
+        INSTALL(FILES "${Thirdeye_BINARY_DIR}/launcher.qss" DESTINATION "${DATADIR}/resources" )
     ENDIF(BUILD_LAUNCHER)
 endif(NOT WIN32 AND NOT DPKG_PROGRAM AND NOT APPLE)
