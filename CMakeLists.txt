@@ -18,6 +18,7 @@ message(STATUS "TEST: ${OpenADD_SOURCE_DIR}")
 
 # Are we building statically?
 option(BOOST_STATIC "Link static build of Boost into the binaries" FALSE)
+option(SDL2_STATIC "Link static build of SDL into the binaries" FALSE)
 
 # Apps and tools
 option(BUILD_LAUNCHER "Build OpenADD Launcher" ON)
