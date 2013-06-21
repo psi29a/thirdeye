@@ -22,6 +22,7 @@ option(SDL2_STATIC "Link static build of SDL into the binaries" FALSE)
 
 # Apps and tools
 option(BUILD_LAUNCHER "Build Thirdeye Launcher" ON)
+option(BUILD_DAESOP "Build Daesop" ON)
 
 # We probably support older versions than this.
 cmake_minimum_required(VERSION 2.6)
@@ -144,7 +145,7 @@ if(DPKG_PROGRAM)
     SET(CPACK_DEBIAN_PACKAGE_DESCRIPTION "Thirdeye is an attempt at recreating the engine for the popular role-playing games produced by Strategic Simulations, Inc. You need to own and install the original games for Thirdeye to work.")
     SET(CPACK_DEBIAN_PACKAGE_NAME "Thirdeye")
     SET(CPACK_DEBIAN_PACKAGE_VERSION "${VERSION_STRING}")
-    SET(CPACK_PACKAGE_EXECUTABLES "thirdeye;Thirdeye thirdeyelauncher;ThirdeyeLauncher")
+    SET(CPACK_PACKAGE_EXECUTABLES "thirdeye;Thirdeye thirdeyelauncher;ThirdeyeLauncher daesop;Daesop")
     SET(CPACK_DEBIAN_PACKAGE_DEPENDS "libc6 (>= 2.11.2), libstdc++6 (>= 4.4.5), libuuid1 (>= 2.17.2)")
     SET(CPACK_DEBIAN_PACKAGE_SECTION "Games")
     string(TOLOWER "${CPACK_PACKAGE_NAME}" CPACK_PACKAGE_NAME_LOWERCASE)
@@ -167,6 +168,7 @@ if(WIN32)
         "${Thirdeye_SOURCE_DIR}/GPL3.txt"
         "${Thirdeye_BINARY_DIR}/Release/thirdeyelauncher.exe"
         "${Thirdeye_BINARY_DIR}/Release/thirdeye.exe"
+        "${Thirdeye_BINARY_DIR}/Release/daesop.exe"
         DESTINATION ".")
     INSTALL(DIRECTORY "${Thirdeye_BINARY_DIR}/resources" DESTINATION ".")
 
@@ -177,7 +179,7 @@ if(WIN32)
     SET(CPACK_PACKAGE_VERSION_MAJOR ${THIRDEYE_VERSION_MAJOR})
     SET(CPACK_PACKAGE_VERSION_MINOR ${THIRDEYE_VERSION_MINOR})
     SET(CPACK_PACKAGE_VERSION_PATCH ${THIRDEYE_VERSION_RELEASE})
-    SET(CPACK_PACKAGE_EXECUTABLES "thirdeye;Thirdeye;thirdeyelauncher;Thirdeye Launcher")
+    SET(CPACK_PACKAGE_EXECUTABLES "thirdeye;Thirdeye;thirdeyelauncher;Thirdeye Launcher;daesop;Daesop")
     SET(CPACK_NSIS_CREATE_ICONS_EXTRA "CreateShortCut '\$SMPROGRAMS\\\\$STARTMENU_FOLDER\\\\Readme.lnk' '\$INSTDIR\\\\README.md'")
     SET(CPACK_NSIS_DELETE_ICONS_EXTRA "
         !insertmacro MUI_STARTMENU_GETFOLDER Application $MUI_TEMP
@@ -218,9 +220,11 @@ add_subdirectory (components)
 
 # Apps and tools
 add_subdirectory( apps/thirdeye )
-
 if (BUILD_LAUNCHER)
    add_subdirectory( apps/launcher )
+endif()
+if (BUILD_DAESOP)
+   add_subdirectory( apps/daesop )
 endif()
 
 if (WIN32)
@@ -285,6 +289,9 @@ if (WIN32)
     if (BUILD_LAUNCHER)
 		set_target_properties(thirdeyelauncher PROPERTIES COMPILE_FLAGS ${WARNINGS})
 	endif (BUILD_LAUNCHER)
+    if (BUILD_DAESOP)
+        set_target_properties(daesop PROPERTIES COMPILE_FLAGS ${WARNINGS})
+    endif (BUILD_DAESOP)	
     set_target_properties(THIRDEYE PROPERTIES COMPILE_FLAGS ${WARNINGS})
   endif(MSVC)
 
@@ -403,6 +410,9 @@ if (NOT WIN32 AND NOT DPKG_PROGRAM AND NOT APPLE)
     IF(BUILD_LAUNCHER)
         INSTALL(PROGRAMS "${Thirdeye_BINARY_DIR}/thirdeyelauncher" DESTINATION "${BINDIR}" )
     ENDIF(BUILD_LAUNCHER)
+    IF(BUILD_DAESOP)
+        INSTALL(PROGRAMS "${Thirdeye_BINARY_DIR}/daesop" DESTINATION "${BINDIR}" )
+    ENDIF(BUILD_DAESOP)    
 
     # Install icon and .desktop
     INSTALL(FILES "${Thirdeye_SOURCE_DIR}/apps/launcher/resources/images/thirdeye.png" DESTINATION "${ICONDIR}")

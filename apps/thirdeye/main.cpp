@@ -51,7 +51,7 @@ bool parseOptions (int argc, char** argv, bool engine, Files::ConfigurationManag
     namespace bpo = boost::program_options;
     typedef std::vector<std::string> StringsVector;
 
-    bpo::options_description desc("Syntax: openadd <options>\nAllowed options");
+    bpo::options_description desc("Syntax: thirdeye <options>\nAllowed options");
 
     desc.add_options()
         ("help", "print help message")
@@ -99,7 +99,7 @@ bool parseOptions (int argc, char** argv, bool engine, Files::ConfigurationManag
 
     if (variables.count ("version"))
     {
-        std::cout << "OpenADD version " << OPENADD_VERSION << std::endl;
+        std::cout << "Thirdeye version " << THIRDEYE_VERSION << std::endl;
         run = false;
     }
 
@@ -247,8 +247,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
         boost::iostreams::stream_buffer<DebugOutput> sb;
         sb.open(DebugOutput());
 #else
-    // Redirect cout to openadd.log
-    std::ofstream logfile ("openadd.log");
+    // Redirect cout to thirdeye.log
+    std::ofstream logfile ("thirdeye.log");
     {
         boost::iostreams::stream_buffer<Logger> sb;
         sb.open (Logger (logfile));

@@ -15,17 +15,14 @@ set(GAME_HEADER
 source_group(game FILES ${GAME} ${GAME_HEADER})
 
 # Main executable
-add_executable(openadd
-    ${OPENADD_LIBS} ${OPENADD_LIBS_HEADER}
-    ${OPENADD_FILES}
+add_executable(thirdeye
+    ${THIRDEYE_LIBS} ${THIRDEYE_LIBS_HEADER}
+    ${THIRDEYE_FILES}
     ${GAME} ${GAME_HEADER}
     ${APPLE_BUNDLE_RESOURCES}
 )
 
-# Sound stuff - here so CMake doesn't stupidly recompile EVERYTHING
-# when we change the backend.
-
-target_link_libraries(openadd
+target_link_libraries(thirdeye
     ${Boost_LIBRARIES}
     ${SDL2_LIBRARY}
     components
@@ -33,27 +30,27 @@ target_link_libraries(openadd
 
 # Fix for not visible pthreads functions for linker with glibc 2.15
 if (UNIX AND NOT APPLE)
-target_link_libraries(openadd ${CMAKE_THREAD_LIBS_INIT})
+target_link_libraries(thirdeye ${CMAKE_THREAD_LIBS_INIT})
 endif()
 
 if(APPLE)
     find_library(CARBON_FRAMEWORK Carbon)
     find_library(COCOA_FRAMEWORK Cocoa)
     find_library(IOKIT_FRAMEWORK IOKit)
-    target_link_libraries(openadd ${CARBON_FRAMEWORK} ${COCOA_FRAMEWORK} ${IOKIT_FRAMEWORK})
+    target_link_libraries(thirdeye ${CARBON_FRAMEWORK} ${COCOA_FRAMEWORK} ${IOKIT_FRAMEWORK})
 
     if (FFMPEG_FOUND)
         find_library(COREVIDEO_FRAMEWORK CoreVideo)
         find_library(VDA_FRAMEWORK VideoDecodeAcceleration)
-        target_link_libraries(openadd ${COREVIDEO_FRAMEWORK} ${VDA_FRAMEWORK})
+        target_link_libraries(thirdeye ${COREVIDEO_FRAMEWORK} ${VDA_FRAMEWORK})
     endif()
 endif(APPLE)
 
 if(DPKG_PROGRAM)
-    INSTALL(TARGETS openadd RUNTIME DESTINATION games COMPONENT openadd)
+    INSTALL(TARGETS thirdeye RUNTIME DESTINATION games COMPONENT thirdeye)
 endif(DPKG_PROGRAM)
 
 if (BUILD_WITH_CODE_COVERAGE)
   add_definitions (--coverage)
-  target_link_libraries(openadd gcov)
+  target_link_libraries(thirdeye gcov)
 endif()
