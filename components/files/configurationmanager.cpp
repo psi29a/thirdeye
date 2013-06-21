@@ -14,7 +14,7 @@
 namespace Files
 {
 
-static const char* const openaddCfgFile = "openadd.cfg";
+static const char* const thirdeyeCfgFile = "thirdeye.cfg";
 
 const char* const gameToken = "?game?";
 const char* const localToken = "?local?";
@@ -22,7 +22,7 @@ const char* const userToken = "?user?";
 const char* const globalToken = "?global?";
 
 ConfigurationManager::ConfigurationManager()
-    : mFixedPath("openadd")
+    : mFixedPath("thirdeye")
 {
     setupTokensMapping();
 
@@ -106,7 +106,7 @@ void ConfigurationManager::loadConfig(const boost::filesystem::path& path,
     boost::program_options::options_description& description)
 {
     boost::filesystem::path cfgFile(path);
-    cfgFile /= std::string(openaddCfgFile);
+    cfgFile /= std::string(thirdeyeCfgFile);
     if (boost::filesystem::is_regular_file(cfgFile))
     {
         std::cout << "Loading config file: " << cfgFile.string() << "... ";

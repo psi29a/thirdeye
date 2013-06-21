@@ -1,10 +1,10 @@
 [Desktop Entry]
 Type=Application
-Name=OpenADD Launcher
+Name=Thirdeye Launcher
 GenericName=Role Playing Game
-Comment=An engine replacement for SSI's role playing game engine
-TryExec=openaddlauncher
-Exec=openaddlauncher
-Icon=openadd
+Comment=An engine replacement for AESOP
+TryExec=thirdeyelauncher
+Exec=thirdeyelauncher
+Icon=thirdeye
 Categories=Game;RolePlaying;
-Name[en_US]=OpenADD
+Name[en_US]=Thirdeye

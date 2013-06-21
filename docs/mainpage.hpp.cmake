@@ -2,4 +2,4 @@
 ///
 /// This is the source documentation for:
 ///
-/// OpenADD @OPENADD_VERSION@
+/// Thirdeye @THIRDEYE_VERSION@

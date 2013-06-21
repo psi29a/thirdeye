@@ -89,7 +89,7 @@ bool Video_Init(void)
 	}
 
 
-	const char *window_caption = "OpenADD - Pre v0.1";
+	const char *window_caption = "Thirdeye - Pre v0.1";
 
 	//FIXME: SDL_WM_SetCaption(window_caption, "");
 	//s_gfx_surface = SDL_SetVideoMode(SCREEN_WIDTH * SCREEN_MAGNIFICATION, SCREEN_HEIGHT * SCREEN_MAGNIFICATION, 8, SDL_SWSURFACE | SDL_HWPALETTE);
