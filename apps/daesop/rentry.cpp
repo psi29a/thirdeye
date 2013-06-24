@@ -1,7 +1,15 @@
+///////////////////////////////////////////////////////////////////////////////
+//
+// DAESOP
+// using code from AESOP engine and ReWiki website
+// (c) Mirek Luza
+// public domain software
+//
+///////////////////////////////////////////////////////////////////////////////
+
 #include <malloc.h>
 
 #include "rentry.hpp"
-#include "dblocks.hpp"
 
 /*
 Get the file index of the specified resource (including the resource header)
@@ -35,8 +43,8 @@ Reads the resource entry header
 struct RESEntryHeader *getResourceEntryHeader(int aNumber, FILE *aResFile, DIRPOINTER * aDirectoryPointers)
 {
     long loResourceEntryIndex;
-    int loEntryHeaderSize;
-    int loReadSize;
+    unsigned int loEntryHeaderSize;
+    unsigned int loReadSize;
     struct RESEntryHeader *loEntryHeader = NULL;
     
     loResourceEntryIndex = getResourceEntryIndex(aNumber, aDirectoryPointers);
@@ -75,13 +83,13 @@ int getMaxNumberOfResourceEntries(DIRPOINTER *aDirectoryPointers)
 /*
 Read the resource binary to memory
 */
-char *readResourceBinary(int aResourceNumber, FILE *aResFile, DIRPOINTER *aDirectoryPointers, int *aResourceLength)
+unsigned char *readResourceBinary(int aResourceNumber, FILE *aResFile, DIRPOINTER *aDirectoryPointers, int *aResourceLength)
 {
     struct RESEntryHeader *loResEntryHeader;
     ULONG loDataSize;
     long loResourceEntryIndex;
-    char *loBuffer;
-    int loReadSize;
+    unsigned char *loBuffer;
+    unsigned int loReadSize;
     
     // start of the resource
     loResourceEntryIndex = getResourceEntryIndex(aResourceNumber, aDirectoryPointers);
@@ -99,7 +107,7 @@ char *readResourceBinary(int aResourceNumber, FILE *aResFile, DIRPOINTER *aDirec
     printf("Reading %ld bytes from the position %ld...\n", (long)loDataSize, (long)loResourceEntryIndex);    
 
     // now read the resource from the position loResourceEntryIndex with the length loDataSize
-    loBuffer = (char *)malloc(loDataSize);
+    loBuffer = (unsigned char *)malloc(loDataSize);
     if (loBuffer == NULL)
     {
         char loError[256];

@@ -13,8 +13,6 @@
 #include <string.h>
 
 #include "dblocks.hpp"
-//#include "tdefs.h"
-#include "resstr.hpp"
 
 /*
 Read directory blocks
@@ -34,20 +32,17 @@ int readDirectoryBlocks(FILE *aResFile, DIRPOINTER * loDirectoryPointers)
         if (loDirCounter > MAX_DIRECTORIES)
         {
             printf("Too much directory blocks, only %d of them were read!", MAX_DIRECTORIES);
-            return true;
+            return TRUE;
         }
         printf("Reading the directory block %d from the position %ld\n",loDirCounter, ftell(aResFile));        
         loDirectoryPointers[loDirCounter] = (DIRPOINTER) malloc(loDirBlockSize);
         loReadSize = fread( loDirectoryPointers[loDirCounter], 1, loDirBlockSize, aResFile);
-
-        printf("loReadSize: %u  loDirBlockSize: %u \n", loReadSize, loDirBlockSize);
-
         if (loReadSize != loDirBlockSize)
         {
             free(loDirectoryPointers[loDirCounter]);
             loDirectoryPointers[loDirCounter] = NULL;
             printf("Reading of the directory block failed!\n");
-            return false;
+            return FALSE;
         }
         // set the file position to the next block
         
@@ -55,11 +50,11 @@ int readDirectoryBlocks(FILE *aResFile, DIRPOINTER * loDirectoryPointers)
         if (fseek(aResFile, loDirPos, SEEK_SET) != 0)
         {
             printf("Failure to set the file position %ld when reading a directory block!\n", loDirPos);
-            return false;
+            return FALSE;
         }
     }
     printf("The total number of directory blocks read: %d\n", loDirCounter + 1);
-    return true;
+    return TRUE;
 }
 
 /*
@@ -80,7 +75,7 @@ int getNumberOfDirectoryBlocks(DIRPOINTER *aDirectoryPointers)
 /*
 Opens RES file, sets file pointer on the first directory block
 */
-FILE* openAESOPResourceAndSetToFirstDirectoryBlock(char *aResName, char *aMode, struct RESGlobalHeader *aHeaderPointer)
+FILE* openAESOPResourceAndSetToFirstDirectoryBlock(char *aResName, const char *aMode, struct RESGlobalHeader *aHeaderPointer)
 {
     FILE *loResFile;
     int loHeaderSize;

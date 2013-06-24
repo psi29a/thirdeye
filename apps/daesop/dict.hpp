@@ -1,3 +1,12 @@
+///////////////////////////////////////////////////////////////////////////////
+//
+// DAESOP
+// using code from AESOP engine and ReWiki website
+// (c) Mirek Luza
+// public domain software
+//
+///////////////////////////////////////////////////////////////////////////////
+
 #ifndef DICT_H
 #define DICT_H
 
@@ -5,7 +14,6 @@
 #include "resstr.hpp"
 #include "utils.hpp"
 #include "rentry.hpp"
-
 
 // just a sensible value to check when working with dictionaries
 #define MAX_NUMBER_OF_DICTIONARY_ITEMS 30000

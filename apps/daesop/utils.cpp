@@ -1,14 +1,24 @@
+///////////////////////////////////////////////////////////////////////////////
+//
+// DAESOP
+// using code from AESOP engine and ReWiki website
+// (c) Mirek Luza
+// public domain software
+//
+///////////////////////////////////////////////////////////////////////////////
+
 #include <malloc.h>
 #include <stdio.h>
 #include <string.h>
 #include <ctype.h>
 
 #include "utils.hpp"
+#include "tdefs.hpp"
 
 /*
 Allocate a string
 */
-char *makeString(char *aString)
+char *makeString(const char *aString)
 {
     char *loResult = NULL;
     if (aString == NULL)
@@ -27,7 +37,7 @@ Get the date
 */
 char *unpackDate(ULONG aDate, char *aDateString)
 {
-    static char *months[] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
+    const char *months[12] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
 
     sprintf(aDateString, "%s %d, %4d %02d:%02d:%02d", 
     months[((aDate >> 21) & 0x000f)-1], 
@@ -86,7 +96,7 @@ int stringEndsWith(char *aFullString, char *aEndString)
 {
     int loFullStringLength;
     int loEndStringLength;
-    int loResult = false;
+    int loResult = FALSE;
     char *loFullStringEndPointer;
     
     if (aFullString == NULL || aEndString == NULL)
@@ -106,7 +116,7 @@ int stringEndsWith(char *aFullString, char *aEndString)
     if (strcmpCS(loFullStringEndPointer, aEndString) == 0)
     {
         // ok, the ending agrees
-        loResult = true;
+        loResult = TRUE;
     }
     return loResult;
 }
@@ -117,7 +127,7 @@ Copy the file into a new file
 int copyFile(FILE *aSourceFile, char *aNewFileName)
 {
     FILE *loNewFile;
-    int loReadSize;
+    unsigned int loReadSize;
     char loBuffer[MAX_COPY_BUFFER];    
     
     // new file
@@ -126,7 +136,7 @@ int copyFile(FILE *aSourceFile, char *aNewFileName)
     if (loNewFile == NULL)
     {
         printf("The file could not be opened: %s!\n", aNewFileName);
-        return false;
+        return FALSE;
     }
 
     // copy the aResFile file into aNewFile
@@ -137,12 +147,12 @@ int copyFile(FILE *aSourceFile, char *aNewFileName)
         {
             printf("Unable to write to the file: %s\n", aNewFileName);
             fclose(loNewFile);
-            return false;
+            return FALSE;
         }
     }
 
     // close the file after copying
     fclose(loNewFile);
     printf("Finished copying of the original into the file: %s\n", aNewFileName);
-    return true;
+    return TRUE;
 }
