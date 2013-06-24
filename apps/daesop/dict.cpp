@@ -167,7 +167,7 @@ DICTENTRYPOINTER *readTheDictionary(int aResource, int aMaxDictionaryEntries, FI
             // not empty
             loStringListIndex += loDictionaryStart; // add the start of the index table to get the real offset
             //printf("String list index: %d\n", (int)loStringListIndex);
-            if (readDictionaryStringList(loDictionaryArray, aMaxDictionaryEntries, &loCurrentIndexInDictionary, aResFile, loStringListIndex) != true)
+            if (readDictionaryStringList(loDictionaryArray, aMaxDictionaryEntries, &loCurrentIndexInDictionary, aResFile, loStringListIndex) != TRUE)
             {
                 // something failed
                 printf("Error while reading dictionary resource: %d\n", aResource);
@@ -191,8 +191,8 @@ int readDictionaryStringList(DICTENTRYPOINTER *aDictionaryArray, int aMaxDiction
     
     if (fseek(aResFile, aStringListIndex, SEEK_SET) != 0)
     {
-        printf("Failure to set the file position %ld when reading a dictionary string list!\n", aStringListIndex);
-        return false;
+        printf("Failure to set the file position %ud when reading a dictionary string list!\n", aStringListIndex);
+        return FALSE;
     }
 
     for(;;)
@@ -201,7 +201,7 @@ int readDictionaryStringList(DICTENTRYPOINTER *aDictionaryArray, int aMaxDiction
         if (loReadSize != sizeof(UWORD))
         {
             printf("Failure to read the string length from the dictionary!\n");
-            return false;
+            return FALSE;           
         }
         if (loStringLength == 0)
         {
@@ -212,7 +212,7 @@ int readDictionaryStringList(DICTENTRYPOINTER *aDictionaryArray, int aMaxDiction
         if (loReadSize != loStringLength)
         {
             printf("Failure to read the string from the dictionary!\n");
-            return false;
+            return FALSE;           
         }                
         loReadString[loStringLength] = '\0';
         //printf("%s\n", loReadString);
@@ -222,7 +222,7 @@ int readDictionaryStringList(DICTENTRYPOINTER *aDictionaryArray, int aMaxDiction
             if (aMaxDictionaryEntries == (*aCurrentIndexInDictionary))
             {
                 printf("The max number of the entries in this dictionary is %d!\n", aMaxDictionaryEntries);
-                return false;
+                return FALSE;
             }            
             storeIntoDictionaryArray(aDictionaryArray, aCurrentIndexInDictionary, loPreviousString, loReadString);            
         }
@@ -233,7 +233,7 @@ int readDictionaryStringList(DICTENTRYPOINTER *aDictionaryArray, int aMaxDiction
         }
     }
 
-    return true;
+    return TRUE;
 }
 
 /*
@@ -327,16 +327,16 @@ int sortDictionaryAccordingToSecondNumber(DICTENTRYPOINTER *aArray)
     if (aArray == NULL)
     {
         printf("The dictionary array is NULL!\n");
-        return false;
+        return FALSE;
     }
     loItems = getNumberOfItems(aArray);
     if (loItems == -1)
     {
         printf("Unable to determine the number of items when sorting!");
-        return false;
+        return FALSE;
     }
     qsort (aArray, loItems, sizeof(DICTENTRYPOINTER), compareAccordingToSecondNumber);
-    return true;
+    return TRUE;
 }
 
 /*
@@ -348,16 +348,16 @@ int sortDictionaryAccordingToSecondString(DICTENTRYPOINTER *aArray)
     if (aArray == NULL)
     {
         printf("The dictionary array is NULL!\n");
-        return false;
+        return FALSE;
     }
     loItems = getNumberOfItems(aArray);
     if (loItems == -1)
     {
         printf("Unable to determine the number of items when sorting!");
-        return false;
+        return FALSE;
     }
     qsort (aArray, loItems, sizeof(DICTENTRYPOINTER), compareAccordingToSecondString);
-    return true;
+    return TRUE;
 }
 
 /*
@@ -369,16 +369,16 @@ int sortDictionaryAccordingToFirstString(DICTENTRYPOINTER *aArray)
     if (aArray == NULL)
     {
         printf("The dictionary array is NULL!\n");
-        return false;
+        return FALSE;
     }
     loItems = getNumberOfItems(aArray);
     if (loItems == -1)
     {
         printf("Unable to determine the number of items when sorting!");
-        return false;
+        return FALSE;
     }
     qsort (aArray, loItems, sizeof(DICTENTRYPOINTER), compareAccordingToFirstString);
-    return true;
+    return TRUE;
 }
 
 
@@ -419,7 +419,7 @@ void displayDictionary(char *aText, char *aHeader, char *aFormat, FILE *aOutputF
     for( i = 0; i < MAX_NUMBER_OF_DICTIONARY_ITEMS && aDictionary[i] != NULL; i++)
     {
         char loTmp[256];
-        if (aSecondIsDecimalNumber == true)
+        if (aSecondIsDecimalNumber == TRUE)
         {
             if (strchr(aDictionary[i]->second, ',') != NULL)
             {
@@ -921,7 +921,7 @@ void displayImportDictionary(char *aImportResourceName, int aImportResourceNumbe
     int i;
     int loPreviouslyDisplayedType;
     fprintf(aOutputFile, "\n*** IMPORT DICTIONARY (resource name %s, resource number: %d) ***\n", aImportResourceName, aImportResourceNumber) ;
-    if (aSecondIsDecimalNumber == true)
+    if (aSecondIsDecimalNumber == TRUE)
     {
         fprintf(aOutputFile, "(for some decadic numbers their hexadecimal values are provided in () )\n");
     }
@@ -947,7 +947,7 @@ void displayImportDictionary(char *aImportResourceName, int aImportResourceNumbe
         sprintf(loSecond, "%s", loCurrentImportEntry->secondOriginal);         
 
         // the second can be a decimal number and we may want to add a hexadecimal value to it
-        if (aSecondIsDecimalNumber == true && strchr(loCurrentImportEntry->secondOriginal, ',') == NULL)
+        if (aSecondIsDecimalNumber == TRUE && strchr(loCurrentImportEntry->secondOriginal, ',') == NULL)
         {
             // probably a number            
             int loNum = atoi(loCurrentImportEntry->secondOriginal);
@@ -1025,7 +1025,7 @@ void displayExportDictionary(char *aExportResourceName, int aExportResourceNumbe
     int i;
     int loPreviouslyDisplayedType;
     fprintf(aOutputFile,"\n*** EXPORT DICTIONARY (resource name %s, resource number: %d) ***\n", aExportResourceName, aExportResourceNumber) ;
-    if (aSecondIsDecimalNumber == true)
+    if (aSecondIsDecimalNumber == TRUE)
     {
         fprintf(aOutputFile, "(for some decadic numbers their hexadecimal values are provided in () )\n");
     }
@@ -1051,7 +1051,7 @@ void displayExportDictionary(char *aExportResourceName, int aExportResourceNumbe
         sprintf(loSecond, "%s", loCurrentExportEntry->secondOriginal);         
 
         // the second can be a decimal number and we may want to add a hexadecimal value to it
-        if (aSecondIsDecimalNumber == true && strchr(loCurrentExportEntry->secondOriginal, ',') == NULL)
+        if (aSecondIsDecimalNumber == TRUE && strchr(loCurrentExportEntry->secondOriginal, ',') == NULL)
         {
             // probably a number            
             int loNum = atoi(loCurrentExportEntry->secondOriginal);
@@ -1171,7 +1171,7 @@ char* getMessageName(char *aResult, char *aExportTableString, FILE *aResFile, DI
     {
         if (readMessageNamesDictionary(aResFile, aDirectoryPointers) == NULL)
         {
-            char *loError = "Unable to read the message names dictionary (resource 4)!\n";
+            const char *loError = "Unable to read the message names dictionary (resource 4)!\n";
             printf("%s\n", loError);
             return NULL;
         }        
@@ -1451,28 +1451,28 @@ int getResourceType(FILE *aResFile, DIRPOINTER *aDirectoryPointers, DICTENTRYPOI
     toUpperCase(aInfoString2UpperCase);
     
     // test file extensions
-    if (stringEndsWith(aResourceName, IMPORT_EXTENSION) == true)
+    if (stringEndsWith(aResourceName, IMPORT_EXTENSION) == TRUE)
     {
         return RESOURCE_TYPE_IMPORT;
     }
-    if (stringEndsWith(aResourceName, EXPORT_EXTENSION)== true)
+    if (stringEndsWith(aResourceName, EXPORT_EXTENSION)== TRUE)
     {
         return RESOURCE_TYPE_EXPORT;
     }
-    if (stringEndsWith(aInfoString2UpperCase, BITMAP1_FILE_EXTENSION) == true ||
-        stringEndsWith(aInfoString2UpperCase, BITMAP2_FILE_EXTENSION) == true)
+    if (stringEndsWith(aInfoString2UpperCase, BITMAP1_FILE_EXTENSION) == TRUE ||
+        stringEndsWith(aInfoString2UpperCase, BITMAP2_FILE_EXTENSION) == TRUE)
     {
         return RESOURCE_TYPE_BITMAP;
     }
-    if (stringEndsWith(aInfoString2UpperCase, SOUND_FILE_EXTENSION) == true)
+    if (stringEndsWith(aInfoString2UpperCase, SOUND_FILE_EXTENSION) == TRUE)
     {
         return RESOURCE_TYPE_SOUND;
     }
-    if (stringEndsWith(aInfoString2UpperCase, MUSIC_FILE_EXTENSION) == true)
+    if (stringEndsWith(aInfoString2UpperCase, MUSIC_FILE_EXTENSION) == TRUE)
     {
         return RESOURCE_TYPE_MUSIC;
     }
-    if (stringEndsWith(aInfoString2UpperCase, FONT_FILE_EXTENSION) == true)
+    if (stringEndsWith(aInfoString2UpperCase, FONT_FILE_EXTENSION) == TRUE)
     {
         return RESOURCE_TYPE_FONT;
     }                
@@ -1487,12 +1487,12 @@ int getResourceType(FILE *aResFile, DIRPOINTER *aDirectoryPointers, DICTENTRYPOI
         }
     }
 
-    if (aLookForStringResources == true)
+    if (aLookForStringResources == TRUE)
     {
         // check whether it is not a string
         struct RESEntryHeader *loResEntryHeader;
         ULONG loDataSize;
-        char *loBuffer;
+        unsigned char *loBuffer;
         int loDummy;
         loResEntryHeader = getResourceEntryHeader(aResourceNumber, aResFile, aDirectoryPointers);
         if (loResEntryHeader == NULL)
@@ -1519,7 +1519,7 @@ int getResourceType(FILE *aResFile, DIRPOINTER *aDirectoryPointers, DICTENTRYPOI
             // it is a string
             if (aFoundStringPointer != 0)
             {
-                *aFoundStringPointer = makeString(loBuffer + 2);
+                *aFoundStringPointer = makeString((char*)loBuffer + 2);
                 if (*aFoundStringPointer == NULL)
                 {
                     printf("Unable to allocate the space for the string read from the resource string: %d\n", aResourceNumber);
@@ -1560,7 +1560,7 @@ void displayResourcesInfoEntries(FILE *aOutputFile, RESINFOPOINTER *aResourcesIn
         char *loInfoFromResource1;
         char *loInfoFromResource2;
         char *loStringValue;
-        int loAdditionalInfoPresent = false;
+        int loAdditionalInfoPresent = FALSE;
         getResourceTypeString(loType,  aResourcesInfoTable[i]->resourceType);
         loName = aResourcesInfoTable[i]->name;
         loNumber = aResourcesInfoTable[i]->number;
@@ -1569,13 +1569,13 @@ void displayResourcesInfoEntries(FILE *aOutputFile, RESINFOPOINTER *aResourcesIn
         loStringValue = aResourcesInfoTable[i]->stringValue;
         if (loInfoFromResource1 != NULL || loInfoFromResource1 != NULL)
         {
-            loAdditionalInfoPresent = true;
+            loAdditionalInfoPresent = TRUE;
         }
         // basic info        
         fprintf(aOutputFile, "%-5d %-10s %-45s %s\n", loNumber, loType, loName,
-            ((loAdditionalInfoPresent == true || loStringValue != NULL)?"(see below)":""));
+            ((loAdditionalInfoPresent == TRUE || loStringValue != NULL)?"(see below)":""));
             
-        if (loAdditionalInfoPresent == true)
+        if (loAdditionalInfoPresent == TRUE)
         {
             fprintf(aOutputFile, "               %s\n               %s\n",
             ((loInfoFromResource1 == NULL)?"-":loInfoFromResource1),
@@ -1598,7 +1598,7 @@ void displayResourcesInfoEntries(FILE *aOutputFile, RESINFOPOINTER *aResourcesIn
                         fprintf(aOutputFile, "%s", "\\r");
                         break;
                     case '\t':
-                        fprintf(aOutputFile, "%t", "\\t");
+                        fprintf(aOutputFile, "%s", "\\t");  //TODO: %s was original t, check this
                         break;
                     case '\"':
                         fprintf(aOutputFile, "%s", "\\\"");
@@ -1614,7 +1614,7 @@ void displayResourcesInfoEntries(FILE *aOutputFile, RESINFOPOINTER *aResourcesIn
             fprintf(aOutputFile, "\"\n");
                        
         }
-        if (loAdditionalInfoPresent == true || loStringValue != NULL)
+        if (loAdditionalInfoPresent == TRUE || loStringValue != NULL)
         {
             // one more empty line
             fprintf(aOutputFile, "\n");

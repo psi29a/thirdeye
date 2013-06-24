@@ -1,3 +1,12 @@
+///////////////////////////////////////////////////////////////////////////////
+//
+// DAESOP
+// using code from AESOP engine and ReWiki website
+// (c) Mirek Luza
+// public domain software
+//
+///////////////////////////////////////////////////////////////////////////////
+
 #ifndef RENTRY_H
 #define RENTRY_H
 
@@ -5,12 +14,12 @@
 
 #include "tdefs.hpp"
 #include "resstr.hpp"
+#include "dblocks.hpp"
 
+long getResourceEntryIndex(int i, DIRPOINTER * loDirectoryPointers);
 struct RESEntryHeader *getResourceEntryHeader(int aNumber, FILE *aResFile, DIRPOINTER * aDirectoryPointers);
-
-long 	getResourceEntryIndex(int i, DIRPOINTER * loDirectoryPointers);
-int 	getMaxNumberOfResourceEntries(DIRPOINTER *aDirectoryPointers);
-char 	*readResourceBinary(int aResourceNumber, FILE *aResFile, DIRPOINTER *aDirectoryPointers, int *aResourceLength);
+int getMaxNumberOfResourceEntries(DIRPOINTER *aDirectoryPointers);
+unsigned char *readResourceBinary(int aResourceNumber, FILE *aResFile, DIRPOINTER *aDirectoryPointers, int *aResourceLength);
 
 #endif
 

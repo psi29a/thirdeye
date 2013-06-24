@@ -1,18 +1,19 @@
 set(DAESOP
+    convert.cpp
     daesop.cpp
-    dict.cpp
+    damap.cpp
+    dasm.cpp
     dblocks.cpp
+    dict.cpp
+    dvar.cpp    
     rentry.cpp
     utils.cpp
 )
 
 set(DAESOP_HEADER
-    tdefs.hpp
+    convert.hpp
     resstr.hpp
-    dict.hpp
-    dblocks.hpp
-    rentry.hpp
-    utils.hpp
+    tdefs.hpp
 )
 
 source_group(game FILES ${GAME} ${DAESOP_HEADER})

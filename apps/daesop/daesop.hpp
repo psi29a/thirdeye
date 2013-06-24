@@ -1,11 +1,24 @@
+///////////////////////////////////////////////////////////////////////////////
+//
+// DAESOP
+// using code from AESOP engine and ReWiki website
+// (c) Mirek Luza
+// public domain software
+//
+///////////////////////////////////////////////////////////////////////////////
+
 #ifndef DAESOP_H
 #define DAESOP_H
 
 #include "tdefs.hpp"
-#include "resstr.hpp"
+#include "dblocks.hpp"
 #include "dict.hpp"
+#include "utils.hpp"
+#include "rentry.hpp"
+#include "dasm.hpp"
+#include "convert.hpp"
 
-#define VERSION 0.86
+#define VERSION 0.85
 
 #define NOTHING                             0
 #define GET_INFORMATION                     1
@@ -42,7 +55,7 @@ int getResource(FILE *aResFile, DIRPOINTER *aDirectoryPointers, int aFunction, c
 void displayCodeResourceInformation(FILE *aResFile, DIRPOINTER *aDirectoryPointers, FILE *aOutputFile, int aResourceType,char *aResourceName, DICTENTRYPOINTER* aResourceNameArray);
 void displaySpecialAESOPResource(FILE *aResFile, DIRPOINTER *aDirectoryPointers, FILE *aOutputFile, int aResourceNumber);
 void displayHexadecimalDump(int aResourceNumber, FILE *aResFile, DIRPOINTER *aDirectoryPointers, FILE *aOutputFile);
-void displayHexadecimalDumpOfMemoryBuffer(char *aBuffer, int aLength, FILE *aOutputFile);
+void displayHexadecimalDumpOfMemoryBuffer(unsigned char *aBuffer, int aLength, FILE *aOutputFile);
 int getResourceInformation(FILE *aResFile, DIRPOINTER *aDirectoryPointers, int aFunction, char *aResource, char *aOutputFilename);
 void displayCodeResource(int aCodeResourceNumber, char *aCodeResourceName, IMPORTENTRYPOINTER *aFullImportResourceDictionary,
             int aImportResourceSize, EXPORTENTRYPOINTER *aFullExportResourceDictionary, int aExportResourceSize,
