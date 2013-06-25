@@ -16,7 +16,7 @@ Run the installer.
 Linux:  
 Run either in place with generic tar balls or install distribution specific packages.
 
-OSX:
+OSX:  
 Open DMG file, copy Thirdeye folder anywhere, for example in /Applications
 
 BUILD FROM SOURCE
