@@ -1,18 +1,8 @@
-///////////////////////////////////////////////////////////////////////////////
-//
-// DAESOP
-// using code from AESOP engine and ReWiki website
-// (c) Mirek Luza
-// public domain software
-//
-///////////////////////////////////////////////////////////////////////////////
-
 #ifndef DASM_H
 #define DASM_H
 
 #include <stdio.h>
 
-#include "tdefs.hpp"
 #include "dict.hpp"
 #include "utils.hpp"
 #include "damap.hpp"
@@ -150,10 +140,10 @@ struct BYTECODE
 
 struct SOP_script_header
 {
-  UWORD static_size;       // probably size of class variables/constants (??)
-  ULONG import_resource;  // the number of the corresponding import resource
-  ULONG export_resource;   // the number of the corresponding export resource
-  ULONG parent;            // the number of parent object (ffffffff if none) 
+  unsigned short static_size;       // probably size of class variables/constants (??)
+  unsigned int import_resource;  // the number of the corresponding import resource
+  unsigned int export_resource;   // the number of the corresponding export resource
+  unsigned int parent;            // the number of parent object (ffffffff if none) 
 };
 
 

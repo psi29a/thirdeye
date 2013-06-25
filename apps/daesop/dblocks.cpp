@@ -1,12 +1,3 @@
-///////////////////////////////////////////////////////////////////////////////
-//
-// DAESOP
-// using code from AESOP engine and ReWiki website
-// (c) Mirek Luza
-// public domain software
-//
-///////////////////////////////////////////////////////////////////////////////
-
 #include <malloc.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -32,7 +23,7 @@ int readDirectoryBlocks(FILE *aResFile, DIRPOINTER * loDirectoryPointers)
         if (loDirCounter > MAX_DIRECTORIES)
         {
             printf("Too much directory blocks, only %d of them were read!", MAX_DIRECTORIES);
-            return TRUE;
+            return true;
         }
         printf("Reading the directory block %d from the position %ld\n",loDirCounter, ftell(aResFile));        
         loDirectoryPointers[loDirCounter] = (DIRPOINTER) malloc(loDirBlockSize);
@@ -42,19 +33,19 @@ int readDirectoryBlocks(FILE *aResFile, DIRPOINTER * loDirectoryPointers)
             free(loDirectoryPointers[loDirCounter]);
             loDirectoryPointers[loDirCounter] = NULL;
             printf("Reading of the directory block failed!\n");
-            return FALSE;
+            return false;
         }
         // set the file position to the next block
         
         loDirPos = (loDirectoryPointers[loDirCounter])->next_directory_block;
         if (fseek(aResFile, loDirPos, SEEK_SET) != 0)
         {
-            printf("Failure to set the file position %ld when reading a directory block!\n", loDirPos);
-            return FALSE;
+            printf("Failure to set the file position %d when reading a directory block!\n", loDirPos);
+            return false;
         }
     }
     printf("The total number of directory blocks read: %d\n", loDirCounter + 1);
-    return TRUE;
+    return true;
 }
 
 /*
@@ -80,7 +71,7 @@ FILE* openAESOPResourceAndSetToFirstDirectoryBlock(char *aResName, const char *a
     FILE *loResFile;
     int loHeaderSize;
     int loReadSize;
-    LONG loLength;
+    unsigned int loLength;
 
     loResFile = fopen(aResName, aMode);
     if (loResFile == NULL)
@@ -113,7 +104,7 @@ FILE* openAESOPResourceAndSetToFirstDirectoryBlock(char *aResName, const char *a
     loLength = ftell(loResFile);
     if (loLength != aHeaderPointer->file_size)
     {
-        printf("The real length of %ld bytes does not agree with the length %ld bytes in the header!\n",
+        printf("The real length of %u bytes does not agree with the length %u bytes in the header!\n",
             loLength, aHeaderPointer->file_size);
         fclose(loResFile);
         return NULL;            

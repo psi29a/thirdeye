@@ -35,7 +35,7 @@ bool getImageFromCPS(uint8_t *uImage, boost::filesystem3::path cpsPath)
 
 	uint8_t cImage[EOB2_IMAGE_SIZE] = {};
 	uint16_t fileSize;
-	uint16_t uImageSize;
+	//uint16_t uImageSize;
 
 	if (boost::filesystem::exists(cpsPath) == false)
 		return false;
@@ -62,7 +62,8 @@ bool getImageFromCPS(uint8_t *uImage, boost::filesystem3::path cpsPath)
 		cImage[i-10] = byteCPS[i];
 
 	// Decode Format80 data
-	uImageSize = decodeFormat80(uImage, cImage, EOB2_IMAGE_SIZE);
+	//uImageSize = decodeFormat80(uImage, cImage, EOB2_IMAGE_SIZE);
+	decodeFormat80(uImage, cImage, EOB2_IMAGE_SIZE);
 
 //	std::cout << "Size: " << uImageSize << std::endl;
 //	for(int i=1; i<IMAGE_SIZE; i++)

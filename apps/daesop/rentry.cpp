@@ -1,12 +1,3 @@
-///////////////////////////////////////////////////////////////////////////////
-//
-// DAESOP
-// using code from AESOP engine and ReWiki website
-// (c) Mirek Luza
-// public domain software
-//
-///////////////////////////////////////////////////////////////////////////////
-
 #include <malloc.h>
 
 #include "rentry.hpp"
@@ -18,8 +9,8 @@ long getResourceEntryIndex(int aNumber, DIRPOINTER * aDirectoryPointers)
 {
     int loDirBlockNumber = aNumber / DIRECTORY_BLOCK_ITEMS;
     int loNumberInDirBlock = aNumber % DIRECTORY_BLOCK_ITEMS;
-    UBYTE loDirItemAttr;
-    ULONG loDirItemIndex;
+    unsigned char loDirItemAttr;
+    unsigned int loDirItemIndex;
     
     if (loDirBlockNumber >= MAX_DIRECTORIES || aDirectoryPointers[loDirBlockNumber] == NULL)
     {
@@ -86,7 +77,7 @@ Read the resource binary to memory
 unsigned char *readResourceBinary(int aResourceNumber, FILE *aResFile, DIRPOINTER *aDirectoryPointers, int *aResourceLength)
 {
     struct RESEntryHeader *loResEntryHeader;
-    ULONG loDataSize;
+    unsigned int loDataSize;
     long loResourceEntryIndex;
     unsigned char *loBuffer;
     unsigned int loReadSize;

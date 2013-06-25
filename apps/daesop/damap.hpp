@@ -1,18 +1,8 @@
-///////////////////////////////////////////////////////////////////////////////
-//
-// DAESOP
-// using code from AESOP engine and ReWiki website
-// (c) Mirek Luza
-// public domain software
-//
-///////////////////////////////////////////////////////////////////////////////
-
 #ifndef DAMAP_H
 #define DAMAP_H
 
 #include <stdio.h>
 
-#include "tdefs.hpp"
 #include "utils.hpp"
 
 // constants from the disassembly map (they must be < 127)

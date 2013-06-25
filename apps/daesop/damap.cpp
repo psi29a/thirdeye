@@ -1,12 +1,3 @@
-///////////////////////////////////////////////////////////////////////////////
-//
-// DAESOP
-// using code from AESOP engine and ReWiki website
-// (c) Mirek Luza
-// public domain software
-//
-///////////////////////////////////////////////////////////////////////////////
-
 #include <malloc.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -31,7 +22,7 @@ int createCodeMap(int aLength)
     if (myCodeMap == NULL)
     {
         printf("Failure to allocate %d for the code map during the disaasembling process!", loMapSize);
-        return FALSE;
+        return false;
     }
     myCodeMapLength = aLength;
     // initialize everything to MAP_DATA_BYTE (just 14 bytes at the beginning are special)
@@ -46,7 +37,7 @@ int createCodeMap(int aLength)
             myCodeMap[i] = MAP_DATA_BYTE;
         }    
     }
-    return TRUE;    
+    return true;
 }
 
 /*
@@ -58,12 +49,12 @@ int setCodeMapAddress(int aAddress, unsigned char aValue)
     if (aAddress < 0 || aAddress >= myCodeMapLength)
     {
         printf("The code map address %d is out of range in setCodeMapAddress()!\n", aAddress);
-        return FALSE;
+        return false;
     }    
     if (aValue >= LABEL_MASK)
     {
         printf("The code map value %d is not allowed!\n", (int)aValue);
-        return FALSE;
+        return false;
     }   
     // keep the setting for label
     loLabel = hasAddressLabel(aAddress);
@@ -90,14 +81,14 @@ int setCodeMapAddress(int aAddress, unsigned char aValue)
                 break;
         default:
                 printf("The code map value %d is not allowed!\n", (int)aValue);
-                return FALSE;
+                return false;
     }
     // restore label
-    if (loLabel == TRUE)
+    if (loLabel == true)
     {
         setLabelForAddress(aAddress);
     }
-    return TRUE;
+    return true;
 }
 
 /*
@@ -121,10 +112,10 @@ int setLabelForAddress(int aAddress)
     if (aAddress < 0 || aAddress >= myCodeMapLength)
     {
         printf("The code map address %d is out of range in setLabelForAddress()!\n", aAddress);
-        return FALSE;
+        return false;
     }
     myCodeMap[aAddress] |= LABEL_MASK;
-    return TRUE;
+    return true;
 }
 
 /*
@@ -136,16 +127,16 @@ int hasAddressLabel(int aAddress)
     if (aAddress < 0 || aAddress >= myCodeMapLength)
     {
         printf("The code map address %d is out of range in hasAddressLabel()!\n", aAddress);
-        return FALSE;
+        return false;
     }
     loLabel = myCodeMap[aAddress] & (unsigned char)LABEL_MASK;
     if (loLabel == 0)
     {
-        return FALSE;
+        return false;
     }
     else
     {
-        return TRUE;
+        return true;
     }    
 }
 
@@ -182,33 +173,33 @@ int shouldBeAddressDisassembled(int aAddress)
     if (aAddress < 0 || aAddress >= myCodeMapLength)
     {
         printf("The code map address %d is out of range in shouldBeAddressDisassembled()!\n", aAddress);
-        return FALSE;
+        return false;
     }
     loValue = getCodeMapAddressValue(aAddress);
     if (loValue == -1)
     {
         // error
-        return FALSE;
+        return false;
     }
     if (loValue == MAP_MESSAGE_HANDLER_NOT_DONE)
     {
-        return TRUE;
+        return true;
     }
     else if (loValue == MAP_CODE_START_NOT_DONE)
     {
-        return TRUE;
+        return true;
     }
     else if (loValue == MAP_PROCEDURE_START_NOT_DONE)
     {
-        return TRUE;
+        return true;
     }
     else if (loValue == MAP_DATA_BYTE)
     {
-        return TRUE;
+        return true;
     }
     else
     {
-        return FALSE;
+        return false;
     }    
 }
 
@@ -221,13 +212,13 @@ int markAddressAsDisassembled(int aAddress)
     if (aAddress < 0 || aAddress >= myCodeMapLength)
     {
         printf("The code map address %d is out of range in markAddressAsDisassembled()!\n", aAddress);
-        return FALSE;
+        return false;
     }
     loValue = getCodeMapAddressValue(aAddress);
     if (loValue == -1)
     {
         // error
-        return FALSE;
+        return false;
     }
     if (loValue == MAP_MESSAGE_HANDLER_NOT_DONE)
     {
@@ -248,7 +239,7 @@ int markAddressAsDisassembled(int aAddress)
     else
     {
         printf("Setting the code map address %d (value %d) as disassembled is not possible!\n", aAddress, (int)loValue);
-        return FALSE;
+        return false;
     }    
 }
 
@@ -261,13 +252,13 @@ int setJumpTarget(int aAddress)
     if (aAddress < 0 || aAddress >= myCodeMapLength)
     {
         printf("The code map address %d is out of range in setJumpTarget()!\n", aAddress);
-        return FALSE;
+        return false;
     }
     loValue = getCodeMapAddressValue(aAddress);
     if (loValue == -1)
     {
         // error
-        return FALSE;
+        return false;
     }
     setLabelForAddress(aAddress);
     if (loValue == MAP_DATA_BYTE)
@@ -286,9 +277,9 @@ int setJumpTarget(int aAddress)
     else
     {
         printf("Setting the jump target for the address %d (value %d) is not possible!\n", aAddress, (int)loValue);        
-        return FALSE;
+        return false;
     }
-    return TRUE;        
+    return true;
 }
 
 /*
@@ -300,13 +291,13 @@ int setProcedureStart(int aAddress)
     if (aAddress < 0 || aAddress >= myCodeMapLength)
     {
         printf("The code map address %d is out of range in setProcedureStart()!\n", aAddress);
-        return FALSE;
+        return false;
     }
     loValue = getCodeMapAddressValue(aAddress);
     if (loValue == -1)
     {
         // error
-        return FALSE;
+        return false;
     }
     if (loValue == MAP_DATA_BYTE)
     {
@@ -319,9 +310,9 @@ int setProcedureStart(int aAddress)
     else
     {
         printf("Setting the procedure start for the address %d (value %d) is not possible!\n", aAddress, (int)loValue);        
-        return FALSE;
+        return false;
     }
-    return TRUE;        
+    return true;
 }
 
 /*
@@ -351,11 +342,11 @@ void displayCodeTableMap(FILE *aOutputFile)
         }
         if (aOutputFile == NULL)
         {
-            printf("%5d:  %d  label %s\n", i, loValue, (loLabel==TRUE)?"yes":"no");
+            printf("%5d:  %d  label %s\n", i, loValue, (loLabel==true)?"yes":"no");
         }
         else
         {
-            fprintf(aOutputFile, "%5d:  %d  label %s\n", i, loValue, (loLabel==TRUE)?"yes":"no");
+            fprintf(aOutputFile, "%5d:  %d  label %s\n", i, loValue, (loLabel==true)?"yes":"no");
         }
     }
     return;    
@@ -397,7 +388,7 @@ void fixCodeTableForConstantTables(void)
             }
             else
             {
-                if (fillTheMapInCodeTable(loTableType, loStart, loNumberOfElements) == FALSE)
+                if (fillTheMapInCodeTable(loTableType, loStart, loNumberOfElements) == false)
                 {
                     printf("Error when filling the table map in the code map for the table on the address %d!\n", loStart);
                     setCodeMapAddress(loStart, MAP_ERROR);                    
@@ -460,7 +451,7 @@ int fillTheMapInCodeTable(int aTableType, int aStart, int aNumberOfElements)
     if (aTableType != getCodeMapAddressValue(aStart))
     {
         printf("fillTheMapInCodeTable(): disagreement between parameter and code map!\n");
-        return FALSE;
+        return false;
     }
     if (aTableType == MAP_BYTE_TABLE_START)
     {
@@ -480,7 +471,7 @@ int fillTheMapInCodeTable(int aTableType, int aStart, int aNumberOfElements)
     else
     {
         printf("fillTheMapInCodeTable(): unknown filling type: %d!\n", aTableType);
-        return FALSE;        
+        return false;
     }
     // fill it
     for(i = 0; i < aNumberOfElements * loFillingDataLength; i++)
@@ -493,7 +484,7 @@ int fillTheMapInCodeTable(int aTableType, int aStart, int aNumberOfElements)
         {
             printf("fillTheMapInCodeTable(): attempt to overwrite the value %d on the address %d of the code map!\n",
             loCurrentValue, loCurrentAddress);
-            return FALSE;
+            return false;
         }
         
         if (i % loFillingDataLength == 0)
@@ -509,7 +500,7 @@ int fillTheMapInCodeTable(int aTableType, int aStart, int aNumberOfElements)
     }
     // restore the original first byte of the table in the code map
     setCodeMapAddress(aStart, aTableType);
-    return TRUE;
+    return true;
 }
 
 

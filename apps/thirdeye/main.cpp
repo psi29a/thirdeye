@@ -156,8 +156,8 @@ int main(int argc, char**argv)
         	SDL_SetColorKey( screen, SDL_TRUE, SDL_MapRGB(screen->format, 255, 0, 255) ); // set magenta as our transparent colour
 
         	//Blit to rendering surface that is to be turned into a texture
-        	SDL_Rect rcSrc = { 0, 0, 320, 200 };
-        	SDL_Rect rcDst = { 0, 0, 320, 200 };
+        	//SDL_Rect rcSrc = { 0, 0, 320, 200 };
+        	//SDL_Rect rcDst = { 0, 0, 320, 200 };
 
         	// create a surfaces
         	SDL_Surface** images;

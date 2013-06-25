@@ -25,6 +25,7 @@ add_executable(thirdeye
 target_link_libraries(thirdeye
     ${Boost_LIBRARIES}
     ${SDL2_LIBRARY}
+    ${SDL2MAIN_LIBRARY} 
     components
 )
 

@@ -1,12 +1,3 @@
-/////////////////////f//////////////////////////////////////////////////////////
-//
-// DAESOP
-// using code from AESOP engine and ReWiki website
-// (c) Mirek Luza
-// public domain software
-//
-///////////////////////////////////////////////////////////////////////////////
-
 #include <malloc.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -71,7 +62,7 @@ BYTECODEPOINTER *readBytecodeDefinition(void)
             continue;
         }
         loResult = processBytecodeDefinitionLine(loLine);       
-        if (loResult == FALSE)
+        if (loResult == false)
         {
             printf("The analysis of the following line in the bytecode definition file failed:\n  %s\n", loLine);
             free(bytecodeTable);  // well, this does not free everything, there can be some items already
@@ -117,7 +108,7 @@ int processBytecodeDefinitionLine(char *aLine)
     if(loTokens[0]==NULL)
     {
         printf("The line cannot be parsed: %s\n", loLine);
-        return FALSE;
+        return false;
     }
     for(i = 1; i < MAX_TOKENS; i++)
     {
@@ -142,26 +133,26 @@ int processBytecodeDefinitionLine(char *aLine)
     if (*loEndPtr != '\0')
     {
         printf("The conversion of the hexadecimal number %s failed!\n", loTokens[0]);
-        return FALSE;
+        return false;
     }
     //printf("loBytecodeCode: %d\n", loBytecodeCode);
     loNumberOfParameters = (int)strtol(loTokens[2], &loEndPtr, 10);
     if (*loEndPtr != '\0')
     {
         printf("The conversion of the decadic number %s failed!\n", loTokens[2]);
-        return FALSE;
+        return false;
     }
     //printf("loNumberOfParameters: %d\n\n", loNumberOfParameters);    
     if (loNumberOfParameters < 0 || loNumberOfParameters > PARAMETERS_HANDLED_BY_CODE)
     {
         printf("The nonesense number of parameters: %d\n", loNumberOfParameters);
-        return FALSE;        
+        return false;
     }
     loBytecodeEntryPointer = (BYTECODEPOINTER)malloc(sizeof(struct BYTECODE));
     if (loBytecodeEntryPointer == NULL)
     {
         printf("Failure to allocate the memory for a bytecode entry!\n");
-        return FALSE;
+        return false;
     }
 
     loBytecodeEntryPointer->number = loBytecodeCode;
@@ -180,7 +171,7 @@ int processBytecodeDefinitionLine(char *aLine)
     {
         printf("Failure to allocate the memory for a parameter string in a bytecode entry!\n");
         free(loBytecodeEntryPointer);
-        return FALSE;
+        return false;
     }    
     loBytecodeEntryPointer->paramString[0] = '\0';
 
@@ -225,7 +216,7 @@ int processBytecodeDefinitionLine(char *aLine)
             printf("Unknown parameter type: %s!\n", loType);
             free(loBytecodeEntryPointer->paramString);
             free(loBytecodeEntryPointer);
-            return FALSE;
+            return false;
         }        
     }
     // explanation
@@ -235,7 +226,7 @@ int processBytecodeDefinitionLine(char *aLine)
         printf("The bytecode explanation is missing!\n");
         free(loBytecodeEntryPointer->paramString);
         free(loBytecodeEntryPointer);
-        return FALSE;
+        return false;
     }
     
     //printf("\nCode: %d\n  Name: %s\n  ParamCount: %d\n  ParamString: %s\n  Explanation: %s\n",
@@ -248,12 +239,12 @@ int processBytecodeDefinitionLine(char *aLine)
         printf("The bytecode entry %s is defined more than once!\n", loTokens[0]);
         free(loBytecodeEntryPointer->paramString);
         free(loBytecodeEntryPointer);
-        return FALSE;        
+        return false;
     }
 
     loEntryNumber = (int)(loBytecodeEntryPointer->number);
     bytecodeTable[loEntryNumber] = loBytecodeEntryPointer;     
-    return TRUE;
+    return true;
 }
 
 /*
@@ -329,7 +320,7 @@ void disassembleCodeResource(int aCodeResourceNumber, unsigned char *aResource, 
     while ((loDisassemblyStart = findFirstAddressForDisassembling()) != -1)
     {
         // just set the code map properly, the real disassembly will be done later
-        if (makeFirstDisassemblyPass(aResource, aLength, loDisassemblyStart, aFullImportResourceDictionary) == FALSE)
+        if (makeFirstDisassemblyPass(aResource, aLength, loDisassemblyStart, aFullImportResourceDictionary) == false)
         {
             // error
             break;
@@ -378,21 +369,21 @@ void disassembleCodeResource(int aCodeResourceNumber, unsigned char *aResource, 
 
     fprintf(aOutputFile, ";\n");
     // write out the imported references
-    if (writeExternalReferencesInfo(aFullImportResourceDictionary, aOutputFile) == FALSE)
+    if (writeExternalReferencesInfo(aFullImportResourceDictionary, aOutputFile) == false)
     {
         fprintf(aOutputFile, ";failure while generating the list of the external references (imports)!\n");
     }    
     fprintf(aOutputFile, ";\n");
 
     // write out the imported references
-    if (writeExportedVariablesInfo(aOutputFile) == FALSE)
+    if (writeExportedVariablesInfo(aOutputFile) == false)
     {
         fprintf(aOutputFile, ";failure while generating the list of the static variables (private and public)!\n");
     }    
     fprintf(aOutputFile, ";\n");
 
     // generate the resource information table (it is used for generating comments about referred resources in the disassembly)
-    loResourcesInfoTable = getResourcesInformationTable(aResFile, aDirectoryPointers, TRUE);
+    loResourcesInfoTable = getResourcesInformationTable(aResFile, aDirectoryPointers, true);
     if (loResourcesInfoTable == NULL)
     {
         // unable to get the resource information table
@@ -442,7 +433,7 @@ int makeFirstDisassemblyPass(unsigned char *aResource, int aLength, int aStartAd
         int loInstructionLength;
         int loInstructionEndsDisassembly;
         int i;
-        if (shouldBeAddressDisassembled(loCurrentAddress) != TRUE)
+        if (shouldBeAddressDisassembled(loCurrentAddress) != true)
         {
             // time to end;
             break;
@@ -454,7 +445,7 @@ int makeFirstDisassemblyPass(unsigned char *aResource, int aLength, int aStartAd
             // error, mark it in the code map and end
             printf("Setting the MAP_ERROR for the code map address: %d\n", loCurrentAddress);
             setCodeMapAddress(loCurrentAddress, MAP_ERROR);
-            return FALSE;
+            return false;
         }
         // targets for jump instructions, CASE, LECA etc.
         setTargetsForTheInstruction(aResource, aLength, loCurrentAddress);
@@ -469,7 +460,7 @@ int makeFirstDisassemblyPass(unsigned char *aResource, int aLength, int aStartAd
         }
         // find out whether the instruction ends the disassembly (END or uncond. jump)
         loInstructionEndsDisassembly = endsDisassembly(aResource, aLength, loCurrentAddress);               
-        if (loInstructionEndsDisassembly == TRUE)
+        if (loInstructionEndsDisassembly == true)
         {
             // ends this disassembly (end or unconditional jump)
             break;
@@ -478,7 +469,7 @@ int makeFirstDisassemblyPass(unsigned char *aResource, int aLength, int aStartAd
         loCurrentAddress += loInstructionLength;        
             
     }
-    return TRUE;
+    return true;
 }
 
 /*
@@ -507,7 +498,7 @@ int getInstructionLength(unsigned char *aResource, int aResourceLength, int aCur
             int loParameterAddress = aCurrentAddress + 1;
             // read the number of options in case (word parameter)
             loParamRes = getParameterAsNumber(aResource, aResourceLength, 'w', &loCaseOptions, &loParameterAddress);
-            if (loParamRes == FALSE)
+            if (loParamRes == false)
             {
                 // error
                 return -1;
@@ -585,13 +576,13 @@ void setTargetsForTheInstruction(unsigned char *aResource, int aLength, int aOri
                 // just set a label for LECA
                 // read the word parameter representing the target
                 loParamRes = getParameterAsNumber(aResource, aLength, 'w', &loTarget, &loCurrentAddress);
-                if (loParamRes == FALSE)
+                if (loParamRes == false)
                 {
                     printf("Unable to read a target for the instruction %d at the address %d!\n",
                         loInstruction, aOriginalAddress);
                     return;
                 }
-                if (setLabelForAddress((int)loTarget) == FALSE)
+                if (setLabelForAddress((int)loTarget) == false)
                 {
                     printf("Unable to set a target for the instruction %d at the address %d!\n",
                         loInstruction, aOriginalAddress);
@@ -602,13 +593,13 @@ void setTargetsForTheInstruction(unsigned char *aResource, int aLength, int aOri
         case INSTRUCTION_BRA:
                 // read the word parameter representing the target
                 loParamRes = getParameterAsNumber(aResource, aLength, 'w', &loTarget, &loCurrentAddress);
-                if (loParamRes == FALSE)
+                if (loParamRes == false)
                 {
                     printf("Unable to read a jump target for the instruction %d at the address %d!\n",
                         loInstruction, aOriginalAddress);
                     return;
                 }
-                if (setJumpTarget((int)loTarget) == FALSE)
+                if (setJumpTarget((int)loTarget) == false)
                 {
                     printf("Unable to set a jump target for the instruction %d at the address %d!\n",
                         loInstruction, aOriginalAddress);
@@ -617,13 +608,13 @@ void setTargetsForTheInstruction(unsigned char *aResource, int aLength, int aOri
         case INSTRUCTION_JSR:
                 // read the word parameter representing the target
                 loParamRes = getParameterAsNumber(aResource, aLength, 'w', &loTarget, &loCurrentAddress);
-                if (loParamRes == FALSE)
+                if (loParamRes == false)
                 {
                     printf("Unable to read a procedure address for the instruction %d at the address %d!\n",
                         loInstruction, aOriginalAddress);
                     return;
                 }
-                if (setProcedureStart((int)loTarget) == FALSE)
+                if (setProcedureStart((int)loTarget) == false)
                 {
                     printf("Unable to set a procedure target for the instruction %d at the address %d!\n",
                         loInstruction, aOriginalAddress);
@@ -633,7 +624,7 @@ void setTargetsForTheInstruction(unsigned char *aResource, int aLength, int aOri
                 // CASE needs a special hadling
                 // read the number of options in case (word parameter)
                 loParamRes = getParameterAsNumber(aResource, aLength, 'w', &loCaseOptions, &loCurrentAddress);
-                if (loParamRes == FALSE)
+                if (loParamRes == false)
                 {
                     // error
                     printf("Unable to read the number of options for the CASE instruction at the address %d\n",
@@ -645,13 +636,13 @@ void setTargetsForTheInstruction(unsigned char *aResource, int aLength, int aOri
                 {
                     loCurrentAddress += 4; // ignore the value, we need only jump target
                     loParamRes = getParameterAsNumber(aResource, aLength, 'w', &loTarget, &loCurrentAddress);
-                    if (loParamRes == FALSE)
+                    if (loParamRes == false)
                     {
                         printf("Unable to read a case option target for the CASE instruction at the address %d!\n",
                             aOriginalAddress);
                         return;
                     }
-                    if (setJumpTarget((int)loTarget) == FALSE)
+                    if (setJumpTarget((int)loTarget) == false)
                     {
                         printf("Unable to set a case option target for the CASE instruction at the address %d!\n",
                             aOriginalAddress);
@@ -659,13 +650,13 @@ void setTargetsForTheInstruction(unsigned char *aResource, int aLength, int aOri
                 }
                 // now read the default target
                 loParamRes = getParameterAsNumber(aResource, aLength, 'w', &loTarget, &loCurrentAddress);
-                if (loParamRes == FALSE)
+                if (loParamRes == false)
                 {
                     printf("Unable to read a default target for the CASE instruction at the address %d!\n",
                         aOriginalAddress);
                     return;
                 }
-                if (setJumpTarget((int)loTarget) == FALSE)
+                if (setJumpTarget((int)loTarget) == false)
                 {
                     printf("Unable to set a default target for the CASE instruction at the address %d!\n",
                         aOriginalAddress);
@@ -687,15 +678,15 @@ int endsDisassembly(unsigned char *aResource, int aLength, int aCurrentAddress)
     if (loInstruction > MAX_BYTECODES || bytecodeTable[loInstruction] == NULL)
     {
         printf("endsDisassembly(): there is no instruction with the code %x on the address %d!\n", loInstruction, aCurrentAddress);
-        return TRUE;            
+        return true;
     }
     if (loInstruction == INSTRUCTION_BRA || loInstruction == INSTRUCTION_END || loInstruction == INSTRUCTION_RTS)
     {
-        return TRUE;
+        return true;
     }
     else
     {
-        return FALSE;
+        return false;
     }
 }
 
@@ -707,36 +698,36 @@ int getParameterAsNumber(unsigned char *aResource, int aLength, char aParameterT
     int loAddressBehind = *aCurrentAddress;
     if (aParameterType == 'b')
     {
-        UBYTE loValue = 0;
+        unsigned char loValue = 0;
         loAddressBehind+=1;
         if (loAddressBehind >= aLength)
         {
             printf("The current address got out of the code resource when reading a parameter!\n");
-            return FALSE;
+            return false;
         }
         memcpy(&loValue, aResource + *aCurrentAddress, 1);        
         *aParameterValue = loValue;
     }
     else if (aParameterType == 'w' || aParameterType == 'i' || aParameterType == 'm')
     {
-        UWORD loValue = 0;
+        unsigned short loValue = 0;
         loAddressBehind+=2;
         if (loAddressBehind >= aLength)
         {
             printf("The current address got out of the code resource when reading a parameter!\n");
-            return FALSE;
+            return false;
         }
         memcpy(&loValue, aResource + *aCurrentAddress, 2);        
         *aParameterValue = loValue;                
     }
     else if (aParameterType == 'l')
     {
-        ULONG loValue = 0;
+        unsigned int loValue = 0;
         loAddressBehind+=4;
         if (loAddressBehind >= aLength)
         {
             printf("The current address got out of the code resource when reading a parameter!\n");
-            return FALSE;
+            return false;
         }
         memcpy(&loValue, aResource + *aCurrentAddress, 4);        
         *aParameterValue = loValue;        
@@ -744,10 +735,10 @@ int getParameterAsNumber(unsigned char *aResource, int aLength, char aParameterT
     else
     {
         printf("Unknown parameter type %c\n", aParameterType);
-        return FALSE;
+        return false;
     }
     (*aCurrentAddress) = loAddressBehind;
-    return TRUE;        
+    return true;
 }
 
 /*
@@ -791,7 +782,7 @@ void makeSecondDisassemblyPass(unsigned char *aResource, int aLength, IMPORTENTR
         int loCodeMapValue = getCodeMapAddressValue(loCurrentAddress);
         if (loCodeMapValue == MAP_MESSAGE_HANDLER_PROCESSED)
         {
-            UWORD loLocalVariablesSize;
+            unsigned short loLocalVariablesSize;
             char *loMessageHandlerName;
             int loEndAddress;
             loMessageHandlerName = getMessageHandlerNameForAddress(loCurrentAddress, aFullExportResourceDictionary);
@@ -809,7 +800,7 @@ void makeSecondDisassemblyPass(unsigned char *aResource, int aLength, IMPORTENTR
         }
         else if (loCodeMapValue == MAP_PROCEDURE_START_PROCESSED)
         {
-            UWORD loLocalVariablesSize;
+            unsigned short loLocalVariablesSize;
             char loProcedureName[256];
             int loEndAddress;
             sprintf(loProcedureName, "%s%d", PROCEDURE_PREFIX, (int)loCurrentAddress);
@@ -828,7 +819,7 @@ void makeSecondDisassemblyPass(unsigned char *aResource, int aLength, IMPORTENTR
         else if (loCodeMapValue == MAP_DATA_BYTE)
         {
             char loDBString[256];
-            if (hasAddressLabel(loCurrentAddress) == TRUE)
+            if (hasAddressLabel(loCurrentAddress) == true)
             {
                 writeLabel(loCurrentAddress, aOutputFile);
             }            
@@ -839,7 +830,7 @@ void makeSecondDisassemblyPass(unsigned char *aResource, int aLength, IMPORTENTR
         else if (loCodeMapValue == MAP_DATA_WORD)
         {
            char loDBString[256];
-            if (hasAddressLabel(loCurrentAddress) == TRUE)
+            if (hasAddressLabel(loCurrentAddress) == true)
             {
                 writeLabel(loCurrentAddress, aOutputFile);
             }            
@@ -850,7 +841,7 @@ void makeSecondDisassemblyPass(unsigned char *aResource, int aLength, IMPORTENTR
         else if (loCodeMapValue == MAP_DATA_LONG)
         {
            char loDBString[256];
-            if (hasAddressLabel(loCurrentAddress) == TRUE)
+            if (hasAddressLabel(loCurrentAddress) == true)
             {
                 writeLabel(loCurrentAddress, aOutputFile);
             }            
@@ -861,7 +852,7 @@ void makeSecondDisassemblyPass(unsigned char *aResource, int aLength, IMPORTENTR
         else if (loCodeMapValue == MAP_CODE_START_PROCESSED || loCodeMapValue == MAP_CODE_PROCESSED)
         {
             if (writeOneInstruction(aResource, aLength, &loCurrentAddress, aFullImportResourceDictionary,
-                aOutputFile, aResFile, aDirectoryPointers, aResourcesInfoTable) == FALSE)
+                aOutputFile, aResFile, aDirectoryPointers, aResourcesInfoTable) == false)
             {
                 // error
                 fprintf(aOutputFile, "writeOneInstruction() returned an error!\n");
@@ -976,7 +967,7 @@ void getDBByteString(char *aResult, unsigned char *aResource, int aLength, int a
     // instruction
     sprintf(loTmp, INSTRUCTION_FORMAT_STRING, "DB");
     strcat(loResultLine, loTmp);
-    getParameterString(loTmp, 'b', loValue, TRUE, TRUE);
+    getParameterString(loTmp, 'b', loValue, true, true);
     strcat(loResultLine, loTmp);
     strcpy(aResult, loResultLine);
 }
@@ -1005,7 +996,7 @@ void getDWWordString(char *aResult, unsigned char *aResource, int aLength, int a
     // instruction
     sprintf(loTmp, INSTRUCTION_FORMAT_STRING, "DW");
     strcat(loResultLine, loTmp);
-    getParameterString(loTmp, 'w', loValue, TRUE, TRUE);
+    getParameterString(loTmp, 'w', loValue, true, true);
     strcat(loResultLine, loTmp);
     strcpy(aResult, loResultLine);
 }
@@ -1034,7 +1025,7 @@ void getDLLongString(char *aResult, unsigned char *aResource, int aLength, int a
     // instruction
     sprintf(loTmp, INSTRUCTION_FORMAT_STRING, "DL");
     strcat(loResultLine, loTmp);
-    getParameterString(loTmp, 'l', loValue, TRUE, TRUE);
+    getParameterString(loTmp, 'l', loValue, true, true);
     strcat(loResultLine, loTmp);
     strcpy(aResult, loResultLine);
 }
@@ -1063,7 +1054,7 @@ int writeOneInstruction(unsigned char *aResource, int aLength, int *loCurrentAdd
             loCurrentInstruction, *loCurrentAddress);
         printf("%s\n", loError);
         fprintf(aOutputFile, "%s\n", loError); 
-        return FALSE;            
+        return false;
     }
         
     // move to the parameters
@@ -1089,18 +1080,18 @@ int writeOneInstruction(unsigned char *aResource, int aLength, int *loCurrentAdd
                 bytecodeTable[loCurrentInstruction]->name, loInstructionStartAddress);
             printf("%s\n", loError);
             fprintf(aOutputFile, "%s\n", loError); 
-            return FALSE;
+            return false;
         }
         fprintf(aOutputFile, ";CASE instruction start\n");
 
         // read the number of options in case (word parameter)
         loParamRes = getParameterAsNumber(aResource, aLength, 'w', &loCaseOptions, loCurrentAddress);
-        if (loParamRes == FALSE)
+        if (loParamRes == false)
         {
             // error
             printf("Unable to read the number of options for the CASE instruction at the address %d\n",
                 loInstructionStartAddress);
-            return FALSE;
+            return false;
         }
         // write to the output file
         writeCaseHeader(aResource, aLength, loInstructionStartAddress, loCaseOptions, aOutputFile);
@@ -1110,29 +1101,29 @@ int writeOneInstruction(unsigned char *aResource, int aLength, int *loCurrentAdd
         {
             int loCaseEntryStartAddress = *loCurrentAddress;
             loParamRes = getParameterAsNumber(aResource, aLength, 'l', &loValue, loCurrentAddress);
-            if (loParamRes == FALSE)
+            if (loParamRes == false)
             {
                 printf("Unable to read a case option value for the CASE instruction at the address %d!\n",
                     loInstructionStartAddress);
-                return FALSE;
+                return false;
             }            
             loParamRes = getParameterAsNumber(aResource, aLength, 'w', &loTarget, loCurrentAddress);
-            if (loParamRes == FALSE)
+            if (loParamRes == false)
             {
                 printf("Unable to read a case option target for the CASE instruction at the address %d!\n",
                     loInstructionStartAddress);
-                return FALSE;
+                return false;
             }
             // write to the the output files            
             writeCaseEntry(aResource, aLength, loCaseEntryStartAddress, loValue, loTarget, aOutputFile);
         }
 
         // default label
-        if (getParameterAsNumber(aResource, aLength, 'w', &loTarget, loCurrentAddress) == FALSE)
+        if (getParameterAsNumber(aResource, aLength, 'w', &loTarget, loCurrentAddress) == false)
         {
             printf("Unable to read a default target for the CASE instruction at the address %d!\n",
                 loInstructionStartAddress);
-            return FALSE;            
+            return false;
         }
         // write to the output file
         writeCaseDefault(aResource, aLength, *loCurrentAddress - 2, loTarget, aOutputFile);        
@@ -1145,13 +1136,13 @@ int writeOneInstruction(unsigned char *aResource, int aLength, int *loCurrentAdd
         {
             char loParameterType = bytecodeTable[loCurrentInstruction]->paramString[i];
             long loParameterValue;
-            int loIsLastParameter = (i == (loParamCount - 1))?TRUE:FALSE;
+            int loIsLastParameter = (i == (loParamCount - 1))?true:false;
             
             if (getParameterAsNumber(aResource, aLength, loParameterType,
-                &loParameterValue, loCurrentAddress) == FALSE)
+                &loParameterValue, loCurrentAddress) == false)
             {
                 // error
-                return FALSE;
+                return false;
             }
             if (i > 0)
             {
@@ -1171,7 +1162,7 @@ int writeOneInstruction(unsigned char *aResource, int aLength, int *loCurrentAdd
                     sprintf(loTmp, "\"%s\"", loRuntimeCodeResourceName);
                     strcat(loInstruction, loTmp);
                     /*
-                    if (loIsLastParameter == TRUE)
+                    if (loIsLastParameter == true)
                     {
                         // it is last parameter, add the number as a comment
                         sprintf(loTmp, "  ;runtime_function_number: %d", loParameterValue);
@@ -1193,7 +1184,7 @@ int writeOneInstruction(unsigned char *aResource, int aLength, int *loCurrentAdd
                     sprintf(loTmp, "\"%s\"", loVariableName);
                     strcat(loInstruction, loTmp);
                     /*
-                    if (loIsLastParameter == TRUE)
+                    if (loIsLastParameter == true)
                     {
                         // it is last parameter, add the number as a comment
                         sprintf(loTmp, "  ;external_variable_number: %d", loParameterValue);
@@ -1218,7 +1209,7 @@ int writeOneInstruction(unsigned char *aResource, int aLength, int *loCurrentAdd
                 else
                 {
                     printf("The parameter \"import\" is not supported for the instruction %d\n", loCurrentInstruction);
-                    return FALSE;
+                    return false;
                 }
             }
             else if (loParameterType == 'm')
@@ -1316,12 +1307,12 @@ int writeOneInstruction(unsigned char *aResource, int aLength, int *loCurrentAdd
                         // may be the name can referer a resource, so add a comment
                         writeInfoAboutReferredResourceIfAvailable(loParameterValue, aResourcesInfoTable, aOutputFile);
                     }
-                    if (getParameterString(loTmp, loParameterType, loParameterValue, loIsLastParameter, TRUE) != TRUE)
+                    if (getParameterString(loTmp, loParameterType, loParameterValue, loIsLastParameter, true) != true)
                     {
                         printf("Failure to get the parameter value for the parameter type %c, value %ld for the instruction %d on the address %d!\n",
                                 (unsigned char)loParameterType, (long)loParameterValue,
                                 (int)loCurrentInstruction, (int)loInstructionStartAddress);
-                        return FALSE;       
+                        return false;
                     }
                     strcat(loInstruction, loTmp);
                 }
@@ -1331,7 +1322,7 @@ int writeOneInstruction(unsigned char *aResource, int aLength, int *loCurrentAdd
         // get the hex codes
         getHexCodes(loHexaCodes, aResource, aLength, loInstructionStartAddress, *loCurrentAddress - loInstructionStartAddress);
         // add label if needed
-        if (hasAddressLabel(loInstructionStartAddress) == TRUE)
+        if (hasAddressLabel(loInstructionStartAddress) == true)
         {
             writeLabel(loInstructionStartAddress, aOutputFile);
         }        
@@ -1345,7 +1336,7 @@ int writeOneInstruction(unsigned char *aResource, int aLength, int *loCurrentAdd
             fprintf(aOutputFile, ";\n");
         }        
      }
-     return TRUE;
+     return true;
 }
 
 /*
@@ -1387,7 +1378,7 @@ void writeCaseHeader(unsigned char *aResource, int aLength, int aStartAddress, l
      char loTmp[256];
      char loInstruction[256];
      char loResultLine[256];
-     if (hasAddressLabel(aStartAddress) == TRUE)
+     if (hasAddressLabel(aStartAddress) == true)
      {
         writeLabel(aStartAddress, aOutputFile);
      }     
@@ -1396,7 +1387,7 @@ void writeCaseHeader(unsigned char *aResource, int aLength, int aStartAddress, l
      // instruction
      sprintf(loTmp, INSTRUCTION_FORMAT_STRING, bytecodeTable[INSTRUCTION_CASE]->name);
      strcpy(loInstruction, loTmp);
-     getParameterString(loTmp, 'w', aCaseOptions, TRUE, FALSE);     
+     getParameterString(loTmp, 'w', aCaseOptions, true, false);
      strcat(loInstruction, loTmp);
      // result
      strcpy(loResultLine, loHexCodes);
@@ -1487,35 +1478,35 @@ int getParameterString(char *aString, unsigned char aParameterType, long aParame
     {
         printf("Unknown parameter type: %c\n", aParameterType);
         sprintf(aString, "%ld", aParameterValue);
-        return FALSE;
+        return false;
     }
 
-    if (aAddParameterComment == TRUE)
+    if (aAddParameterComment == true)
     {
         // ok, add a comment
         char loTmp[256];
         int i;
         unsigned char loArray[4];        
-        int loPrintableCharacters = TRUE;
+        int loPrintableCharacters = true;
         if (loSize == 1)
         {
-            UBYTE loChar = (UBYTE)aParameterValue;
+            unsigned char loChar = (unsigned char)aParameterValue;
             memcpy(loArray, &loChar, 1);
-            sprintf(loTmp, "     ;%u", (ULONG)aParameterValue);
+            sprintf(loTmp, "     ;%u", (unsigned int)aParameterValue);
             strcat(aString, loTmp);            
         }
         if (loSize == 2)
         {
-            UWORD loWord = (UWORD)aParameterValue;
+            unsigned short loWord = (unsigned short)aParameterValue;
             memcpy(loArray, &loWord, 2);
-            sprintf(loTmp, "     ;%u", (ULONG)aParameterValue);
+            sprintf(loTmp, "     ;%u", (unsigned int)aParameterValue);
             strcat(aString, loTmp);             
         }
         if (loSize == 4)
         {
-            ULONG loLong = (ULONG)aParameterValue;
+            unsigned int loLong = (unsigned int)aParameterValue;
             memcpy(loArray, &loLong, 4);
-            sprintf(loTmp, "     ;%u", (ULONG)aParameterValue);
+            sprintf(loTmp, "     ;%u", (unsigned int)aParameterValue);
             strcat(aString, loTmp);             
         }        
         for(i = 0; i < loSize; i++)
@@ -1523,11 +1514,11 @@ int getParameterString(char *aString, unsigned char aParameterType, long aParame
             if (loArray[i] < 32)
             {
                 // at least one unprintable character
-                loPrintableCharacters = FALSE;
+                loPrintableCharacters = false;
                 break;
             }
         }
-        if (loPrintableCharacters == TRUE && aAddCharactersInTheComment == TRUE)
+        if (loPrintableCharacters == true && aAddCharactersInTheComment == true)
         {
             // add the printable characters in ""
             strcat(aString, ", \"");
@@ -1540,7 +1531,7 @@ int getParameterString(char *aString, unsigned char aParameterType, long aParame
         }
 
     }
-    return TRUE;
+    return true;
 }
 
 
@@ -1618,7 +1609,7 @@ void handleVariableAndArrayRelatedInstructions(unsigned char *aResource, int aLe
         case INSTRUCTION_LEXA:
             // read the word parameter representing the parameter
             loParamRes = getParameterAsNumber(aResource, aLength, 'w', &loParameter, &loCurrentAddress);
-            if (loParamRes == FALSE)
+            if (loParamRes == false)
             {
                 printf("Unable to read a parameter for the instruction %d at the address %d!\n",
                     loInstruction, aOriginalAddress);
@@ -1638,7 +1629,7 @@ void handleVariableAndArrayRelatedInstructions(unsigned char *aResource, int aLe
         case INSTRUCTION_LTDA:
         case INSTRUCTION_LETA:
             loVariableType = getUppercaseVariableType(loInstruction);
-            if (addConstantTableEntryIfNotExisting((int)loParameter, loVariableType) == FALSE)
+            if (addConstantTableEntryIfNotExisting((int)loParameter, loVariableType) == false)
             {
                 printf("Unable to add an entry into the table of constant tables for the instruction %d at the address %d!\n",
                         loInstruction, aOriginalAddress);
@@ -1651,7 +1642,7 @@ void handleVariableAndArrayRelatedInstructions(unsigned char *aResource, int aLe
         case INSTRUCTION_SAB:
         case INSTRUCTION_SAW:
         case INSTRUCTION_SAD:
-            if (addAutoVariableReference(aOriginalAddress, loInstruction, (int)loParameter, FALSE) == FALSE)
+            if (addAutoVariableReference(aOriginalAddress, loInstruction, (int)loParameter, false) == false)
             {
                 printf("Unable to add an entry into the table local variables for the instruction %d at the address %d!\n",
                         loInstruction, aOriginalAddress);
@@ -1664,7 +1655,7 @@ void handleVariableAndArrayRelatedInstructions(unsigned char *aResource, int aLe
         case INSTRUCTION_SAWA:
         case INSTRUCTION_SADA:
         case INSTRUCTION_LEAA:  // this is not correct, we do not know whether it is an array or not for LEAA
-            if (addAutoVariableReference(aOriginalAddress, loInstruction, (int)loParameter, TRUE) == FALSE)
+            if (addAutoVariableReference(aOriginalAddress, loInstruction, (int)loParameter, true) == false)
             {
                 printf("Unable to add an entry into the table local variables for the instruction %d at the address %d!\n",
                         loInstruction, aOriginalAddress);
@@ -1678,7 +1669,7 @@ void handleVariableAndArrayRelatedInstructions(unsigned char *aResource, int aLe
         case INSTRUCTION_SSW:
         case INSTRUCTION_SSD:
             loVariableType = getUppercaseVariableType(loInstruction);
-            if (addPrivateStaticVariableIfNotExisting((int)loParameter, FALSE, loVariableType) == FALSE)
+            if (addPrivateStaticVariableIfNotExisting((int)loParameter, false, loVariableType) == false)
             {
                 printf("Unable to add an entry into the static variable table for the instruction %d at the address %d!\n",
                         loInstruction, aOriginalAddress);
@@ -1693,7 +1684,7 @@ void handleVariableAndArrayRelatedInstructions(unsigned char *aResource, int aLe
         case INSTRUCTION_SSDA:
         case INSTRUCTION_LESA:   // this is not correct, we do not know whether is is an array or not for LESA
             loVariableType = getUppercaseVariableType(loInstruction);
-            if (addPrivateStaticVariableIfNotExisting((int)loParameter, TRUE, loVariableType) == FALSE)
+            if (addPrivateStaticVariableIfNotExisting((int)loParameter, true, loVariableType) == false)
             {
                 printf("Unable to add an entry into the static variable table for the instruction %d at the address %d!\n",
                         loInstruction, aOriginalAddress);
@@ -1706,7 +1697,7 @@ void handleVariableAndArrayRelatedInstructions(unsigned char *aResource, int aLe
         case INSTRUCTION_SXBA:
         case INSTRUCTION_SXWA:
         case INSTRUCTION_SXDA:
-                if (changeImportEntryVariableToArray(loParameter, aFullImportResourceDictionary) == FALSE)
+                if (changeImportEntryVariableToArray(loParameter, aFullImportResourceDictionary) == false)
                 {
                     printf("Unable to mark a parameter for the instruction %d at the address %d as array in the import dictionary!\n",
                         loInstruction, aOriginalAddress);

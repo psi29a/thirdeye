@@ -11,9 +11,7 @@ set(DAESOP
 )
 
 set(DAESOP_HEADER
-    convert.hpp
     resstr.hpp
-    tdefs.hpp
 )
 
 source_group(game FILES ${GAME} ${DAESOP_HEADER})
