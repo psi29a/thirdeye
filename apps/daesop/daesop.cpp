@@ -1,70 +1,3 @@
-///////////////////////////////////////////////////////////////////////////////
-//
-// DAESOP
-// using code from AESOP engine and ReWiki website
-// (c) Mirek Luza
-// public domain software
-//
-// version  0.85
-//
-// History
-// 0.1x  initial versions (development)
-// 0.20  first release (061014)
-// 0.25  internal version
-// 0.30  second release including resource extraction (061017)
-// 0.31  bugfix release:fixed syntax help
-// 0.35  internal: major rewriting, starting to show individuall resource information)
-// 0.36  internal: added info about special/import/export/code resources
-// 0.40  third release: added more dumps, resolving names in export tables
-// 0.452 internal: starting to work on disassembler (nothing really implemented yet)
-// 0.453 internal: first disassembler attempt working
-// 0.46  internal: reworking disassembly (using code map), partially working
-// 0.47  internal: added support for the CASE instruction
-// 0.48  internal: support for labels, various improvements
-// 0.50  fourth release (various disasm. errors fixed, resource names are case sensitive!)
-// 0.51  bugfix release - some minor fixes in the disassembly format:
-//       - missing end of line before .OBJECT_NAME
-//       - missing hex number in hex dump of CASE
-//       - doubling number in the comment ;import_resource_number
-//       - changing the way how the numeric parameters are displayed
-//       - increasing the disassembly version to 2
-// 0.55  internal: reworking the handling of import/export resources, some minor fixes
-// 0.551 internal: adding support for procedures (JSR/RTS), some minor fixes
-// 0.552 internal: reworking the handling of import/export resources, better displaying of an import dictionary
-// 0.56  internal: list of imported variables/runtime functions, better displaying of an export dictionary
-// 0.563 internal: list of imported arrays added
-// 0.60  fifth release, (061119) added support for static and table variables, increasing disassembly version
-// 0.61  internal: adding /ir command
-// 0.62  internal: reworking, string detection
-// 0.63  sixth release, (061130) showing string values, minor changes/fixes in /ir command
-// 0.64  internal: added /test_old_bitmaps (not documented)
-// 0.645 internal: stated to work on on /r /rh options (not finished yet)
-// 0.65  internal: finishing the options /r /rh
-// 0.655 internal: fixes for /r /rh
-// 0.660 seventh release
-// 0.670 added commands /ioff /create_tbl
-// 0.675 internal: working on conversion, /convert_old_bitmaps (not finished yet)
-// 0.676 internal: working on conversion (not finished yet)
-// 0.68  internal: first buggy bitmap conversion implemented (EOB 3 shows something in AESOP/32)
-// 0.70  8th release: fixing bitmap conversion, /cob command, documenting all commands
-// 0.71  internal: working on font conversion (not finished yet)
-// 0.72  internal: working on font conversion (not finished yet)
-// 0.73  internal: some text shown, but not correct yet
-// 0.74  internal: font conversion fixed
-// 0.75  9th release: font conversion, fixing the resource type detections (maps, palettes)
-// 0.80  10th release: added /eob3menupatch (patching menu bug), /eob3conv (/eob3menupatch + /cof + /cob)
-// 0.81  internal: working on symbolic names for local variables
-// 0.82  internal: first working implementation of symbolic names for local variables
-// 0.83  internal: support for symbolic names of LETA/LESA/LEXA (not tested yet)
-// 0.84  internal: symbolic names for LEAA, bugfixing (static tables crash, freeing list of loc. variables, LEXA parameter)
-// 0.85  11th release: add comments about possible references to AESOP resources into the bytecode, increasing dissasembly version
-//
-// WARNING: The structure alignment must be set to 1 for this program to work!
-//          RES files depend on the structure alignment - EOB 3 uses 1.
-//          Remember to set this in compiler options.
-//
-///////////////////////////////////////////////////////////////////////////////
-
 #include <malloc.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -83,7 +16,6 @@ int main(int argc, char *argv[])
 {
     char loFunctionOption[256];
     int loFunction = NOTHING;
-    int i;
     DIRPOINTER loDirectoryPointers[MAX_DIRECTORIES];
     FILE *loResFile;
     int loResult;
@@ -91,7 +23,7 @@ int main(int argc, char *argv[])
 
     // store the home directory
     strcpy(myHomeDirectory, argv[0]);
-    for(i = strlen(myHomeDirectory) - 1; i >= 0; i--)
+    for(int i = strlen(myHomeDirectory) - 1; i >= 0; i--)
     {
         if (myHomeDirectory[i] == '/' || myHomeDirectory[i] == '\\')
         {
@@ -101,7 +33,7 @@ int main(int argc, char *argv[])
     }
     
     // empty table
-    for(i = 0; i < MAX_DIRECTORIES; i++)
+    for(unsigned int i = 0; i < MAX_DIRECTORIES; i++)
     {
         loDirectoryPointers[i] = NULL;
     }
@@ -227,7 +159,7 @@ int main(int argc, char *argv[])
 
     // res name
     strcpy(myResName,argv[2]);
-    for (i = 0; i <strlen(myResName); i++)
+    for (unsigned int i = 0; i <strlen(myResName); i++)
     {
         if (myResName[i] == '.')
         {
@@ -246,14 +178,14 @@ int main(int argc, char *argv[])
    }
 
    loResult = readDirectoryBlocks(loResFile, loDirectoryPointers);
-   if (loResult == FALSE)
+   if (loResult == false)
    {
        printf("The reading of directory blocks failed!\n");
        fclose(loResFile);
        return 4;
    }
 
-   loResult = FALSE;
+   loResult = false;
    if (loFunction == GET_INFORMATION)
    {
        loResult = getInformation(loResFile, loDirectoryPointers, argv[3]);
@@ -288,7 +220,7 @@ int main(int argc, char *argv[])
        char *loAddedFile = argv[4];
        char *loNewName = argv[5];
        loResult = replaceResourceByResourceFromFile(loResFile, loDirectoryPointers, loResNumber, loAddedFile,
-            loNewName, FALSE);
+            loNewName, false);
    }
    else if (loFunction == REPLACE_BY_RESOURCE_WITH_HEADER)
    {
@@ -296,7 +228,7 @@ int main(int argc, char *argv[])
        char *loAddedFile = argv[4];
        char *loNewName = argv[5];
        loResult = replaceResourceByResourceFromFile(loResFile, loDirectoryPointers, loResNumber, loAddedFile,
-            loNewName, TRUE);
+            loNewName, true);
    }
    else if (loFunction == CREATE_TBL_FILE)
    {
@@ -305,22 +237,22 @@ int main(int argc, char *argv[])
    else if (loFunction == CONVERT_OLD_BITMAPS)
    {
        // convert bitmaps, end on any error
-       loResult = convertOldBitmaps(loResFile, loDirectoryPointers, argv[3], FALSE);
+       loResult = convertOldBitmaps(loResFile, loDirectoryPointers, argv[3], false);
    }
    else if (loFunction == CONVERT_OLD_BITMAPS_IGNORE_ERRORS)
    {
        // convert bitmaps, skip bitmaps with errors
-       loResult = convertOldBitmaps(loResFile, loDirectoryPointers, argv[3], TRUE);
+       loResult = convertOldBitmaps(loResFile, loDirectoryPointers, argv[3], true);
    }
    else if (loFunction == CONVERT_OLD_FONTS)
    {
        // convert fonts, end on any error
-       loResult = convertOldFonts(loResFile, loDirectoryPointers, argv[3], FALSE);
+       loResult = convertOldFonts(loResFile, loDirectoryPointers, argv[3], false);
    }
    else if (loFunction == CONVERT_OLD_FONTS_IGNORE_ERRORS)
    {
        // convert fonts, skip fonts with errors
-       loResult = convertOldFonts(loResFile, loDirectoryPointers, argv[3], TRUE);
+       loResult = convertOldFonts(loResFile, loDirectoryPointers, argv[3], true);
    }
    else if (loFunction == PATCH_EOB3_MENU)
    {
@@ -333,7 +265,7 @@ int main(int argc, char *argv[])
        loResult = convertEOB3toAESOP32(loResFile, loDirectoryPointers, argv[3]);
    }                    
    fclose(loResFile);
-   if (loResult == FALSE)
+   if (loResult == false)
    {
        printf("Finished with an error!\n");       
    }
@@ -389,7 +321,7 @@ int getInformation(FILE *aResFile, DIRPOINTER *aDirectoryPointers, char *aOutput
     loResourceNameArray = getResourceNameArray(aResFile, aDirectoryPointers);
     if (loResourceNameArray == NULL)
     {
-        return FALSE;
+        return false;
     }
     
     loNumberOfResources =  getNumberOfItems(loResourceNameArray);    
@@ -399,7 +331,7 @@ int getInformation(FILE *aResFile, DIRPOINTER *aDirectoryPointers, char *aOutput
     if (loOutputFile == NULL)
     {
         printf("The file could not be opened: %s!\n", aOutputFilename);
-        return FALSE;
+        return false;
     }
 
     fprintf(loOutputFile, "AESOP decompiler version: %1.3f\n", VERSION);
@@ -438,9 +370,9 @@ int getInformation(FILE *aResFile, DIRPOINTER *aDirectoryPointers, char *aOutput
     fprintf(loOutputFile, "The corresponding code resource is <name> (it is an AESOP bytecode binary).\n\n");            
     
     fprintf(loOutputFile, "*** Resource details ***\n");
-    fprintf(loOutputFile, " (Every resource starts with %d byte header on address START,\n", (int)(sizeof(struct RESEntryHeader)));    
-    fprintf(loOutputFile, " the real resource starts on the address REAL_START,\n", (int)(sizeof(struct RESEntryHeader)));
-    fprintf(loOutputFile, " the resource length SIZE does not include the length of the header.\n", (int)(sizeof(struct RESEntryHeader)));
+    fprintf(loOutputFile, " (Every resource starts with %d byte header on address START,\n", (int)(sizeof(struct RESEntryHeader)));
+    fprintf(loOutputFile, " the real resource starts on the address REAL_START,\n");
+    fprintf(loOutputFile, " the resource length SIZE does not include the length of the header.\n");
     fprintf(loOutputFile, " ATTRIB is the attribute value from the resource header)\n");        
     fprintf(loOutputFile, "NUMBER     START  (REAL_START)      SIZE                    DATE    ATTRIB  NAME\n");    
     for(i = 0; i < MAX_NUMBER_OF_DICTIONARY_ITEMS && loResourceNameArray[i] != NULL; i++)
@@ -449,8 +381,8 @@ int getInformation(FILE *aResFile, DIRPOINTER *aDirectoryPointers, char *aOutput
         int loResourceNumber;
         char *loResourceName;
         struct RESEntryHeader *loResEntryHeader;
-        ULONG loDataSize;
-        ULONG loResourceAttributes;
+        unsigned int loDataSize;
+        unsigned int loResourceAttributes;
         long loResourceEntryIndex;
         char loStorageTime[256];
             
@@ -461,7 +393,7 @@ int getInformation(FILE *aResFile, DIRPOINTER *aDirectoryPointers, char *aOutput
         {
             printf("Failure to convert the resource number: %s!\n", loResourceNumberString);
             fclose(loOutputFile);
-            return FALSE;                 
+            return false;
         }
         // resource name
         loResourceName = loResourceNameArray[i]->first;
@@ -476,14 +408,13 @@ int getInformation(FILE *aResFile, DIRPOINTER *aDirectoryPointers, char *aOutput
         loResourceAttributes = loResEntryHeader->data_attributes;
 
         // print it
-        fprintf(loOutputFile, "%6d  %8ld  (%10ld)  %8ld   %21s  %8lu  %s\n", loResourceNumber, (long)loResourceEntryIndex,
+        fprintf(loOutputFile, "%6d  %8ld  (%10ld)  %8ld   %21s  %8du  %s\n", loResourceNumber, (long)loResourceEntryIndex,
             (long)loResourceEntryIndex + sizeof(struct RESEntryHeader),
-            (long)loDataSize, loStorageTime, loResourceAttributes,
-            loResourceName);
+            (long)loDataSize, loStorageTime, loResourceAttributes, loResourceName);
         free(loResEntryHeader);            
     }
     fclose(loOutputFile);
-    return TRUE;
+    return true;
     
 }
 
@@ -496,15 +427,15 @@ int getResource(FILE *aResFile, DIRPOINTER *aDirectoryPointers, int aFunction, c
     FILE *loOutputFile;
     int loExtractedResourceNumber;
     struct RESEntryHeader *loResEntryHeader;
-    ULONG loDataSize;
+    unsigned int loDataSize;
     long loResourceEntryIndex;
     unsigned char *loBuffer;
-    int loReadSize;
+    unsigned int loReadSize;
 
     loResourceNameArray = getResourceNameArray(aResFile, aDirectoryPointers);
     if (loResourceNameArray == NULL)
     {
-        return FALSE;
+        return false;
     }
 
     if (aFunction == GET_RESOURCE_BY_NUMBER || aFunction == GET_RESOURCE_WITH_HEADER_BY_NUMBER)
@@ -514,7 +445,7 @@ int getResource(FILE *aResFile, DIRPOINTER *aDirectoryPointers, int aFunction, c
         if (loExtractedResourceNumber == -1)
         {
             // error
-            return FALSE;
+            return false;
         }
     }
     else
@@ -525,7 +456,7 @@ int getResource(FILE *aResFile, DIRPOINTER *aDirectoryPointers, int aFunction, c
         {
             // error
             printf("The resource %s was not found!\n", aResource);
-            return FALSE;
+            return false;
         }
     }
 
@@ -559,14 +490,14 @@ int getResource(FILE *aResFile, DIRPOINTER *aDirectoryPointers, int aFunction, c
     if (fseek(aResFile, loResourceEntryIndex, SEEK_SET) != 0)
     {
         printf("Failure to set the file position %ld when reading a resource!\n", loResourceEntryIndex);
-        return FALSE;
+        return false;
     }        
     loReadSize = fread(loBuffer, 1, loDataSize, aResFile);
     if (loReadSize != loDataSize)
     {
         printf("The resource could not be read!\n");
         free(loBuffer);
-        return FALSE;        
+        return false;
     }    
 
     // write the binary
@@ -576,12 +507,12 @@ int getResource(FILE *aResFile, DIRPOINTER *aDirectoryPointers, int aFunction, c
     {
         printf("The file could not be opened: %s!\n", aOutputFilename);
         free(loBuffer);
-        return FALSE;
+        return false;
     }
     fwrite(loBuffer, 1, loReadSize, loOutputFile);
     fclose(loOutputFile);
     free(loBuffer);   
-    return TRUE;
+    return true;
 }
 
 /*
@@ -704,7 +635,7 @@ void displayCodeResourceInformation(FILE *aResFile, DIRPOINTER *aDirectoryPointe
                 // show the import dictionary
                 fprintf(aOutputFile, "\n");                
                 displayImportDictionary(loImportResourceName, loImportResourceNumber, aOutputFile,
-                    loFullImportResourceDictionary, FALSE);                
+                    loFullImportResourceDictionary, false);
             }            
 
         }        
@@ -729,7 +660,7 @@ void displayCodeResourceInformation(FILE *aResFile, DIRPOINTER *aDirectoryPointe
                 // show the export dictionary
                 fprintf(aOutputFile, "\n");
                 displayExportDictionary(loExportResourceName, loExportResourceNumber, aOutputFile,
-                    loFullExportResourceDictionary, FALSE);                
+                    loFullExportResourceDictionary, false);
             }
         }                    
     }
@@ -765,15 +696,15 @@ void displaySpecialAESOPResource(FILE *aResFile, DIRPOINTER *aDirectoryPointers,
         int loSecondIsDecimalNumber;
         if (aResourceNumber == 0 || aResourceNumber == 3 || aResourceNumber == 4)
         {
-            loSecondIsDecimalNumber = TRUE;
+            loSecondIsDecimalNumber = true;
         }
         else
         {
-            loSecondIsDecimalNumber = FALSE;
+            loSecondIsDecimalNumber = false;
         }
         
         // sorting according to the first entry
-        if (sortDictionaryAccordingToFirstString(loSpecialDictionary) == FALSE)
+        if (sortDictionaryAccordingToFirstString(loSpecialDictionary) == false)
         {
             fprintf(aOutputFile, "The sorting of the special resource %d according to the FIRST ENTRY failed!", aResourceNumber);
         }
@@ -784,10 +715,10 @@ void displaySpecialAESOPResource(FILE *aResFile, DIRPOINTER *aDirectoryPointers,
         fprintf(aOutputFile, "\n");
 
         // sorting accoding to the second entry
-        if (loSecondIsDecimalNumber == TRUE)
+        if (loSecondIsDecimalNumber == true)
         {
             // these special AESOP resources have the second entry numeric so sort it like that
-            if (sortDictionaryAccordingToSecondNumber(loSpecialDictionary) == FALSE)
+            if (sortDictionaryAccordingToSecondNumber(loSpecialDictionary) == false)
             {
                 fprintf(aOutputFile, "The sorting of the special resource %d according to the SECOND ENTRY (numeric) failed!", aResourceNumber);
             }
@@ -798,9 +729,9 @@ void displaySpecialAESOPResource(FILE *aResFile, DIRPOINTER *aDirectoryPointers,
         else
         {
             // otherwise sort according to the second entry (as string)
-            if (sortDictionaryAccordingToSecondString(loSpecialDictionary) == FALSE)
+            if (sortDictionaryAccordingToSecondString(loSpecialDictionary) == false)
             {
-                fprintf(aOutputFile, "The sorting of the special resource %d according to the SECOND ENTRY %d failed!", aResourceNumber);
+                fprintf(aOutputFile, "The sorting of the special resource %d according to the SECOND ENTRY (numeric) failed!", aResourceNumber);
             }            
             strcpy(loText, "\n  *** SPECIAL TABLE (sorted by the SECOND ENTRY) ***");
             strcpy(loFormat, "%30s     %20s");
@@ -887,11 +818,11 @@ int getResourceInformation(FILE *aResFile, DIRPOINTER *aDirectoryPointers, int a
     FILE *loOutputFile;
     int loExtractedResourceNumber;
     struct RESEntryHeader *loResEntryHeader;
-    ULONG loDataSize;
+    unsigned int loDataSize;
     long loResourceEntryIndex;
     //char *loBuffer;
     //int loReadSize;
-    ULONG loResourceAttributes;
+    unsigned int loResourceAttributes;
     char loStorageTime[256];
     char loResourceName[256];
     char loTmp[256];
@@ -900,7 +831,7 @@ int getResourceInformation(FILE *aResFile, DIRPOINTER *aDirectoryPointers, int a
     loResourceNameArray = getResourceNameArray(aResFile, aDirectoryPointers);
     if (loResourceNameArray == NULL)
     {
-        return FALSE;
+        return false;
     }
 
     if (aFunction == GET_RESOURCE_INFORMATION_BY_NUMBER)
@@ -910,7 +841,7 @@ int getResourceInformation(FILE *aResFile, DIRPOINTER *aDirectoryPointers, int a
         if (loExtractedResourceNumber == -1)
         {
             // error
-            return FALSE;
+            return false;
         }
     }
     else
@@ -921,14 +852,14 @@ int getResourceInformation(FILE *aResFile, DIRPOINTER *aDirectoryPointers, int a
         {
             // error
             printf("The resource %s was not found!\n", aResource);
-            return FALSE;
+            return false;
         }
     }
 
     if (getResourceName(loResourceName, loExtractedResourceNumber) == NULL)
     {
         // error
-        return FALSE;
+        return false;
     }
     
     printf("The resource %s was found.\n", aResource);
@@ -946,7 +877,7 @@ int getResourceInformation(FILE *aResFile, DIRPOINTER *aDirectoryPointers, int a
     if (loOutputFile == NULL)
     {
         printf("The file could not be opened: %s!\n", aOutputFilename);
-        return FALSE;
+        return false;
     }
     fprintf(loOutputFile,"AESOP decompiler version: %1.3f\n", VERSION);
     fprintf(loOutputFile,"Public domain software made by Mirek Luza\n\n");    
@@ -954,18 +885,18 @@ int getResourceInformation(FILE *aResFile, DIRPOINTER *aDirectoryPointers, int a
     fprintf(loOutputFile,"Resource name:   %s\n", loResourceName);
     fprintf(loOutputFile,"Resource number: %d\n", loExtractedResourceNumber);
     fprintf(loOutputFile,"Starts at:       %ld\n", (long)loResourceEntryIndex + sizeof(struct RESEntryHeader));
-    fprintf(loOutputFile,"Length:          %lu\n", loDataSize);
-    fprintf(loOutputFile,"Attributes:      %lu\n", loResourceAttributes);
+    fprintf(loOutputFile,"Length:          %u\n", loDataSize);
+    fprintf(loOutputFile,"Attributes:      %u\n", loResourceAttributes);
     fprintf(loOutputFile,"Time:            %s\n", loStorageTime);
 
     strcpy(loTmp, loResourceName);
     //toUpperCase(loTmp); // resouce names ARE CASE SENSITIVE, so do not convert to uppercase!
-    if (stringEndsWith(loTmp, IMPORT_EXTENSION) == TRUE)
+    if (stringEndsWith(loTmp, IMPORT_EXTENSION) == true)
     {
         loResourceType = RESOURCE_TYPE_IMPORT;
         displayCodeResourceInformation(aResFile, aDirectoryPointers, loOutputFile, loResourceType, loResourceName, loResourceNameArray);
     }
-    else if (stringEndsWith(loTmp, EXPORT_EXTENSION) == TRUE)
+    else if (stringEndsWith(loTmp, EXPORT_EXTENSION) == true)
     {
         loResourceType = RESOURCE_TYPE_EXPORT;
         displayCodeResourceInformation(aResFile, aDirectoryPointers, loOutputFile, loResourceType, loResourceName, loResourceNameArray);
@@ -993,7 +924,7 @@ int getResourceInformation(FILE *aResFile, DIRPOINTER *aDirectoryPointers, int a
     fclose(loOutputFile);                 
     free(loResEntryHeader);            
         
-    return TRUE;
+    return true;
 }
 
 /*
@@ -1031,11 +962,11 @@ int getResourcesInformation(FILE *aResFile, DIRPOINTER *aDirectoryPointers, char
     FILE *loOutputFile;
     char loDateString[256];
     
-    loResInfo = getResourcesInformationTable(aResFile, aDirectoryPointers, TRUE);
+    loResInfo = getResourcesInformationTable(aResFile, aDirectoryPointers, true);
     if (loResInfo == NULL)
     {
         // unable to get the resource information table
-        return FALSE;
+        return false;
     }
   
     printf("Opening the output file: %s\n", aOutputFilename);
@@ -1043,7 +974,7 @@ int getResourcesInformation(FILE *aResFile, DIRPOINTER *aDirectoryPointers, char
     if (loOutputFile == NULL)
     {
         printf("The file could not be opened: %s!\n", aOutputFilename);
-        return FALSE;
+        return false;
     }
 
     fprintf(loOutputFile, "AESOP decompiler version: %1.3f\n", VERSION);
@@ -1060,7 +991,7 @@ int getResourcesInformation(FILE *aResFile, DIRPOINTER *aDirectoryPointers, char
     displayResourcesInfoEntries(loOutputFile, loResInfo);
     
     fclose(loOutputFile);
-    return TRUE;
+    return true;
     
 }
 
@@ -1071,10 +1002,10 @@ int testOldBitmaps(FILE *aResFile, DIRPOINTER *aDirectoryPointers, char *aOutput
 {
     RESINFOPOINTER   *loResourcesInfoTable;
     FILE *loOutputFile;
-    int loResult = FALSE;
+    int loResult = false;
     int i;
     
-    loResourcesInfoTable = getResourcesInformationTable(aResFile, aDirectoryPointers, FALSE);
+    loResourcesInfoTable = getResourcesInformationTable(aResFile, aDirectoryPointers, false);
     if (loResourcesInfoTable == NULL)
     {
         // unable to get the resource information table
@@ -1089,7 +1020,7 @@ int testOldBitmaps(FILE *aResFile, DIRPOINTER *aDirectoryPointers, char *aOutput
         return loResult;
     }
 
-    loResult = TRUE;
+    loResult = true;
     for(i = 0; i < MAX_NUMBER_OF_DICTIONARY_ITEMS && loResourcesInfoTable[i] != NULL; i++)
     {
         int loResourceType;
@@ -1102,10 +1033,10 @@ int testOldBitmaps(FILE *aResFile, DIRPOINTER *aDirectoryPointers, char *aOutput
             loName = loResourcesInfoTable[i]->name;
             loNumber = loResourcesInfoTable[i]->number;
             loFileName = loResourcesInfoTable[i]->infoFromResource2;
-            if (testOneOldBitmap(aResFile, aDirectoryPointers, loName, loNumber, loOutputFile) == FALSE)
+            if (testOneOldBitmap(aResFile, aDirectoryPointers, loName, loNumber, loOutputFile) == false)
             {
                 fprintf(loOutputFile, "%-6s %5d \"%s\" \"%s\"\n\n", "FAILED", loNumber, loName, loFileName);
-                loResult = FALSE;
+                loResult = false;
             }
             else
             {
@@ -1115,7 +1046,7 @@ int testOldBitmaps(FILE *aResFile, DIRPOINTER *aDirectoryPointers, char *aOutput
     }
 
     fclose(loOutputFile);
-    return TRUE;        
+    return true;
 }
 
 
@@ -1137,20 +1068,20 @@ int replaceResourceByResourceFromFile(FILE *aResFile, DIRPOINTER *aDirectoryPoin
     loResourceNameArray = getResourceNameArray(aResFile, aDirectoryPointers);
     if (loResourceNameArray == NULL)
     {
-        return FALSE;
+        return false;
     }
 
     loResourceNumber = atoi(aResourceNumberString);
     if (loResourceNumber == 0 && strcmp(aResourceNumberString,"0") != 0)
     {
         printf("Failure to convert the resource number: %s!\n", aResourceNumberString);
-        return FALSE;                 
+        return false;
     }    
 
     if (getResourceName(loResourceName, loResourceNumber) == NULL)
     {
         printf("Unable to find the original resource number: %d\n", loResourceNumber);
-        return FALSE; 
+        return false;
     }
                 
     // added resource
@@ -1158,7 +1089,7 @@ int replaceResourceByResourceFromFile(FILE *aResFile, DIRPOINTER *aDirectoryPoin
     if (loAddedResourceFile == NULL)
     {
         printf("The file could not be opened: %s!\n", aAddedResourceFileName);
-        return FALSE;
+        return false;
     }
     fseek(loAddedResourceFile, 0, SEEK_END); // at the end
     loAddedResourceSize = ftell(loAddedResourceFile);
@@ -1167,9 +1098,9 @@ int replaceResourceByResourceFromFile(FILE *aResFile, DIRPOINTER *aDirectoryPoin
     loBuffer = (unsigned char *)malloc(loAddedResourceSize);
     if (loBuffer == NULL)
     {
-        printf("The allocation of the array for the added resource with the size %d failed!\n", loAddedResourceSize);
+        printf("The allocation of the array for the added resource with the size %ld failed!\n", loAddedResourceSize);
         fclose(loAddedResourceFile);
-        return FALSE;
+        return false;
     }    
 
     fseek(loAddedResourceFile, 0, SEEK_SET);  // at the beginning
@@ -1179,7 +1110,7 @@ int replaceResourceByResourceFromFile(FILE *aResFile, DIRPOINTER *aDirectoryPoin
         printf("Failure to read the added resource into memory!\n");
         free(loBuffer);
         fclose(loAddedResourceFile);
-        return FALSE;           
+        return false;
     }
     fclose(loAddedResourceFile);
 
@@ -1210,7 +1141,7 @@ int getOffsetInformation(FILE *aResFile, DIRPOINTER *aDirectoryPointers, char *a
     if (aOffsetString == NULL || strlen(aOffsetString) == 0)
     {
         printf("File offset is NULL or an empty string!\n");
-        return FALSE;
+        return false;
     }
     if (strlen(aOffsetString) > 1 && aOffsetString[0] == '#')
     {
@@ -1218,20 +1149,20 @@ int getOffsetInformation(FILE *aResFile, DIRPOINTER *aDirectoryPointers, char *a
         char loHexadecimalNumber[256];
         strcpy(loHexadecimalNumber, "0x");
         strcat(loHexadecimalNumber, aOffsetString + 1);
-        if (sscanf(loHexadecimalNumber, "%x", &loOffset) != 1)
+        if (sscanf(loHexadecimalNumber, "%i", &loOffset) != 1)
         {
             printf("Failed to convert the hexadecimal number: %s\n", aOffsetString);
-            return FALSE;
+            return false;
         }
     }
     else if (strlen(aOffsetString) > 2 && aOffsetString[0] == '0' &&
         (aOffsetString[1] == 'x' || aOffsetString[1] == 'X'))
     {
         // hex number starting by 0x
-        if (sscanf(aOffsetString, "%x", &loOffset) != 1)
+        if (sscanf(aOffsetString, "%i", &loOffset) != 1)
         {
             printf("Failed to convert the hexadecimal number: %s\n", aOffsetString);
-            return FALSE;
+            return false;
         }        
     }
     else
@@ -1240,20 +1171,20 @@ int getOffsetInformation(FILE *aResFile, DIRPOINTER *aDirectoryPointers, char *a
         if (sscanf(aOffsetString, "%d", &loOffset) != 1)
         {
             printf("Failed to convert the number: %s\n", aOffsetString);
-            return FALSE;
+            return false;
         }        
     }
 
-    if (loOffset < 0 || loOffset >= myHeader.file_size)
+    if (loOffset < 0 || loOffset >= (int) myHeader.file_size)
     {
         printf("The offset %d points does not point into the file %s!\n", loOffset, myResName);
-        return FALSE;
+        return false;
     }
     
     loResourceNameArray = getResourceNameArray(aResFile, aDirectoryPointers);
     if (loResourceNameArray == NULL)
     {
-        return FALSE;
+        return false;
     }
 
     printf("Opening the output file: %s\n", aOutputFileName);
@@ -1261,7 +1192,7 @@ int getOffsetInformation(FILE *aResFile, DIRPOINTER *aDirectoryPointers, char *a
     if (loOutputFile == NULL)
     {
         printf("The file could not be opened: %s!\n", aOutputFileName);
-        return FALSE;
+        return false;
     }
 
     fprintf(loOutputFile, "AESOP decompiler version: %1.3f\n", VERSION);
@@ -1279,29 +1210,29 @@ int getOffsetInformation(FILE *aResFile, DIRPOINTER *aDirectoryPointers, char *a
         fprintf(loOutputFile, "%s\n", loTmp);
         printf("%s\n", loTmp);
         fclose(loOutputFile);
-        return TRUE;        
+        return true;
     }
-    if (loOffset >= myHeader.first_directory_block  &&
-        loOffset < myHeader.first_directory_block + loDirBlockSize)
+    if (loOffset >= (int) myHeader.first_directory_block  &&
+        loOffset < (int) myHeader.first_directory_block + loDirBlockSize)
     {
         sprintf(loTmp, "The offset %d points to the directory block %d.", loOffset, 1);
         fprintf(loOutputFile, "%s\n", loTmp);
         printf("%s\n", loTmp);
         fclose(loOutputFile);
-        return TRUE;        
+        return true;
     }
     for (i = 0; i < MAX_DIRECTORIES; i++)
     {
         if (aDirectoryPointers[i] != NULL && aDirectoryPointers[i]->next_directory_block != 0)
         {
-            if (loOffset >= aDirectoryPointers[i]->next_directory_block  &&
-                loOffset < aDirectoryPointers[i]->next_directory_block + loDirBlockSize)
+            if (loOffset >= (int) aDirectoryPointers[i]->next_directory_block  &&
+                loOffset < (int) aDirectoryPointers[i]->next_directory_block + loDirBlockSize)
             {
                 sprintf(loTmp, "The offset %d points to the directory block %d.", loOffset, i + 1);
                 fprintf(loOutputFile, "%s\n", loTmp);
                 printf("%s\n", loTmp);
                 fclose(loOutputFile);
-                return TRUE;        
+                return true;
             }
         }
     }
@@ -1312,7 +1243,7 @@ int getOffsetInformation(FILE *aResFile, DIRPOINTER *aDirectoryPointers, char *a
         int loResourceNumber;
         char *loResourceName;
         struct RESEntryHeader *loResEntryHeader;
-        ULONG loDataSize;
+        unsigned int loDataSize;
         long loResourceEntryIndex;
             
         //  resource number
@@ -1322,7 +1253,7 @@ int getOffsetInformation(FILE *aResFile, DIRPOINTER *aDirectoryPointers, char *a
         {
             printf("Failure to convert the resource number: %s!\n", loResourceNumberString);
             fclose(loOutputFile);
-            return FALSE;                 
+            return false;
         }
         // resource name
         loResourceName = loResourceNameArray[i]->first;
@@ -1342,7 +1273,7 @@ int getOffsetInformation(FILE *aResFile, DIRPOINTER *aDirectoryPointers, char *a
             printf("%s\n", loTmp);
             free(loResEntryHeader);
             fclose(loOutputFile);
-            return TRUE;            
+            return true;
         }
 
         if (loOffset >= loResourceEntryIndex + loResEntryHeaderSize &&
@@ -1354,7 +1285,7 @@ int getOffsetInformation(FILE *aResFile, DIRPOINTER *aDirectoryPointers, char *a
             printf("%s\n", loTmp);
             free(loResEntryHeader);
             fclose(loOutputFile);
-            return TRUE;            
+            return true;
         }        
 
         free(loResEntryHeader);            
@@ -1363,7 +1294,7 @@ int getOffsetInformation(FILE *aResFile, DIRPOINTER *aDirectoryPointers, char *a
     fprintf(loOutputFile, "%s\n", loTmp);
     printf("%s\n", loTmp);
     fclose(loOutputFile);
-    return TRUE;            
+    return true;
 }
 
 /*
@@ -1381,7 +1312,7 @@ int createTblFile(FILE *aResFile, DIRPOINTER *aDirectoryPointers, char *aTblFile
     if (loOutputFile == NULL)
     {
         printf("The file could not be opened: %s!\n", aTblFileName);
-        return FALSE;
+        return false;
     }
 
     // write the indexes
@@ -1390,13 +1321,13 @@ int createTblFile(FILE *aResFile, DIRPOINTER *aDirectoryPointers, char *aTblFile
         int j;
         for(j = 0; j < DIRECTORY_BLOCK_ITEMS; j++)
         {
-            ULONG loIndex;
+            unsigned int loIndex;
             loIndex = aDirectoryPointers[i]->entry_header_index[j];
-            if (fwrite(&loIndex, 1, sizeof(ULONG), loOutputFile) != sizeof(ULONG))
+            if (fwrite(&loIndex, 1, sizeof(unsigned int), loOutputFile) != sizeof(unsigned int))
             {
                 printf("Error while writing a TBL file!\n");
                 fclose(loOutputFile);
-                return FALSE;
+                return false;
             }                
         }
     }
@@ -1404,18 +1335,18 @@ int createTblFile(FILE *aResFile, DIRPOINTER *aDirectoryPointers, char *aTblFile
     // write end markers
     for(i = 0; i < TBL_END_MARKER_LENGTH; i++)
     {
-        UBYTE loZero = 0;
-        if (fwrite(&loZero, 1, sizeof(UBYTE), loOutputFile) != sizeof(UBYTE))
+        unsigned char loZero = 0;
+        if (fwrite(&loZero, 1, sizeof(unsigned char), loOutputFile) != sizeof(unsigned char))
         {
             printf("Error while writing a TBL file!\n");
             fclose(loOutputFile);
-            return FALSE;
+            return false;
         }        
     }
 
     // close the file
     fclose(loOutputFile);    
-    return TRUE;
+    return true;
 }
 
 /*
@@ -1424,7 +1355,7 @@ Converts old bitmaps (EOB3 -> AESOP/32)
 int convertOldBitmaps(FILE *aResFile, DIRPOINTER *aDirectoryPointers, char *aNewFileName, int aIgnoreErrors)
 {
     RESINFOPOINTER   *loResourcesInfoTable;
-    int loResult = FALSE;
+    int loResult = false;
     int i;
     int loOkConversions = 0;
     int loFailedConversions = 0;
@@ -1432,7 +1363,7 @@ int convertOldBitmaps(FILE *aResFile, DIRPOINTER *aDirectoryPointers, char *aNew
     struct RESGlobalHeader loNewFileHeader;
     FILE *loNewFile;    
     
-    loResourcesInfoTable = getResourcesInformationTable(aResFile, aDirectoryPointers, FALSE);
+    loResourcesInfoTable = getResourcesInformationTable(aResFile, aDirectoryPointers, false);
     if (loResourcesInfoTable == NULL)
     {
         // unable to get the resource information table
@@ -1441,10 +1372,10 @@ int convertOldBitmaps(FILE *aResFile, DIRPOINTER *aDirectoryPointers, char *aNew
 
     // copy the original file
     // (only the copy will be modified)
-    if (copyFile(aResFile, aNewFileName) == FALSE)
+    if (copyFile(aResFile, aNewFileName) == false)
     {
         printf("Copying of the original file failed!\n");
-        return FALSE;   
+        return false;
     }
   
     // open the copied file and read the header
@@ -1452,15 +1383,15 @@ int convertOldBitmaps(FILE *aResFile, DIRPOINTER *aDirectoryPointers, char *aNew
     if (loNewFile == NULL)
     {
         printf("The file could not be opened: %s!\n", aNewFileName);
-        return FALSE;
+        return false;
     }     
     
     // read the directory
-    if (readDirectoryBlocks(loNewFile, loNewFileDirectoryPointers) == FALSE)
+    if (readDirectoryBlocks(loNewFile, loNewFileDirectoryPointers) == false)
     {
        printf("The reading of directory blocks in the new file failed!\n");
        fclose(loNewFile);
-       return FALSE;
+       return false;
     }
 
     for(i = 0; i < MAX_NUMBER_OF_DICTIONARY_ITEMS && loResourcesInfoTable[i] != NULL; i++)
@@ -1473,11 +1404,11 @@ int convertOldBitmaps(FILE *aResFile, DIRPOINTER *aDirectoryPointers, char *aNew
             int loNumber;
             loName = loResourcesInfoTable[i]->name;
             loNumber = loResourcesInfoTable[i]->number;
-            if (convertOneOldBitmap(loNewFile, loNewFileDirectoryPointers, &loNewFileHeader, loNumber, loName) == FALSE)
+            if (convertOneOldBitmap(loNewFile, loNewFileDirectoryPointers, &loNewFileHeader, loNumber, loName) == false)
             {
                 loFailedConversions++;
                 printf("The conversion of the bitmap resource number %d, name \"%s\" FAILED!\n", loNumber, loName);
-                if (aIgnoreErrors == FALSE)
+                if (aIgnoreErrors == false)
                 {
                     printf("Ending the conversion prematurely!\n");
                     // mark the file as invalid (by overwriting the beginning)
@@ -1498,11 +1429,11 @@ int convertOldBitmaps(FILE *aResFile, DIRPOINTER *aDirectoryPointers, char *aNew
     printf("The number of failed bitmap conversions: %d\n", loFailedConversions);    
     if (loFailedConversions > 0)
     {
-        return FALSE;
+        return false;
     }
     else
     {
-        return TRUE;
+        return true;
     }
 }
 
@@ -1512,7 +1443,7 @@ Converts old fonts (EOB3 -> AESOP/32)
 int convertOldFonts(FILE *aResFile, DIRPOINTER *aDirectoryPointers, char *aNewFileName, int aIgnoreErrors)
 {
     RESINFOPOINTER   *loResourcesInfoTable;
-    int loResult = FALSE;
+    int loResult = false;
     int i;
     int loOkConversions = 0;
     int loFailedConversions = 0;
@@ -1520,7 +1451,7 @@ int convertOldFonts(FILE *aResFile, DIRPOINTER *aDirectoryPointers, char *aNewFi
     struct RESGlobalHeader loNewFileHeader;
     FILE *loNewFile;    
     
-    loResourcesInfoTable = getResourcesInformationTable(aResFile, aDirectoryPointers, FALSE);
+    loResourcesInfoTable = getResourcesInformationTable(aResFile, aDirectoryPointers, false);
     if (loResourcesInfoTable == NULL)
     {
         // unable to get the resource information table
@@ -1529,10 +1460,10 @@ int convertOldFonts(FILE *aResFile, DIRPOINTER *aDirectoryPointers, char *aNewFi
 
     // copy the original file
     // (only the copy will be modified)
-    if (copyFile(aResFile, aNewFileName) == FALSE)
+    if (copyFile(aResFile, aNewFileName) == false)
     {
         printf("Copying of the original file failed!\n");
-        return FALSE;   
+        return false;
     }
   
     // open the copied file and read the header
@@ -1540,15 +1471,15 @@ int convertOldFonts(FILE *aResFile, DIRPOINTER *aDirectoryPointers, char *aNewFi
     if (loNewFile == NULL)
     {
         printf("The file could not be opened: %s!\n", aNewFileName);
-        return FALSE;
+        return false;
     }     
     
     // read the directory
-    if (readDirectoryBlocks(loNewFile, loNewFileDirectoryPointers) == FALSE)
+    if (readDirectoryBlocks(loNewFile, loNewFileDirectoryPointers) == false)
     {
        printf("The reading of directory blocks in the new file failed!\n");
        fclose(loNewFile);
-       return FALSE;
+       return false;
     }
 
     for(i = 0; i < MAX_NUMBER_OF_DICTIONARY_ITEMS && loResourcesInfoTable[i] != NULL; i++)
@@ -1561,11 +1492,11 @@ int convertOldFonts(FILE *aResFile, DIRPOINTER *aDirectoryPointers, char *aNewFi
             int loNumber;
             loName = loResourcesInfoTable[i]->name;
             loNumber = loResourcesInfoTable[i]->number;
-            if (convertOneOldFont(loNewFile, loNewFileDirectoryPointers, &loNewFileHeader, loNumber, loName) == FALSE)
+            if (convertOneOldFont(loNewFile, loNewFileDirectoryPointers, &loNewFileHeader, loNumber, loName) == false)
             {
                 loFailedConversions++;
                 printf("The conversion of the font resource number %d, name \"%s\" FAILED!\n", loNumber, loName);
-                if (aIgnoreErrors == FALSE)
+                if (aIgnoreErrors == false)
                 {
                     printf("Ending the conversion prematurely!\n");
                     // mark the file as invalid (by overwriting the beginning)
@@ -1586,11 +1517,11 @@ int convertOldFonts(FILE *aResFile, DIRPOINTER *aDirectoryPointers, char *aNewFi
     printf("The number of failed font conversions: %d\n", loFailedConversions);    
     if (loFailedConversions > 0)
     {
-        return FALSE;
+        return false;
     }
     else
     {
-        return TRUE;
+        return true;
     }
 }
 
@@ -1599,7 +1530,7 @@ Patch EOB 3 menu code to run in AESOP/32
 */
 int patchEOB3Menu(FILE *aResFile, DIRPOINTER *aDirectoryPointers, char *aNewFileName)
 {    
-    int loResult = FALSE;
+    int loResult = false;
     DIRPOINTER loNewFileDirectoryPointers[MAX_DIRECTORIES];
     struct RESGlobalHeader loNewFileHeader;
     FILE *loNewFile;    
@@ -1607,12 +1538,12 @@ int patchEOB3Menu(FILE *aResFile, DIRPOINTER *aDirectoryPointers, char *aNewFile
     // read the resource name array (it is used later)
     if (getResourceNameArray(aResFile, aDirectoryPointers) == NULL)
     {
-        return FALSE;
+        return false;
     }
     
     // copy the original file
     // (only the copy will be modified)
-    if (copyFile(aResFile, aNewFileName) == FALSE)
+    if (copyFile(aResFile, aNewFileName) == false)
     {
         printf("Copying of the original file failed!\n");
         return loResult;   
@@ -1627,24 +1558,24 @@ int patchEOB3Menu(FILE *aResFile, DIRPOINTER *aDirectoryPointers, char *aNewFile
     }     
     
     // read the directory
-    if (readDirectoryBlocks(loNewFile, loNewFileDirectoryPointers) == FALSE)
+    if (readDirectoryBlocks(loNewFile, loNewFileDirectoryPointers) == false)
     {
        printf("The reading of directory blocks in the new file failed!\n");
        fclose(loNewFile);
        return loResult;
     }
 
-    if (patchEOB3MenuInOpenedFile(loNewFile, loNewFileDirectoryPointers, &loNewFileHeader) == FALSE)
+    if (patchEOB3MenuInOpenedFile(loNewFile, loNewFileDirectoryPointers, &loNewFileHeader) == false)
     {
         printf("Patching of the menu resource failed!\n");
         // mark the file as invalid (by overwriting the beginning)
         fseek(loNewFile, 0, SEEK_SET);
         fprintf(loNewFile, "BAD FILE: THE MENU RESOURCE PATCHING FAILED !!!\n");
-        loResult = FALSE;        
+        loResult = false;
     }
     else
     {
-        loResult = TRUE;
+        loResult = true;
     }
 
     fclose(loNewFile);  
@@ -1657,7 +1588,7 @@ Converts EOB 3 to AESOP/32
 int convertEOB3toAESOP32(FILE *aResFile, DIRPOINTER *aDirectoryPointers, char *aNewFileName)
 {
     RESINFOPOINTER   *loResourcesInfoTable;
-    int loResult = FALSE;
+    int loResult = false;
     int i;
     int loOkFontConversions = 0;
     int loOkBitmapConversions = 0;
@@ -1667,7 +1598,7 @@ int convertEOB3toAESOP32(FILE *aResFile, DIRPOINTER *aDirectoryPointers, char *a
 
     printf("Starting the full EOB3 to AESOP/32 conversion (menu patching, bitmap/font conversion)...\n");    
     
-    loResourcesInfoTable = getResourcesInformationTable(aResFile, aDirectoryPointers, FALSE);
+    loResourcesInfoTable = getResourcesInformationTable(aResFile, aDirectoryPointers, false);
     if (loResourcesInfoTable == NULL)
     {
         // unable to get the resource information table
@@ -1676,10 +1607,10 @@ int convertEOB3toAESOP32(FILE *aResFile, DIRPOINTER *aDirectoryPointers, char *a
 
     // copy the original file
     // (only the copy will be modified)
-    if (copyFile(aResFile, aNewFileName) == FALSE)
+    if (copyFile(aResFile, aNewFileName) == false)
     {
         printf("Copying of the original file failed!\n");
-        return FALSE;   
+        return false;
     }
   
     // open the copied file and read the header
@@ -1687,26 +1618,26 @@ int convertEOB3toAESOP32(FILE *aResFile, DIRPOINTER *aDirectoryPointers, char *a
     if (loNewFile == NULL)
     {
         printf("The file could not be opened: %s!\n", aNewFileName);
-        return FALSE;
+        return false;
     }     
     
     // read the directory
-    if (readDirectoryBlocks(loNewFile, loNewFileDirectoryPointers) == FALSE)
+    if (readDirectoryBlocks(loNewFile, loNewFileDirectoryPointers) == false)
     {
        printf("The reading of directory blocks in the new file failed!\n");
        fclose(loNewFile);
-       return FALSE;
+       return false;
     }
 
     // patch the menu resource
-    if (patchEOB3MenuInOpenedFile(loNewFile, loNewFileDirectoryPointers, &loNewFileHeader) == FALSE)
+    if (patchEOB3MenuInOpenedFile(loNewFile, loNewFileDirectoryPointers, &loNewFileHeader) == false)
     {
         printf("Patching of the menu resource failed!\n");
         // mark the file as invalid (by overwriting the beginning)
         fseek(loNewFile, 0, SEEK_SET);
         fprintf(loNewFile, "BAD FILE: THE MENU RESOURCE PATCHING FAILED !!!\n");
         fclose(loNewFile);
-        return FALSE;       
+        return false;
     }    
 
     // convert fonts and bitmaps
@@ -1722,7 +1653,7 @@ int convertEOB3toAESOP32(FILE *aResFile, DIRPOINTER *aDirectoryPointers, char *a
                 
         if (loResourceType == RESOURCE_TYPE_BITMAP)
         {        
-            if (convertOneOldBitmap(loNewFile, loNewFileDirectoryPointers, &loNewFileHeader, loNumber, loName) == FALSE)
+            if (convertOneOldBitmap(loNewFile, loNewFileDirectoryPointers, &loNewFileHeader, loNumber, loName) == false)
             {
                 printf("The conversion of the bitmap resource number %d, name \"%s\" FAILED!\n", loNumber, loName);
                 printf("Ending the conversion prematurely!\n");
@@ -1730,7 +1661,7 @@ int convertEOB3toAESOP32(FILE *aResFile, DIRPOINTER *aDirectoryPointers, char *a
                 fseek(loNewFile, 0, SEEK_SET);
                 fprintf(loNewFile, "BAD FILE: THE BITMAP CONVERSION FAILED !!!\n");
                 fclose(loNewFile);
-                return FALSE;
+                return false;
             }
             else
             {
@@ -1739,7 +1670,7 @@ int convertEOB3toAESOP32(FILE *aResFile, DIRPOINTER *aDirectoryPointers, char *a
         }
         else if (loResourceType == RESOURCE_TYPE_FONT)
         {
-            if (convertOneOldFont(loNewFile, loNewFileDirectoryPointers, &loNewFileHeader, loNumber, loName) == FALSE)
+            if (convertOneOldFont(loNewFile, loNewFileDirectoryPointers, &loNewFileHeader, loNumber, loName) == false)
             {
                 printf("The conversion of the font resource number %d, name \"%s\" FAILED!\n", loNumber, loName);
                 printf("Ending the conversion prematurely!\n");
@@ -1747,7 +1678,7 @@ int convertEOB3toAESOP32(FILE *aResFile, DIRPOINTER *aDirectoryPointers, char *a
                 fseek(loNewFile, 0, SEEK_SET);
                 fprintf(loNewFile, "BAD FILE: THE FONT CONVERSION FAILED !!!\n");
                 fclose(loNewFile);
-                return FALSE;
+                return false;
             }
             else
             {
@@ -1766,6 +1697,6 @@ int convertEOB3toAESOP32(FILE *aResFile, DIRPOINTER *aDirectoryPointers, char *a
     {
         printf("Warning: no font conversions were done!\n");
     }        
-    return TRUE;
+    return true;
 }
 

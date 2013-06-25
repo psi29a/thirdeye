@@ -1,16 +1,6 @@
-///////////////////////////////////////////////////////////////////////////////
-//
-// DAESOP
-// using code from AESOP engine and ReWiki website
-// (c) Mirek Luza
-// public domain software
-//
-///////////////////////////////////////////////////////////////////////////////
-
 #ifndef DAESOP_H
 #define DAESOP_H
 
-#include "tdefs.hpp"
 #include "dblocks.hpp"
 #include "dict.hpp"
 #include "utils.hpp"
@@ -18,7 +8,7 @@
 #include "dasm.hpp"
 #include "convert.hpp"
 
-#define VERSION 0.85
+#define VERSION 0.86
 
 #define NOTHING                             0
 #define GET_INFORMATION                     1

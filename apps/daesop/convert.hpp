@@ -1,18 +1,8 @@
-///////////////////////////////////////////////////////////////////////////////
-//
-// DAESOP
-// using code from AESOP engine and ReWiki website
-// (c) Mirek Luza
-// public domain software
-//
-///////////////////////////////////////////////////////////////////////////////
-
 #ifndef CONVERT_H
 #define CONVERT_H
 
 #include <stdio.h>
 #include "resstr.hpp"
-#include "tdefs.hpp"
 #include "rentry.hpp"
 #include "dblocks.hpp"
 #include "dict.hpp"
@@ -38,42 +28,42 @@ struct NEW_BITMAP_GLOBAL_HEADER
     char version2;
     char version3;
     char version4;            
-    LONG  number_of_shapes; 
+    int  number_of_shapes; 
 };
 
 struct NEW_BITMAP_SUBPICTURE_HEADER
 {
-    UWORD boundsy; 
-    UWORD boundsx;
-    UWORD originy;
-    UWORD originx;
-    LONG  xmin;
-    LONG  ymin;
-    LONG  xmax;
-    LONG  ymax;   
+    unsigned short boundsy; 
+    unsigned short boundsx;
+    unsigned short originy;
+    unsigned short originx;
+    int  xmin;
+    int  ymin;
+    int  xmax;
+    int  ymax;   
 };
 
 // TODO: The old font header is almost certainly incomplete, fix it!
 struct OLD_FONT_HEADER
 {
-    UWORD char_count;
-    UWORD char_height;
-    UBYTE header4;
-    UBYTE header5;
-    UBYTE header6;
-    UBYTE header7;        
+    unsigned short char_count;
+    unsigned short char_height;
+    unsigned char header4;
+    unsigned char header5;
+    unsigned char header6;
+    unsigned char header7;        
 };
 
 // new font header
 struct NEW_FONT_HEADER
 {
-    UBYTE version1;
-    UBYTE version2;
-    UBYTE version3;
-    UBYTE version4;
-    ULONG char_count;
-    ULONG char_height;
-    ULONG font_background;
+    unsigned char version1;
+    unsigned char version2;
+    unsigned char version3;
+    unsigned char version4;
+    unsigned int char_count;
+    unsigned int char_height;
+    unsigned int font_background;
 };
 
 // bitmap testing
@@ -81,19 +71,19 @@ int testOneOldBitmap(FILE *aResFile, DIRPOINTER *aDirectoryPointers, char *aBitm
     int aBitmapNumber, FILE *aOutputFile);
 // replacement of resources
 int replaceResourceByResourceFromMemory(FILE *aResFile, char *aResourceName, int aResourceNumber,
-        unsigned char *aAddedResourceBuffer, int aAddedResourceSize, char *aNewFileName, int aNewResourceHasHeader);
+        unsigned char *aAddedResourceBuffer, unsigned int aAddedResourceSize, char *aNewFileName, int aNewResourceHasHeader);
 int replaceResourceInOpenedFile(char *aResourceName, int aResourceNumber, unsigned char *aAddedResourceBuffer,
-        int aAddedResourceSize, FILE *aNewFile, struct RESGlobalHeader *aNewFileHeader,
+        unsigned int aAddedResourceSize, FILE *aNewFile, struct RESGlobalHeader *aNewFileHeader,
         DIRPOINTER *aNewFileDirectoryPointers, int aNewResourceHasHeader);
 // conversion of bitmaps
 int convertOneOldBitmap(FILE *aNewFile, DIRPOINTER *aNewFileDirectoryPointers, struct RESGlobalHeader *aNewFileHeader,
         int aResourceNumber, char *aResourceName);
-unsigned char *getNewBitmapForOldBitmap(unsigned char *aOldResourceBuffer, int aOldResourceLength,
+unsigned char *getNewBitmapForOldBitmap(unsigned char *aOldResourceBuffer, unsigned int aOldResourceLength,
     int *aNewResourceLength);
 unsigned char *allocateNewBitmapBuffer(int aOldBitmapHeaderSize, int *aNewBitmapBufferLength);
 int prepareNewBitmapGlobalHeader(unsigned char *aNewBitmapBuffer, int aNewBitmapBufferLength, int *aNewBitmapBufferPointer,
     int aSubpictures);
-void storeNewBitmapSubpicturePointer(unsigned char *aNewBitmapBuffer, int aIndex, ULONG aPointer);    
+void storeNewBitmapSubpicturePointer(unsigned char *aNewBitmapBuffer, int aIndex, unsigned int aPointer);    
 int prepareNewBitmapSubpictureHeader(unsigned char *aNewBitmapBuffer, int aNewBitmapBufferLength, int *aNewBitmapBufferPointer,
     int aWidth, int aHeight);
 int convertOneOldSubpicture(unsigned char *aOldResourceBuffer, int aOldResourceBufferLength, unsigned int aOldPictureStart,
@@ -121,16 +111,16 @@ int addNewRunToken(unsigned char aValue, int aAmount, unsigned char *aNewBitmapB
 // conversion of fonts
 int convertOneOldFont(FILE *aNewFile, DIRPOINTER *aNewFileDirectoryPointers, struct RESGlobalHeader *aNewFileHeader,
         int aResourceNumber, char *aResourceName);
-unsigned char *allocateNewFontBuffer(int aOldFontHeaderSize, int *aNewFontBufferLength);
+unsigned char *allocateNewFontBuffer(unsigned int aOldFontHeaderSize, unsigned int *aNewFontBufferLength);
 void freeOldCharacterDefinitionTable(unsigned char **aOldCharacterDefinitionTable);
-unsigned char *getNewFontForOldFont(unsigned char *aOldResourceBuffer, int aOldResourceLength,
+unsigned char *getNewFontForOldFont(unsigned char *aOldResourceBuffer, unsigned int aOldResourceLength,
     int *aNewResourceLength);
 int readOldCharacterDefinition(unsigned char **aResult, int aStartPos, int aChar, unsigned char *aOldResourceBuffer,
-    int aOldResourceLength, int aHeight);
+    unsigned int aOldResourceLength, int aHeight);
 int prepareNewFontHeader(int aNumberOfCharacters, int aFontHeight, unsigned char *aNewFontBuffer,
-        int aNewFontBufferLength, int *aNewFontBufferPointer);
+        unsigned int aNewFontBufferLength, int *aNewFontBufferPointer);
 int convertOldAndStoreNewCharacter(unsigned char *aOldCharacterDefinition, int aChar, int aFontHeight,
-        unsigned char *aNewFontBuffer, int aNewFontBufferLength, int *aNewFontBufferPointer,
+        unsigned char *aNewFontBuffer, unsigned int aNewFontBufferLength, int *aNewFontBufferPointer,
         int aNewOffsetsStart);
 int patchEOB3MenuInOpenedFile(FILE *aNewFile, DIRPOINTER *aNewFileDirectoryPointers, struct RESGlobalHeader *aNewFileHeader);
 int patchOneByte(unsigned char *aBinary, int aBinaryLength, int aAddress, unsigned char aOldValue,

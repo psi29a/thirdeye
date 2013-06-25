@@ -1,19 +1,9 @@
-///////////////////////////////////////////////////////////////////////////////
-//
-// DAESOP
-// using code from AESOP engine and ReWiki website
-// (c) Mirek Luza
-// public domain software
-//
-///////////////////////////////////////////////////////////////////////////////
-
 #include <malloc.h>
 #include <stdio.h>
 #include <string.h>
 #include <ctype.h>
 
 #include "utils.hpp"
-#include "tdefs.hpp"
 
 /*
 Allocate a string
@@ -35,7 +25,7 @@ char *makeString(const char *aString)
 /*
 Get the date
 */
-char *unpackDate(ULONG aDate, char *aDateString)
+char *unpackDate(unsigned int aDate, char *aDateString)
 {
     const char *months[12] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
 
@@ -92,11 +82,11 @@ char getCharacterForDump(char aChar)
 /*
 Checks whether the one string ends with another string (case insensitive)
 */
-int stringEndsWith(char *aFullString, char *aEndString)
+int stringEndsWith(char *aFullString, const char *aEndString)
 {
     int loFullStringLength;
     int loEndStringLength;
-    int loResult = FALSE;
+    int loResult = false;
     char *loFullStringEndPointer;
     
     if (aFullString == NULL || aEndString == NULL)
@@ -116,7 +106,7 @@ int stringEndsWith(char *aFullString, char *aEndString)
     if (strcmpCS(loFullStringEndPointer, aEndString) == 0)
     {
         // ok, the ending agrees
-        loResult = TRUE;
+        loResult = true;
     }
     return loResult;
 }
@@ -136,7 +126,7 @@ int copyFile(FILE *aSourceFile, char *aNewFileName)
     if (loNewFile == NULL)
     {
         printf("The file could not be opened: %s!\n", aNewFileName);
-        return FALSE;
+        return false;
     }
 
     // copy the aResFile file into aNewFile
@@ -147,12 +137,12 @@ int copyFile(FILE *aSourceFile, char *aNewFileName)
         {
             printf("Unable to write to the file: %s\n", aNewFileName);
             fclose(loNewFile);
-            return FALSE;
+            return false;
         }
     }
 
     // close the file after copying
     fclose(loNewFile);
     printf("Finished copying of the original into the file: %s\n", aNewFileName);
-    return TRUE;
+    return true;
 }

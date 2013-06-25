@@ -1,18 +1,8 @@
-///////////////////////////////////////////////////////////////////////////////
-//
-// DAESOP
-// using code from AESOP engine and ReWiki website
-// (c) Mirek Luza
-// public domain software
-//
-///////////////////////////////////////////////////////////////////////////////
-
 #ifndef RENTRY_H
 #define RENTRY_H
 
 #include <stdio.h>
 
-#include "tdefs.hpp"
 #include "resstr.hpp"
 #include "dblocks.hpp"
 

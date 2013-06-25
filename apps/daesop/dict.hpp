@@ -1,16 +1,6 @@
-///////////////////////////////////////////////////////////////////////////////
-//
-// DAESOP
-// using code from AESOP engine and ReWiki website
-// (c) Mirek Luza
-// public domain software
-//
-///////////////////////////////////////////////////////////////////////////////
-
 #ifndef DICT_H
 #define DICT_H
 
-#include "tdefs.hpp"
 #include "resstr.hpp"
 #include "utils.hpp"
 #include "rentry.hpp"
