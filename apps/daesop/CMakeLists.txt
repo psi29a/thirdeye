@@ -1,3 +1,6 @@
+# config file
+configure_file ("${CMAKE_CURRENT_SOURCE_DIR}/config.hpp.cmake" "${CMAKE_CURRENT_SOURCE_DIR}/config.hpp")
+
 set(DAESOP
     convert.cpp
     daesop.cpp
@@ -12,9 +15,10 @@ set(DAESOP
 
 set(DAESOP_HEADER
     resstr.hpp
+    config.hpp
 )
 
-source_group(game FILES ${GAME} ${DAESOP_HEADER})
+source_group(game FILES ${DAESOP} ${DAESOP_HEADER})
 
 include_directories(${CMAKE_CURRENT_BINARY_DIR})
 
