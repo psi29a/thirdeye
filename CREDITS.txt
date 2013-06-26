@@ -1,7 +1,6 @@
 Contributors
 
 The Thirdeye project was started in 2013 by Bret Curtis.
-In the course of years many people have contributed to the project.
 
 If you feel your name is missing from this list,
 please notify a developer.
@@ -14,7 +13,7 @@ Additional Credits:
 In this section we would like to thank people not part of Thirdeye for their work.
 
 Thanks to Mirek Luza
-For original starting daesop to update Eye of the Beholder 3 to work on
+For originaly starting daesop to update Eye of the Beholder 3 to work on
 AESOP/32 and for releasing daesop into the public domain.
 
 Thanks to John Miles

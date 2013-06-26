@@ -38,8 +38,8 @@ int main(int argc, char *argv[])
         loDirectoryPointers[i] = NULL;
     }
 
-    printf("AESOP decompiler version: %1.3f\n", VERSION);
-    printf("Public domain software made by Mirek Luza\n");
+    printf("AESOP decompiler version: %s\n", DAESOP_VERSION);
+    printf("\n\n");
         
     if (argc < 3)
     {
@@ -334,8 +334,8 @@ int getInformation(FILE *aResFile, DIRPOINTER *aDirectoryPointers, char *aOutput
         return false;
     }
 
-    fprintf(loOutputFile, "AESOP decompiler version: %1.3f\n", VERSION);
-    fprintf(loOutputFile, "Public domain software made by Mirek Luza\n\n");
+    fprintf(loOutputFile, "AESOP decompiler version: %s\n", DAESOP_VERSION);
+    fprintf(loOutputFile, "\n\n");
         
     fprintf(loOutputFile, "Analyzed file:      %s\n", myResName);
     fprintf(loOutputFile, "Signature:          %s\n", myHeader.signature);    
@@ -879,8 +879,8 @@ int getResourceInformation(FILE *aResFile, DIRPOINTER *aDirectoryPointers, int a
         printf("The file could not be opened: %s!\n", aOutputFilename);
         return false;
     }
-    fprintf(loOutputFile,"AESOP decompiler version: %1.3f\n", VERSION);
-    fprintf(loOutputFile,"Public domain software made by Mirek Luza\n\n");    
+    fprintf(loOutputFile,"AESOP decompiler version: %s\n", DAESOP_VERSION);
+    fprintf(loOutputFile,"\n\n");
     fprintf(loOutputFile,"Analyzing the resource %s in the file: %s\n\n", aResource, myResName);
     fprintf(loOutputFile,"Resource name:   %s\n", loResourceName);
     fprintf(loOutputFile,"Resource number: %d\n", loExtractedResourceNumber);
@@ -977,8 +977,8 @@ int getResourcesInformation(FILE *aResFile, DIRPOINTER *aDirectoryPointers, char
         return false;
     }
 
-    fprintf(loOutputFile, "AESOP decompiler version: %1.3f\n", VERSION);
-    fprintf(loOutputFile, "Public domain software made by Mirek Luza\n\n");
+    fprintf(loOutputFile, "AESOP decompiler version: %s\n", DAESOP_VERSION);
+    fprintf(loOutputFile, "\n\n");
         
     fprintf(loOutputFile, "Analyzed file:      %s\n", myResName);
     fprintf(loOutputFile, "Signature:          %s\n", myHeader.signature);    
@@ -1195,8 +1195,8 @@ int getOffsetInformation(FILE *aResFile, DIRPOINTER *aDirectoryPointers, char *a
         return false;
     }
 
-    fprintf(loOutputFile, "AESOP decompiler version: %1.3f\n", VERSION);
-    fprintf(loOutputFile, "Public domain software made by Mirek Luza\n\n");
+    fprintf(loOutputFile, "AESOP decompiler version: %s\n", DAESOP_VERSION);
+    fprintf(loOutputFile, "\n\n");
         
     fprintf(loOutputFile, "Analyzed file:      %s\n\n", myResName);
 
