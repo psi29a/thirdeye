@@ -1,5 +1,7 @@
 #include <malloc.h>
 
+#include "dblocks.hpp"
+
 #include "rentry.hpp"
 
 /*

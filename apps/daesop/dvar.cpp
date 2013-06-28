@@ -3,6 +3,9 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "dasm.hpp"
+#include "damap.hpp"
+
 #include "dvar.hpp"
 
 // static variables

@@ -2,11 +2,6 @@
 #define CONVERT_H
 
 #include <stdio.h>
-#include "resstr.hpp"
-#include "rentry.hpp"
-#include "dblocks.hpp"
-#include "dict.hpp"
-#include "utils.hpp"
 
 // leave reserve for future
 #define MAX_BITMAP_WIDTH 2500

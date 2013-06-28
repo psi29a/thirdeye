@@ -2,9 +2,6 @@
 #define DVAR_H
 
 #include "dict.hpp"
-#include "utils.hpp"
-#include "dasm.hpp"
-#include "damap.hpp"
 
 #define MAX_STATIC_VARIABLES 1000
 #define MAX_CONSTANT_TABLES 1000

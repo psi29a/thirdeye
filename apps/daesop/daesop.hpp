@@ -1,13 +1,10 @@
 #ifndef DAESOP_H
 #define DAESOP_H
 
-#include "config.hpp"
-#include "dblocks.hpp"
+#include <stdio.h>
+
+#include "resstr.hpp"
 #include "dict.hpp"
-#include "utils.hpp"
-#include "rentry.hpp"
-#include "dasm.hpp"
-#include "convert.hpp"
 
 #define NOTHING                             0
 #define GET_INFORMATION                     1
