@@ -2,6 +2,12 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "resstr.hpp"
+#include "rentry.hpp"
+#include "dblocks.hpp"
+#include "dict.hpp"
+#include "utils.hpp"
+
 #include "convert.hpp"
 
 // set this to get more information about font conversion

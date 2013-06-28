@@ -4,7 +4,6 @@
 #include <stdio.h>
 
 #include "resstr.hpp"
-#include "dblocks.hpp"
 
 long getResourceEntryIndex(int i, DIRPOINTER * loDirectoryPointers);
 struct RESEntryHeader *getResourceEntryHeader(int aNumber, FILE *aResFile, DIRPOINTER * aDirectoryPointers);

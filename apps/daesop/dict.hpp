@@ -2,8 +2,6 @@
 #define DICT_H
 
 #include "resstr.hpp"
-#include "utils.hpp"
-#include "rentry.hpp"
 
 // just a sensible value to check when working with dictionaries
 #define MAX_NUMBER_OF_DICTIONARY_ITEMS 30000

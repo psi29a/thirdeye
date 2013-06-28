@@ -3,6 +3,9 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "utils.hpp"
+#include "rentry.hpp"
+
 #include "dict.hpp"
 
 int readDictionaryStringList(DICTENTRYPOINTER *aDictionaryArray, int aMaxDictionaryEntries, int *aCurrentIndexInDictionary, FILE *aResFile, unsigned int aStringListIndex);

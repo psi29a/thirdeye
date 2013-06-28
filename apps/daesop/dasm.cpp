@@ -4,6 +4,10 @@
 #include <string.h>
 #include <ctype.h>
 
+#include "utils.hpp"
+#include "damap.hpp"
+#include "dvar.hpp"
+
 #include "dasm.hpp"
 
 extern char myHomeDirectory[];

@@ -1,12 +1,7 @@
 #ifndef DASM_H
 #define DASM_H
 
-#include <stdio.h>
-
 #include "dict.hpp"
-#include "utils.hpp"
-#include "damap.hpp"
-#include "dvar.hpp"
 
 #define MAX_BYTECODES 256
 #define BYTECODE_DEFINITION_FILE "abc_list.def"
