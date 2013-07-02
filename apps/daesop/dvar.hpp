@@ -20,55 +20,55 @@
 // max number of function parameters or local variables
 #define MAX_FUNCTION_PARAMETERS_OR_LOCAL_VARIABLES 10000
 
-struct STATIC_VARIABLE_ENTRY
-{
-    int isPublic;
-    int isArray;
-    char *name;
-    int variableIndex;     // used for both variables/arrays
-    int numberOfElements;  // used for arrays 
+struct STATIC_VARIABLE_ENTRY {
+	int isPublic;
+	int isArray;
+	char *name;
+	int variableIndex;     // used for both variables/arrays
+	int numberOfElements;  // used for arrays
 };
 
 typedef struct STATIC_VARIABLE_ENTRY *STATVARPOINTER;
 
-struct TABLE_CONSTANT_ENTRY
-{
-    char *name;
-    int tableIndex;     
-    char elementType;
-    int numberOfElements; 
+struct TABLE_CONSTANT_ENTRY {
+	char *name;
+	int tableIndex;
+	char elementType;
+	int numberOfElements;
 };
 
 typedef struct TABLE_CONSTANT_ENTRY *TABLECONSTPOINTER;
 
-
-struct LOCAL_VARIABLE_REFERENCE
-{
-    int address;     
-    int instruction;
-    int index;
-    int isArray;
-    int isLocalVariableOrArray; // it is parametrer or local variable 
+struct LOCAL_VARIABLE_REFERENCE {
+	int address;
+	int instruction;
+	int index;
+	int isArray;
+	int isLocalVariableOrArray; // it is parametrer or local variable
 };
 
 typedef struct LOCAL_VARIABLE_REFERENCE *LOCALVARIABLEREFERENCEPOINTER;
 
-struct LOCAL_VARIABLE
-{
-    char* name;
-    int index;
-    int isArray;
+struct LOCAL_VARIABLE {
+	char* name;
+	int index;
+	int isArray;
 };
 
 typedef struct LOCAL_VARIABLE *LOCALVARIABLEPOINTER;
 
-char *getExternalVariableNameForVariableNumber(char *aResult, long aVariableNumber,
-    IMPORTENTRYPOINTER *aFullImportResourceDictionary);
-int changeImportEntryVariableToArray(long aVariableNumber, IMPORTENTRYPOINTER *aFullImportResourceDictionary);    
-int writeExternalReferencesInfo(IMPORTENTRYPOINTER *aFullImportResourceDictionary, FILE *aOutputFile);    
+char *getExternalVariableNameForVariableNumber(char *aResult,
+		long aVariableNumber,
+		IMPORTENTRYPOINTER *aFullImportResourceDictionary);
+int changeImportEntryVariableToArray(long aVariableNumber,
+		IMPORTENTRYPOINTER *aFullImportResourceDictionary);
+int writeExternalReferencesInfo(
+		IMPORTENTRYPOINTER *aFullImportResourceDictionary, FILE *aOutputFile);
 
-int initializeStaticVariableList(EXPORTENTRYPOINTER *aFullExportResourceDictionary);
-int addPrivateStaticVariableIfNotExisting(int aVariableIndex, int aIsArray, char aVariableType);
+int initializeStaticVariableList(
+		EXPORTENTRYPOINTER *aFullExportResourceDictionary);
+int addPrivateStaticVariableIfNotExisting(int aVariableIndex, int aIsArray,
+		char aVariableType);
 char *getStaticVariableNameForIndex(char *aResult, int aVariableIndex);
 int writeExportedVariablesInfo(FILE *aOutputFile);
 
@@ -77,14 +77,17 @@ char *getConstantTableName(char *aResult, int aTableIndex);
 int addConstantTableEntryIfNotExisting(int aTableIndex, char aVariableType);
 void processConstantTableList(void);
 
-void getAutoVariableNameForIndex(char *aResult, int aCurrentInstruction, int aVariableIndex);
+void getAutoVariableNameForIndex(char *aResult, int aCurrentInstruction,
+		int aVariableIndex);
 int initializeLocalVariableReferencesList(void);
-int addAutoVariableReference(int aAddress, int aInstruction, int aVariableIndex, int aIsArray);
+int addAutoVariableReference(int aAddress, int aInstruction, int aVariableIndex,
+		int aIsArray);
 int sortLocalVariableReferencesList(void);
 void displayLocalVariableReferencesList(void);
-int getParametersOrLocalVariables(LOCALVARIABLEPOINTER aResultArray[], int aGetLocalVariables,
-    int aStartAddress, int aEndAddress);
+int getParametersOrLocalVariables(LOCALVARIABLEPOINTER aResultArray[],
+		int aGetLocalVariables, int aStartAddress, int aEndAddress);
 void writeParameters(FILE *aOutputFile, int aCurrentAddress, int aEndAddress);
-void writeLocalVariables(FILE *aOutputFile, int aCurrentAddress, int aEndAddress);
+void writeLocalVariables(FILE *aOutputFile, int aCurrentAddress,
+		int aEndAddress);
 #endif
 
