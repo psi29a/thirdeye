@@ -82,13 +82,13 @@ int main(int argc, char *argv[]) {
 	} else if (strcmp(loFunctionOption, "-cob") == 0) {
 		loFunction = CONVERT_OLD_BITMAPS;
 		loNumberOfRequiredParameters = 1;
-	} else if (strcmp(loFunctionOption, "-convert_old_bitmaps") == 0) {
+	} else if (strcmp(loFunctionOption, "-cobi") == 0) {
 		loFunction = CONVERT_OLD_BITMAPS_IGNORE_ERRORS;
 		loNumberOfRequiredParameters = 1;
 	} else if (strcmp(loFunctionOption, "-cof") == 0) {
 		loFunction = CONVERT_OLD_FONTS;
 		loNumberOfRequiredParameters = 1;
-	} else if (strcmp(loFunctionOption, "-convert_old_fonts") == 0) {
+	} else if (strcmp(loFunctionOption, "-cofi") == 0) {
 		loFunction = CONVERT_OLD_FONTS_IGNORE_ERRORS;
 		loNumberOfRequiredParameters = 1;
 	} else if (strcmp(loFunctionOption, "-eob3menupatch") == 0) {
@@ -203,31 +203,31 @@ void syntaxInformation(void) {
 	printf("Syntax: daesop <main_option> <res_file> <extra_options> <output_file>\n");
 	printf("Allowed options:\n");
 	printf("  Information:\n");
-	printf("  -i						: produces information about the <res_file>\n");
-	printf("  -ir						: additional information from special resources \n");
-    printf("						  1 and 2 (original names of source files), resource \n");
-    printf("						  types and for string resources their values\n");
-	printf("  -j <resource_name>				: produces information about the <resource_name>\n");
-	printf("  -k <resource_number>				: produces information about the <resource_number>\n");
-	printf("  -ioff <offset>				: tells what is on the specified <offset> in the <res_file>\n");
-	printf("  -test_old_bitmaps				: checks all bitmap resources whether they are 'EOB 3 like' bitmaps\n");
+	printf("  -i			: produces information about the <res_file>\n");
+	printf("  -ir			: additional information from special resources \n");
+    printf("			  1 and 2 (original names of source files), resource \n");
+    printf("			  types and for string resources their values\n");
+	printf("  -j <resource_name>	: produces information about the <resource_name>\n");
+	printf("  -k <resource_number>	: produces information about the <resource_number>\n");
+	printf("  -ioff <offset>	: tells what is at specified <offset> in the <res_file>\n");
+	printf("  -test_old_bitmaps	: checks for all 'EOB 3 like' bitmap resources'\n");
 	printf("  \n");
 	printf("  Extraction:\n");
-	printf("  -e <resource_name>				: extracts the <resource_name>\n");
-	printf("  -eh <resource_name>				: extracts the <resource_name> including header\n");
-	printf("  -x <resource_number>				: extracts the <resource_number>\n");
-	printf("  -xh <resource_number>				: extracts the <resource_number> including header\n");
+	printf("  -e <resource_name>	: extracts the <resource_name>\n");
+	printf("  -eh <resource_name>	: extracts the <resource_name> including header\n");
+	printf("  -x <resource_number>	: extracts the <resource_number>\n");
+	printf("  -xh <resource_number>	: extracts the <resource_number> including header\n");
 	printf("  \n");
 	printf("  Conversion:\n");
-	printf("  -r <resource_number> <new_resource_binary>	: replaces with the specified resource number with the provided resource binary\n");
-	printf("  -rh <resource_number> <new_resource_binary>	: additionally with a resource header\n");
-	printf("  -eob3conv					: same effect as using commands /cob, /cof and /eob3menupatch\n");
-	printf("  -create_tbl					: create a TBL file for the specified RES file\n");
-	printf("  -cob						: converts all 'EOB 3 like' bitmaps in <res_file>, stops on error\n");
-	printf("  -convert_old_bitmaps				: same as above, but ignores errors\n");
-	printf("  -cof						: converts all 'EOB 3 like' fonts in <res_file>, stops on error\n");
-	printf("  -convert_old_fonts				: same as above, but ignores errors\n");
-	printf("  -eob3menupatch				: patches the <res_file>'s 'menu' and 'show' to work with AESOP/32\n");
+	printf("  -r <resource_number> <new_resource>	: replaces old with the new resource\n");
+	printf("  -rh <resource_number> <new_resource>	: additionally with a resource header\n");
+	printf("  -create_tbl		: create a TBL file for the specified RES file\n");
+	printf("  -cob			: converts all 'EOB 3 like' bitmaps in <res_file>\n");
+	printf("  -cobi			: same as above, but ignores errors\n");
+	printf("  -cof			: converts all 'EOB 3 like' fonts in <res_file>\n");
+	printf("  -cofi			: same as above, but ignores errors\n");
+	printf("  -eob3menupatch	: patches the <res_file> to work with AESOP/32\n");
+	printf("  -eob3conv		: same as using commands /cob, /cof and /eob3menupatch\n");
 	printf("  \n");
 	printf("Examples:  \n");
 	printf("  daesop -i EYE.RES info.txt\n");
