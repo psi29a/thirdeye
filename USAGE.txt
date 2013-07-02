@@ -1,0 +1,127 @@
+Background
+----------
+This utility is based on the information from the AESOP documentation and source code (thanks to its author John Miles) and on information from ReWiki(http://rewiki.regengedanken.de/wiki/Main_Page, thanks to Darkstar).
+
+This is simple utility for analyzing AESOP engine RES files. It can also convert the "Eye of Beholder 3" to the AESOP/32 engine. AESOP engine is used in the games "Eye of Beholder 3" and "Dungeon Hack".
+Its author John Miles recently released it as public domain including sources and documentation (I mean the engine and the interpreter including sources and documentation - the games themselves were *NOT* released).
+
+Also see the following links for information about the AESOP and format of the RES files:
+http://rewiki.regengedanken.de/wiki/AESOP/16 
+http://rewiki.regengedanken.de/wiki/.RES 
+http://rewiki.regengedanken.de/wiki/EYE.RES 
+
+
+Usage
+-----
+    Information:
+    daesop -i <res_file> <output_text_file>
+    daesop -ir <res_file> <output_text_file>
+    daesop -j <res_file> <resource_name> <output_text_file>
+    daesop -k <res_file> <resource_number> <output_text_file>
+    daesop -ioff <res_file> <offset> <output_text_file>
+    daesop -test_old_bitmaps <res_file> <output_text_file>
+    
+    Extraction:
+    daesop -e <res_file> <resource_name> <output_binary_file>
+    daesop -eh <res_file> <resource_name> <output_binary_file>
+    daesop -x <res_file> <resource_number> <output_binary_file>
+    daesop -xh <res_file> <resource_number> <output_binary_file>
+    
+    Conversion:
+    daesop -r <res_file> <resource_number> <new_resource_binary> <output_res_file>
+    daesop -rh <res_file> <resource_number> <new_resource_binary> <output_res_file>
+    daesop -eob3conv <res_file> <output_res_file>
+    daesop -create_tbl <res_file> <output_tbl_file>
+    daesop -cob <res_file> <output_res_file>
+    daesop -cobi <res_file> <output_res_file>
+    daesop -cof <res_file> <output_res_file>
+    daesop -cofi <res_file> <output_res_file>
+    daesop -eob3menupatch <res_file> <output_res_file>
+
+<res_file> is RES file (e.g. EYE.RES from EOB 3)
+<output_text_file> text file with some information
+<output_binary_file> binary file with an extracted resource
+<new_resource_binary> binary file representing the new resource
+<output_res_file> the result RES file with the replaced resource or converted bitmaps
+<offset> number (decadic or hexadecimal starting by # or 0x)
+<output_tbl_file> newly created TBL file (for "Dungeon Hack" engine)
+
+/i      - produces a text file with the information about the <res_file>
+/ir     - produces a text file with the information about the resources, including information from special resources 1 and 2 (original names of source files), resource types and for string resources their values
+/j      - produces a text file with the information about the resource <resource_name>
+/k      - produces a text file with the information about the resource <resource_number>
+/ioff   - tells what is on the specified offset in the resource file. It is usefull when seeing something interesting in a hexadecimal editor and wanting to know to which resource it belongs.
+/test_old_bitmaps - checks all bitmap resources whether they are "EOB 3 like" bitmaps
+
+/e      - extracts the resource <resource_name>
+/eh     - extracts the resource <resource_name> including header
+/x      - extracts the resource <resource_number>
+/xh     - extracts the resource <resource_number> including header
+
+/r      - replaces the specified resource number with the provided resource binary. The provided binary file represents the "new" resource without a resource header. The resource header from the original resource is used (just the length is corrected according the length of the "new" resource). The command does not change the original RES file, but produces its modified copy.
+/rh     - replaces the specified resource number with the provided resource binary. The provided binary file represents the "new" resource with a resource header.  The command does not change the original RES file, but produces its modified copy.
+/eob3conv - this command patches the EOB 3 (fixing the menu bug which leads to load/save crashes in the AESOP/32) and converts bitmaps and fonts. It has the same effect as using commands /cob, /cof and /eob3menupatch. (Warning: the final effect will be the same, but the result binary can differ a bit in content - resources are added at the end in a different order - but the effect will be the same in both cases).
+/create_tbl - create a TBL file for the specified RES file (the "Dungeon Hack" engine needs TBL files)
+/cob    - converts all "EOB 3 like" bitmaps in the specified file. Ends up immediately if an error is found.
+/cobi   - converts all "EOB 3 like" bitmaps in the specified file. Ignores errors (when a bitmap conversion fails, the old bitmap is kept)
+/cof    - converts all "EOB 3 like" fonts in the specified file. Ends up immediately if an error is found.
+/cofi   - converts all "EOB 3 like" fonts in the specified file. Ignores errors (when a font conversion fails, the old font is kept)
+/eob3menupatch - patches the EOB 3 (resource "menu", message handler "show") to work in the AESOP/32. The original code depends on the shape of pointers in the 16 bit mode and crashes in the AESOP/32. Unpatched game crashes when trying to load/save game from menu. The patched game works ok in the AESOP/32.
+
+The header mentioned above is the sequence of 12 bytes at the beginning (it contains encoded length, attributes, date).
+The switches /eh /xh extract resource with this header, /e /x without it (so only the resource itself).
+
+The switches /j /k are the most useful for the special AESOP tables (resources 0..4) and for the IMPORT/EXPORT/CODE resources. In these cases they provide some specific information including disassembly for code resources/. For all other resources a hexadecimal dump is produced.
+The import resources are the resources <name>.IMPT, the export resources are the resources <name>.EXPT. Every import/export resource has a corresponding code resource <name>.
+When the options /j or /k are used for the code related resources they dissassemble the corresponding code resource (check the resulting text file for the disassembled code). At the moment there is no AESOP assembler (I may do it in future).
+
+The replacement command (/r or /rh) does not remove an old resource physically but rather adds a new resource to the end of the file and changes the reference pointing to the old resource so that it points to the new resource. So every usage of /r or /rh increases the size of the file.
+
+The EOB 3 menu patch command (/eob3menupatch) does not patch the old resource itself, but rather makes its copy, patches the copy and  changes the reference pointing to the old resource so that it points to the new resource. So the usage of /eob3menupatch increases the size of the file.
+
+For conversion see the chapter further in this document ("Conversion of RES files").
+
+WARNING: The AESOP resource names are case sensitive! In EOB 3 there are resources "holy symbol" and "Holy symbol".
+
+Conversion of RES files
+-----------------------
+The conversion of the RES files between different versions of the AESOP engine includes (sometimes not all steps are necessary):
+a) Changing of the table of low level functions (resource 3)
+b) Conversion of bitmaps if needed
+c) Conversion of fonts if needed
+d) Conversion of other things if needed (sound, music)
+e) When converting to the "Dungeon Hack" engine, the corresponding TBL file must be created
+f) Patching incompatible code
+
+The point a) is easy - extract the resource 3 from a RES file made in the target engine and replace the resource 3 in the source RES file.
+The point b) is implemented in DAESOP for the conversion EOB 3 > AESOP/32 (see /cob).
+The point c) is implemented in DAESOP for the conversion EOB 3 > AESOP/32 (see /cof).
+The point d) is not being handled yet (it is not needed for the EOB 3 > AESOP/32 conversion).
+The point e) is implemented in the DAESOP (see create_tbl).
+The point f) in DAESOP for the conversion EOB 3 > AESOP/32 (see /eob3menupatch).
+
+For the conversion EOB 3 > AESOP/32 the command /eob3conv was implemented - it makes the work of the original commands /cob, /cof and /eob3menupatch (the points b), c), f) ).
+
+Remember that the target engine should support all those functions used by the source system. For example it is possible to convert the "Eye of Beholder 3" to the "Dungeon Hack" engine (change the resource 3, generate EYE.TBL for EYE.RES), but it has no sense. When running, the game ends up almost immediately complaining about missing function "create_initial_binary_files" which is available in the EOB 3 engine, but not in the DH engine.
+
+Conversion of the "Eye of Beholder 3" to "AESOP/32"
+---------------------------------------------------
+This partially works already: the game runs, but the texts are missing.
+These things are needed:
+a) Changing the resource 3
+b) Converting bitmaps
+c) Converting fonts
+d) Patching incompatible code
+
+All these things are supported by DAESOP
+
+# converts EYE.RES to EYE2.RES usable in AESOP/32
+# rename the result file to EYE.RES and use in AESOP/32
+daesop /eob3conv eye.res eye1.res
+daesop /xh sample.res 3 3h.bin
+daesop /rh eye1.res 3 3h.bin eye2.res
+
+The first command converts bitmaps/fonts and patches one incompatibility (resource "menu", message handler "show" - when unpatched, opening the save/load menu crashes the game in the AESOP/32), the second extracts the resource 3 from a sample AESOP/32 file, the third replaces the old resource 3.
+After that the game runs in the AESOP/32 (but beware that there can be problems - this was not extensively tested yet).
+
+The command /eob3conv makes the work of the original commands /cob, /cof and /eob3menupatch. (Warning: the final effect will be the same, but the result binary can differ a bit in content - resources are added at the end in a different order - but the effect will be the same in both cases).

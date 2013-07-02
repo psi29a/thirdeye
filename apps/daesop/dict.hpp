@@ -65,7 +65,6 @@
 #define PALETTE_PREFIX_UPPERCASE "PALETTE:"
 #define MAP_PREFIX_UPPERCASE     "MAP:"
 
-
 #define IMPORT_EXTENSION  ".IMPT"
 #define EXPORT_EXTENSION ".EXPT"
 
@@ -77,102 +76,113 @@
 
 #define MAX_LENGTH_OF_TESTED_STRING_RESOURCE 2000
 
-struct INTERNAL_DICTIONARY_ENTRY
-{
-    char *first;
-    char *second;
+struct INTERNAL_DICTIONARY_ENTRY {
+	char *first;
+	char *second;
 };
 
 typedef struct INTERNAL_DICTIONARY_ENTRY *DICTENTRYPOINTER;
 
-struct INTERNAL_IMPORT_ENTRY
-{
-    int importType;
-    // name
-    char *firstOriginal;
-    // the second entry format depends on the "importType" (it is decoded into the settings below)    
-    char *secondOriginal;
-    // used for runtime functions entries
-    int runtimeFunctionNumber;
-    // used for imported variable/array entries
-    int importedVariableNumber;
-    int originalResourceNumber;
-    char *originalResourceName;
+struct INTERNAL_IMPORT_ENTRY {
+	int importType;
+	// name
+	char *firstOriginal;
+	// the second entry format depends on the "importType" (it is decoded into the settings below)
+	char *secondOriginal;
+	// used for runtime functions entries
+	int runtimeFunctionNumber;
+	// used for imported variable/array entries
+	int importedVariableNumber;
+	int originalResourceNumber;
+	char *originalResourceName;
 };
 
 typedef struct INTERNAL_IMPORT_ENTRY *IMPORTENTRYPOINTER;
 
-struct INTERNAL_EXPORT_ENTRY
-{
-    int exportType;
-    // name
-    char *firstOriginal;
-    // the second entry format depends on the "exportType" (it is decoded into the settings below)
-    char *secondOriginal;
-    // used for message handlers entries
-    int messageHandlerStart;
-    char *messageHandlerName;
-    // used for an object name entry
-    char *objectName;
-    // used for a parent object name entry
-    int parentResourceNumber;
-    char *parentResourceName;
-    // used for exported variables entries
-    int exportedVariablePosition;
-    // used for arrays
-    int exportedArrayPosition;
-    int exportedArraySizeInElements;
+struct INTERNAL_EXPORT_ENTRY {
+	int exportType;
+	// name
+	char *firstOriginal;
+	// the second entry format depends on the "exportType" (it is decoded into the settings below)
+	char *secondOriginal;
+	// used for message handlers entries
+	int messageHandlerStart;
+	char *messageHandlerName;
+	// used for an object name entry
+	char *objectName;
+	// used for a parent object name entry
+	int parentResourceNumber;
+	char *parentResourceName;
+	// used for exported variables entries
+	int exportedVariablePosition;
+	// used for arrays
+	int exportedArrayPosition;
+	int exportedArraySizeInElements;
 };
 
 typedef struct INTERNAL_EXPORT_ENTRY *EXPORTENTRYPOINTER;
 
-struct INTERNAL_RESOURCE_INFO
-{
-    int resourceType;
-    int number;
-    char *name;
-    char *infoFromResource1;
-    char *infoFromResource2;
-    char *stringValue;
+struct INTERNAL_RESOURCE_INFO {
+	int resourceType;
+	int number;
+	char *name;
+	char *infoFromResource1;
+	char *infoFromResource2;
+	char *stringValue;
 };
 
 typedef struct INTERNAL_RESOURCE_INFO *RESINFOPOINTER;
 
-
 // auxiliary
 int getResourceNumberFromNumberString(char *aResource);
-int getResourceNumberFromNameString(char *aResource, DICTENTRYPOINTER* aResourceNameArray);
+int getResourceNumberFromNameString(char *aResource,
+		DICTENTRYPOINTER* aResourceNameArray);
 // common
-DICTENTRYPOINTER *readTheDictionary(int aResource, int aMaxDictionaryEntries, FILE *aResFile,
-    DIRPOINTER *aDirectoryPointers, int *aResourceSize);
+DICTENTRYPOINTER *readTheDictionary(int aResource, int aMaxDictionaryEntries,
+		FILE *aResFile, DIRPOINTER *aDirectoryPointers, int *aResourceSize);
 int getNumberOfItems(DICTENTRYPOINTER *aArray);
 int sortDictionaryAccordingToSecondNumber(DICTENTRYPOINTER *aArray);
 int sortDictionaryAccordingToSecondString(DICTENTRYPOINTER *aArray);
 int sortDictionaryAccordingToFirstString(DICTENTRYPOINTER *aArray);
-void displayDictionary(char *aText, char *aHeader, char *aFormat, FILE *aOutputFile,
-    DICTENTRYPOINTER *aDictionary, int aSecondIsDecimalNumber);
+void displayDictionary(char *aText, char *aHeader, char *aFormat,
+		FILE *aOutputFile, DICTENTRYPOINTER *aDictionary,
+		int aSecondIsDecimalNumber);
 // Special tables
 char *getResourceName(char *aResult, int aResourceNumber);
-DICTENTRYPOINTER *getResourceNameArray(FILE *aResFile, DIRPOINTER *aDirectoryPointers);
+DICTENTRYPOINTER *getResourceNameArray(FILE *aResFile,
+		DIRPOINTER *aDirectoryPointers);
 DICTENTRYPOINTER *getRawImportArray(int aImportResourceNumber, FILE *aResFile,
-    DIRPOINTER *aDirectoryPointers, int *aImportResourceSize);
+		DIRPOINTER *aDirectoryPointers, int *aImportResourceSize);
 DICTENTRYPOINTER *getRawExportArray(int aExportResourceNumber, FILE *aResFile,
-    DIRPOINTER *aDirectoryPointers, int *aExportResourceSize);
-IMPORTENTRYPOINTER *getFullImportArray(DICTENTRYPOINTER *aRawImportArray, FILE *aResFile, DIRPOINTER *aDirectoryPointers);
-EXPORTENTRYPOINTER *getFullExportArray(DICTENTRYPOINTER *aRawExportArray, FILE *aResFile, DIRPOINTER *aDirectoryPointers);
-void displayImportDictionary(char *aImportResourceName, int aImportResourceNumber, FILE *aOutputFile,
-    IMPORTENTRYPOINTER *aFullImportResourceDictionary, int aSecondIsDecimalNumber);
-void displayExportDictionary(char *aExportResourceName, int aExportResourceNumber, FILE *aOutputFile,
-    EXPORTENTRYPOINTER *aFullExportResourceDictionary, int aSecondIsDecimalNumber);
-DICTENTRYPOINTER *getSpecialArray(int aResourceNumber, FILE *aResFile, DIRPOINTER *aDirectoryPointers);
-char *getMessageName(char *aResult, char *aExportTableString, FILE *aResFile, DIRPOINTER *aDirectoryPointers);
-RESINFOPOINTER *getResourcesInformationTable(FILE *aResFile, DIRPOINTER *aDirectoryPointers, int aLookForStringResources);
-char* getSecondEntryForTheFirstEntry(DICTENTRYPOINTER *aResourceTable, char *aResourceName);            
-int getResourceType(FILE *aResFile, DIRPOINTER *aDirectoryPointers, DICTENTRYPOINTER *aResourceNameArray,
-                int aResourceNumber, char *aResourceName, char *aInfoString1, char *aInfoString2,
-                int aLookForStringResources, char **aFoundStringPointer);
-void displayResourcesInfoEntries(FILE *aOutputFile, RESINFOPOINTER *aResourcesInfoTable);
-void getResourceTypeString(char* aResult,  int aType);
+		DIRPOINTER *aDirectoryPointers, int *aExportResourceSize);
+IMPORTENTRYPOINTER *getFullImportArray(DICTENTRYPOINTER *aRawImportArray,
+		FILE *aResFile, DIRPOINTER *aDirectoryPointers);
+EXPORTENTRYPOINTER *getFullExportArray(DICTENTRYPOINTER *aRawExportArray,
+		FILE *aResFile, DIRPOINTER *aDirectoryPointers);
+void displayImportDictionary(char *aImportResourceName,
+		int aImportResourceNumber, FILE *aOutputFile,
+		IMPORTENTRYPOINTER *aFullImportResourceDictionary,
+		int aSecondIsDecimalNumber);
+void displayExportDictionary(char *aExportResourceName,
+		int aExportResourceNumber, FILE *aOutputFile,
+		EXPORTENTRYPOINTER *aFullExportResourceDictionary,
+		int aSecondIsDecimalNumber);
+DICTENTRYPOINTER *getSpecialArray(int aResourceNumber, FILE *aResFile,
+		DIRPOINTER *aDirectoryPointers);
+char *getMessageName(char *aResult, char *aExportTableString, FILE *aResFile,
+		DIRPOINTER *aDirectoryPointers);
+RESINFOPOINTER *getResourcesInformationTable(FILE *aResFile,
+		DIRPOINTER *aDirectoryPointers, int aLookForStringResources);
+char* getSecondEntryForTheFirstEntry(DICTENTRYPOINTER *aResourceTable,
+		char *aResourceName);
+int getResourceType(FILE *aResFile, DIRPOINTER *aDirectoryPointers,
+		DICTENTRYPOINTER *aResourceNameArray, int aResourceNumber,
+		char *aResourceName, char *aInfoString1, char *aInfoString2,
+		int aLookForStringResources, char **aFoundStringPointer);
+void displayResourcesInfoEntries(FILE *aOutputFile,
+		RESINFOPOINTER *aResourcesInfoTable);
+void getResourceTypeString(char* aResult, int aType);
 void displayResourcesTypeWarning(FILE *aOutputFile);
-void displayResourcesTypeSummary(RESINFOPOINTER *aResourcesInfoTable, FILE *aOutputFile);
+void displayResourcesTypeSummary(RESINFOPOINTER *aResourcesInfoTable,
+		FILE *aOutputFile);
 #endif

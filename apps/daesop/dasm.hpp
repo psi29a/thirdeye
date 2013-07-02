@@ -4,7 +4,7 @@
 #include "dict.hpp"
 
 #define MAX_BYTECODES 256
-#define BYTECODE_DEFINITION_FILE "abc_list.def"
+#define BYTECODE_DEFINITION_FILE "bytecode.def"
 #define MAX_TOKENS 20
 #define PARAMETERS_HANDLED_BY_CODE 99
 
@@ -123,67 +123,85 @@
 #define LOCAL_VARIABLES_START_INDEX          3
 #define LOCAL_VARIABLES_END_INDEX            32767
 
-struct BYTECODE
-{
-    int number;
-    char *name;
-    int paramCount;
-    char *paramString;
-    char *explanation;    
+struct BYTECODE {
+	int number;
+	char *name;
+	int paramCount;
+	char *paramString;
+	char *explanation;
 };
 
-
-struct SOP_script_header
-{
-  unsigned short static_size;       // probably size of class variables/constants (??)
-  unsigned int import_resource;  // the number of the corresponding import resource
-  unsigned int export_resource;   // the number of the corresponding export resource
-  unsigned int parent;            // the number of parent object (ffffffff if none) 
+struct SOP_script_header {
+	unsigned short static_size; // probably size of class variables/constants (??)
+	unsigned int import_resource; // the number of the corresponding import resource
+	unsigned int export_resource; // the number of the corresponding export resource
+	unsigned int parent;      // the number of parent object (ffffffff if none) 
 };
-
 
 typedef struct BYTECODE *BYTECODEPOINTER;
 
 BYTECODEPOINTER *readBytecodeDefinition(void);
 int processBytecodeDefinitionLine(char *aLine);
-void disassembleCodeResource(int aCodeResourceNumber, unsigned char *aResource, int aLength,
-    IMPORTENTRYPOINTER *aFullImportResourceDictionary, int aImportResourceSize,
-    EXPORTENTRYPOINTER *aFullExportResourceDictionary, int aExportResourceSize,
-    FILE *aOutputFile, FILE *aResFile, DIRPOINTER *aDirectoryPointers);
-int makeFirstDisassemblyPass(unsigned char *aResource, int aLength, int aStartAddress, IMPORTENTRYPOINTER *aFullExportResourceDictionary);
-int getInstructionLength(unsigned char *aResource, int aResourceLength, int aCurrentAddress);
-void setTargetsForTheInstruction(unsigned char *aResource, int aLength, int aOriginalAddress);
+void disassembleCodeResource(int aCodeResourceNumber, unsigned char *aResource,
+		int aLength, IMPORTENTRYPOINTER *aFullImportResourceDictionary,
+		int aImportResourceSize,
+		EXPORTENTRYPOINTER *aFullExportResourceDictionary,
+		int aExportResourceSize, FILE *aOutputFile, FILE *aResFile,
+		DIRPOINTER *aDirectoryPointers);
+int makeFirstDisassemblyPass(unsigned char *aResource, int aLength,
+		int aStartAddress, IMPORTENTRYPOINTER *aFullExportResourceDictionary);
+int getInstructionLength(unsigned char *aResource, int aResourceLength,
+		int aCurrentAddress);
+void setTargetsForTheInstruction(unsigned char *aResource, int aLength,
+		int aOriginalAddress);
 int endsDisassembly(unsigned char *aResource, int aLength, int aCurrentAddress);
-int getParameterAsNumber(unsigned char *aResource, int aLength, char aParameterType, long *aParameterValue, int *aCurrentAddress);
-char *getRuntimeCodeFunctionName(char *aResult, long aFunctionNumber, IMPORTENTRYPOINTER *aFullImportResourceDictionary);
-void makeSecondDisassemblyPass(unsigned char *aResource, int aLength, IMPORTENTRYPOINTER *aFullImportResourceDictionary,
-        EXPORTENTRYPOINTER *aFullExportResourceDictionary, FILE *aOutputFile, FILE *aResFile,
-        DIRPOINTER *aDirectoryPointers, RESINFOPOINTER *aResourcesInfoTable);
-char *getMessageHandlerNameForAddress(int aEntryPointAddress, EXPORTENTRYPOINTER *aFullExportResourceDictionary);
-void getDBByteString(char *aResult, unsigned char *aResource, int aResourceLength, int aAddress);
-void getDWWordString(char *aResult, unsigned char *aResource, int aResourceLength, int aAddress);
-void getDLLongString(char *aResult, unsigned char *aResource, int aResourceLength, int aAddress);
-int writeOneInstruction(unsigned char *aResource, int aLength, int *loCurrentAddress, IMPORTENTRYPOINTER *aFullImportResourceDictionary,
-        FILE *aOutputFile, FILE *aResFile, DIRPOINTER *aDirectoryPointers, RESINFOPOINTER *aResourcesInfoTable);
-void getHexCodes(char *aString, unsigned char *aResource, int aBufferLength, int aStartAddress, int aSize);
+int getParameterAsNumber(unsigned char *aResource, int aLength,
+		char aParameterType, long *aParameterValue, int *aCurrentAddress);
+char *getRuntimeCodeFunctionName(char *aResult, long aFunctionNumber,
+		IMPORTENTRYPOINTER *aFullImportResourceDictionary);
+void makeSecondDisassemblyPass(unsigned char *aResource, int aLength,
+		IMPORTENTRYPOINTER *aFullImportResourceDictionary,
+		EXPORTENTRYPOINTER *aFullExportResourceDictionary, FILE *aOutputFile,
+		FILE *aResFile, DIRPOINTER *aDirectoryPointers,
+		RESINFOPOINTER *aResourcesInfoTable);
+char *getMessageHandlerNameForAddress(int aEntryPointAddress,
+		EXPORTENTRYPOINTER *aFullExportResourceDictionary);
+void getDBByteString(char *aResult, unsigned char *aResource,
+		int aResourceLength, int aAddress);
+void getDWWordString(char *aResult, unsigned char *aResource,
+		int aResourceLength, int aAddress);
+void getDLLongString(char *aResult, unsigned char *aResource,
+		int aResourceLength, int aAddress);
+int writeOneInstruction(unsigned char *aResource, int aLength,
+		int *loCurrentAddress,
+		IMPORTENTRYPOINTER *aFullImportResourceDictionary, FILE *aOutputFile,
+		FILE *aResFile, DIRPOINTER *aDirectoryPointers,
+		RESINFOPOINTER *aResourcesInfoTable);
+void getHexCodes(char *aString, unsigned char *aResource, int aBufferLength,
+		int aStartAddress, int aSize);
 void writeLabel(int aAddress, FILE *aOutputFile);
-int getParameterString(char *aString, unsigned char aParameterType, long aParameterValue,
-    int aAddParameterComment, int aAddCharactersInTheComment);
-void handleVariableAndArrayRelatedInstructions(unsigned char *aResource, int aLength, int aOriginalAddress,
-        IMPORTENTRYPOINTER *aFullImportResourceDictionary);
-char getUppercaseVariableType(int aInstruction);   
+int getParameterString(char *aString, unsigned char aParameterType,
+		long aParameterValue, int aAddParameterComment,
+		int aAddCharactersInTheComment);
+void handleVariableAndArrayRelatedInstructions(unsigned char *aResource,
+		int aLength, int aOriginalAddress,
+		IMPORTENTRYPOINTER *aFullImportResourceDictionary);
+char getUppercaseVariableType(int aInstruction);
 
 // CASE instruction handling
-void writeCaseHeader(unsigned char *aResource, int aLength, int aStartAddress, long aCaseOptions, FILE *aOutputFile);
-void writeCaseEntry(unsigned char *aResource, int aLength, int aStartAddress, long aValue, int aTarget, FILE *aOutputFile);
-void writeCaseDefault(unsigned char *aResource, int aLength, int aStartAddress, int aTarget, FILE *aOutputFile);
+void writeCaseHeader(unsigned char *aResource, int aLength, int aStartAddress,
+		long aCaseOptions, FILE *aOutputFile);
+void writeCaseEntry(unsigned char *aResource, int aLength, int aStartAddress,
+		long aValue, int aTarget, FILE *aOutputFile);
+void writeCaseDefault(unsigned char *aResource, int aLength, int aStartAddress,
+		int aTarget, FILE *aOutputFile);
 
 // parameters, local variables
 int getAddressBehindTheFunction(int aStartAddress, int aLength);
 
 // comment about the referred resource
-void writeInfoAboutReferredResourceIfAvailable(long aParameterValue, RESINFOPOINTER *aResourcesInfoTable,
-    FILE *aOutputFile);
-   
+void writeInfoAboutReferredResourceIfAvailable(long aParameterValue,
+		RESINFOPOINTER *aResourcesInfoTable, FILE *aOutputFile);
+
 #endif
 

@@ -1,0 +1,111 @@
+;
+;AESOP BYTECODE LIST 0.8
+;format <hex_code>,<name>,<decadic_number_of_params>,<param_ids>,<explanation>
+; <param_ids> is the sequence of byte (1 byte)/word (2 bytes)/long (4 bytes)/import (2 bytes) parameters
+; according to <decadic_number_of_params>
+; The value "import" means the entry from the import resource,
+; the value "message" means the entry points to the message table (resource 4),
+; all other are numbers.
+;
+; When <decadic_number_of_params> = 0 then there are no parameters.
+; When <decadic_number_of_params> = 99 then special handling of parameters is implemented in code.
+;
+; Comments are started by ; and ignored.
+; The delimiter is , (comma). Do not use it elsewhere!
+;
+; Warning: The precise handling of some instructions (like jumps, CASE, instructions
+; working with variables etc.) is implemented in the program!
+;
+; BE CAREFULL WHEN MODIFYING THIS!
+; 
+00,BRT,1,word,BRanch if True
+01,BRF,1,word,BRanch if False
+02,BRA,1,word,BRanch Always
+03,CASE,99,CASE selection
+04,PUSH,0,PUSH 0 onto stack (used as a parameter delimiter for CALL and SEND)
+05,DUP,0,DUPlicate top of stack
+06,NOT,0,Logical NOT (unary)
+07,SETB,0,SET Boolean value (unary)
+08,NEG,0,NEGate (unary)
+09,ADD,0,ADD (binary)
+0A,SUB,0,SUBtract (binary)
+0B,MUL,0,MULtiply (binary)
+0C,DIV,0,DIVide (binary)
+0D,MOD,0,MODulus (binary)
+0E,EXP,0,EXPonent (binary)
+0F,BAND,0,Bitwise AND (binary)
+10,BOR,0,Bitwise OR (binary)
+11,XOR,0,Bitwise XOR (binary)
+12,BNOT,0,Bitwise NOT (unary)
+13,SHL,0,SHift Left (binary)
+14,SHR,0,SHift Right (binary)
+15,LT,0,Less Than (binary)
+16,LE,0,Less than or Equal (binary)
+17,EQ,0,EQual (binary)
+18,NE,0,Not Equal (binary)
+19,GE,0,Greater than or Equal (binary)
+1A,GT,0,Greather Than (binary)
+1B,INC,0,INCrement (unary)
+1C,DEC,0,DECrement (unary)
+1D,SHTC,1,byte,Load SHorT Constant (0...256)
+1E,INTC,1,word,Load INTeger Constant (256...64K)
+1F,LNGC,1,long,Load LoNG Constant (64K...4G)
+20,RCRS,1,import,Reference Code ReSource address (auxiliary for CALL)
+21,CALL,1,byte,CALL code resource handler  (call of the runtime function)
+22,SEND,2,byte,message,SEND message (sending message to another object - it in fact calls an object method)
+23,PASS,1,byte,PASS message to parent class
+24,JSR,1,word,Jump to SubRoutine
+25,RTS,0,ReTurn from Subroutine
+26,AIM,1,word,Array Index Multiply
+27,AIS,1,byte,Array Index Shift
+28,LTBA,1,word,Load Table Byte Array
+29,LTWA,1,word,Load Table Word Array
+2A,LTDA,1,word,Load Table Dword Array
+2B,LETA,1,word,Load Effective Table Address
+2C,LAB,1,word,Load Auto Byte ("auto" works with parameters/local variables)
+2D,LAW,1,word,Load Auto Word
+2E,LAD,1,word,Load Auto Dword
+2F,SAB,1,word,Store Auto Byte
+30,SAW,1,word,Store Auto Word
+31,SAD,1,word,Store Auto Dword
+32,LABA,1,word,Load Auto Byte Array
+33,LAWA,1,word,Load Auto Word Array
+34,LADA,1,word,Load Auto Dword Array
+35,SABA,1,word,Store Auto Byte Array
+36,SAWA,1,word,Store Auto Word Array
+37,SADA,1,word,Store Auto Dword Array
+38,LEAA,1,word,Load Effective Auto Address
+39,LSB,1,word,Load Static Byte
+3A,LSW,1,word,Load Static Word
+3B,LSD,1,word,Load Static Dword
+3C,SSB,1,word,Store Static Byte
+3D,SSW,1,word,Store Static Word
+3E,SSD,1,word,Store Static Dword
+3F,LSBA,1,word,Load Static Byte Array
+40,LSWA,1,word,Load Static Word Array
+41,LSDA,1,word,Load Static Dword Array
+42,SSBA,1,word,Store Static Byte Array
+43,SSWA,1,word,Store Static Word Array
+44,SSDA,1,word,Store Static Dword Array
+45,LESA,1,word,Load Effective Static Address
+46,LXB,1,import,Load eXtern Byte
+47,LXW,1,import,Load eXtern Word
+48,LXD,1,import,Load eXtern Dword
+49,SXB,1,import,Store eXtern Byte
+4A,SXW,1,import,Store eXtern Word
+4B,SXD,1,import,Store eXtern Dword
+4C,LXBA,1,import,Load eXtern Byte Array
+4D,LXWA,1,import,Load eXtern Word Array
+4E,LXDA,1,import,Load eXtern Dword Array
+4F,SXBA,1,import,Store eXtern Byte Array
+50,SXWA,1,import,Store eXtern Word Array
+51,SXDA,1,import,Store eXtern Dword Array
+52,LEXA,1,import,Load Effective eXtern Address
+53,SXAS,0,Set eXtern Array Source
+54,LECA,1,word,Load Effective Code Address  (used to address direct string in bytecode)
+55,SOLE,0,Selector for Object List Entry
+56,END,0,END of handler (end of handler - used also as return)
+57,BRK,0,BReaKpoint for debugging
+;
+;end
+;
