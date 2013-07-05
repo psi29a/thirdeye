@@ -1,0 +1,9 @@
+#ifndef CONFIG_H
+#define CONFIG_H
+
+#define DAESOP_VERSION_MAJOR 0
+#define DAESOP_VERSION_MINOR 86
+#define DAESOP_VERSION_RELEASE 0
+#define DAESOP_VERSION "0.86.0"
+
+#endif
