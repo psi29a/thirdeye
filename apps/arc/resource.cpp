@@ -1,27 +1,27 @@
-//лллллллллллллллллллллллллллллллллллллллллллллллллллллллллллллллллллллллллллл
-//лл                                                                        лл
-//лл  RESOURCE.C                                                            лл
-//лл                                                                        лл
-//лл  Resource management functions for AESOP ARC compiler                  лл
-//лл                                                                        лл
-//лл  Version: 1.00 of 15-Apr-92 -- Initial version                         лл
-//лл                                                                        лл
-//лл  Project: Extensible State-Object Processor (AESOP/16)                 лл
-//лл   Author: John Miles                                                   лл
-//лл                                                                        лл
-//лл  C source compatible with IBM PC ANSI C/C++ implementations            лл
-//лл  Large memory model (16-bit DOS)                                       лл
-//лл                                                                        лл
-//лллллллллллллллллллллллллллллллллллллллллллллллллллллллллллллллллллллллллллл
-//лл                                                                        лл
-//лл  Copyright (C) 1992 Miles Design, Inc.                                 лл
-//лл                                                                        лл
-//лл  Miles Design, Inc.                                                    лл
-//лл  10926 Jollyville #308                                                 лл
-//лл  Austin, TX 78759                                                      лл
-//лл  (512) 345-2642 / BBS (512) 454-9990 / FAX (512) 338-9630              лл
-//лл                                                                        лл
-//лллллллллллллллллллллллллллллллллллллллллллллллллллллллллллллллллллллллллллл
+//яПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПН
+//яПНяПН                                                                        яПНяПН
+//яПНяПН  RESOURCE.C                                                            яПНяПН
+//яПНяПН                                                                        яПНяПН
+//яПНяПН  Resource management functions for AESOP ARC compiler                  яПНяПН
+//яПНяПН                                                                        яПНяПН
+//яПНяПН  Version: 1.00 of 15-Apr-92 -- Initial version                         яПНяПН
+//яПНяПН                                                                        яПНяПН
+//яПНяПН  Project: Extensible State-Object Processor (AESOP/16)                 яПНяПН
+//яПНяПН   Author: John Miles                                                   яПНяПН
+//яПНяПН                                                                        яПНяПН
+//яПНяПН  C source compatible with IBM PC ANSI C/C++ implementations            яПНяПН
+//яПНяПН  Large memory model (16-bit DOS)                                       яПНяПН
+//яПНяПН                                                                        яПНяПН
+//яПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПН
+//яПНяПН                                                                        яПНяПН
+//яПНяПН  Copyright (C) 1992 Miles Design, Inc.                                 яПНяПН
+//яПНяПН                                                                        яПНяПН
+//яПНяПН  Miles Design, Inc.                                                    яПНяПН
+//яПНяПН  10926 Jollyville #308                                                 яПНяПН
+//яПНяПН  Austin, TX 78759                                                      яПНяПН
+//яПНяПН  (512) 345-2642 / BBS (512) 454-9990 / FAX (512) 338-9630              яПНяПН
+//яПНяПН                                                                        яПНяПН
+//яПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПН
 
 #include <string.h>
 #include <stdio.h>
@@ -55,75 +55,72 @@
 /***************************************************/
 
 ULONG RES_store_resource(RF_class *RF, ULONG entry, void *source,
-   RF_entry_hdr *RHDR, UWORD type)
-{
-   WORD file;
-   UBYTE *ptr;
-   ULONG len;
-   WORD err;
+		RF_entry_hdr *RHDR, UWORD type) {
+	WORD file;
+	UBYTE *ptr;
+	ULONG len;
+	WORD err;
 
-   err = 0;
+	err = 0;
 
-   r_write(RF->file,RHDR,sizeof(RF_entry_hdr));
+	r_write(RF->file, RHDR, sizeof(RF_entry_hdr));
 
-   len = RHDR->data_size;
-   if (!len) return entry;
+	len = RHDR->data_size;
+	if (!len)
+		return entry;
 
-   if (RHDR->data_attrib & DA_PLACEHOLDER) return entry;
+	if (RHDR->data_attrib & DA_PLACEHOLDER)
+		return entry;
 
-   switch (type)
-      {
-      case RTYP_HOUSECLEAN:
-         file = *(WORD *) source;
-         ptr = mem_alloc(BLK_SIZE);
+	switch (type) {
+	case RTYP_HOUSECLEAN:
+		file = *(WORD *) source;
+		ptr = mem_alloc(BLK_SIZE);
 
-         while (len > BLK_SIZE)
-            {
-            r_read(file,ptr,(UWORD) BLK_SIZE);
-            r_write(RF->file,ptr,(UWORD) BLK_SIZE);
-            len -= BLK_SIZE;
-            }
-         r_read(file,ptr,(UWORD) len);
-         r_write(RF->file,ptr,(UWORD) len);
+		while (len > BLK_SIZE) {
+			r_read(file, ptr, (UWORD) BLK_SIZE);
+			r_write(RF->file, ptr, (UWORD) BLK_SIZE);
+			len -= BLK_SIZE;
+		}
+		r_read(file, ptr, (UWORD) len);
+		r_write(RF->file, ptr, (UWORD) len);
 
-         mem_free(ptr);
-         break;
+		mem_free(ptr);
+		break;
 
-      case RTYP_DICTIONARY:
-      case RTYP_RAW_MEM:
-         ptr = source;
+	case RTYP_DICTIONARY:
+	case RTYP_RAW_MEM:
+		ptr = source;
 
-         while (len > BLK_SIZE)
-            {
-            r_write(RF->file,ptr,(UWORD) BLK_SIZE);
-            len -= BLK_SIZE;
-            ptr = add_ptr(ptr,BLK_SIZE);
-            }
-         r_write(RF->file,ptr,(UWORD) len);
-         break;
+		while (len > BLK_SIZE) {
+			r_write(RF->file, ptr, (UWORD) BLK_SIZE);
+			len -= BLK_SIZE;
+			ptr = add_ptr(ptr, BLK_SIZE);
+		}
+		r_write(RF->file, ptr, (UWORD) len);
+		break;
 
-      case RTYP_RAW_FILE:
-         file = open(source,O_RDWR);
-         ptr = mem_alloc(BLK_SIZE);
+	case RTYP_RAW_FILE:
+		file = open(source, O_RDWR);
+		ptr = mem_alloc(BLK_SIZE);
 
-         while (len > BLK_SIZE)
-            {
-            r_read(file,ptr,(UWORD) BLK_SIZE);
-            r_write(RF->file,ptr,(UWORD) BLK_SIZE);
-            len -= BLK_SIZE;
-            }
-         r_read(file,ptr,(UWORD) len);
-         r_write(RF->file,ptr,(UWORD) len);
+		while (len > BLK_SIZE) {
+			r_read(file, ptr, (UWORD) BLK_SIZE);
+			r_write(RF->file, ptr, (UWORD) BLK_SIZE);
+			len -= BLK_SIZE;
+		}
+		r_read(file, ptr, (UWORD) len);
+		r_write(RF->file, ptr, (UWORD) len);
 
-         mem_free(ptr);
-         close(file);
-         break;
-      }
+		mem_free(ptr);
+		close(file);
+		break;
+	}
 
-   if (!err)
-      return entry;
-   else
-      return (ULONG) -1;
+	if (!err)
+		return entry;
+	else
+		return (ULONG) -1;
 }
 
 /***************************************************/
@@ -144,65 +141,62 @@ ULONG RES_store_resource(RF_class *RF, ULONG entry, void *source,
 // 
 /***************************************************/
 
-UWORD RES_read_entry(RF_class *RF, ULONG entry, void *dest,
-   RF_entry_hdr *RHDR, UWORD type)
-{
-   static RF_entry_hdr header;
-   ULONG len,hl;
-   UWORD tl,dl,n;
-   BYTE *tag;
-   DICT_entry *cur;
+UWORD RES_read_entry(RF_class *RF, ULONG entry, void *dest, RF_entry_hdr *RHDR,
+		UWORD type) {
+	static RF_entry_hdr header;
+	ULONG len, hl;
+	UWORD tl, dl, n;
+	BYTE *tag;
+	DICT_entry *cur;
 
-   if (RF_flags(RF,entry) & (SA_UNUSED | SA_DELETED))
-      return 0;
+	if (RF_flags(RF, entry) & (SA_UNUSED | SA_DELETED))
+		return 0;
 
-   header = *RF_header(RF,entry);
-   if (RHDR != NULL) *RHDR = header;
+	header = *RF_header(RF, entry);
+	if (RHDR != NULL)
+		*RHDR = header;
 
-   len = header.data_size;
+	len = header.data_size;
 
-   switch (type)
-      {
-      case RTYP_DICTIONARY:
-         r_read(RF->file,&n,sizeof(UWORD));
-         len -= ((ULONG) sizeof(UWORD) * 2L);
+	switch (type) {
+	case RTYP_DICTIONARY:
+		r_read(RF->file, &n, sizeof(UWORD));
+		len -= ((ULONG) sizeof(UWORD) * 2L);
 
-         hl = (ULONG) n * (ULONG) sizeof(ULONG);
-         len -= hl;
+		hl = (ULONG) n * (ULONG) sizeof(ULONG);
+		len -= hl;
 
-         lseek(RF->file,hl,SEEK_CUR);
+		lseek(RF->file, hl, SEEK_CUR);
 
-         while (len)
-            {
-            r_read(RF->file,&tl,sizeof(tl));
-            len -= (ULONG) (sizeof(tl) + tl);
+		while (len) {
+			r_read(RF->file, &tl, sizeof(tl));
+			len -= (ULONG) (sizeof(tl) + tl);
 
-            if (!tl) continue;
+			if (!tl)
+				continue;
 
-            tag = mem_alloc((ULONG) tl);
-            r_read(RF->file,tag,(UWORD) tl);
+			tag = mem_alloc((ULONG) tl);
+			r_read(RF->file, tag, (UWORD) tl);
 
-            cur = DICT_enter(dest,tag,D_DEFHEAP);
-            mem_free(tag);
+			cur = DICT_enter(dest, tag, D_DEFHEAP);
+			mem_free(tag);
 
-            r_read(RF->file,&dl,sizeof(dl));
-            len -= (ULONG) (sizeof(dl) + dl);
+			r_read(RF->file, &dl, sizeof(dl));
+			len -= (ULONG) (sizeof(dl) + dl);
 
-            if (dl)
-               {
-               cur->def = mem_alloc((ULONG) dl);
-               r_read(RF->file,cur->def,(UWORD) dl);
-               }
-            else
-               cur->def = NULL;
-            }
-         break;
+			if (dl) {
+				cur->def = mem_alloc((ULONG) dl);
+				r_read(RF->file, cur->def, (UWORD) dl);
+			} else
+				cur->def = NULL;
+		}
+		break;
 
-      default:
-         return 0;
-      }
+	default:
+		return 0;
+	}
 
-   return 1;
+	return 1;
 }
 
 /*************************************************************/
@@ -212,19 +206,18 @@ UWORD RES_read_entry(RF_class *RF, ULONG entry, void *dest,
 //
 /*************************************************************/
 
-ULONG RES_storage_timestamp(RF_class *RF, ULONG entry)
-{
-   RF_entry_hdr *RHDR;
+ULONG RES_storage_timestamp(RF_class *RF, ULONG entry) {
+	RF_entry_hdr *RHDR;
 
-   if (RF_flags(RF,entry) & (SA_DELETED | SA_UNUSED))
-      return 0L;
+	if (RF_flags(RF, entry) & (SA_DELETED | SA_UNUSED))
+		return 0L;
 
-   RHDR = RF_header(RF,entry);
+	RHDR = RF_header(RF, entry);
 
-   if (RHDR->data_attrib & DA_PLACEHOLDER)
-      return 0L;
+	if (RHDR->data_attrib & DA_PLACEHOLDER)
+		return 0L;
 
-   return RHDR->timestamp;
+	return RHDR->timestamp;
 }
 
 /***************************************************/
@@ -256,103 +249,93 @@ ULONG RES_storage_timestamp(RF_class *RF, ULONG entry)
 // 
 /***************************************************/
 
-ULONG DICT_save(DICT_class *DICT, RF_class *RF, ULONG entry)
-{
-   RF_entry_hdr RHDR;
-   ULONG saved,total_len,nchains;
-   UWORD i;
-   DICT_entry *cur;
-   DI_class *DI;
-   BYTE *ptr,*base;
-   ULONG *offset;
+ULONG DICT_save(DICT_class *DICT, RF_class *RF, ULONG entry) {
+	RF_entry_hdr RHDR;
+	ULONG saved, total_len, nchains;
+	UWORD i;
+	DICT_entry *cur;
+	DI_class *DI;
+	BYTE *ptr, *base;
+	ULONG *offset;
 
-   nchains = 0L;
-   for (i=0;i<DICT->hash_size;i++)
-      if (DICT->root[i] != NULL)
-         ++nchains;
+	nchains = 0L;
+	for (i = 0; i < DICT->hash_size; i++)
+		if (DICT->root[i] != NULL)
+			++nchains;
 
-   total_len = nchains * (ULONG) sizeof(UWORD);
+	total_len = nchains * (ULONG) sizeof(UWORD);
 
-   DI = DI_construct(DICT);
+	DI = DI_construct(DICT);
 
-   total_len +=
-      ((ULONG) sizeof(UWORD)) +
-      ((ULONG) sizeof(UWORD)) +
-      ((ULONG) DICT->hash_size * (ULONG) sizeof(ULONG));
+	total_len += ((ULONG) sizeof(UWORD)) + ((ULONG) sizeof(UWORD))
+			+ ((ULONG) DICT->hash_size * (ULONG) sizeof(ULONG));
 
-   while ((cur = DI_fetch(DI)) != NULL)
-      {
-      total_len += (ULONG) ((strlen(cur->tag)+1) + (2 * sizeof(UWORD)));
-      if (cur->def != NULL)
-         total_len += (ULONG) (strlen(cur->def)+1);
-      }
+	while ((cur = DI_fetch(DI)) != NULL) {
+		total_len += (ULONG) ((strlen(cur->tag) + 1) + (2 * sizeof(UWORD)));
+		if (cur->def != NULL)
+			total_len += (ULONG) (strlen(cur->def) + 1);
+	}
 
-   DI_destroy(DI);
+	DI_destroy(DI);
 
-   ptr = base = mem_alloc(total_len);
+	ptr = base = mem_alloc(total_len);
 
-   *(UWORD *) ptr = DICT->hash_size;
-   ptr += sizeof(UWORD);
+	*(UWORD *) ptr = DICT->hash_size;
+	ptr += sizeof(UWORD);
 
-   offset = (ULONG *) ptr;
-   ptr = add_ptr(ptr,((ULONG) sizeof(ULONG) * (ULONG) DICT->hash_size));
+	offset = (ULONG *) ptr;
+	ptr = add_ptr(ptr, ((ULONG) sizeof(ULONG) * (ULONG) DICT->hash_size));
 
-   for (i=0;i<DICT->hash_size;i++)
-      {
-      cur = DICT->root[i];
+	for (i = 0; i < DICT->hash_size; i++) {
+		cur = DICT->root[i];
 
-      if (cur == NULL)
-         {
-         offset[i] = 0L;
-         continue;
-         }
+		if (cur == NULL) {
+			offset[i] = 0L;
+			continue;
+		}
 
-      offset[i] = ptr_dif(ptr,base);
+		offset[i] = ptr_dif(ptr, base);
 
-      while (cur != NULL)
-         {
-         *(UWORD *) ptr = (strlen(cur->tag)+1);
-         ptr += sizeof(UWORD);
+		while (cur != NULL) {
+			*(UWORD *) ptr = (strlen(cur->tag) + 1);
+			ptr += sizeof(UWORD);
 
-         strcpy(ptr,cur->tag);
-         ptr += (strlen(cur->tag)+1);
+			strcpy(ptr, cur->tag);
+			ptr += (strlen(cur->tag) + 1);
 
-         if (cur->def == NULL)
-            {
-            *(UWORD *) ptr = 0;
-            ptr += sizeof(UWORD);
-            }
-         else
-            {
-            *(UWORD *) ptr = (strlen(cur->def)+1);
-            ptr += sizeof(UWORD);
+			if (cur->def == NULL) {
+				*(UWORD *) ptr = 0;
+				ptr += sizeof(UWORD);
+			} else {
+				*(UWORD *) ptr = (strlen(cur->def) + 1);
+				ptr += sizeof(UWORD);
 
-            strcpy(ptr,cur->def);
-            ptr += (strlen(cur->def)+1);
-            }
+				strcpy(ptr, cur->def);
+				ptr += (strlen(cur->def) + 1);
+			}
 
-         cur = cur->next;
-         ptr = norm(ptr);
-         }
+			cur = cur->next;
+			ptr = norm(ptr);
+		}
 
-      *(UWORD *) ptr = 0;
-      ptr += sizeof(UWORD);
-      }
+		*(UWORD *) ptr = 0;
+		ptr += sizeof(UWORD);
+	}
 
-   *(UWORD *) ptr = 0;
-   ptr += sizeof(UWORD);
+	*(UWORD *) ptr = 0;
+	ptr += sizeof(UWORD);
 
-   RHDR.data_size = total_len;
-   RHDR.data_attrib = DA_TEMPORARY;
+	RHDR.data_size = total_len;
+	RHDR.data_attrib = DA_TEMPORARY;
 
-   if (entry == (ULONG) -1)
-      saved = RF_new_entry(RF,base,&RHDR,RTYP_DICTIONARY);
-   else
-      RF_write_entry(RF,saved=entry,base,&RHDR,RTYP_DICTIONARY);
+	if (entry == (ULONG) -1)
+		saved = RF_new_entry(RF, base, &RHDR, RTYP_DICTIONARY);
+	else
+		RF_write_entry(RF, saved = entry, base, &RHDR, RTYP_DICTIONARY);
 
-   mem_free(base);
+	mem_free(base);
 
-   return saved;
+	return saved;
 }
 
 /***************************************************/
@@ -365,11 +348,10 @@ ULONG DICT_save(DICT_class *DICT, RF_class *RF, ULONG entry)
 //
 /***************************************************/
 
-void DICT_load(DICT_class *DICT, RF_class *RF, ULONG entry)
-{
-   RES_read_entry(RF,entry,DICT,NULL,RTYP_DICTIONARY);
+void DICT_load(DICT_class *DICT, RF_class *RF, ULONG entry) {
+	RES_read_entry(RF, entry, DICT, NULL, RTYP_DICTIONARY);
 
-   DICT->touched = 0;
+	DICT->touched = 0;
 }
 
 /***************************************************/
@@ -379,35 +361,33 @@ void DICT_load(DICT_class *DICT, RF_class *RF, ULONG entry)
 //
 /***************************************************/
 
-BYTE *DICT_build_tag_string(DICT_class *DICT)
-{
-   ULONG len;
-   BYTE *string;
-   DI_class *DI;
-   DICT_entry *cur;
+BYTE *DICT_build_tag_string(DICT_class *DICT) {
+	ULONG len;
+	BYTE *string;
+	DI_class *DI;
+	DICT_entry *cur;
 
-   DI = DI_construct(DICT);
-   len = 0;
-   while ((cur = DI_fetch(DI)) != NULL)
-      len += (ULONG) (strlen(cur->tag)+1);
-   DI_destroy(DI);
+	DI = DI_construct(DICT);
+	len = 0;
+	while ((cur = DI_fetch(DI)) != NULL)
+		len += (ULONG) (strlen(cur->tag) + 1);
+	DI_destroy(DI);
 
-   string = mem_alloc(len+1L);
-   string[0] = 0;
+	string = mem_alloc(len + 1L);
+	string[0] = 0;
 
-   DI = DI_construct(DICT);
-   while ((cur = DI_fetch(DI)) != NULL)
-      {
-      strcat(string,cur->tag);
-      strcat(string,",");
-      }
-   DI_destroy(DI);
+	DI = DI_construct(DICT);
+	while ((cur = DI_fetch(DI)) != NULL) {
+		strcat(string, cur->tag);
+		strcat(string, ",");
+	}
+	DI_destroy(DI);
 
-   len = strlen(string);
-   if (len) 
-      string[(UWORD) len-1] = 0;
+	len = strlen(string);
+	if (len)
+		string[(UWORD) len - 1] = 0;
 
-   return string;
+	return string;
 }
 
 /*************************************************************/
@@ -416,15 +396,14 @@ BYTE *DICT_build_tag_string(DICT_class *DICT)
 //
 /*************************************************************/
 
-TS_class *TS_construct(void)
-{
-   TS_class *TS;
+TS_class *TS_construct(void) {
+	TS_class *TS;
 
-   TS = mem_alloc(sizeof(TS_class));
+	TS = mem_alloc(sizeof(TS_class));
 
-   TS->cache = DICT_construct(256);
+	TS->cache = DICT_construct(256);
 
-   return TS;
+	return TS;
 }
 
 /*************************************************************/
@@ -433,11 +412,10 @@ TS_class *TS_construct(void)
 //
 /*************************************************************/
 
-void TS_destroy(TS_class *TS)
-{
-   DICT_destroy(TS->cache);
+void TS_destroy(TS_class *TS) {
+	DICT_destroy(TS->cache);
 
-   mem_free(TS);
+	mem_free(TS);
 }
 
 /*************************************************************/
@@ -446,9 +424,8 @@ void TS_destroy(TS_class *TS)
 //
 /*************************************************************/
 
-void TS_invalidate(TS_class *TS, BYTE *filename)
-{
-   DICT_delete(TS->cache,filename);
+void TS_invalidate(TS_class *TS, BYTE *filename) {
+	DICT_delete(TS->cache, filename);
 }
 
 /*************************************************************/
@@ -460,27 +437,25 @@ void TS_invalidate(TS_class *TS, BYTE *filename)
 //
 /*************************************************************/
 
-ULONG TS_file_time(TS_class *TS, BYTE *filename)
-{
-   DICT_entry *cur;
-   ULONG *tstamp;
+ULONG TS_file_time(TS_class *TS, BYTE *filename) {
+	DICT_entry *cur;
+	ULONG *tstamp;
 
-   if (!strcasecmp(filename,"$obsolete"))
-      return 0L;
+	if (!strcasecmp(filename, "$obsolete"))
+		return 0L;
 
-   cur = DICT_lookup(TS->cache,filename);
+	cur = DICT_lookup(TS->cache, filename);
 
-   if (cur == NULL)
-      {
-      cur = DICT_enter(TS->cache,filename,D_DEFHEAP);
+	if (cur == NULL) {
+		cur = DICT_enter(TS->cache, filename, D_DEFHEAP);
 
-      tstamp = mem_alloc(sizeof(ULONG));
+		tstamp = mem_alloc(sizeof(ULONG));
 
-      *tstamp = file_time(filename);
-      cur->def = tstamp;
-      }
+		*tstamp = file_time(filename);
+		cur->def = tstamp;
+	}
 
-   return *(ULONG *)cur->def;
+	return *(ULONG *) cur->def;
 }
 
 /*************************************************************/
@@ -493,48 +468,48 @@ ULONG TS_file_time(TS_class *TS, BYTE *filename)
 //
 /*************************************************************/
 
-ULONG TS_latest_file_time(TS_class *TS, BYTE *filelist)
-{
-   ULONG latest;
-   ULONG timestamp;
-   BYTE *str;
-   UWORD beg,end,last;
+ULONG TS_latest_file_time(TS_class *TS, BYTE *filelist) {
+	ULONG latest;
+	ULONG timestamp;
+	BYTE *str;
+	UWORD beg, end, last;
 
-   if (filelist==NULL) return 0L;
+	if (filelist == NULL)
+		return 0L;
 
-   if (!strlen(filelist)) return 0L;
+	if (!strlen(filelist))
+		return 0L;
 
-   str = str_alloc(filelist);
+	str = str_alloc(filelist);
 
-   latest = 0L;
+	latest = 0L;
 
-   beg = last = 0;
-   while (!last)
-      {
-      end = beg;
-      while (str[end] && (str[end] != ','))
-         end++;
+	beg = last = 0;
+	while (!last) {
+		end = beg;
+		while (str[end] && (str[end] != ','))
+			end++;
 
-      if (str[end] == ',')
-         str[end] = 0;
-      else
-         last = 1;
+		if (str[end] == ',')
+			str[end] = 0;
+		else
+			last = 1;
 
-      timestamp = TS_file_time(TS,&str[beg]);
+		timestamp = TS_file_time(TS, &str[beg]);
 
-      if (timestamp == 0L)
-         {
-         latest = 0L;
-         break;
-         }
+		if (timestamp == 0L) {
+			latest = 0L;
+			break;
+		}
 
-      if (timestamp > latest) latest = timestamp;
+		if (timestamp > latest)
+			latest = timestamp;
 
-      beg = end+1;
-      }
+		beg = end + 1;
+	}
 
-   mem_free(str);
-   return latest;
+	mem_free(str);
+	return latest;
 }
 
 /***************************************************/
@@ -548,18 +523,17 @@ ULONG TS_latest_file_time(TS_class *TS, BYTE *filelist)
 //
 /***************************************************/
 
-CSS_class *CSS_construct(BYTE *string)
-{
-   CSS_class *CSS;
+CSS_class *CSS_construct(BYTE *string) {
+	CSS_class *CSS;
 
-   CSS = mem_alloc(sizeof(CSS_class));
-   
-   if (string == NULL)
-      CSS->string = CSS->cur = str_alloc("");
-   else
-      CSS->string = CSS->cur = string;
+	CSS = mem_alloc(sizeof(CSS_class));
 
-   return CSS;
+	if (string == NULL)
+		CSS->string = CSS->cur = str_alloc("");
+	else
+		CSS->string = CSS->cur = string;
+
+	return CSS;
 }
 
 /***************************************************/
@@ -568,9 +542,8 @@ CSS_class *CSS_construct(BYTE *string)
 //
 /***************************************************/
 
-void CSS_destroy(CSS_class *CSS)
-{
-   mem_free(CSS);
+void CSS_destroy(CSS_class *CSS) {
+	mem_free(CSS);
 }
 
 /***************************************************/
@@ -583,30 +556,28 @@ void CSS_destroy(CSS_class *CSS)
 //
 /***************************************************/
 
-BYTE *CSS_fetch_string(CSS_class *CSS)
-{
-   BYTE save,*ptr;
+BYTE *CSS_fetch_string(CSS_class *CSS) {
+	BYTE save, *ptr;
 
-   ptr = CSS->cur;
+	ptr = CSS->cur;
 
-   if (*ptr == 0)
-      return NULL;
+	if (*ptr == 0)
+		return NULL;
 
-   while ((*CSS->cur != ',') && (*CSS->cur))
-      CSS->cur++;
+	while ((*CSS->cur != ',') && (*CSS->cur))
+		CSS->cur++;
 
-   save = *CSS->cur;
-   *CSS->cur = 0;
+	save = *CSS->cur;
+	*CSS->cur = 0;
 
-   ptr = str_alloc(ptr);
+	ptr = str_alloc(ptr);
 
-   if (save)
-      {
-      *CSS->cur = save;
-      CSS->cur++;
-      }
+	if (save) {
+		*CSS->cur = save;
+		CSS->cur++;
+	}
 
-   return ptr;
+	return ptr;
 }
 
 /***************************************************/
@@ -616,31 +587,29 @@ BYTE *CSS_fetch_string(CSS_class *CSS)
 //
 /***************************************************/
 
-ULONG CSS_fetch_num(CSS_class *CSS)
-{
-   BYTE save,*ptr;
-   ULONG num;
+ULONG CSS_fetch_num(CSS_class *CSS) {
+	BYTE save, *ptr;
+	ULONG num;
 
-   ptr = CSS->cur;
+	ptr = CSS->cur;
 
-   if (*ptr == 0)
-      return (ULONG) -1L;
+	if (*ptr == 0)
+		return (ULONG) -1L;
 
-   while ((*CSS->cur != ',') && (*CSS->cur))
-      CSS->cur++;
+	while ((*CSS->cur != ',') && (*CSS->cur))
+		CSS->cur++;
 
-   save = *CSS->cur;
-   *CSS->cur = 0;
+	save = *CSS->cur;
+	*CSS->cur = 0;
 
-   num = ascnum(ptr,10);
+	num = ascnum(ptr, 10);
 
-   if (save)
-      {
-      *CSS->cur = save;
-      CSS->cur++;
-      }
+	if (save) {
+		*CSS->cur = save;
+		CSS->cur++;
+	}
 
-   return num;
+	return num;
 }
 
 /***************************************************/
@@ -649,9 +618,8 @@ ULONG CSS_fetch_num(CSS_class *CSS)
 //
 /***************************************************/
 
-void CSS_rewind(CSS_class *CSS)
-{
-   CSS->cur = CSS->string;
+void CSS_rewind(CSS_class *CSS) {
+	CSS->cur = CSS->string;
 }
 
 /***************************************************/
@@ -660,22 +628,20 @@ void CSS_rewind(CSS_class *CSS)
 //
 /***************************************************/
 
-void CSS_add_string(CSS_class *CSS, BYTE *string)
-{
-   BYTE *ptr;
+void CSS_add_string(CSS_class *CSS, BYTE *string) {
+	BYTE *ptr;
 
-   ptr = mem_alloc((ULONG) strlen(CSS->string)+
-                   (ULONG) strlen(string)+4L);
+	ptr = mem_alloc((ULONG) strlen(CSS->string) + (ULONG) strlen(string) + 4L);
 
-   strcpy(ptr,CSS->string);
+	strcpy(ptr, CSS->string);
 
-   if (strlen(ptr))
-      strcat(ptr,",");
+	if (strlen(ptr))
+		strcat(ptr, ",");
 
-   strcat(ptr,string);
+	strcat(ptr, string);
 
-   mem_free(CSS->string);
-   CSS->string = ptr;
+	mem_free(CSS->string);
+	CSS->string = ptr;
 }
 
 /***************************************************/
@@ -685,13 +651,12 @@ void CSS_add_string(CSS_class *CSS, BYTE *string)
 //
 /***************************************************/
 
-void CSS_add_num(CSS_class *CSS, ULONG num)
-{
-   BYTE *ptr;
+void CSS_add_num(CSS_class *CSS, ULONG num) {
+	BYTE *ptr;
 
-   ptr = str(num);
-   CSS_add_string(CSS,ptr);
-   mem_free(ptr);
+	ptr = str(num);
+	CSS_add_string(CSS, ptr);
+	mem_free(ptr);
 }
 
 /***************************************************/
@@ -700,7 +665,6 @@ void CSS_add_num(CSS_class *CSS, ULONG num)
 //
 /***************************************************/
 
-BYTE *CSS_string(CSS_class *CSS)
-{
-   return CSS->string;
+BYTE *CSS_string(CSS_class *CSS) {
+	return CSS->string;
 }

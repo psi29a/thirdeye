@@ -16,12 +16,10 @@ extern "C" {
 #define MSP_CELLX 4
 #define MSP_CELLY 5
 
-typedef struct
-{
-   IDR_class *IDR;
-   WORD parms[6];
-}
-MAP_class;
+typedef struct {
+	IDR_class *IDR;
+	WORD parms[6];
+} MAP_class;
 
 MAP_class *MAP_construct(IDR_class *IDR);
 void MAP_destroy(MAP_class *MAP);

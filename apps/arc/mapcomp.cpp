@@ -1,27 +1,27 @@
-//лллллллллллллллллллллллллллллллллллллллллллллллллллллллллллллллллллллллллллл
-//лл                                                                        лл
-//лл  MAPCOMP.C                                                             лл
-//лл                                                                        лл
-//лл  AESOP Cartesian map compiler class                                    лл
-//лл                                                                        лл
-//лл  Version: 1.00 of 30-Aug-92 -- Initial version                         лл
-//лл                                                                        лл
-//лл  Project: Extensible State-Object Processor (AESOP/16)                 лл
-//лл   Author: John Miles                                                   лл
-//лл                                                                        лл
-//лл  C source compatible with IBM PC ANSI C/C++ implementations            лл
-//лл  Large memory model (16-bit DOS)                                       лл
-//лл                                                                        лл
-//лллллллллллллллллллллллллллллллллллллллллллллллллллллллллллллллллллллллллллл
-//лл                                                                        лл
-//лл  Copyright (C) 1992 Miles Design, Inc.                                 лл
-//лл                                                                        лл
-//лл  Miles Design, Inc.                                                    лл
-//лл  10926 Jollyville #308                                                 лл
-//лл  Austin, TX 78759                                                      лл
-//лл  (512) 345-2642 / BBS (512) 454-9990 / FAX (512) 338-9630              лл
-//лл                                                                        лл
-//лллллллллллллллллллллллллллллллллллллллллллллллллллллллллллллллллллллллллллл
+//яПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПН
+//яПНяПН                                                                        яПНяПН
+//яПНяПН  MAPCOMP.C                                                             яПНяПН
+//яПНяПН                                                                        яПНяПН
+//яПНяПН  AESOP Cartesian map compiler class                                    яПНяПН
+//яПНяПН                                                                        яПНяПН
+//яПНяПН  Version: 1.00 of 30-Aug-92 -- Initial version                         яПНяПН
+//яПНяПН                                                                        яПНяПН
+//яПНяПН  Project: Extensible State-Object Processor (AESOP/16)                 яПНяПН
+//яПНяПН   Author: John Miles                                                   яПНяПН
+//яПНяПН                                                                        яПНяПН
+//яПНяПН  C source compatible with IBM PC ANSI C/C++ implementations            яПНяПН
+//яПНяПН  Large memory model (16-bit DOS)                                       яПНяПН
+//яПНяПН                                                                        яПНяПН
+//яПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПН
+//яПНяПН                                                                        яПНяПН
+//яПНяПН  Copyright (C) 1992 Miles Design, Inc.                                 яПНяПН
+//яПНяПН                                                                        яПНяПН
+//яПНяПН  Miles Design, Inc.                                                    яПНяПН
+//яПНяПН  10926 Jollyville #308                                                 яПНяПН
+//яПНяПН  Austin, TX 78759                                                      яПНяПН
+//яПНяПН  (512) 345-2642 / BBS (512) 454-9990 / FAX (512) 338-9630              яПНяПН
+//яПНяПН                                                                        яПНяПН
+//яПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПН
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -44,9 +44,8 @@
 //
 /*************************************************************/
 
-void MAP_error(RS_class *RS, BYTE *msg, BYTE *arg)
-{
-   report(E_ERROR,LEX_line(RS->LEX,LEX_CUR),msg,arg);
+void MAP_error(RS_class *RS, BYTE *msg, BYTE *arg) {
+	report(E_ERROR, LEX_line(RS->LEX, LEX_CUR), msg, arg);
 }
 
 /*************************************************************/
@@ -55,38 +54,32 @@ void MAP_error(RS_class *RS, BYTE *msg, BYTE *arg)
 //
 /*************************************************************/
 
-void LBM_fetch_line(UBYTE **ptr, UBYTE *buffer, UWORD width)
-{
-   WORD x,i,color;
-   UBYTE *body;
-   BYTE token;
+void LBM_fetch_line(UBYTE **ptr, UBYTE *buffer, UWORD width) {
+	WORD x, i, color;
+	UBYTE *body;
+	BYTE token;
 
-   body = norm(*ptr);
+	body = norm(*ptr);
 
-   x = 0;
-   do
-      {
-      token = *body++;
+	x = 0;
+	do {
+		token = *body++;
 
-      if (token == (BYTE) 0x80)
-         continue;
-      
-      if (token >= 0)
-         {
-         for (i=0;i<=token;i++)
-            buffer[x++] = *body++;
-         }
-      else
-         {
-         color = *body++;
+		if (token == (BYTE) 0x80)
+			continue;
 
-         for (i=0;i<=-token;i++)
-            buffer[x++] = color;
-         }
-      }
-   while (x < width);
+		if (token >= 0) {
+			for (i = 0; i <= token; i++)
+				buffer[x++] = *body++;
+		} else {
+			color = *body++;
 
-   *ptr = norm(body);
+			for (i = 0; i <= -token; i++)
+				buffer[x++] = color;
+		}
+	} while (x < width);
+
+	*ptr = norm(body);
 }
 
 /*************************************************************/
@@ -102,44 +95,40 @@ void LBM_fetch_line(UBYTE **ptr, UBYTE *buffer, UWORD width)
 //
 /*************************************************************/
 
-MAP_class *MAP_construct(IDR_class *IDR)
-{
-   MAP_class *MAP;
-   BYTE *spec,*str,*tok;
-   WORD i;
+MAP_class *MAP_construct(IDR_class *IDR) {
+	MAP_class *MAP;
+	BYTE *spec, *str, *tok;
+	WORD i;
 
-   MAP = mem_alloc(sizeof(MAP_class));
+	MAP = mem_alloc(sizeof(MAP_class));
 
-   MAP->IDR = IDR;
+	MAP->IDR = IDR;
 
-   spec = str = str_alloc(IDR->speclist);
+	spec = str = str_alloc(IDR->speclist);
 
-   i = 0;
-   while ((tok = strchr(str,',')) != NULL)
-      {
-      str = tok+1;
+	i = 0;
+	while ((tok = strchr(str, ',')) != NULL) {
+		str = tok + 1;
 
-      if (i >= arysize(MAP->parms))
-         {
-         MAP_error(IDR->RS,MSG_TMR,NULL);
-         mem_free(MAP);
-         mem_free(spec);
-         return NULL;
-         }
+		if (i >= arysize(MAP->parms)) {
+			MAP_error(IDR->RS, MSG_TMR, NULL);
+			mem_free(MAP);
+			mem_free(spec);
+			return NULL;
+		}
 
-      MAP->parms[i++] = atoi(str);
-      }
-          
-   mem_free(spec);
+		MAP->parms[i++] = atoi(str);
+	}
 
-   if (i < arysize(MAP->parms))
-      {
-      MAP_error(IDR->RS,MSG_MRS,NULL);
-      mem_free(MAP);
-      return NULL;
-      }
+	mem_free(spec);
 
-   return MAP;
+	if (i < arysize(MAP->parms)) {
+		MAP_error(IDR->RS, MSG_MRS, NULL);
+		mem_free(MAP);
+		return NULL;
+	}
+
+	return MAP;
 }
 
 /*************************************************************/
@@ -148,9 +137,8 @@ MAP_class *MAP_construct(IDR_class *IDR)
 //
 /*************************************************************/
 
-void MAP_destroy(MAP_class *MAP)
-{
-   mem_free(MAP);
+void MAP_destroy(MAP_class *MAP) {
+	mem_free(MAP);
 }
 
 /*************************************************************/
@@ -161,81 +149,76 @@ void MAP_destroy(MAP_class *MAP)
 //
 /*************************************************************/
 
-void MAP_compile(MAP_class *MAP)
-{
-   RF_entry_hdr RHDR;
-   ULONG flen;
-   UBYTE *buffer;
-   UBYTE *map;
-   UBYTE *file;
-   UBYTE *body;
-   UBYTE *prop;
-   UWORD width,height;
-   UWORD x,y,ox,oy,dx,dy,sx,sy,m,i;
+void MAP_compile(MAP_class *MAP) {
+	RF_entry_hdr RHDR;
+	ULONG flen;
+	UBYTE *buffer;
+	UBYTE *map;
+	UBYTE *file;
+	UBYTE *body;
+	UBYTE *prop;
+	UWORD width, height;
+	UWORD x, y, ox, oy, dx, dy, sx, sy, m, i;
 
-   file = (UBYTE *) read_file(MAP->IDR->fn,NULL);
+	file = (UBYTE *) read_file(MAP->IDR->fn, NULL);
 
-   if (file == NULL)
-      {
-      MAP_error(MAP->IDR->RS,MSG_SNF,MAP->IDR->fn);
-      return;
-      }
+	if (file == NULL) {
+		MAP_error(MAP->IDR->RS, MSG_SNF, MAP->IDR->fn);
+		return;
+	}
 
-   flen = file_size(MAP->IDR->fn);
+	flen = file_size(MAP->IDR->fn);
 
-   prop = IFF_property("BMHD",file,flen);
-   if (prop == NULL)
-      {
-      MAP_error(MAP->IDR->RS,MSG_BFT,NULL);
-      mem_free(file);
-      return;
-      }
+	prop = IFF_property("BMHD", file, flen);
+	if (prop == NULL) {
+		MAP_error(MAP->IDR->RS, MSG_BFT, NULL);
+		mem_free(file);
+		return;
+	}
 
-   width = ((*(UBYTE *) prop) * 256) + (*(UBYTE *) (prop+1));
-   height = ((*(UBYTE *) (prop+2)) * 256) + (*(UBYTE *) (prop+3));
+	width = ((*(UBYTE *) prop) * 256) + (*(UBYTE *) (prop + 1));
+	height = ((*(UBYTE *) (prop + 2)) * 256) + (*(UBYTE *) (prop + 3));
 
-   body = IFF_property("BODY",file,flen);
-   if (prop == NULL)
-      {
-      MAP_error(MAP->IDR->RS,MSG_BFT,NULL);
-      mem_free(file);
-      return;
-      }
+	body = IFF_property("BODY", file, flen);
+	if (prop == NULL) {
+		MAP_error(MAP->IDR->RS, MSG_BFT, NULL);
+		mem_free(file);
+		return;
+	}
 
-   ox = MAP->parms[MSP_ORGX];
-   oy = MAP->parms[MSP_ORGY];
-   dx = MAP->parms[MSP_CELLX];
-   dy = MAP->parms[MSP_CELLY];
+	ox = MAP->parms[MSP_ORGX];
+	oy = MAP->parms[MSP_ORGY];
+	dx = MAP->parms[MSP_CELLX];
+	dy = MAP->parms[MSP_CELLY];
 
-   sx = MAP->parms[MSP_XSIZE];
-   sy = MAP->parms[MSP_YSIZE];
+	sx = MAP->parms[MSP_XSIZE];
+	sy = MAP->parms[MSP_YSIZE];
 
-   buffer = mem_alloc(width);
-   map = mem_alloc(sx*sy);
+	buffer = mem_alloc(width);
+	map = mem_alloc(sx * sy);
 
-   m = 0;
+	m = 0;
 
-   for (y=0;y<height;y++)
-      {
-      LBM_fetch_line(&body,buffer,width);
+	for (y = 0; y < height; y++) {
+		LBM_fetch_line(&body, buffer, width);
 
-      if (y == oy)
-         {
-         oy += dy;
+		if (y == oy) {
+			oy += dy;
 
-         for (x=ox,i=0;i<sx;x+=dx,i++)
-            map[m++] = buffer[x] - 1;
+			for (x = ox, i = 0; i < sx; x += dx, i++)
+				map[m++] = buffer[x] - 1;
 
-         if (!--sy) break;
-         }
-      }
+			if (!--sy)
+				break;
+		}
+	}
 
-   RHDR.data_attrib = MAP->IDR->attrib;
-   RHDR.data_size = m;
+	RHDR.data_attrib = MAP->IDR->attrib;
+	RHDR.data_size = m;
 
-   RF_write_entry(MAP->IDR->RS->RF,MAP->IDR->ord,map,&RHDR,RTYP_RAW_MEM);
+	RF_write_entry(MAP->IDR->RS->RF, MAP->IDR->ord, map, &RHDR, RTYP_RAW_MEM);
 
-   mem_free(map);
-   mem_free(buffer);
-   mem_free(file);
+	mem_free(map);
+	mem_free(buffer);
+	mem_free(file);
 }

@@ -1,27 +1,27 @@
-//ÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛ
-//ÛÛ                                                                        ÛÛ
-//ÛÛ  SOPCOMP.C                                                             ÛÛ
-//ÛÛ                                                                        ÛÛ
-//ÛÛ  AESOP state-object program compiler class                             ÛÛ
-//ÛÛ                                                                        ÛÛ
-//ÛÛ  Version: 1.00 of 30-Apr-92 -- Initial version                         ÛÛ
-//ÛÛ                                                                        ÛÛ
-//ÛÛ  Project: Extensible State-Object Processor (AESOP/16)                 ÛÛ
-//ÛÛ   Author: John Miles                                                   ÛÛ
-//ÛÛ                                                                        ÛÛ
-//ÛÛ  C source compatible with IBM PC ANSI C/C++ implementations            ÛÛ
-//ÛÛ  Large memory model (16-bit DOS)                                       ÛÛ
-//ÛÛ                                                                        ÛÛ
-//ÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛ
-//ÛÛ                                                                        ÛÛ
-//ÛÛ  Copyright (C) 1992 Miles Design, Inc.                                 ÛÛ
-//ÛÛ                                                                        ÛÛ
-//ÛÛ  Miles Design, Inc.                                                    ÛÛ
-//ÛÛ  10926 Jollyville #308                                                 ÛÛ
-//ÛÛ  Austin, TX 78759                                                      ÛÛ
-//ÛÛ  (512) 345-2642 / BBS (512) 454-9990 / FAX (512) 338-9630              ÛÛ
-//ÛÛ                                                                        ÛÛ
-//ÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛ
+//ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
+//ï¿½ï¿½                                                                        ï¿½ï¿½
+//ï¿½ï¿½  SOPCOMP.C                                                             ï¿½ï¿½
+//ï¿½ï¿½                                                                        ï¿½ï¿½
+//ï¿½ï¿½  AESOP state-object program compiler class                             ï¿½ï¿½
+//ï¿½ï¿½                                                                        ï¿½ï¿½
+//ï¿½ï¿½  Version: 1.00 of 30-Apr-92 -- Initial version                         ï¿½ï¿½
+//ï¿½ï¿½                                                                        ï¿½ï¿½
+//ï¿½ï¿½  Project: Extensible State-Object Processor (AESOP/16)                 ï¿½ï¿½
+//ï¿½ï¿½   Author: John Miles                                                   ï¿½ï¿½
+//ï¿½ï¿½                                                                        ï¿½ï¿½
+//ï¿½ï¿½  C source compatible with IBM PC ANSI C/C++ implementations            ï¿½ï¿½
+//ï¿½ï¿½  Large memory model (16-bit DOS)                                       ï¿½ï¿½
+//ï¿½ï¿½                                                                        ï¿½ï¿½
+//ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
+//ï¿½ï¿½                                                                        ï¿½ï¿½
+//ï¿½ï¿½  Copyright (C) 1992 Miles Design, Inc.                                 ï¿½ï¿½
+//ï¿½ï¿½                                                                        ï¿½ï¿½
+//ï¿½ï¿½  Miles Design, Inc.                                                    ï¿½ï¿½
+//ï¿½ï¿½  10926 Jollyville #308                                                 ï¿½ï¿½
+//ï¿½ï¿½  Austin, TX 78759                                                      ï¿½ï¿½
+//ï¿½ï¿½  (512) 345-2642 / BBS (512) 454-9990 / FAX (512) 338-9630              ï¿½ï¿½
+//ï¿½ï¿½                                                                        ï¿½ï¿½
+//ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -38,75 +38,45 @@
 #include "rscomp.hpp"
 #include "sopcomp.hpp"
 
-#pragma warn -par
-
-BYTE *SOP_keywords[] =
-{
-   KW_CASE,
-   KW_DEFAULT,
-   KW_MESSAGE,
-   KW_PROCEDURE,
-   KW_RETURN,
-   KW_IF,
-   KW_ELSE,
-   KW_SWITCH,
-   KW_WHILE,
-   KW_DO,
-   KW_FOR,
-   KW_LOOP,
-   KW_BREAK,
-   KW_CONTINUE,
-   KW_CLASS,
-   KW_MEMBER,
-   KW_EXTERN,
-   KW_PUBLIC,
-   KW_PRIVATE,
-   KW_TABLE,
-   KW_LONG,
-   KW_WORD,
-   KW_BYTE,
-   KW_AND,
-   KW_OR,
-   KW_NOT,
-   KW_STRING,
-   KW_TRIGGER,
-   NULL
-};
+BYTE *SOP_keywords[] = { KW_CASE, KW_DEFAULT, KW_MESSAGE, KW_PROCEDURE,
+		KW_RETURN, KW_IF, KW_ELSE, KW_SWITCH, KW_WHILE, KW_DO, KW_FOR, KW_LOOP,
+		KW_BREAK, KW_CONTINUE, KW_CLASS, KW_MEMBER, KW_EXTERN, KW_PUBLIC,
+		KW_PRIVATE, KW_TABLE, KW_LONG, KW_WORD, KW_BYTE, KW_AND, KW_OR, KW_NOT,
+		KW_STRING, KW_TRIGGER, NULL };
 
 //
 // Decimal tokens for keywords
 //
 
-enum     
-{
-   SOP_CASE,
-   SOP_DEFAULT,
-   SOP_MESSAGE,
-   SOP_PROCEDURE,
-   SOP_RETURN,
-   SOP_IF,
-   SOP_ELSE,
-   SOP_SWITCH,
-   SOP_WHILE,
-   SOP_DO,
-   SOP_FOR,
-   SOP_LOOP,
-   SOP_BREAK,
-   SOP_CONTINUE,
-   SOP_CLASS,
-   SOP_MEMBER,
-   SOP_EXTERN,
-   SOP_PUBLIC,
-   SOP_PRIVATE,
-   SOP_TABLE,
-   SOP_LONG,
-   SOP_WORD,
-   SOP_BYTE,
-   SOP_AND,
-   SOP_OR,
-   SOP_NOT,
-   SOP_STRING,
-   SOP_TRIGGER
+enum {
+	SOP_CASE,
+	SOP_DEFAULT,
+	SOP_MESSAGE,
+	SOP_PROCEDURE,
+	SOP_RETURN,
+	SOP_IF,
+	SOP_ELSE,
+	SOP_SWITCH,
+	SOP_WHILE,
+	SOP_DO,
+	SOP_FOR,
+	SOP_LOOP,
+	SOP_BREAK,
+	SOP_CONTINUE,
+	SOP_CLASS,
+	SOP_MEMBER,
+	SOP_EXTERN,
+	SOP_PUBLIC,
+	SOP_PRIVATE,
+	SOP_TABLE,
+	SOP_LONG,
+	SOP_WORD,
+	SOP_BYTE,
+	SOP_AND,
+	SOP_OR,
+	SOP_NOT,
+	SOP_STRING,
+	SOP_TRIGGER
 };
 
 //
@@ -114,219 +84,173 @@ enum
 // of increasing length
 //
 
-BYTE *SOP_symbols[] =   
-{
-   ",",     // single-char operators
-   "?",     
-   ":",
-   "|",
-   "&",
-   "^",
-   "!",
-   "+",
-   "-",
-   "*",
-   "/",
-   "%",
-   "~",
-   "@",
-   "[",
-   "]",
-   "(",
-   ")",
-   ".",
-   ";",
-   "<",     
-   ">",
-   "=",
-   "{",
-   "}",
+BYTE *SOP_symbols[] = {
+		",",     // single-char operators
+		"?", ":", "|", "&", "^", "!", "+", "-", "*", "/", "%", "~", "@", "[",
+		"]", "(", ")", ".", ";", "<", ">", "=", "{", "}",
 
-   "^^",    // double-char operators
-   "++",
-   "--",
-   "<=",
-   ">=",
-   "<<",
-   ">>",
-   "*=",    
-   "/=",
-   "%=",
-   "+=",
-   "-=",
-   "&=",
-   "^=",
-   "|=",
-   "==",
-   "!=",
+		"^^",    // double-char operators
+		"++", "--", "<=", ">=", "<<", ">>", "*=", "/=", "%=", "+=", "-=", "&=",
+		"^=", "|=", "==", "!=",
 
-   ">>=",   // triple-char operators
-   "<<=",
+		">>=",   // triple-char operators
+		"<<=",
 
-   NULL
+		NULL };
+
+enum {
+	SOP_COMMA,
+	SOP_QUESTION,
+	SOP_COLON,
+	SOP_BIT_OR,
+	SOP_BIT_AND,
+	SOP_XOR,
+	SOP_EXCLAMATION,
+	SOP_PLUS,
+	SOP_MINUS,
+	SOP_MUL,
+	SOP_DIV,
+	SOP_MOD,
+	SOP_TILDE,
+	SOP_AT,
+	SOP_L_SQUARE,
+	SOP_R_SQUARE,
+	SOP_L_PAREN,
+	SOP_R_PAREN,
+	SOP_PERIOD,
+	SOP_SEMICOLON,
+	SOP_LT,
+	SOP_GT,
+	SOP_SETEQ,
+	SOP_L_CURLY,
+	SOP_R_CURLY,
+
+	SOP_EXP,
+	SOP_INC,
+	SOP_DEC,
+	SOP_LE,
+	SOP_GE,
+	SOP_SHL,
+	SOP_SHR,
+	SOP_MULEQ,
+	SOP_DIVEQ,
+	SOP_MODEQ,
+	SOP_PLUSEQ,
+	SOP_MINUSEQ,
+	SOP_ANDEQ,
+	SOP_XOREQ,
+	SOP_OREQ,
+	SOP_E,
+	SOP_NE,
+
+	SOP_SHREQ,
+	SOP_SHLEQ
 };
 
-enum
-{
-   SOP_COMMA,
-   SOP_QUESTION,
-   SOP_COLON,
-   SOP_BIT_OR,
-   SOP_BIT_AND,
-   SOP_XOR,
-   SOP_EXCLAMATION,
-   SOP_PLUS,
-   SOP_MINUS,
-   SOP_MUL,
-   SOP_DIV,
-   SOP_MOD,
-   SOP_TILDE,
-   SOP_AT,
-   SOP_L_SQUARE,
-   SOP_R_SQUARE,
-   SOP_L_PAREN,
-   SOP_R_PAREN,
-   SOP_PERIOD,
-   SOP_SEMICOLON,
-   SOP_LT,
-   SOP_GT,
-   SOP_SETEQ,
-   SOP_L_CURLY,
-   SOP_R_CURLY,
-
-   SOP_EXP,
-   SOP_INC,
-   SOP_DEC,
-   SOP_LE,
-   SOP_GE,
-   SOP_SHL,
-   SOP_SHR,
-   SOP_MULEQ,
-   SOP_DIVEQ,
-   SOP_MODEQ,
-   SOP_PLUSEQ,
-   SOP_MINUSEQ,
-   SOP_ANDEQ,
-   SOP_XOREQ,
-   SOP_OREQ,
-   SOP_E,
-   SOP_NE,
-
-   SOP_SHREQ,
-   SOP_SHLEQ
+enum {
+	REF_LOAD, REF_STORE, REF_PUSH, REF_DUP
 };
 
-enum
-{
-   REF_LOAD,
-   REF_STORE,
-   REF_PUSH,
-   REF_DUP
+enum {
+	OP_BRT,  // BRanch if True
+	OP_BRF,  // BRanch if False
+	OP_BRA,  // BRanch Always
+	OP_CASE, // CASE selection
+	OP_PUSH, // PUSH 0 onto stack
+	OP_DUP,  // DUPlicate top of stack
+	OP_NOT,  // Logical NOT (unary)
+	OP_SETB, // SET Boolean value (unary)
+	OP_NEG,  // NEGate (unary)
+	OP_ADD,  // ADD (binary)
+	OP_SUB,  // SUBtract (binary)
+	OP_MUL,  // MULtiply (binary)
+	OP_DIV,  // DIVide (binary)
+	OP_MOD,  // MODulus (binary)
+	OP_EXP,  // EXPonent (binary)
+	OP_BAND, // Bitwise AND (binary)
+	OP_BOR,  // Bitwise OR (binary)
+	OP_XOR,  // Bitwise XOR (binary)
+	OP_BNOT, // Bitwise NOT (unary)
+	OP_SHL,  // SHift Left (binary)
+	OP_SHR,  // SHift Right (binary)
+	OP_LT,   // Less Than (binary)
+	OP_LE,   // Less than or Equal (binary)
+	OP_EQ,   // EQual (binary)
+	OP_NE,   // Not Equal (binary)
+	OP_GE,   // Greater than or Equal (binary)
+	OP_GT,   // Greather Than (binary)
+	OP_INC,  // INCrement (unary)
+	OP_DEC,  // DECrement (unary)
+	OP_SHTC, // Load SHorT Constant (0-256)
+	OP_INTC, // Load INTeger Constant (256-64K)
+	OP_LNGC, // Load LoNG Constant (64K-4G)
+	OP_RCRS, // Reference Code ReSource
+	OP_CALL, // CALL function
+	OP_SEND, // SEND message
+	OP_PASS, // PASS message to parent class
+	OP_JSR,  // Jump to SubRoutine
+	OP_RTS,  // ReTurn from Subroutine
+	OP_AIM,  // Array Index Multiply
+	OP_AIS,  // Array Index Shift
+	OP_LTBA, // Load Table Byte Array
+	OP_LTWA, // Load Table Word Array
+	OP_LTDA, // Load Table Dword Array
+	OP_LETA, // Load Effective Table Address
+	OP_LAB,  // Load Auto Byte
+	OP_LAW,  // Load Auto Word
+	OP_LAD,  // Load Auto Dword
+	OP_SAB,  // Store Auto Byte
+	OP_SAW,  // Store Auto Word
+	OP_SAD,  // Store Auto Dword
+	OP_LABA, // Load Auto Byte Array
+	OP_LAWA, // Load Auto Word Array
+	OP_LADA, // Load Auto Dword Array
+	OP_SABA, // Store Auto Byte Array
+	OP_SAWA, // Store Auto Word Array
+	OP_SADA, // Store Auto Dword Array
+	OP_LEAA, // Load Effective Auto Address
+	OP_LSB,  // Load Static Byte
+	OP_LSW,  // Load Static Word
+	OP_LSD,  // Load Static Dword
+	OP_SSB,  // Store Static Byte
+	OP_SSW,  // Store Static Word
+	OP_SSD,  // Store Static Dword
+	OP_LSBA, // Load Static Byte Array
+	OP_LSWA, // Load Static Word Array
+	OP_LSDA, // Load Static Dword Array
+	OP_SSBA, // Store Static Byte Array
+	OP_SSWA, // Store Static Word Array
+	OP_SSDA, // Store Static Dword Array
+	OP_LESA, // Load Effective Static Address
+	OP_LXB,  // Load eXtern Byte
+	OP_LXW,  // Load eXtern Word
+	OP_LXD,  // Load eXtern Dword
+	OP_SXB,  // Store eXtern Byte
+	OP_SXW,  // Store eXtern Word
+	OP_SXD,  // Store eXtern Dword
+	OP_LXBA, // Load eXtern Byte Array
+	OP_LXWA, // Load eXtern Word Array
+	OP_LXDA, // Load eXtern Dword Array
+	OP_SXBA, // Store eXtern Byte Array
+	OP_SXWA, // Store eXtern Word Array
+	OP_SXDA, // Store eXtern Dword Array
+	OP_LEXA, // Load Effective eXtern Address
+	OP_SXAS, // Set eXtern Array Source
+	OP_LECA, // Load Effective Code Address
+	OP_SOLE, // Selector for Object List Entry
+	OP_END,  // END of handler
+	OP_BRK   // BReaKpoint for debugging
 };
 
-enum
-{
-   OP_BRT,  // BRanch if True
-   OP_BRF,  // BRanch if False
-   OP_BRA,  // BRanch Always
-   OP_CASE, // CASE selection
-   OP_PUSH, // PUSH 0 onto stack
-   OP_DUP,  // DUPlicate top of stack
-   OP_NOT,  // Logical NOT (unary)
-   OP_SETB, // SET Boolean value (unary)
-   OP_NEG,  // NEGate (unary)
-   OP_ADD,  // ADD (binary)
-   OP_SUB,  // SUBtract (binary)
-   OP_MUL,  // MULtiply (binary)
-   OP_DIV,  // DIVide (binary)
-   OP_MOD,  // MODulus (binary)
-   OP_EXP,  // EXPonent (binary)
-   OP_BAND, // Bitwise AND (binary)
-   OP_BOR,  // Bitwise OR (binary)
-   OP_XOR,  // Bitwise XOR (binary)
-   OP_BNOT, // Bitwise NOT (unary)
-   OP_SHL,  // SHift Left (binary)
-   OP_SHR,  // SHift Right (binary)
-   OP_LT,   // Less Than (binary)
-   OP_LE,   // Less than or Equal (binary)
-   OP_EQ,   // EQual (binary)
-   OP_NE,   // Not Equal (binary)
-   OP_GE,   // Greater than or Equal (binary)
-   OP_GT,   // Greather Than (binary)
-   OP_INC,  // INCrement (unary)
-   OP_DEC,  // DECrement (unary)
-   OP_SHTC, // Load SHorT Constant (0-256)
-   OP_INTC, // Load INTeger Constant (256-64K)
-   OP_LNGC, // Load LoNG Constant (64K-4G)
-   OP_RCRS, // Reference Code ReSource
-   OP_CALL, // CALL function
-   OP_SEND, // SEND message
-   OP_PASS, // PASS message to parent class
-   OP_JSR,  // Jump to SubRoutine
-   OP_RTS,  // ReTurn from Subroutine
-   OP_AIM,  // Array Index Multiply
-   OP_AIS,  // Array Index Shift
-   OP_LTBA, // Load Table Byte Array
-   OP_LTWA, // Load Table Word Array
-   OP_LTDA, // Load Table Dword Array
-   OP_LETA, // Load Effective Table Address
-   OP_LAB,  // Load Auto Byte
-   OP_LAW,  // Load Auto Word
-   OP_LAD,  // Load Auto Dword
-   OP_SAB,  // Store Auto Byte
-   OP_SAW,  // Store Auto Word
-   OP_SAD,  // Store Auto Dword
-   OP_LABA, // Load Auto Byte Array
-   OP_LAWA, // Load Auto Word Array
-   OP_LADA, // Load Auto Dword Array
-   OP_SABA, // Store Auto Byte Array
-   OP_SAWA, // Store Auto Word Array
-   OP_SADA, // Store Auto Dword Array
-   OP_LEAA, // Load Effective Auto Address
-   OP_LSB,  // Load Static Byte
-   OP_LSW,  // Load Static Word
-   OP_LSD,  // Load Static Dword
-   OP_SSB,  // Store Static Byte
-   OP_SSW,  // Store Static Word
-   OP_SSD,  // Store Static Dword
-   OP_LSBA, // Load Static Byte Array
-   OP_LSWA, // Load Static Word Array
-   OP_LSDA, // Load Static Dword Array
-   OP_SSBA, // Store Static Byte Array
-   OP_SSWA, // Store Static Word Array
-   OP_SSDA, // Store Static Dword Array
-   OP_LESA, // Load Effective Static Address
-   OP_LXB,  // Load eXtern Byte
-   OP_LXW,  // Load eXtern Word
-   OP_LXD,  // Load eXtern Dword
-   OP_SXB,  // Store eXtern Byte
-   OP_SXW,  // Store eXtern Word
-   OP_SXD,  // Store eXtern Dword
-   OP_LXBA, // Load eXtern Byte Array
-   OP_LXWA, // Load eXtern Word Array
-   OP_LXDA, // Load eXtern Dword Array
-   OP_SXBA, // Store eXtern Byte Array
-   OP_SXWA, // Store eXtern Word Array
-   OP_SXDA, // Store eXtern Dword Array
-   OP_LEXA, // Load Effective eXtern Address
-   OP_SXAS, // Set eXtern Array Source
-   OP_LECA, // Load Effective Code Address
-   OP_SOLE, // Selector for Object List Entry
-   OP_END,  // END of handler
-   OP_BRK   // BReaKpoint for debugging
-};
+typedef struct PVAL {
+	void (*fn)(SOP_class *SOP, UWORD op, struct PVAL *pv);
 
-typedef struct PVAL
-{
-   void (*fn)(SOP_class *SOP, UWORD op, struct PVAL *pv);
+	DICT_class *type;
+	DICT_entry *val;
 
-   DICT_class *type;
-   DICT_entry *val;
-
-   WORD indexed;
-   WORD source;
-}
-PVAL;
+	WORD indexed;
+	WORD source;
+} PVAL;
 
 void SOP_rvalue(SOP_class *SOP, PVAL *PV);
 WORD SOP_check_lvalue(SOP_class *SOP, PVAL *PV);
@@ -356,19 +280,15 @@ void SOP_statement(SOP_class *SOP);
 #define SIZE_B 1           // Size of byte type
 #define SIZE_W 2           // Size of word type
 #define SIZE_L 4           // Size of long type
-
 #define CON_D 0            // Static-declarative context
 #define CON_H 1            // Message handler context
 #define CON_P 2            // Procedure context
-
 #define V_PRIVATE 0        // Private visibility
 #define V_PUBLIC  1        // Public visibility (exported)
-
 #define NTYP_MSG 0
 #define NTYP_RES 1
 
 #define TEMP_NAME "TEMP"   // Name of TEMP environment variable
-
 /*************************************************************/
 //
 // Issue an error message of the form
@@ -376,10 +296,9 @@ void SOP_statement(SOP_class *SOP);
 //
 /*************************************************************/
 
-void SOP_basic_error(SOP_class *SOP, BYTE *msg)
-{
-   report(E_ERROR,LEX_line(SOP->LEX,LEX_CUR),msg,LEX_lexeme(SOP->LEX,
-      LEX_CUR),NULL);
+void SOP_basic_error(SOP_class *SOP, BYTE *msg) {
+	report(E_ERROR, LEX_line(SOP->LEX, LEX_CUR), msg,
+			LEX_lexeme(SOP->LEX, LEX_CUR), NULL);
 }
 
 /*************************************************************/
@@ -388,30 +307,32 @@ void SOP_basic_error(SOP_class *SOP, BYTE *msg)
 //
 /*************************************************************/
 
-UWORD SOP_emit_opcode(SOP_class *SOP, WORD op)
-{
-   UWORD pc;
-   static BYTE *ops[]= {"BRT","BRF","BRA","CASE","PUSH","DUP","NOT","SETB","NEG","ADD","SUB",
-      "MUL","DIV","MOD","EXP","BAND","BOR","XOR","BNOT","SHL","SHR","LT","LE","EQ",
-      "NE","GE","GT","INC","DEC","SHTC","INTC","LNGC","RCRS","CALL","SEND","PASS",
-      "JSR","RTS","AIM","AIS",
-      "LTBA","LTWA","LTDA","LETA",
-      "LAB","LAW","LAD","SAB","SAW","SAD","LABA","LAWA","LADA","SABA","SAWA","SADA","LEAA",
-      "LSB","LSW","LSD","SSB","SSW","SSD","LSBA","LSWA","LSDA","SSBA","SSWA","SSDA","LESA",
-      "LXB","LXW","LXD","SXB","SXW","SXD","LXBA","LXWA","LXDA","SXBA","SXWA","SXDA","LEXA","SXAS",
-      "LECA","SOLE",
-      "END","BRK"};
+UWORD SOP_emit_opcode(SOP_class *SOP, WORD op) {
+	UWORD pc;
+	static BYTE *ops[] =
+			{ "BRT", "BRF", "BRA", "CASE", "PUSH", "DUP", "NOT", "SETB", "NEG",
+					"ADD", "SUB", "MUL", "DIV", "MOD", "EXP", "BAND", "BOR",
+					"XOR", "BNOT", "SHL", "SHR", "LT", "LE", "EQ", "NE", "GE",
+					"GT", "INC", "DEC", "SHTC", "INTC", "LNGC", "RCRS", "CALL",
+					"SEND", "PASS", "JSR", "RTS", "AIM", "AIS", "LTBA", "LTWA",
+					"LTDA", "LETA", "LAB", "LAW", "LAD", "SAB", "SAW", "SAD",
+					"LABA", "LAWA", "LADA", "SABA", "SAWA", "SADA", "LEAA",
+					"LSB", "LSW", "LSD", "SSB", "SSW", "SSD", "LSBA", "LSWA",
+					"LSDA", "SSBA", "SSWA", "SSDA", "LESA", "LXB", "LXW", "LXD",
+					"SXB", "SXW", "SXD", "LXBA", "LXWA", "LXDA", "SXBA", "SXWA",
+					"SXDA", "LEXA", "SXAS", "LECA", "SOLE", "END", "BRK" };
 
-   if (verbose()) printf("%s %.05u: %s\n",SOP->name,SOP->PC,ops[op]);
+	if (verbose())
+		printf("%s %.05u: %s\n", SOP->name, SOP->PC, ops[op]);
 
-   *((UBYTE *) ((UBYTE *) SOP->CODE + (pc=SOP->PC))) = (UBYTE) op & 0xff;
+	*((UBYTE *) ((UBYTE *) SOP->CODE + (pc = SOP->PC))) = (UBYTE) op & 0xff;
 
-   if (SOP->PC > MAX_CODE-1-sizeof(UBYTE))
-      SOP_basic_error(SOP,MSG_OCS);
+	if (SOP->PC > MAX_CODE - 1 - sizeof(UBYTE))
+		SOP_basic_error(SOP, MSG_OCS);
 
-   SOP->PC += sizeof(UBYTE);
+	SOP->PC += sizeof(UBYTE);
 
-   return pc;
+	return pc;
 }
 
 /*************************************************************/
@@ -420,20 +341,20 @@ UWORD SOP_emit_opcode(SOP_class *SOP, WORD op)
 //
 /*************************************************************/
 
-UWORD SOP_emit_long(SOP_class *SOP, ULONG val)
-{
-   UWORD pc;
+UWORD SOP_emit_long(SOP_class *SOP, ULONG val) {
+	UWORD pc;
 
-   if (verbose()) printf("%s %.05u: %lu\n",SOP->name,SOP->PC,val);
+	if (verbose())
+		printf("%s %.05u: %lu\n", SOP->name, SOP->PC, val);
 
-   *((ULONG *) ((UBYTE *) SOP->CODE + (pc=SOP->PC))) = val;
+	*((ULONG *) ((UBYTE *) SOP->CODE + (pc = SOP->PC))) = val;
 
-   if (SOP->PC > MAX_CODE-1-sizeof(ULONG))
-      SOP_basic_error(SOP,MSG_OCS);
+	if (SOP->PC > MAX_CODE - 1 - sizeof(ULONG))
+		SOP_basic_error(SOP, MSG_OCS);
 
-   SOP->PC += sizeof(ULONG);
+	SOP->PC += sizeof(ULONG);
 
-   return pc;
+	return pc;
 }
 
 /*************************************************************/
@@ -442,20 +363,20 @@ UWORD SOP_emit_long(SOP_class *SOP, ULONG val)
 //
 /*************************************************************/
 
-UWORD SOP_emit_word(SOP_class *SOP, ULONG val)
-{
-   UWORD pc;
+UWORD SOP_emit_word(SOP_class *SOP, ULONG val) {
+	UWORD pc;
 
-   if (verbose()) printf("%s %.05u: %lu\n",SOP->name,SOP->PC,val);
+	if (verbose())
+		printf("%s %.05u: %lu\n", SOP->name, SOP->PC, val);
 
-   *((UWORD *) ((UBYTE *) SOP->CODE + (pc=SOP->PC))) = (UWORD) val & 0xffff;
+	*((UWORD *) ((UBYTE *) SOP->CODE + (pc = SOP->PC))) = (UWORD) val & 0xffff;
 
-   if (SOP->PC > MAX_CODE-1-sizeof(UWORD))
-      SOP_basic_error(SOP,MSG_OCS);
+	if (SOP->PC > MAX_CODE - 1 - sizeof(UWORD))
+		SOP_basic_error(SOP, MSG_OCS);
 
-   SOP->PC += sizeof(UWORD);
+	SOP->PC += sizeof(UWORD);
 
-   return pc;
+	return pc;
 }
 
 /*************************************************************/
@@ -464,20 +385,20 @@ UWORD SOP_emit_word(SOP_class *SOP, ULONG val)
 //
 /*************************************************************/
 
-UWORD SOP_emit_byte(SOP_class *SOP, ULONG val)
-{
-   UWORD pc;
+UWORD SOP_emit_byte(SOP_class *SOP, ULONG val) {
+	UWORD pc;
 
-   if (verbose()) printf("%s %.05u: %lu\n",SOP->name,SOP->PC,val);
+	if (verbose())
+		printf("%s %.05u: %lu\n", SOP->name, SOP->PC, val);
 
-   *((UBYTE *) ((UBYTE *) SOP->CODE + (pc=SOP->PC))) = (UBYTE) val & 0xff;
+	*((UBYTE *) ((UBYTE *) SOP->CODE + (pc = SOP->PC))) = (UBYTE) val & 0xff;
 
-   if (SOP->PC > MAX_CODE-1-sizeof(UBYTE))
-      SOP_basic_error(SOP,MSG_OCS);
+	if (SOP->PC > MAX_CODE - 1 - sizeof(UBYTE))
+		SOP_basic_error(SOP, MSG_OCS);
 
-   SOP->PC += sizeof(UBYTE);
+	SOP->PC += sizeof(UBYTE);
 
-   return pc;
+	return pc;
 }
 
 /*************************************************************/
@@ -486,23 +407,20 @@ UWORD SOP_emit_byte(SOP_class *SOP, ULONG val)
 //
 /*************************************************************/
 
-void SOP_emit_array_index(SOP_class *SOP, ULONG dsize)
-{
-   WORD log;
+void SOP_emit_array_index(SOP_class *SOP, ULONG dsize) {
+	WORD log;
 
-   if ((log = log2(dsize)) != -1)
-      if (log == 0)
-         SOP_emit_opcode(SOP,OP_ADD);
-      else
-         {
-         SOP_emit_opcode(SOP,OP_AIS);
-         SOP_emit_byte(SOP,log);
-         }
-   else
-      {
-      SOP_emit_opcode(SOP,OP_AIM);
-      SOP_emit_word(SOP,dsize);
-      }
+	if ((log = log2(dsize)) != -1)
+		if (log == 0)
+			SOP_emit_opcode(SOP, OP_ADD);
+		else {
+			SOP_emit_opcode(SOP, OP_AIS);
+			SOP_emit_byte(SOP, log);
+		}
+	else {
+		SOP_emit_opcode(SOP, OP_AIM);
+		SOP_emit_word(SOP, dsize);
+	}
 }
 
 /*************************************************************/
@@ -512,23 +430,17 @@ void SOP_emit_array_index(SOP_class *SOP, ULONG dsize)
 //
 /*************************************************************/
 
-void SOP_emit_constant(SOP_class *SOP, ULONG val)
-{
-   if (val < 256L)
-      {
-      SOP_emit_opcode(SOP,OP_SHTC);
-      SOP_emit_byte(SOP,val);
-      }
-   else if (val < 65536L)
-      {
-      SOP_emit_opcode(SOP,OP_INTC);
-      SOP_emit_word(SOP,val);
-      }
-   else
-      {
-      SOP_emit_opcode(SOP,OP_LNGC);
-      SOP_emit_long(SOP,val);
-      }
+void SOP_emit_constant(SOP_class *SOP, ULONG val) {
+	if (val < 256L) {
+		SOP_emit_opcode(SOP, OP_SHTC);
+		SOP_emit_byte(SOP, val);
+	} else if (val < 65536L) {
+		SOP_emit_opcode(SOP, OP_INTC);
+		SOP_emit_word(SOP, val);
+	} else {
+		SOP_emit_opcode(SOP, OP_LNGC);
+		SOP_emit_long(SOP, val);
+	}
 }
 
 /*************************************************************/
@@ -538,199 +450,175 @@ void SOP_emit_constant(SOP_class *SOP, ULONG val)
 //
 /*************************************************************/
 
-WORD SOP_next_symbol(SOP_class *SOP, WORD token)
-{
-   if (LEX_type(SOP->LEX,LEX_NXT) != TTYP_SYMBOL)
-      return 0;
+WORD SOP_next_symbol(SOP_class *SOP, WORD token) {
+	if (LEX_type(SOP->LEX, LEX_NXT) != TTYP_SYMBOL)
+		return 0;
 
-   return (LEX_token(SOP->LEX,LEX_NXT) == token);
+	return (LEX_token(SOP->LEX, LEX_NXT) == token);
 }
 
-WORD SOP_next_keyword(SOP_class *SOP, WORD token)
-{
-   if (LEX_type(SOP->LEX,LEX_NXT) != TTYP_KEYWORD)
-      return 0;
+WORD SOP_next_keyword(SOP_class *SOP, WORD token) {
+	if (LEX_type(SOP->LEX, LEX_NXT) != TTYP_KEYWORD)
+		return 0;
 
-   return (LEX_token(SOP->LEX,LEX_NXT) == token);
+	return (LEX_token(SOP->LEX, LEX_NXT) == token);
 }
 
-WORD SOP_next_literal_constant(SOP_class *SOP)
-{
-   if (LEX_type(SOP->LEX,LEX_NXT) == TTYP_STRLIT)
-      return 1;
+WORD SOP_next_literal_constant(SOP_class *SOP) {
+	if (LEX_type(SOP->LEX, LEX_NXT) == TTYP_STRLIT)
+		return 1;
 
-   if (LEX_type(SOP->LEX,LEX_NXT) == TTYP_NUM)
-      return 1;
+	if (LEX_type(SOP->LEX, LEX_NXT) == TTYP_NUM)
+		return 1;
 
-   return (SOP_next_symbol(SOP,SOP_MINUS) ||
-           SOP_next_symbol(SOP,SOP_PLUS));
+	return (SOP_next_symbol(SOP, SOP_MINUS) || SOP_next_symbol(SOP, SOP_PLUS));
 }
 
-WORD SOP_next_mul(SOP_class *SOP)
-{
-   if (LEX_type(SOP->LEX,LEX_NXT) != TTYP_SYMBOL)
-      return 0;
+WORD SOP_next_mul(SOP_class *SOP) {
+	if (LEX_type(SOP->LEX, LEX_NXT) != TTYP_SYMBOL)
+		return 0;
 
-   switch (LEX_token(SOP->LEX,LEX_NXT))
-      {
-      case SOP_MUL: 
-      case SOP_DIV: 
-      case SOP_MOD:
-         return 1;
-      }
+	switch (LEX_token(SOP->LEX, LEX_NXT)) {
+	case SOP_MUL:
+	case SOP_DIV:
+	case SOP_MOD:
+		return 1;
+	}
 
-   return 0;
+	return 0;
 }
 
-WORD SOP_next_add(SOP_class *SOP)
-{
-   if (LEX_type(SOP->LEX,LEX_NXT) != TTYP_SYMBOL)
-      return 0;
+WORD SOP_next_add(SOP_class *SOP) {
+	if (LEX_type(SOP->LEX, LEX_NXT) != TTYP_SYMBOL)
+		return 0;
 
-   switch (LEX_token(SOP->LEX,LEX_NXT))
-      {
-      case SOP_PLUS: 
-      case SOP_MINUS: 
-         return 1;
-      }
+	switch (LEX_token(SOP->LEX, LEX_NXT)) {
+	case SOP_PLUS:
+	case SOP_MINUS:
+		return 1;
+	}
 
-   return 0;
+	return 0;
 }
 
-WORD SOP_next_shift(SOP_class *SOP)
-{
-   if (LEX_type(SOP->LEX,LEX_NXT) != TTYP_SYMBOL)
-      return 0;
+WORD SOP_next_shift(SOP_class *SOP) {
+	if (LEX_type(SOP->LEX, LEX_NXT) != TTYP_SYMBOL)
+		return 0;
 
-   switch (LEX_token(SOP->LEX,LEX_NXT))
-      {
-      case SOP_SHL: 
-      case SOP_SHR: 
-         return 1;
-      }
+	switch (LEX_token(SOP->LEX, LEX_NXT)) {
+	case SOP_SHL:
+	case SOP_SHR:
+		return 1;
+	}
 
-   return 0;
+	return 0;
 }
 
-WORD SOP_next_assign(SOP_class *SOP)
-{
-   if (LEX_type(SOP->LEX,LEX_NXT) != TTYP_SYMBOL)
-      return 0;
+WORD SOP_next_assign(SOP_class *SOP) {
+	if (LEX_type(SOP->LEX, LEX_NXT) != TTYP_SYMBOL)
+		return 0;
 
-   switch (LEX_token(SOP->LEX,LEX_NXT))
-      {
-      case SOP_SETEQ:
-      case SOP_MULEQ: 
-      case SOP_DIVEQ: 
-      case SOP_MODEQ: 
-      case SOP_PLUSEQ: 
-      case SOP_MINUSEQ: 
-      case SOP_ANDEQ: 
-      case SOP_XOREQ: 
-      case SOP_OREQ: 
-      case SOP_SHREQ: 
-      case SOP_SHLEQ: 
-         return 1;
-      }
+	switch (LEX_token(SOP->LEX, LEX_NXT)) {
+	case SOP_SETEQ:
+	case SOP_MULEQ:
+	case SOP_DIVEQ:
+	case SOP_MODEQ:
+	case SOP_PLUSEQ:
+	case SOP_MINUSEQ:
+	case SOP_ANDEQ:
+	case SOP_XOREQ:
+	case SOP_OREQ:
+	case SOP_SHREQ:
+	case SOP_SHLEQ:
+		return 1;
+	}
 
-   return 0;
+	return 0;
 }
 
-WORD SOP_next_eq(SOP_class *SOP)
-{
-   if (LEX_type(SOP->LEX,LEX_NXT) != TTYP_SYMBOL)
-      return 0;
+WORD SOP_next_eq(SOP_class *SOP) {
+	if (LEX_type(SOP->LEX, LEX_NXT) != TTYP_SYMBOL)
+		return 0;
 
-   switch (LEX_token(SOP->LEX,LEX_NXT))
-      {
-      case SOP_E: 
-      case SOP_NE: 
-         return 1;
-      }
+	switch (LEX_token(SOP->LEX, LEX_NXT)) {
+	case SOP_E:
+	case SOP_NE:
+		return 1;
+	}
 
-   return 0;
+	return 0;
 }
 
-WORD SOP_next_rel(SOP_class *SOP)
-{
-   if (LEX_type(SOP->LEX,LEX_NXT) != TTYP_SYMBOL)
-      return 0;
+WORD SOP_next_rel(SOP_class *SOP) {
+	if (LEX_type(SOP->LEX, LEX_NXT) != TTYP_SYMBOL)
+		return 0;
 
-   switch (LEX_token(SOP->LEX,LEX_NXT))
-      {
-      case SOP_LT: 
-      case SOP_GT:
-      case SOP_LE:
-      case SOP_GE:
-         return 1;
-      }
+	switch (LEX_token(SOP->LEX, LEX_NXT)) {
+	case SOP_LT:
+	case SOP_GT:
+	case SOP_LE:
+	case SOP_GE:
+		return 1;
+	}
 
-   return 0;
+	return 0;
 }
 
-WORD SOP_next_unary(SOP_class *SOP)
-{
-   if (SOP_next_keyword(SOP,SOP_NOT))
-      return 1;
+WORD SOP_next_unary(SOP_class *SOP) {
+	if (SOP_next_keyword(SOP, SOP_NOT))
+		return 1;
 
-   if (LEX_type(SOP->LEX,LEX_NXT) != TTYP_SYMBOL)
-      return 0;
+	if (LEX_type(SOP->LEX, LEX_NXT) != TTYP_SYMBOL)
+		return 0;
 
-   switch (LEX_token(SOP->LEX,LEX_NXT))
-      {
-      case SOP_MINUS:
-      case SOP_PLUS:
-      case SOP_EXCLAMATION:
-      case SOP_TILDE:
-      case SOP_AT:
-      case SOP_INC:
-      case SOP_DEC:
-         return 1;
-      }
+	switch (LEX_token(SOP->LEX, LEX_NXT)) {
+	case SOP_MINUS:
+	case SOP_PLUS:
+	case SOP_EXCLAMATION:
+	case SOP_TILDE:
+	case SOP_AT:
+	case SOP_INC:
+	case SOP_DEC:
+		return 1;
+	}
 
-   return 0;
+	return 0;
 }
 
-WORD SOP_next_postfix(SOP_class *SOP)
-{
-   if (LEX_type(SOP->LEX,LEX_NXT) != TTYP_SYMBOL)
-      return 0;
+WORD SOP_next_postfix(SOP_class *SOP) {
+	if (LEX_type(SOP->LEX, LEX_NXT) != TTYP_SYMBOL)
+		return 0;
 
-   switch (LEX_token(SOP->LEX,LEX_NXT))
-      {
-      case SOP_L_PAREN:
-      case SOP_L_SQUARE:
-      case SOP_INC:
-      case SOP_DEC:
-      case SOP_PERIOD:
-         return 1;
-      }
+	switch (LEX_token(SOP->LEX, LEX_NXT)) {
+	case SOP_L_PAREN:
+	case SOP_L_SQUARE:
+	case SOP_INC:
+	case SOP_DEC:
+	case SOP_PERIOD:
+		return 1;
+	}
 
-   return 0;
+	return 0;
 }
 
-WORD SOP_next_log_or(SOP_class *SOP)
-{
-   return (SOP_next_keyword(SOP,SOP_OR));
+WORD SOP_next_log_or(SOP_class *SOP) {
+	return (SOP_next_keyword(SOP, SOP_OR));
 }
 
-WORD SOP_next_log_and(SOP_class *SOP)
-{
-   return (SOP_next_keyword(SOP,SOP_AND));
+WORD SOP_next_log_and(SOP_class *SOP) {
+	return (SOP_next_keyword(SOP, SOP_AND));
 }
 
-WORD SOP_next_definition(SOP_class *SOP)
-{
-   if (LEX_type(SOP->LEX,LEX_NXT) != TTYP_KEYWORD)
-      return 0;
+WORD SOP_next_definition(SOP_class *SOP) {
+	if (LEX_type(SOP->LEX, LEX_NXT) != TTYP_KEYWORD)
+		return 0;
 
-   switch (LEX_token(SOP->LEX,LEX_NXT))
-      {
-      case SOP_CLASS:
-         return 1;
-      }
+	switch (LEX_token(SOP->LEX, LEX_NXT)) {
+	case SOP_CLASS:
+		return 1;
+	}
 
-   return 0;
+	return 0;
 }
 
 /*************************************************************/
@@ -741,22 +629,20 @@ WORD SOP_next_definition(SOP_class *SOP)
 //
 /*************************************************************/
 
-ULONG SOP_resource_name_entry(SOP_class *SOP)
-{
-   ULONG val;
+ULONG SOP_resource_name_entry(SOP_class *SOP) {
+	ULONG val;
 
-   val = RS_current_ROED_entry(SOP->RS,LEX_lexeme(SOP->LEX,LEX_CUR));
+	val = RS_current_ROED_entry(SOP->RS, LEX_lexeme(SOP->LEX, LEX_CUR));
 
-   if (val == -1L)
-      {
-      val = RS_get_ROED_entry(SOP->RS,LEX_lexeme(SOP->LEX,LEX_CUR));
+	if (val == -1L) {
+		val = RS_get_ROED_entry(SOP->RS, LEX_lexeme(SOP->LEX, LEX_CUR));
 
-      if (strcmp(LEX_lexeme(SOP->LEX,LEX_CUR),SOP->name))
-         DICT_enter(SOP->RS->refcr,LEX_lexeme(SOP->LEX,LEX_CUR),
-            D_DEFHEAP)->def = str_alloc(LEX_line(SOP->LEX,LEX_CUR));
-      }
+		if (strcmp(LEX_lexeme(SOP->LEX, LEX_CUR), SOP->name))
+			DICT_enter(SOP->RS->refcr, LEX_lexeme(SOP->LEX, LEX_CUR), D_DEFHEAP)->def =
+					str_alloc(LEX_line(SOP->LEX, LEX_CUR));
+	}
 
-   return val;
+	return val;
 }
 
 /*************************************************************/
@@ -765,18 +651,16 @@ ULONG SOP_resource_name_entry(SOP_class *SOP)
 //
 /*************************************************************/
 
-void SOP_local_fixup(SOP_class *SOP, UWORD reference, UWORD value)
-{
-   UWORD *ptr;
+void SOP_local_fixup(SOP_class *SOP, UWORD reference, UWORD value) {
+	UWORD *ptr;
 
-   while (reference)
-      {
-      ptr = (UWORD *) ((UBYTE *) SOP->CODE + reference);
+	while (reference) {
+		ptr = (UWORD *) ((UBYTE *) SOP->CODE + reference);
 
-      reference = *ptr;
+		reference = *ptr;
 
-      *ptr = value;
-      }
+		*ptr = value;
+	}
 }
 
 /*************************************************************/
@@ -787,49 +671,45 @@ void SOP_local_fixup(SOP_class *SOP, UWORD reference, UWORD value)
 /*************************************************************/
 
 WORD SOP_export_symbol(SOP_class *SOP, ULONG symbol, ULONG value, BYTE type,
-   ULONG asize)
-{
-   CSS_class *def;
-   BYTE *tag,*sym;
-   WORD stat;
+		ULONG asize) {
+	CSS_class *def;
+	BYTE *tag, *sym;
+	WORD stat;
 
-   if (type == 'M')
-      sym = str(symbol);
-   else
-      sym = (BYTE *) symbol;
+	if (type == 'M')
+		sym = str(symbol);
+	else
+		sym = (BYTE *) symbol;
 
-   def = CSS_construct(NULL);
+	def = CSS_construct(NULL);
 
-   CSS_add_num(def,value);
+	CSS_add_num(def, value);
 
-   if (asize != 1)
-      CSS_add_num(def,asize);
+	if (asize != 1)
+		CSS_add_num(def, asize);
 
-   tag = mem_alloc(3L + (ULONG) strlen(sym));
-   tag[0] = type;
-   tag[1] = ':';
-   tag[2] = 0;
-   if (sym != NULL)
-      strcat(tag,sym);
+	tag = (BYTE*) mem_alloc(3L + (ULONG) strlen(sym));
+	tag[0] = type;
+	tag[1] = ':';
+	tag[2] = 0;
+	if (sym != NULL)
+		strcat(tag, sym);
 
-   if (DICT_lookup(SOP->EXPT,tag) == NULL)
-      {
-      DICT_enter(SOP->EXPT,tag,D_DEFHEAP)->def = CSS_string(def);
-      stat = 1;
-      }
-   else
-      {
-      free(CSS_string(def));
-      stat = 0;
-      }
+	if (DICT_lookup(SOP->EXPT, tag) == NULL) {
+		DICT_enter(SOP->EXPT, tag, D_DEFHEAP)->def = CSS_string(def);
+		stat = 1;
+	} else {
+		free(CSS_string(def));
+		stat = 0;
+	}
 
-   free(tag);
-   CSS_destroy(def);
+	free(tag);
+	CSS_destroy(def);
 
-   if (type == 'M')
-      free(sym);
+	if (type == 'M')
+		free(sym);
 
-   return stat;
+	return stat;
 }
 
 /*************************************************************/
@@ -839,52 +719,50 @@ WORD SOP_export_symbol(SOP_class *SOP, ULONG symbol, ULONG value, BYTE type,
 // 
 /*************************************************************/
 
-UWORD SOP_import_symbol(SOP_class *SOP, BYTE *sym, BYTE *class, BYTE type)
-{
-   BYTE *tag,*def,*index;
-   DICT_entry *entry;
-   UWORD size;
+UWORD SOP_import_symbol(SOP_class *SOP, BYTE *sym, BYTE *class_type,
+		BYTE type) {
+	BYTE *tag, *def, *index;
+	DICT_entry *entry;
+	UWORD size;
 
-   index = str(SOP->import_index);
+	index = str(SOP->import_index);
 
-   switch (type)
-      {
-      case 'C':
-         size = sizeof(void *);
-         def = str_alloc(index);
-         break;
+	switch (type) {
+	case 'C':
+		size = sizeof(void *);
+		def = str_alloc(index);
+		break;
 
-      case 'B':
-      case 'W':
-      case 'L':
-         size = sizeof(UWORD);
-         def = mem_alloc((ULONG) strlen(class)+(ULONG) strlen(index)+4L);
-         strcpy(def,index);
-         strcat(def,",");
-         strcat(def,class);
-         break;
-      }
+	case 'B':
+	case 'W':
+	case 'L':
+		size = sizeof(UWORD);
+		def = (BYTE*) mem_alloc(
+				(ULONG) strlen(class_type) + (ULONG) strlen(index) + 4L);
+		strcpy(def, index);
+		strcat(def, ",");
+		strcat(def, class_type);
+		break;
+	}
 
-   tag = mem_alloc(3L + (ULONG) strlen(sym));
-   tag[0] = type;
-   tag[1] = ':';
-   tag[2] = 0;
-   strcat(tag,sym);
+	tag = (BYTE*) mem_alloc(3L + (ULONG) strlen(sym));
+	tag[0] = type;
+	tag[1] = ':';
+	tag[2] = 0;
+	strcat(tag, sym);
 
-   if ((entry = DICT_lookup(SOP->IMPT,tag)) == NULL)
-      {
-      entry = DICT_enter(SOP->IMPT,tag,D_DEFHEAP);
-      
-      entry->def = def;
-      SOP->import_index += size;
-      }
-   else
-      free(def);
+	if ((entry = DICT_lookup(SOP->IMPT, tag)) == NULL) {
+		entry = DICT_enter(SOP->IMPT, tag, D_DEFHEAP);
 
-   free(tag);
-   free(index);
+		entry->def = def;
+		SOP->import_index += size;
+	} else
+		free(def);
 
-   return (UWORD) ascnum(entry->def,10);
+	free(tag);
+	free(index);
+
+	return (UWORD) ascnum((BYTE*) entry->def, 10);
 }
 
 /*************************************************************/
@@ -894,15 +772,13 @@ UWORD SOP_import_symbol(SOP_class *SOP, BYTE *sym, BYTE *class, BYTE type)
 //
 /*************************************************************/
 
-WORD SOP_check_access(SOP_class *SOP)
-{
-   if (SOP->context == CON_D)
-      {
-      SOP_basic_error(SOP,MSG_URC);
-      return 0;
-      }
+WORD SOP_check_access(SOP_class *SOP) {
+	if (SOP->context == CON_D) {
+		SOP_basic_error(SOP, MSG_URC);
+		return 0;
+	}
 
-   return 1;
+	return 1;
 }
 
 /*************************************************************/
@@ -912,15 +788,13 @@ WORD SOP_check_access(SOP_class *SOP)
 //
 /*************************************************************/
 
-WORD SOP_check_nest(SOP_class *SOP)
-{
-   if (SOP->context != CON_D)
-      {
-      SOP_basic_error(SOP,MSG_CND);
-      return 0;
-      }
+WORD SOP_check_nest(SOP_class *SOP) {
+	if (SOP->context != CON_D) {
+		SOP_basic_error(SOP, MSG_CND);
+		return 0;
+	}
 
-   return 1;
+	return 1;
 }
 
 /*************************************************************/
@@ -930,15 +804,13 @@ WORD SOP_check_nest(SOP_class *SOP)
 //
 /*************************************************************/
 
-WORD SOP_check_auto_nest(SOP_class *SOP)
-{
-   if (SOP->context == CON_D)
-      {
-      SOP_basic_error(SOP,MSG_AVO);
-      return 0;
-      }
+WORD SOP_check_auto_nest(SOP_class *SOP) {
+	if (SOP->context == CON_D) {
+		SOP_basic_error(SOP, MSG_AVO);
+		return 0;
+	}
 
-   return 1;
+	return 1;
 }
 
 /*************************************************************/
@@ -948,17 +820,16 @@ WORD SOP_check_auto_nest(SOP_class *SOP)
 //
 /*************************************************************/
 
-void SOP_show_usage(UWORD severity, DICT_class *DICT, BYTE *MSG)
-{
-   DICT_entry *entry;
-   DI_class *DI;
+void SOP_show_usage(UWORD severity, DICT_class *DICT, BYTE *MSG) {
+	DICT_entry *entry;
+	DI_class *DI;
 
-   DI = DI_construct(DICT);
+	DI = DI_construct(DICT);
 
-   while ((entry = DI_fetch(DI)) != NULL)
-      report(severity,entry->def,MSG,entry->tag);
+	while ((entry = DI_fetch(DI)) != NULL)
+		report(severity, (BYTE*) entry->def, MSG, (BYTE*) entry->tag);
 
-   DI_destroy(DI);
+	DI_destroy(DI);
 }
 
 /*************************************************************/
@@ -967,9 +838,8 @@ void SOP_show_usage(UWORD severity, DICT_class *DICT, BYTE *MSG)
 //
 /*************************************************************/
 
-void SOP_require_keyword(SOP_class *SOP, WORD token)
-{
-   LEX_require(SOP->LEX,TTYP_KEYWORD,token,SOP_keywords[token]);
+void SOP_require_keyword(SOP_class *SOP, WORD token) {
+	LEX_require(SOP->LEX, TTYP_KEYWORD, token, SOP_keywords[token]);
 }
 
 /*************************************************************/
@@ -978,9 +848,8 @@ void SOP_require_keyword(SOP_class *SOP, WORD token)
 //
 /*************************************************************/
 
-void SOP_require_symbol(SOP_class *SOP, WORD token)
-{
-   LEX_require(SOP->LEX,TTYP_SYMBOL,token,SOP_symbols[token]);
+void SOP_require_symbol(SOP_class *SOP, WORD token) {
+	LEX_require(SOP->LEX, TTYP_SYMBOL, token, SOP_symbols[token]);
 }
 
 /*************************************************************/
@@ -989,37 +858,34 @@ void SOP_require_symbol(SOP_class *SOP, WORD token)
 //
 /*************************************************************/
 
-LONG SOP_fetch_literal_constant(SOP_class *SOP)
-{
-   WORD t;
-   LONG acc;
-   ULONG sign;
+LONG SOP_fetch_literal_constant(SOP_class *SOP) {
+	WORD t;
+	LONG acc;
+	ULONG sign;
 
-   acc = 0L;
-   sign = 1L;
+	acc = 0L;
+	sign = 1L;
 
-   while (SOP_next_literal_constant(SOP))
-      {
-      t = SOP_next_symbol(SOP,SOP_MINUS);
-      LEX_fetch(SOP->LEX);
+	while (SOP_next_literal_constant(SOP)) {
+		t = SOP_next_symbol(SOP, SOP_MINUS);
+		LEX_fetch(SOP->LEX);
 
-      if (t)
-         sign = (sign == 1L)? -1L:1L;
-      else
-         switch (LEX_type(SOP->LEX,LEX_CUR))
-            {
-            case TTYP_NUM:
-               acc = acc + (sign * LEX_value(SOP->LEX,LEX_CUR));
-               sign = 1L;
-               break;
+		if (t)
+			sign = (sign == 1L) ? -1L : 1L;
+		else
+			switch (LEX_type(SOP->LEX, LEX_CUR)) {
+			case TTYP_NUM:
+				acc = acc + (sign * LEX_value(SOP->LEX, LEX_CUR));
+				sign = 1L;
+				break;
 
-            case TTYP_STRLIT:
-               acc = acc + (sign * SOP_resource_name_entry(SOP));
-               break;
-            }
-      }
+			case TTYP_STRLIT:
+				acc = acc + (sign * SOP_resource_name_entry(SOP));
+				break;
+			}
+	}
 
-   return acc;
+	return acc;
 }
 
 /*************************************************************/
@@ -1031,246 +897,199 @@ LONG SOP_fetch_literal_constant(SOP_class *SOP)
 //
 /*************************************************************/
 
-void SOP_fn_var_reference(SOP_class *SOP, UWORD op, PVAL *PV)
-{
-   DICT_entry *entry;
-   UWORD i,read_op,write_op,vsize,index,ndims;
-   CSS_class *CSS;
+void SOP_fn_var_reference(SOP_class *SOP, UWORD op, PVAL *PV) {
+	DICT_entry *entry;
+	UWORD i, read_op, write_op, vsize, index, ndims;
+	CSS_class *CSS;
 
-   if (PV->type == SOP->XTRN)
-      {
-      if (!PV->source)
-         if (DICT_lookup(SOP->STAT,PV->val->tag) != NULL)
-            {
-            PV->type = SOP->STAT;
-            PV->source = -1;
-            }
-         else
-            SOP_basic_error(SOP,MSG_NCL);
-      }
-   else
-      if (PV->source != -1)
-         SOP_basic_error(SOP,MSG_IUD);
+	if (PV->type == SOP->XTRN) {
+		if (!PV->source)
+			if (DICT_lookup(SOP->STAT, PV->val->tag) != NULL) {
+				PV->type = SOP->STAT;
+				PV->source = -1;
+			} else
+				SOP_basic_error(SOP, MSG_NCL);
+	} else if (PV->source != -1)
+		SOP_basic_error(SOP, MSG_IUD);
 
-   entry = DICT_lookup(PV->type,PV->val->tag);
+	entry = DICT_lookup(PV->type, PV->val->tag);
 
-   CSS = CSS_construct(entry->def);
+	CSS = CSS_construct((BYTE*) entry->def);
 
-   index = (UWORD) CSS_fetch_num(CSS);
-   ndims = (UWORD) CSS_fetch_num(CSS);
+	index = (UWORD) CSS_fetch_num(CSS);
+	ndims = (UWORD) CSS_fetch_num(CSS);
 
-   if (ndims > 1)
-      for (i=0;i<(ndims-1);i++)
-         CSS_fetch_num(CSS);
+	if (ndims > 1)
+		for (i = 0; i < (ndims - 1); i++)
+			CSS_fetch_num(CSS);
 
-   vsize = (UWORD) CSS_fetch_num(CSS);
+	vsize = (UWORD) CSS_fetch_num(CSS);
 
-   CSS_destroy(CSS);
+	CSS_destroy(CSS);
 
-   if (PV->type == SOP->XTRN)
-      switch (vsize)
-         {
-         case SIZE_B:
-            if (ndims)
-               {
-               read_op = (PV->indexed) ? OP_LXBA : OP_LEXA;
-               write_op = OP_SXBA;
-               }
-            else
-               {
-               read_op = OP_LXB;
-               write_op = OP_SXB;
-               }
-            break;
+	if (PV->type == SOP->XTRN)
+		switch (vsize) {
+		case SIZE_B:
+			if (ndims) {
+				read_op = (PV->indexed) ? OP_LXBA : OP_LEXA;
+				write_op = OP_SXBA;
+			} else {
+				read_op = OP_LXB;
+				write_op = OP_SXB;
+			}
+			break;
 
-         case SIZE_W:
-            if (ndims)
-               {
-               read_op = (PV->indexed) ? OP_LXWA : OP_LEXA;
-               write_op = OP_SXWA;
-               }
-            else
-               {
-               read_op = OP_LXW;
-               write_op = OP_SXW;
-               }
-            break;
+		case SIZE_W:
+			if (ndims) {
+				read_op = (PV->indexed) ? OP_LXWA : OP_LEXA;
+				write_op = OP_SXWA;
+			} else {
+				read_op = OP_LXW;
+				write_op = OP_SXW;
+			}
+			break;
 
-         case SIZE_L:
-            if (ndims)
-               {
-               read_op = (PV->indexed) ? OP_LXDA : OP_LEXA;
-               write_op = OP_SXDA;
-               }
-            else
-               {
-               read_op = OP_LXD;
-               write_op = OP_SXD;
-               }
-            break;
-         }
-   else if (PV->type == SOP->STAT)
-      switch (vsize)
-         {
-         case SIZE_B:
-            if (ndims)
-               {
-               read_op = (PV->indexed) ? OP_LSBA : OP_LESA;
-               write_op = OP_SSBA;
-               }
-            else
-               {
-               read_op = OP_LSB;
-               write_op = OP_SSB;
-               }
-            break;
+		case SIZE_L:
+			if (ndims) {
+				read_op = (PV->indexed) ? OP_LXDA : OP_LEXA;
+				write_op = OP_SXDA;
+			} else {
+				read_op = OP_LXD;
+				write_op = OP_SXD;
+			}
+			break;
+		}
+	else if (PV->type == SOP->STAT)
+		switch (vsize) {
+		case SIZE_B:
+			if (ndims) {
+				read_op = (PV->indexed) ? OP_LSBA : OP_LESA;
+				write_op = OP_SSBA;
+			} else {
+				read_op = OP_LSB;
+				write_op = OP_SSB;
+			}
+			break;
 
-         case SIZE_W:
-            if (ndims)
-               {
-               read_op = (PV->indexed) ? OP_LSWA : OP_LESA;
-               write_op = OP_SSWA;
-               }
-            else
-               {
-               read_op = OP_LSW;
-               write_op = OP_SSW;
-               }
-            break;
+		case SIZE_W:
+			if (ndims) {
+				read_op = (PV->indexed) ? OP_LSWA : OP_LESA;
+				write_op = OP_SSWA;
+			} else {
+				read_op = OP_LSW;
+				write_op = OP_SSW;
+			}
+			break;
 
-         case SIZE_L:
-            if (ndims)
-               {
-               read_op = (PV->indexed) ? OP_LSDA : OP_LESA;
-               write_op = OP_SSDA;
-               }
-            else
-               {
-               read_op = OP_LSD;
-               write_op = OP_SSD;
-               }
-            break;
-         }
-   else if (PV->type == SOP->TABL)
-      switch (vsize)
-         {
-         case SIZE_B:
-            read_op = (PV->indexed) ? OP_LTBA : OP_LETA;
-            break;
+		case SIZE_L:
+			if (ndims) {
+				read_op = (PV->indexed) ? OP_LSDA : OP_LESA;
+				write_op = OP_SSDA;
+			} else {
+				read_op = OP_LSD;
+				write_op = OP_SSD;
+			}
+			break;
+		}
+	else if (PV->type == SOP->TABL)
+		switch (vsize) {
+		case SIZE_B:
+			read_op = (PV->indexed) ? OP_LTBA : OP_LETA;
+			break;
 
-         case SIZE_W:
-            read_op = (PV->indexed) ? OP_LTWA : OP_LETA;
-            break;
+		case SIZE_W:
+			read_op = (PV->indexed) ? OP_LTWA : OP_LETA;
+			break;
 
-         case SIZE_L:
-            read_op = (PV->indexed) ? OP_LTDA : OP_LETA;
-            break;
-         }
-   else
-      switch (vsize)
-         {
-         case SIZE_B:
-            if (ndims)
-               {
-               read_op = (PV->indexed) ? OP_LABA : OP_LEAA;
-               write_op = OP_SABA;
-               }
-            else
-               {
-               read_op = OP_LAB;
-               write_op = OP_SAB;
-               }
-            break;
+		case SIZE_L:
+			read_op = (PV->indexed) ? OP_LTDA : OP_LETA;
+			break;
+		}
+	else
+		switch (vsize) {
+		case SIZE_B:
+			if (ndims) {
+				read_op = (PV->indexed) ? OP_LABA : OP_LEAA;
+				write_op = OP_SABA;
+			} else {
+				read_op = OP_LAB;
+				write_op = OP_SAB;
+			}
+			break;
 
-         case SIZE_W:
-            if (ndims)
-               {
-               read_op = (PV->indexed) ? OP_LAWA : OP_LEAA;
-               write_op = OP_SAWA;
-               }
-            else
-               {
-               read_op = OP_LAW;
-               write_op = OP_SAW;
-               }
-            break;
+		case SIZE_W:
+			if (ndims) {
+				read_op = (PV->indexed) ? OP_LAWA : OP_LEAA;
+				write_op = OP_SAWA;
+			} else {
+				read_op = OP_LAW;
+				write_op = OP_SAW;
+			}
+			break;
 
-         case SIZE_L:
-            if (ndims)
-               {
-               read_op = (PV->indexed) ? OP_LADA : OP_LEAA;
-               write_op = OP_SADA;
-               }
-            else
-               {
-               read_op = OP_LAD;
-               write_op = OP_SAD;
-               }
-            break;
-         }
+		case SIZE_L:
+			if (ndims) {
+				read_op = (PV->indexed) ? OP_LADA : OP_LEAA;
+				write_op = OP_SADA;
+			} else {
+				read_op = OP_LAD;
+				write_op = OP_SAD;
+			}
+			break;
+		}
 
-   switch (op)
-      {
-      case REF_LOAD:
-         if (PV->type == SOP->AUTO)
-            {
-            if ((DICT_lookup(SOP->ADUS,PV->val->tag) != NULL) &&
-                (DICT_lookup(SOP->AVUS,PV->val->tag) == NULL))
-               DICT_enter(SOP->APUS,PV->val->tag,D_DEFHEAP)->def =
-                  str_alloc(LEX_line(SOP->LEX,LEX_CUR));
+	switch (op) {
+	case REF_LOAD:
+		if (PV->type == SOP->AUTO) {
+			if ((DICT_lookup(SOP->ADUS, PV->val->tag) != NULL)
+					&& (DICT_lookup(SOP->AVUS, PV->val->tag) == NULL))
+				DICT_enter(SOP->APUS, PV->val->tag, D_DEFHEAP)->def = str_alloc(
+						LEX_line(SOP->LEX, LEX_CUR));
 
-            DICT_delete(SOP->ADUS,PV->val->tag);
-            DICT_delete(SOP->AVUS,PV->val->tag);
-            }
-         else
-            {
-            DICT_delete(SOP->DUSE,PV->val->tag);
-            DICT_delete(SOP->VUSE,PV->val->tag);
-            }
+			DICT_delete(SOP->ADUS, PV->val->tag);
+			DICT_delete(SOP->AVUS, PV->val->tag);
+		} else {
+			DICT_delete(SOP->DUSE, PV->val->tag);
+			DICT_delete(SOP->VUSE, PV->val->tag);
+		}
 
-         SOP_emit_opcode(SOP,read_op);
-         SOP_emit_word(SOP,index);
-         break;
+		SOP_emit_opcode(SOP, read_op);
+		SOP_emit_word(SOP, index);
+		break;
 
-      case REF_STORE:
-         if (PV->type == SOP->TABL)
-            report(E_ERROR,LEX_line(SOP->LEX,LEX_CUR),MSG_CMT,
-               PV->val->tag);
-         else if (PV->type == SOP->AUTO)
-            {
-            if (DICT_lookup(SOP->ADUS,PV->val->tag) != NULL)
-               {
-               DICT_delete(SOP->ADUS,PV->val->tag);
-               DICT_enter(SOP->AVUS,PV->val->tag,D_DEFHEAP)->def =
-                  str_alloc(LEX_line(SOP->LEX,LEX_CUR));
-               }
+	case REF_STORE:
+		if (PV->type == SOP->TABL)
+			report(E_ERROR, LEX_line(SOP->LEX, LEX_CUR), MSG_CMT, PV->val->tag);
+		else if (PV->type == SOP->AUTO) {
+			if (DICT_lookup(SOP->ADUS, PV->val->tag) != NULL) {
+				DICT_delete(SOP->ADUS, PV->val->tag);
+				DICT_enter(SOP->AVUS, PV->val->tag, D_DEFHEAP)->def = str_alloc(
+						LEX_line(SOP->LEX, LEX_CUR));
+			}
 
-            if ((!strcmp(PV->val->tag,KW_THIS)))
-                  report(E_ERROR,LEX_line(SOP->LEX,LEX_CUR),MSG_IVA,
-                     PV->val->tag);
-            }
-         else
-            if (DICT_lookup(SOP->DUSE,PV->val->tag) != NULL)
-               {
-               DICT_delete(SOP->DUSE,PV->val->tag);
-               DICT_enter(SOP->VUSE,PV->val->tag,D_DEFHEAP)->def =
-                  str_alloc(LEX_line(SOP->LEX,LEX_CUR));
-               }
+			if ((!strcmp(PV->val->tag, KW_THIS)))
+				report(E_ERROR, LEX_line(SOP->LEX, LEX_CUR), MSG_IVA,
+						PV->val->tag);
+		} else if (DICT_lookup(SOP->DUSE, PV->val->tag) != NULL) {
+			DICT_delete(SOP->DUSE, PV->val->tag);
+			DICT_enter(SOP->VUSE, PV->val->tag, D_DEFHEAP)->def = str_alloc(
+					LEX_line(SOP->LEX, LEX_CUR));
+		}
 
-         SOP_emit_opcode(SOP,write_op);
-         SOP_emit_word(SOP,index);
-         break;
+		SOP_emit_opcode(SOP, write_op);
+		SOP_emit_word(SOP, index);
+		break;
 
-      case REF_PUSH:
-         if ((ndims) || (PV->type == SOP->XTRN))
-            SOP_emit_opcode(SOP,OP_PUSH);
-         return;
+	case REF_PUSH:
+		if ((ndims) || (PV->type == SOP->XTRN))
+			SOP_emit_opcode(SOP, OP_PUSH);
+		return;
 
-      case REF_DUP:
-         if ((ndims) || (PV->type == SOP->XTRN))
-            SOP_emit_opcode(SOP,OP_DUP);
-         return;
-      }
+	case REF_DUP:
+		if ((ndims) || (PV->type == SOP->XTRN))
+			SOP_emit_opcode(SOP, OP_DUP);
+		return;
+	}
 }
 
 /*************************************************************/
@@ -1280,46 +1099,42 @@ void SOP_fn_var_reference(SOP_class *SOP, UWORD op, PVAL *PV)
 //
 /*************************************************************/
 
-void SOP_compile_send(SOP_class *SOP, PVAL *PV)
-{
-   UWORD argcnt;
-   UWORD msgnum;
+void SOP_compile_send(SOP_class *SOP, PVAL *PV) {
+	UWORD argcnt;
+	UWORD msgnum;
 
-   argcnt = 0;
+	argcnt = 0;
 
-   SOP_require_symbol(SOP,SOP_L_PAREN);
+	SOP_require_symbol(SOP, SOP_L_PAREN);
 
-   SOP_expr_assign(SOP,PV);
-   SOP_rvalue(SOP,PV);
+	SOP_expr_assign(SOP, PV);
+	SOP_rvalue(SOP, PV);
 
-   SOP_require_symbol(SOP,SOP_COMMA);
+	SOP_require_symbol(SOP, SOP_COMMA);
 
-   LEX_fetch(SOP->LEX);
+	LEX_fetch(SOP->LEX);
 
-   if (LEX_type(SOP->LEX,LEX_CUR) != TTYP_STRLIT)
-      {
-      msgnum = -1U;
-      SOP_basic_error(SOP,MSG_BMN);
-      }
-   else
-      msgnum = RS_get_MSGD_entry(SOP->RS,LEX_lexeme(SOP->LEX,LEX_CUR));
+	if (LEX_type(SOP->LEX, LEX_CUR) != TTYP_STRLIT) {
+		msgnum = -1U;
+		SOP_basic_error(SOP, MSG_BMN);
+	} else
+		msgnum = RS_get_MSGD_entry(SOP->RS, LEX_lexeme(SOP->LEX, LEX_CUR));
 
-   while (LEX_next_comma(SOP->LEX))
-      {
-      ++argcnt;
+	while (LEX_next_comma(SOP->LEX)) {
+		++argcnt;
 
-      SOP_emit_opcode(SOP,OP_PUSH);
-      SOP_expr_assign(SOP,PV);
-      SOP_rvalue(SOP,PV);
-      }
+		SOP_emit_opcode(SOP, OP_PUSH);
+		SOP_expr_assign(SOP, PV);
+		SOP_rvalue(SOP, PV);
+	}
 
-   SOP_require_symbol(SOP,SOP_R_PAREN);
+	SOP_require_symbol(SOP, SOP_R_PAREN);
 
-   SOP_emit_opcode(SOP,OP_SEND);
-   SOP_emit_byte(SOP,argcnt);
-   SOP_emit_word(SOP,msgnum);
+	SOP_emit_opcode(SOP, OP_SEND);
+	SOP_emit_byte(SOP, argcnt);
+	SOP_emit_word(SOP, msgnum);
 
-   PV->fn = NULL;
+	PV->fn = NULL;
 }
 
 /*************************************************************/
@@ -1328,31 +1143,28 @@ void SOP_compile_send(SOP_class *SOP, PVAL *PV)
 //
 /*************************************************************/
 
-void SOP_compile_pass(SOP_class *SOP, PVAL *PV)
-{
-   UWORD argcnt;
+void SOP_compile_pass(SOP_class *SOP, PVAL *PV) {
+	UWORD argcnt;
 
-   argcnt = 0;
+	argcnt = 0;
 
-   SOP_require_symbol(SOP,SOP_L_PAREN);
+	SOP_require_symbol(SOP, SOP_L_PAREN);
 
-   if (!SOP_next_symbol(SOP,SOP_R_PAREN))
-      do
-         {
-         ++argcnt;
+	if (!SOP_next_symbol(SOP, SOP_R_PAREN))
+		do {
+			++argcnt;
 
-         SOP_emit_opcode(SOP,OP_PUSH);
-         SOP_expr_assign(SOP,PV);
-         SOP_rvalue(SOP,PV);
-         }
-      while (LEX_next_comma(SOP->LEX));
+			SOP_emit_opcode(SOP, OP_PUSH);
+			SOP_expr_assign(SOP, PV);
+			SOP_rvalue(SOP, PV);
+		} while (LEX_next_comma(SOP->LEX));
 
-   SOP_require_symbol(SOP,SOP_R_PAREN);
+	SOP_require_symbol(SOP, SOP_R_PAREN);
 
-   SOP_emit_opcode(SOP,OP_PASS);
-   SOP_emit_byte(SOP,argcnt);
+	SOP_emit_opcode(SOP, OP_PASS);
+	SOP_emit_byte(SOP, argcnt);
 
-   PV->fn = NULL;
+	PV->fn = NULL;
 }
 
 /*************************************************************/
@@ -1361,22 +1173,20 @@ void SOP_compile_pass(SOP_class *SOP, PVAL *PV)
 //
 /*************************************************************/
 
-void SOP_fn_code_resource(SOP_class *SOP, UWORD op, PVAL *PV)
-{
-   UWORD operand;
+void SOP_fn_code_resource(SOP_class *SOP, UWORD op, PVAL *PV) {
+	UWORD operand;
 
-   op++;  // (avoid warning)
+	op++;  // (avoid warning)
 
-   operand = SOP_import_symbol(SOP,PV->val->tag,NULL,'C');
+	operand = SOP_import_symbol(SOP, PV->val->tag, NULL, 'C');
 
-   if ((!strcmp(PV->val->tag,"notify")) ||
-       (!strcmp(PV->val->tag,"cancel")))
-      SOP->ntype = NTYP_MSG;
-   else
-      SOP->ntype = NTYP_RES;
+	if ((!strcmp(PV->val->tag, "notify")) || (!strcmp(PV->val->tag, "cancel")))
+		SOP->ntype = NTYP_MSG;
+	else
+		SOP->ntype = NTYP_RES;
 
-   SOP_emit_opcode(SOP,OP_RCRS);
-   SOP_emit_word(SOP,operand);
+	SOP_emit_opcode(SOP, OP_RCRS);
+	SOP_emit_word(SOP, operand);
 }
 
 /*************************************************************/
@@ -1385,16 +1195,15 @@ void SOP_fn_code_resource(SOP_class *SOP, UWORD op, PVAL *PV)
 //
 /*************************************************************/
 
-void SOP_fn_procedure(SOP_class *SOP, UWORD op, PVAL *PV)
-{
-   ULONG operand;
+void SOP_fn_procedure(SOP_class *SOP, UWORD op, PVAL *PV) {
+	ULONG operand;
 
-   op++;  // (avoid warning)
+	op++;  // (avoid warning)
 
-   operand = ascnum(PV->val->def,10);
+	operand = ascnum((BYTE*) PV->val->def, 10);
 
-   SOP_emit_opcode(SOP,OP_JSR);
-   SOP_emit_word(SOP,(UWORD) operand);
+	SOP_emit_opcode(SOP, OP_JSR);
+	SOP_emit_word(SOP, (UWORD) operand);
 }
 
 /*************************************************************/
@@ -1408,77 +1217,57 @@ void SOP_fn_procedure(SOP_class *SOP, UWORD op, PVAL *PV)
 //
 /*************************************************************/
 
-void SOP_name_reference(SOP_class *SOP, PVAL *PV, BYTE *name)
-{
-   DICT_entry *entry;
+void SOP_name_reference(SOP_class *SOP, PVAL *PV, BYTE *name) {
+	DICT_entry *entry;
 
-   PV->indexed = 0;
-   PV->source = -1;
+	PV->indexed = 0;
+	PV->source = -1;
 
-   if ((entry = DICT_lookup(SOP->PROC,name)) != NULL)
-      {
-      PV->fn = SOP_fn_procedure;
-      PV->val = entry;
-      PV->type = SOP->PROC;
-      }
-   else if (!strcmp(name,FN_SEND))
-      {
-      PV->fn = NULL;
-      SOP_compile_send(SOP,PV);
-      }
-   else if (!strcmp(name,FN_PASS))
-      {
-      PV->fn = NULL;
-      SOP_compile_pass(SOP,PV);
-      }
-   else if ((entry = DICT_lookup(SOP->RS->dict[CRFD],name)) != NULL) 
-      {
-      PV->fn = SOP_fn_code_resource;
-      PV->val = entry;
-      PV->type = SOP->RS->dict[CRFD];
-      }
-   else if ((entry = DICT_lookup(SOP->ARGV,name)) != NULL)
-      {
-      PV->fn = SOP_fn_var_reference;
-      PV->val = entry;
-      PV->type = SOP->ARGV;
-      }
-   else if ((entry = DICT_lookup(SOP->AUTO,name)) != NULL)
-      {
-      PV->fn = SOP_fn_var_reference;
-      PV->val = entry;
-      PV->type = SOP->AUTO;
-      }
-   else if ((entry = DICT_lookup(SOP->TABL,name)) != NULL)
-      {
-      PV->fn = SOP_fn_var_reference;
-      PV->val = entry;
-      PV->type = SOP->TABL;
-      }
-   else if ((entry = DICT_lookup(SOP->XTRN,name)) != NULL)
-      {
-      PV->fn = SOP_fn_var_reference;
-      PV->val = entry;
-      PV->type = SOP->XTRN;
-      PV->source = 0;
-      }
-   else if ((entry = DICT_lookup(SOP->STAT,name)) != NULL)
-      {
-      PV->fn = SOP_fn_var_reference;
-      PV->val = entry;
-      PV->type = SOP->STAT;
-      }
-   else
-      {
-      report(E_ERROR,LEX_line(SOP->LEX,LEX_CUR),MSG_UID,name);
+	if ((entry = DICT_lookup(SOP->PROC, name)) != NULL) {
+		PV->fn = SOP_fn_procedure;
+		PV->val = entry;
+		PV->type = SOP->PROC;
+	} else if (!strcmp(name, FN_SEND)) {
+		PV->fn = NULL;
+		SOP_compile_send(SOP, PV);
+	} else if (!strcmp(name, FN_PASS)) {
+		PV->fn = NULL;
+		SOP_compile_pass(SOP, PV);
+	} else if ((entry = DICT_lookup(SOP->RS->dict[CRFD], name)) != NULL) {
+		PV->fn = SOP_fn_code_resource;
+		PV->val = entry;
+		PV->type = SOP->RS->dict[CRFD];
+	} else if ((entry = DICT_lookup(SOP->ARGV, name)) != NULL) {
+		PV->fn = SOP_fn_var_reference;
+		PV->val = entry;
+		PV->type = SOP->ARGV;
+	} else if ((entry = DICT_lookup(SOP->AUTO, name)) != NULL) {
+		PV->fn = SOP_fn_var_reference;
+		PV->val = entry;
+		PV->type = SOP->AUTO;
+	} else if ((entry = DICT_lookup(SOP->TABL, name)) != NULL) {
+		PV->fn = SOP_fn_var_reference;
+		PV->val = entry;
+		PV->type = SOP->TABL;
+	} else if ((entry = DICT_lookup(SOP->XTRN, name)) != NULL) {
+		PV->fn = SOP_fn_var_reference;
+		PV->val = entry;
+		PV->type = SOP->XTRN;
+		PV->source = 0;
+	} else if ((entry = DICT_lookup(SOP->STAT, name)) != NULL) {
+		PV->fn = SOP_fn_var_reference;
+		PV->val = entry;
+		PV->type = SOP->STAT;
+	} else {
+		report(E_ERROR, LEX_line(SOP->LEX, LEX_CUR), MSG_UID, name);
 
-      entry = DICT_enter(SOP->AUTO,name,D_DEFHEAP);
-      entry->def = str_alloc("4,0,4");
+		entry = DICT_enter(SOP->AUTO, name, D_DEFHEAP);
+		entry->def = str_alloc("4,0,4");
 
-      PV->fn = SOP_fn_var_reference;
-      PV->val = entry;
-      PV->type = SOP->AUTO;
-      }
+		PV->fn = SOP_fn_var_reference;
+		PV->val = entry;
+		PV->type = SOP->AUTO;
+	}
 }
 
 /*************************************************************/
@@ -1487,35 +1276,32 @@ void SOP_name_reference(SOP_class *SOP, PVAL *PV, BYTE *name)
 //
 /*************************************************************/
 
-void SOP_compile_call(SOP_class *SOP, PVAL *PV)
-{
-   UWORD argcnt;
+void SOP_compile_call(SOP_class *SOP, PVAL *PV) {
+	UWORD argcnt;
 
-   if (PV->type != SOP->RS->dict[CRFD])
-      SOP_basic_error(SOP,MSG_IUA);
+	if (PV->type != SOP->RS->dict[CRFD])
+		SOP_basic_error(SOP, MSG_IUA);
 
-   argcnt = 0;
+	argcnt = 0;
 
-   SOP_rvalue(SOP,PV);
-   if (!SOP_next_symbol(SOP,SOP_R_PAREN))
-      do
-         {
-         ++argcnt;
+	SOP_rvalue(SOP, PV);
+	if (!SOP_next_symbol(SOP, SOP_R_PAREN))
+		do {
+			++argcnt;
 
-         SOP_emit_opcode(SOP,OP_PUSH);
-         SOP_expr_assign(SOP,PV);
-         SOP_rvalue(SOP,PV);
-         }
-      while (LEX_next_comma(SOP->LEX));
+			SOP_emit_opcode(SOP, OP_PUSH);
+			SOP_expr_assign(SOP, PV);
+			SOP_rvalue(SOP, PV);
+		} while (LEX_next_comma(SOP->LEX));
 
-   SOP_require_symbol(SOP,SOP_R_PAREN);
+	SOP_require_symbol(SOP, SOP_R_PAREN);
 
-   SOP_emit_opcode(SOP,OP_CALL);
-   SOP_emit_byte(SOP,argcnt);
+	SOP_emit_opcode(SOP, OP_CALL);
+	SOP_emit_byte(SOP, argcnt);
 
-   SOP->ntype = NTYP_RES;
+	SOP->ntype = NTYP_RES;
 
-   PV->fn = NULL;
+	PV->fn = NULL;
 }
 
 /*************************************************************/
@@ -1525,99 +1311,86 @@ void SOP_compile_call(SOP_class *SOP, PVAL *PV)
 //
 /*************************************************************/
 
-void SOP_compile_index(SOP_class *SOP, PVAL *PV)
-{
-   ULONG ndims,dsize;
-   CSS_class *CSS;
-   DICT_entry *entry;
+void SOP_compile_index(SOP_class *SOP, PVAL *PV) {
+	ULONG ndims, dsize;
+	CSS_class *CSS;
+	DICT_entry *entry;
 
-   if ((PV->type != SOP->AUTO) &&
-       (PV->type != SOP->ARGV) &&
-       (PV->type != SOP->XTRN) &&
-       (PV->type != SOP->STAT) &&
-       (PV->type != SOP->TABL))
-      {
-      SOP_basic_error(SOP,MSG_IUB);
-      return;
-      }
+	if ((PV->type != SOP->AUTO) && (PV->type != SOP->ARGV)
+			&& (PV->type != SOP->XTRN) && (PV->type != SOP->STAT)
+			&& (PV->type != SOP->TABL)) {
+		SOP_basic_error(SOP, MSG_IUB);
+		return;
+	}
 
-   if (PV->type == SOP->XTRN)
-      SOP_emit_opcode(SOP,OP_PUSH);
+	if (PV->type == SOP->XTRN)
+		SOP_emit_opcode(SOP, OP_PUSH);
 
-   entry = DICT_lookup(PV->type,PV->val->tag);
+	entry = DICT_lookup(PV->type, PV->val->tag);
 
-   CSS = CSS_construct(entry->def);
-   CSS_fetch_num(CSS);
+	CSS = CSS_construct((BYTE*) entry->def);
+	CSS_fetch_num(CSS);
 
-   ndims = CSS_fetch_num(CSS);
+	ndims = CSS_fetch_num(CSS);
 
-   if ((ndims == 0) || (ndims == -1L))
-      SOP_basic_error(SOP,MSG_IUB);
-       
-   if (ndims == 1)
-      {
-      dsize = CSS_fetch_num(CSS);
+	if ((ndims == 0) || (ndims == -1L))
+		SOP_basic_error(SOP, MSG_IUB);
 
-      if (dsize == SIZE_B)
-         {
-         SOP_expression(SOP);
-         SOP_require_symbol(SOP,SOP_R_SQUARE);
-         }
-      else
-         {
-         SOP_emit_opcode(SOP,OP_SHTC);
-         SOP_emit_byte(SOP,0L);
+	if (ndims == 1) {
+		dsize = CSS_fetch_num(CSS);
 
-         SOP_emit_opcode(SOP,OP_PUSH);
+		if (dsize == SIZE_B) {
+			SOP_expression(SOP);
+			SOP_require_symbol(SOP, SOP_R_SQUARE);
+		} else {
+			SOP_emit_opcode(SOP, OP_SHTC);
+			SOP_emit_byte(SOP, 0L);
 
-         SOP_expression(SOP);
-         SOP_require_symbol(SOP,SOP_R_SQUARE);
+			SOP_emit_opcode(SOP, OP_PUSH);
 
-         SOP_emit_array_index(SOP,dsize);
-         }
-      }
-   else
-      {
-      SOP_emit_opcode(SOP,OP_SHTC);
-      SOP_emit_byte(SOP,0L);
+			SOP_expression(SOP);
+			SOP_require_symbol(SOP, SOP_R_SQUARE);
 
-      while (ndims--)
-         {
-         SOP_emit_opcode(SOP,OP_PUSH);
+			SOP_emit_array_index(SOP, dsize);
+		}
+	} else {
+		SOP_emit_opcode(SOP, OP_SHTC);
+		SOP_emit_byte(SOP, 0L);
 
-         SOP_expression(SOP);
-         SOP_require_symbol(SOP,SOP_R_SQUARE);
+		while (ndims--) {
+			SOP_emit_opcode(SOP, OP_PUSH);
 
-         if (ndims)
-            if (SOP_next_symbol(SOP,SOP_L_SQUARE))
-               LEX_fetch(SOP->LEX);
-            else
-               {
-               report(E_ERROR,LEX_line(SOP->LEX,LEX_CUR),MSG_NED,
-                  PV->val->tag);
-               break;
-               }
+			SOP_expression(SOP);
+			SOP_require_symbol(SOP, SOP_R_SQUARE);
 
-         dsize = CSS_fetch_num(CSS);
+			if (ndims)
+				if (SOP_next_symbol(SOP, SOP_L_SQUARE))
+					LEX_fetch(SOP->LEX);
+				else {
+					report(E_ERROR, LEX_line(SOP->LEX, LEX_CUR), MSG_NED,
+							PV->val->tag);
+					break;
+				}
 
-         SOP_emit_array_index(SOP,dsize);
-         }
-      }
+			dsize = CSS_fetch_num(CSS);
 
-   while (SOP_next_symbol(SOP,SOP_L_SQUARE))
-      {
-      report(E_ERROR,LEX_line(SOP->LEX,LEX_CUR),MSG_TMD,PV->val->tag);
-      LEX_fetch(SOP->LEX);
-      SOP_expression(SOP);
-      SOP_require_symbol(SOP,SOP_R_SQUARE);
-      }
+			SOP_emit_array_index(SOP, dsize);
+		}
+	}
 
-   PV->indexed = 1;
+	while (SOP_next_symbol(SOP, SOP_L_SQUARE)) {
+		report(E_ERROR, LEX_line(SOP->LEX, LEX_CUR), MSG_TMD, PV->val->tag);
+		LEX_fetch(SOP->LEX);
+		SOP_expression(SOP);
+		SOP_require_symbol(SOP, SOP_R_SQUARE);
+	}
 
-   CSS_destroy(CSS);
+	PV->indexed = 1;
 
-   if (PV->type == SOP->XTRN)
-      SOP_emit_opcode(SOP,OP_SXAS);
+	CSS_destroy(CSS);
+
+	if (PV->type == SOP->XTRN)
+		SOP_emit_opcode(SOP, OP_SXAS);
 }
 
 /*************************************************************/
@@ -1626,13 +1399,11 @@ void SOP_compile_index(SOP_class *SOP, PVAL *PV)
 //
 /*************************************************************/
 
-void SOP_rvalue(SOP_class *SOP, PVAL *PV)
-{
-   if (PV->fn != NULL)
-      {
-      PV->fn(SOP,REF_LOAD,PV);
-      PV->fn = NULL;
-      }
+void SOP_rvalue(SOP_class *SOP, PVAL *PV) {
+	if (PV->fn != NULL) {
+		PV->fn(SOP, REF_LOAD, PV);
+		PV->fn = NULL;
+	}
 }
 
 /*************************************************************/
@@ -1641,15 +1412,13 @@ void SOP_rvalue(SOP_class *SOP, PVAL *PV)
 //
 /*************************************************************/
 
-WORD SOP_check_lvalue(SOP_class *SOP, PVAL *PV)
-{
-   if (PV->fn == NULL)
-      {
-      SOP_basic_error(SOP,MSG_LVR);
-      return 0;
-      }
+WORD SOP_check_lvalue(SOP_class *SOP, PVAL *PV) {
+	if (PV->fn == NULL) {
+		SOP_basic_error(SOP, MSG_LVR);
+		return 0;
+	}
 
-   return 1;
+	return 1;
 }
 
 /*************************************************************/
@@ -1658,12 +1427,11 @@ WORD SOP_check_lvalue(SOP_class *SOP, PVAL *PV)
 //
 /*************************************************************/
 
-void SOP_expression(SOP_class *SOP)
-{
-   PVAL PV;
+void SOP_expression(SOP_class *SOP) {
+	PVAL PV;
 
-   SOP_expr_list(SOP,&PV);
-   SOP_rvalue(SOP,&PV);
+	SOP_expr_list(SOP, &PV);
+	SOP_rvalue(SOP, &PV);
 }
 
 /*************************************************************/
@@ -1674,16 +1442,14 @@ void SOP_expression(SOP_class *SOP)
 //
 /*************************************************************/
 
-void SOP_expr_list(SOP_class *SOP, PVAL *PV)
-{
-   SOP_expr_assign(SOP,PV);
+void SOP_expr_list(SOP_class *SOP, PVAL *PV) {
+	SOP_expr_assign(SOP, PV);
 
-   while (LEX_next_comma(SOP->LEX))
-      {
-      SOP_rvalue(SOP,PV);
-      SOP_expr_list(SOP,PV);
-      SOP_rvalue(SOP,PV);
-      }
+	while (LEX_next_comma(SOP->LEX)) {
+		SOP_rvalue(SOP, PV);
+		SOP_expr_list(SOP, PV);
+		SOP_rvalue(SOP, PV);
+	}
 }
 
 /*************************************************************/
@@ -1694,51 +1460,68 @@ void SOP_expr_list(SOP_class *SOP, PVAL *PV)
 //
 /*************************************************************/
 
-void SOP_expr_assign(SOP_class *SOP, PVAL *PV)
-{
-   PVAL right_side;
-   WORD tkn,op;
+void SOP_expr_assign(SOP_class *SOP, PVAL *PV) {
+	PVAL right_side;
+	WORD tkn, op;
 
-   SOP_expr_cond(SOP,PV);
+	SOP_expr_cond(SOP, PV);
 
-   while (SOP_next_assign(SOP))
-      {
-      LEX_fetch(SOP->LEX);
-      if (!SOP_check_lvalue(SOP,PV)) break;
+	while (SOP_next_assign(SOP)) {
+		LEX_fetch(SOP->LEX);
+		if (!SOP_check_lvalue(SOP, PV))
+			break;
 
-      if ((tkn=LEX_token(SOP->LEX,LEX_CUR)) == SOP_SETEQ)
-         {
-         PV->fn(SOP,REF_PUSH,PV);
-         SOP_expr_assign(SOP,&right_side);
-         SOP_rvalue(SOP,&right_side);
-         PV->fn(SOP,REF_STORE,PV);
-         PV->fn = NULL;
-         continue;
-         }
+		if ((tkn = LEX_token(SOP->LEX, LEX_CUR)) == SOP_SETEQ) {
+			PV->fn(SOP, REF_PUSH, PV);
+			SOP_expr_assign(SOP, &right_side);
+			SOP_rvalue(SOP, &right_side);
+			PV->fn(SOP, REF_STORE, PV);
+			PV->fn = NULL;
+			continue;
+		}
 
-      switch (tkn)
-         {
-         case SOP_MULEQ:   op = OP_MUL;  break;
-         case SOP_DIVEQ:   op = OP_DIV;  break;
-         case SOP_MODEQ:   op = OP_MOD;  break;
-         case SOP_PLUSEQ:  op = OP_ADD;  break;
-         case SOP_MINUSEQ: op = OP_SUB;  break;
-         case SOP_ANDEQ:   op = OP_BAND; break;
-         case SOP_XOREQ:   op = OP_XOR;  break;
-         case SOP_OREQ:    op = OP_BOR;  break;
-         case SOP_SHREQ:   op = OP_SHR;  break;
-         case SOP_SHLEQ:   op = OP_SHL;  break;
-         }
+		switch (tkn) {
+		case SOP_MULEQ:
+			op = OP_MUL;
+			break;
+		case SOP_DIVEQ:
+			op = OP_DIV;
+			break;
+		case SOP_MODEQ:
+			op = OP_MOD;
+			break;
+		case SOP_PLUSEQ:
+			op = OP_ADD;
+			break;
+		case SOP_MINUSEQ:
+			op = OP_SUB;
+			break;
+		case SOP_ANDEQ:
+			op = OP_BAND;
+			break;
+		case SOP_XOREQ:
+			op = OP_XOR;
+			break;
+		case SOP_OREQ:
+			op = OP_BOR;
+			break;
+		case SOP_SHREQ:
+			op = OP_SHR;
+			break;
+		case SOP_SHLEQ:
+			op = OP_SHL;
+			break;
+		}
 
-      PV->fn(SOP,REF_DUP,PV);
-      PV->fn(SOP,REF_LOAD,PV);
-      SOP_emit_opcode(SOP,OP_PUSH);
-      SOP_expr_assign(SOP,&right_side);
-      SOP_rvalue(SOP,&right_side);
-      SOP_emit_opcode(SOP,op);
-      PV->fn(SOP,REF_STORE,PV);
-      PV->fn = NULL;
-      }
+		PV->fn(SOP, REF_DUP, PV);
+		PV->fn(SOP, REF_LOAD, PV);
+		SOP_emit_opcode(SOP, OP_PUSH);
+		SOP_expr_assign(SOP, &right_side);
+		SOP_rvalue(SOP, &right_side);
+		SOP_emit_opcode(SOP, op);
+		PV->fn(SOP, REF_STORE, PV);
+		PV->fn = NULL;
+	}
 }
 
 /*************************************************************/
@@ -1749,36 +1532,34 @@ void SOP_expr_assign(SOP_class *SOP, PVAL *PV)
 //
 /*************************************************************/
 
-void SOP_expr_cond(SOP_class *SOP, PVAL *PV)
-{
-   UWORD false,end;
+void SOP_expr_cond(SOP_class *SOP, PVAL *PV) {
+	UWORD falsed, end;
 
-   SOP_expr_or(SOP,PV);
+	SOP_expr_or(SOP, PV);
 
-   while (SOP_next_symbol(SOP,SOP_QUESTION))
-      {
-      LEX_fetch(SOP->LEX);
+	while (SOP_next_symbol(SOP, SOP_QUESTION)) {
+		LEX_fetch(SOP->LEX);
 
-      SOP_rvalue(SOP,PV);
+		SOP_rvalue(SOP, PV);
 
-      SOP_emit_opcode(SOP,OP_BRF);
-      false = SOP_emit_word(SOP,0);
+		SOP_emit_opcode(SOP, OP_BRF);
+		falsed = SOP_emit_word(SOP, 0);
 
-      SOP_expr_list(SOP,PV);
-      SOP_rvalue(SOP,PV);
+		SOP_expr_list(SOP, PV);
+		SOP_rvalue(SOP, PV);
 
-      SOP_emit_opcode(SOP,OP_BRA);
-      end = SOP_emit_word(SOP,0);
+		SOP_emit_opcode(SOP, OP_BRA);
+		end = SOP_emit_word(SOP, 0);
 
-      SOP_require_symbol(SOP,SOP_COLON);
+		SOP_require_symbol(SOP, SOP_COLON);
 
-      SOP_local_fixup(SOP,false,SOP->PC);
+		SOP_local_fixup(SOP, falsed, SOP->PC);
 
-      SOP_expr_assign(SOP,PV);
-      SOP_rvalue(SOP,PV);
+		SOP_expr_assign(SOP, PV);
+		SOP_rvalue(SOP, PV);
 
-      SOP_local_fixup(SOP,end,SOP->PC);
-      }
+		SOP_local_fixup(SOP, end, SOP->PC);
+	}
 }
 
 /*************************************************************/
@@ -1789,31 +1570,28 @@ void SOP_expr_cond(SOP_class *SOP, PVAL *PV)
 //
 /*************************************************************/
 
-void SOP_expr_or(SOP_class *SOP, PVAL *PV)
-{
-   UWORD end;
+void SOP_expr_or(SOP_class *SOP, PVAL *PV) {
+	UWORD end;
 
-   SOP_expr_and(SOP,PV);
+	SOP_expr_and(SOP, PV);
 
-   end = 0;
+	end = 0;
 
-   while (SOP_next_log_or(SOP))
-      {
-      LEX_fetch(SOP->LEX);
+	while (SOP_next_log_or(SOP)) {
+		LEX_fetch(SOP->LEX);
 
-      SOP_rvalue(SOP,PV);
-      SOP_emit_opcode(SOP,OP_BRT);
-      end = SOP_emit_word(SOP,end);
+		SOP_rvalue(SOP, PV);
+		SOP_emit_opcode(SOP, OP_BRT);
+		end = SOP_emit_word(SOP, end);
 
-      SOP_expr_and(SOP,PV);
-      SOP_rvalue(SOP,PV);
-      }
+		SOP_expr_and(SOP, PV);
+		SOP_rvalue(SOP, PV);
+	}
 
-   if (end)
-      {
-      SOP_local_fixup(SOP,end,SOP->PC);
-      SOP_emit_opcode(SOP,OP_SETB);
-      }
+	if (end) {
+		SOP_local_fixup(SOP, end, SOP->PC);
+		SOP_emit_opcode(SOP, OP_SETB);
+	}
 }
 
 /*************************************************************/
@@ -1824,31 +1602,28 @@ void SOP_expr_or(SOP_class *SOP, PVAL *PV)
 //
 /*************************************************************/
 
-void SOP_expr_and(SOP_class *SOP, PVAL *PV)
-{
-   UWORD end;
+void SOP_expr_and(SOP_class *SOP, PVAL *PV) {
+	UWORD end;
 
-   SOP_expr_bor(SOP,PV);
+	SOP_expr_bor(SOP, PV);
 
-   end = 0;
+	end = 0;
 
-   while (SOP_next_log_and(SOP))
-      {
-      LEX_fetch(SOP->LEX);
+	while (SOP_next_log_and(SOP)) {
+		LEX_fetch(SOP->LEX);
 
-      SOP_rvalue(SOP,PV);
-      SOP_emit_opcode(SOP,OP_BRF);
-      end = SOP_emit_word(SOP,end);
+		SOP_rvalue(SOP, PV);
+		SOP_emit_opcode(SOP, OP_BRF);
+		end = SOP_emit_word(SOP, end);
 
-      SOP_expr_bor(SOP,PV);
-      SOP_rvalue(SOP,PV);
-      }
+		SOP_expr_bor(SOP, PV);
+		SOP_rvalue(SOP, PV);
+	}
 
-   if (end)
-      {
-      SOP_local_fixup(SOP,end,SOP->PC);
-      SOP_emit_opcode(SOP,OP_SETB);
-      }
+	if (end) {
+		SOP_local_fixup(SOP, end, SOP->PC);
+		SOP_emit_opcode(SOP, OP_SETB);
+	}
 }
 
 /*************************************************************/
@@ -1859,22 +1634,20 @@ void SOP_expr_and(SOP_class *SOP, PVAL *PV)
 //
 /*************************************************************/
 
-void SOP_expr_bor(SOP_class *SOP, PVAL *PV)
-{
-   SOP_expr_xor(SOP,PV);
+void SOP_expr_bor(SOP_class *SOP, PVAL *PV) {
+	SOP_expr_xor(SOP, PV);
 
-   while (SOP_next_symbol(SOP,SOP_BIT_OR))
-      {
-      LEX_fetch(SOP->LEX);
+	while (SOP_next_symbol(SOP, SOP_BIT_OR)) {
+		LEX_fetch(SOP->LEX);
 
-      SOP_rvalue(SOP,PV);
-      SOP_emit_opcode(SOP,OP_PUSH);
+		SOP_rvalue(SOP, PV);
+		SOP_emit_opcode(SOP, OP_PUSH);
 
-      SOP_expr_xor(SOP,PV);
-      SOP_rvalue(SOP,PV);
+		SOP_expr_xor(SOP, PV);
+		SOP_rvalue(SOP, PV);
 
-      SOP_emit_opcode(SOP,OP_BOR);
-      }
+		SOP_emit_opcode(SOP, OP_BOR);
+	}
 }
 
 /*************************************************************/
@@ -1885,22 +1658,20 @@ void SOP_expr_bor(SOP_class *SOP, PVAL *PV)
 //
 /*************************************************************/
 
-void SOP_expr_xor(SOP_class *SOP, PVAL *PV)
-{
-   SOP_expr_band(SOP,PV);
+void SOP_expr_xor(SOP_class *SOP, PVAL *PV) {
+	SOP_expr_band(SOP, PV);
 
-   while (SOP_next_symbol(SOP,SOP_XOR))
-      {
-      LEX_fetch(SOP->LEX);
+	while (SOP_next_symbol(SOP, SOP_XOR)) {
+		LEX_fetch(SOP->LEX);
 
-      SOP_rvalue(SOP,PV);
-      SOP_emit_opcode(SOP,OP_PUSH);
+		SOP_rvalue(SOP, PV);
+		SOP_emit_opcode(SOP, OP_PUSH);
 
-      SOP_expr_band(SOP,PV);
-      SOP_rvalue(SOP,PV);
+		SOP_expr_band(SOP, PV);
+		SOP_rvalue(SOP, PV);
 
-      SOP_emit_opcode(SOP,OP_XOR);
-      }
+		SOP_emit_opcode(SOP, OP_XOR);
+	}
 }
 
 /*************************************************************/
@@ -1911,22 +1682,20 @@ void SOP_expr_xor(SOP_class *SOP, PVAL *PV)
 //
 /*************************************************************/
 
-void SOP_expr_band(SOP_class *SOP, PVAL *PV)
-{
-   SOP_expr_eq(SOP,PV);
+void SOP_expr_band(SOP_class *SOP, PVAL *PV) {
+	SOP_expr_eq(SOP, PV);
 
-   while (SOP_next_symbol(SOP,SOP_BIT_AND))
-      {
-      LEX_fetch(SOP->LEX);
+	while (SOP_next_symbol(SOP, SOP_BIT_AND)) {
+		LEX_fetch(SOP->LEX);
 
-      SOP_rvalue(SOP,PV);
-      SOP_emit_opcode(SOP,OP_PUSH);
+		SOP_rvalue(SOP, PV);
+		SOP_emit_opcode(SOP, OP_PUSH);
 
-      SOP_expr_eq(SOP,PV);
-      SOP_rvalue(SOP,PV);
+		SOP_expr_eq(SOP, PV);
+		SOP_rvalue(SOP, PV);
 
-      SOP_emit_opcode(SOP,OP_BAND);
-      }
+		SOP_emit_opcode(SOP, OP_BAND);
+	}
 }
 
 /*************************************************************/
@@ -1938,30 +1707,31 @@ void SOP_expr_band(SOP_class *SOP, PVAL *PV)
 //
 /*************************************************************/
 
-void SOP_expr_eq(SOP_class *SOP, PVAL *PV)
-{
-   WORD op;
+void SOP_expr_eq(SOP_class *SOP, PVAL *PV) {
+	WORD op;
 
-   SOP_expr_rel(SOP,PV);
+	SOP_expr_rel(SOP, PV);
 
-   while (SOP_next_eq(SOP))
-      {
-      LEX_fetch(SOP->LEX);
+	while (SOP_next_eq(SOP)) {
+		LEX_fetch(SOP->LEX);
 
-      switch (LEX_token(SOP->LEX,LEX_CUR))
-         {
-         case SOP_E:  op = OP_EQ; break;
-         case SOP_NE: op = OP_NE; break;
-         }
+		switch (LEX_token(SOP->LEX, LEX_CUR)) {
+		case SOP_E:
+			op = OP_EQ;
+			break;
+		case SOP_NE:
+			op = OP_NE;
+			break;
+		}
 
-      SOP_rvalue(SOP,PV);
-      SOP_emit_opcode(SOP,OP_PUSH);
+		SOP_rvalue(SOP, PV);
+		SOP_emit_opcode(SOP, OP_PUSH);
 
-      SOP_expr_rel(SOP,PV);
-      SOP_rvalue(SOP,PV);
+		SOP_expr_rel(SOP, PV);
+		SOP_rvalue(SOP, PV);
 
-      SOP_emit_opcode(SOP,op);
-      }
+		SOP_emit_opcode(SOP, op);
+	}
 }
 
 /*************************************************************/
@@ -1975,32 +1745,37 @@ void SOP_expr_eq(SOP_class *SOP, PVAL *PV)
 //
 /*************************************************************/
 
-void SOP_expr_rel(SOP_class *SOP, PVAL *PV)
-{
-   WORD op;
+void SOP_expr_rel(SOP_class *SOP, PVAL *PV) {
+	WORD op;
 
-   SOP_expr_shift(SOP,PV);
+	SOP_expr_shift(SOP, PV);
 
-   while (SOP_next_rel(SOP))
-      {
-      LEX_fetch(SOP->LEX);
+	while (SOP_next_rel(SOP)) {
+		LEX_fetch(SOP->LEX);
 
-      switch (LEX_token(SOP->LEX,LEX_CUR))
-         {
-         case SOP_LT: op = OP_LT; break;
-         case SOP_GT: op = OP_GT; break;
-         case SOP_LE: op = OP_LE; break;
-         case SOP_GE: op = OP_GE; break;
-         }
+		switch (LEX_token(SOP->LEX, LEX_CUR)) {
+		case SOP_LT:
+			op = OP_LT;
+			break;
+		case SOP_GT:
+			op = OP_GT;
+			break;
+		case SOP_LE:
+			op = OP_LE;
+			break;
+		case SOP_GE:
+			op = OP_GE;
+			break;
+		}
 
-      SOP_rvalue(SOP,PV);
-      SOP_emit_opcode(SOP,OP_PUSH);
+		SOP_rvalue(SOP, PV);
+		SOP_emit_opcode(SOP, OP_PUSH);
 
-      SOP_expr_shift(SOP,PV);
-      SOP_rvalue(SOP,PV);
+		SOP_expr_shift(SOP, PV);
+		SOP_rvalue(SOP, PV);
 
-      SOP_emit_opcode(SOP,op);
-      }
+		SOP_emit_opcode(SOP, op);
+	}
 }
 
 /*************************************************************/
@@ -2012,30 +1787,31 @@ void SOP_expr_rel(SOP_class *SOP, PVAL *PV)
 //
 /*************************************************************/
 
-void SOP_expr_shift(SOP_class *SOP, PVAL *PV)
-{
-   WORD op;
+void SOP_expr_shift(SOP_class *SOP, PVAL *PV) {
+	WORD op;
 
-   SOP_expr_add(SOP,PV);
+	SOP_expr_add(SOP, PV);
 
-   while (SOP_next_shift(SOP))
-      {
-      LEX_fetch(SOP->LEX);
+	while (SOP_next_shift(SOP)) {
+		LEX_fetch(SOP->LEX);
 
-      switch (LEX_token(SOP->LEX,LEX_CUR))
-         {
-         case SOP_SHL: op = OP_SHL; break;
-         case SOP_SHR: op = OP_SHR; break;
-         }
+		switch (LEX_token(SOP->LEX, LEX_CUR)) {
+		case SOP_SHL:
+			op = OP_SHL;
+			break;
+		case SOP_SHR:
+			op = OP_SHR;
+			break;
+		}
 
-      SOP_rvalue(SOP,PV);
-      SOP_emit_opcode(SOP,OP_PUSH);
+		SOP_rvalue(SOP, PV);
+		SOP_emit_opcode(SOP, OP_PUSH);
 
-      SOP_expr_add(SOP,PV);
-      SOP_rvalue(SOP,PV);
+		SOP_expr_add(SOP, PV);
+		SOP_rvalue(SOP, PV);
 
-      SOP_emit_opcode(SOP,op);
-      }
+		SOP_emit_opcode(SOP, op);
+	}
 }
 
 /*************************************************************/
@@ -2047,30 +1823,31 @@ void SOP_expr_shift(SOP_class *SOP, PVAL *PV)
 //
 /*************************************************************/
 
-void SOP_expr_add(SOP_class *SOP, PVAL *PV)
-{
-   WORD op;
+void SOP_expr_add(SOP_class *SOP, PVAL *PV) {
+	WORD op;
 
-   SOP_expr_mul(SOP,PV);
+	SOP_expr_mul(SOP, PV);
 
-   while (SOP_next_add(SOP))
-      {
-      LEX_fetch(SOP->LEX);
+	while (SOP_next_add(SOP)) {
+		LEX_fetch(SOP->LEX);
 
-      switch (LEX_token(SOP->LEX,LEX_CUR))
-         {
-         case SOP_PLUS : op = OP_ADD; break;
-         case SOP_MINUS: op = OP_SUB; break;
-         }
+		switch (LEX_token(SOP->LEX, LEX_CUR)) {
+		case SOP_PLUS:
+			op = OP_ADD;
+			break;
+		case SOP_MINUS:
+			op = OP_SUB;
+			break;
+		}
 
-      SOP_rvalue(SOP,PV);
-      SOP_emit_opcode(SOP,OP_PUSH);
+		SOP_rvalue(SOP, PV);
+		SOP_emit_opcode(SOP, OP_PUSH);
 
-      SOP_expr_mul(SOP,PV);
-      SOP_rvalue(SOP,PV);
+		SOP_expr_mul(SOP, PV);
+		SOP_rvalue(SOP, PV);
 
-      SOP_emit_opcode(SOP,op);
-      }
+		SOP_emit_opcode(SOP, op);
+	}
 }
 
 /*************************************************************/
@@ -2083,31 +1860,34 @@ void SOP_expr_add(SOP_class *SOP, PVAL *PV)
 //
 /*************************************************************/
 
-void SOP_expr_mul(SOP_class *SOP, PVAL *PV)
-{
-   WORD op;
+void SOP_expr_mul(SOP_class *SOP, PVAL *PV) {
+	WORD op;
 
-   SOP_expr_exp(SOP,PV);
+	SOP_expr_exp(SOP, PV);
 
-   while (SOP_next_mul(SOP))
-      {
-      LEX_fetch(SOP->LEX);
+	while (SOP_next_mul(SOP)) {
+		LEX_fetch(SOP->LEX);
 
-      switch (LEX_token(SOP->LEX,LEX_CUR))
-         {
-         case SOP_MUL: op = OP_MUL; break;
-         case SOP_DIV: op = OP_DIV; break;
-         case SOP_MOD: op = OP_MOD; break;
-         }
+		switch (LEX_token(SOP->LEX, LEX_CUR)) {
+		case SOP_MUL:
+			op = OP_MUL;
+			break;
+		case SOP_DIV:
+			op = OP_DIV;
+			break;
+		case SOP_MOD:
+			op = OP_MOD;
+			break;
+		}
 
-      SOP_rvalue(SOP,PV);
-      SOP_emit_opcode(SOP,OP_PUSH);
+		SOP_rvalue(SOP, PV);
+		SOP_emit_opcode(SOP, OP_PUSH);
 
-      SOP_expr_exp(SOP,PV);
-      SOP_rvalue(SOP,PV);
+		SOP_expr_exp(SOP, PV);
+		SOP_rvalue(SOP, PV);
 
-      SOP_emit_opcode(SOP,op);
-      }
+		SOP_emit_opcode(SOP, op);
+	}
 }
 
 /*************************************************************/
@@ -2118,22 +1898,20 @@ void SOP_expr_mul(SOP_class *SOP, PVAL *PV)
 //
 /*************************************************************/
 
-void SOP_expr_exp(SOP_class *SOP, PVAL *PV)
-{
-   SOP_expr_unary(SOP,PV);
+void SOP_expr_exp(SOP_class *SOP, PVAL *PV) {
+	SOP_expr_unary(SOP, PV);
 
-   while (SOP_next_symbol(SOP,SOP_EXP))
-      {
-      LEX_fetch(SOP->LEX);
+	while (SOP_next_symbol(SOP, SOP_EXP)) {
+		LEX_fetch(SOP->LEX);
 
-      SOP_rvalue(SOP,PV);
-      SOP_emit_opcode(SOP,OP_PUSH);
+		SOP_rvalue(SOP, PV);
+		SOP_emit_opcode(SOP, OP_PUSH);
 
-      SOP_expr_unary(SOP,PV);
-      SOP_rvalue(SOP,PV);
+		SOP_expr_unary(SOP, PV);
+		SOP_rvalue(SOP, PV);
 
-      SOP_emit_opcode(SOP,OP_EXP);
-      }
+		SOP_emit_opcode(SOP, OP_EXP);
+	}
 }
 
 /*************************************************************/
@@ -2146,66 +1924,65 @@ void SOP_expr_exp(SOP_class *SOP, PVAL *PV)
 //
 /*************************************************************/
 
-void SOP_expr_unary(SOP_class *SOP, PVAL *PV)
-{
-   WORD tkn;
+void SOP_expr_unary(SOP_class *SOP, PVAL *PV) {
+	WORD tkn;
 
-   if (!SOP_next_unary(SOP))
-      {
-      SOP_expr_postfix(SOP,PV);
-      return;
-      }
+	if (!SOP_next_unary(SOP)) {
+		SOP_expr_postfix(SOP, PV);
+		return;
+	}
 
-   LEX_fetch(SOP->LEX);
-   tkn = LEX_token(SOP->LEX,LEX_CUR);
+	LEX_fetch(SOP->LEX);
+	tkn = LEX_token(SOP->LEX, LEX_CUR);
 
-   if ((LEX_type(SOP->LEX,LEX_CUR) == TTYP_KEYWORD) && (tkn == SOP_NOT))
-      tkn = SOP_EXCLAMATION;
+	if ((LEX_type(SOP->LEX, LEX_CUR) == TTYP_KEYWORD) && (tkn == SOP_NOT))
+		tkn = SOP_EXCLAMATION;
 
-   SOP_expr_postfix(SOP,PV);
+	SOP_expr_postfix(SOP, PV);
 
-   switch (tkn)
-      {
-      case SOP_MINUS:
-         SOP_rvalue(SOP,PV);
-         SOP_emit_opcode(SOP,OP_NEG);
-         break;
+	switch (tkn) {
+	case SOP_MINUS:
+		SOP_rvalue(SOP, PV);
+		SOP_emit_opcode(SOP, OP_NEG);
+		break;
 
-      case SOP_EXCLAMATION:
-         SOP_rvalue(SOP,PV);
-         SOP_emit_opcode(SOP,OP_NOT);
-         break;
+	case SOP_EXCLAMATION:
+		SOP_rvalue(SOP, PV);
+		SOP_emit_opcode(SOP, OP_NOT);
+		break;
 
-      case SOP_TILDE:
-         SOP_rvalue(SOP,PV);
-         SOP_emit_opcode(SOP,OP_BNOT);
-         break;
+	case SOP_TILDE:
+		SOP_rvalue(SOP, PV);
+		SOP_emit_opcode(SOP, OP_BNOT);
+		break;
 
-      case SOP_AT:
-         SOP_rvalue(SOP,PV);
-         SOP_emit_opcode(SOP,OP_SOLE);
-         break;
+	case SOP_AT:
+		SOP_rvalue(SOP, PV);
+		SOP_emit_opcode(SOP, OP_SOLE);
+		break;
 
-      case SOP_INC:
-         if (!SOP_check_lvalue(SOP,PV)) break;
+	case SOP_INC:
+		if (!SOP_check_lvalue(SOP, PV))
+			break;
 
-         PV->fn(SOP,REF_DUP,PV);
-         PV->fn(SOP,REF_LOAD,PV);
-         SOP_emit_opcode(SOP,OP_INC);
-         PV->fn(SOP,REF_STORE,PV);
-         PV->fn = NULL;
-         break;
+		PV->fn(SOP, REF_DUP, PV);
+		PV->fn(SOP, REF_LOAD, PV);
+		SOP_emit_opcode(SOP, OP_INC);
+		PV->fn(SOP, REF_STORE, PV);
+		PV->fn = NULL;
+		break;
 
-      case SOP_DEC:
-         if (!SOP_check_lvalue(SOP,PV)) break;
+	case SOP_DEC:
+		if (!SOP_check_lvalue(SOP, PV))
+			break;
 
-         PV->fn(SOP,REF_DUP,PV);
-         PV->fn(SOP,REF_LOAD,PV);
-         SOP_emit_opcode(SOP,OP_DEC);
-         PV->fn(SOP,REF_STORE,PV);
-         PV->fn = NULL;
-         break;
-      }
+		PV->fn(SOP, REF_DUP, PV);
+		PV->fn(SOP, REF_LOAD, PV);
+		SOP_emit_opcode(SOP, OP_DEC);
+		PV->fn(SOP, REF_STORE, PV);
+		PV->fn = NULL;
+		break;
+	}
 }
 
 /*************************************************************/
@@ -2220,54 +1997,53 @@ void SOP_expr_unary(SOP_class *SOP, PVAL *PV)
 //
 /*************************************************************/
 
-void SOP_expr_postfix(SOP_class *SOP, PVAL *PV)
-{
-   SOP_expr_primary(SOP,PV);
+void SOP_expr_postfix(SOP_class *SOP, PVAL *PV) {
+	SOP_expr_primary(SOP, PV);
 
-   while (SOP_next_postfix(SOP))
-      {
-      LEX_fetch(SOP->LEX);
+	while (SOP_next_postfix(SOP)) {
+		LEX_fetch(SOP->LEX);
 
-      switch (LEX_token(SOP->LEX,LEX_CUR))
-         {
-         case SOP_INC:
-            if (!SOP_check_lvalue(SOP,PV)) break;
+		switch (LEX_token(SOP->LEX, LEX_CUR)) {
+		case SOP_INC:
+			if (!SOP_check_lvalue(SOP, PV))
+				break;
 
-            PV->fn(SOP,REF_DUP,PV);
-            PV->fn(SOP,REF_LOAD,PV);
-            SOP_emit_opcode(SOP,OP_INC);
-            PV->fn(SOP,REF_STORE,PV);
-            SOP_emit_opcode(SOP,OP_DEC);
-            PV->fn = NULL;
-            break;
+			PV->fn(SOP, REF_DUP, PV);
+			PV->fn(SOP, REF_LOAD, PV);
+			SOP_emit_opcode(SOP, OP_INC);
+			PV->fn(SOP, REF_STORE, PV);
+			SOP_emit_opcode(SOP, OP_DEC);
+			PV->fn = NULL;
+			break;
 
-         case SOP_DEC:
-            if (!SOP_check_lvalue(SOP,PV)) break;
+		case SOP_DEC:
+			if (!SOP_check_lvalue(SOP, PV))
+				break;
 
-            PV->fn(SOP,REF_DUP,PV);
-            PV->fn(SOP,REF_LOAD,PV);
-            SOP_emit_opcode(SOP,OP_DEC);
-            PV->fn(SOP,REF_STORE,PV);
-            SOP_emit_opcode(SOP,OP_INC);
-            PV->fn = NULL;
-            break;
+			PV->fn(SOP, REF_DUP, PV);
+			PV->fn(SOP, REF_LOAD, PV);
+			SOP_emit_opcode(SOP, OP_DEC);
+			PV->fn(SOP, REF_STORE, PV);
+			SOP_emit_opcode(SOP, OP_INC);
+			PV->fn = NULL;
+			break;
 
-         case SOP_L_SQUARE:
-            SOP_compile_index(SOP,PV);
-            break;
+		case SOP_L_SQUARE:
+			SOP_compile_index(SOP, PV);
+			break;
 
-         case SOP_L_PAREN:
-            SOP_compile_call(SOP,PV);
-            break;
+		case SOP_L_PAREN:
+			SOP_compile_call(SOP, PV);
+			break;
 
-         case SOP_PERIOD:
-            SOP_rvalue(SOP,PV);
+		case SOP_PERIOD:
+			SOP_rvalue(SOP, PV);
 
-            SOP_expr_primary(SOP,PV);
-            PV->source = 1;
-            break;
-         }
-      }
+			SOP_expr_primary(SOP, PV);
+			PV->source = 1;
+			break;
+		}
+	}
 }
 
 /*************************************************************/
@@ -2280,106 +2056,98 @@ void SOP_expr_postfix(SOP_class *SOP, PVAL *PV)
 //
 /*************************************************************/
 
-void SOP_expr_primary(SOP_class *SOP, PVAL *PV)
-{
-   ULONG val;
-   UWORD i,end;
-   BYTE *str;
+void SOP_expr_primary(SOP_class *SOP, PVAL *PV) {
+	ULONG val;
+	UWORD i, end;
+	BYTE *str;
 
-   switch (LEX_type(SOP->LEX,LEX_NXT))
-      {
-      case TTYP_SYMBOL:
-         switch (LEX_token(SOP->LEX,LEX_NXT))
-            {
-            case SOP_L_PAREN:
-               LEX_fetch(SOP->LEX);
+	switch (LEX_type(SOP->LEX, LEX_NXT)) {
+	case TTYP_SYMBOL:
+		switch (LEX_token(SOP->LEX, LEX_NXT)) {
+		case SOP_L_PAREN:
+			LEX_fetch(SOP->LEX);
 
-               if (!SOP_next_symbol(SOP,SOP_R_PAREN))
-                  SOP_expr_list(SOP,PV);
-               else
-                  {
-                  LEX_fetch(SOP->LEX);
-                  SOP_expr_assign(SOP,PV);
-                  return;
-                  }
+			if (!SOP_next_symbol(SOP, SOP_R_PAREN))
+				SOP_expr_list(SOP, PV);
+			else {
+				LEX_fetch(SOP->LEX);
+				SOP_expr_assign(SOP, PV);
+				return;
+			}
 
-               SOP_require_symbol(SOP,SOP_R_PAREN);
-               break;
+			SOP_require_symbol(SOP, SOP_R_PAREN);
+			break;
 
-            default:
-               SOP_basic_error(SOP,MSG_EPE);
-               PV->fn = NULL;
-            }
-         break;
+		default:
+			SOP_basic_error(SOP, MSG_EPE);
+			PV->fn = NULL;
+		}
+		break;
 
-      case TTYP_KEYWORD:
-         switch (LEX_token(SOP->LEX,LEX_NXT))
-            {
-            case SOP_STRING:
-               LEX_fetch(SOP->LEX);
+	case TTYP_KEYWORD:
+		switch (LEX_token(SOP->LEX, LEX_NXT)) {
+		case SOP_STRING:
+			LEX_fetch(SOP->LEX);
 
-               LEX_fetch(SOP->LEX);
-               if (LEX_type(SOP->LEX,LEX_CUR) != TTYP_STRLIT)
-                  {
-                  SOP_basic_error(SOP,MSG_ELS);
-                  break;
-                  }
-               
-               SOP_emit_opcode(SOP,OP_LECA);
-               SOP_emit_word(SOP,SOP->PC+5);
-               SOP_emit_opcode(SOP,OP_BRA);
-               end = SOP_emit_word(SOP,0);
-             
-               str = LEX_lexeme(SOP->LEX,LEX_CUR);
+			LEX_fetch(SOP->LEX);
+			if (LEX_type(SOP->LEX, LEX_CUR) != TTYP_STRLIT) {
+				SOP_basic_error(SOP, MSG_ELS);
+				break;
+			}
 
-               for (i=0;i<strlen(str);i++)
-                  SOP_emit_byte(SOP,str[i]);
-               SOP_emit_byte(SOP,0);
+			SOP_emit_opcode(SOP, OP_LECA);
+			SOP_emit_word(SOP, SOP->PC + 5);
+			SOP_emit_opcode(SOP, OP_BRA);
+			end = SOP_emit_word(SOP, 0);
 
-               SOP_local_fixup(SOP,end,SOP->PC);
-               break;
+			str = LEX_lexeme(SOP->LEX, LEX_CUR);
 
-            default:
-               SOP_basic_error(SOP,MSG_EPE);
-               PV->fn = NULL;
-            }
-         break;
+			for (i = 0; i < strlen(str); i++)
+				SOP_emit_byte(SOP, str[i]);
+			SOP_emit_byte(SOP, 0);
 
-      case TTYP_NUM:
-         LEX_fetch(SOP->LEX);
-         val = LEX_value(SOP->LEX,LEX_CUR);
+			SOP_local_fixup(SOP, end, SOP->PC);
+			break;
 
-         SOP_emit_constant(SOP,val);
+		default:
+			SOP_basic_error(SOP, MSG_EPE);
+			PV->fn = NULL;
+		}
+		break;
 
-         PV->fn = NULL;
-         break;
+	case TTYP_NUM:
+		LEX_fetch(SOP->LEX);
+		val = LEX_value(SOP->LEX, LEX_CUR);
 
-      case TTYP_STRLIT:
-         LEX_fetch(SOP->LEX);
+		SOP_emit_constant(SOP, val);
 
-         if (SOP->ntype == NTYP_MSG)
-            {
-            val = RS_get_MSGD_entry(SOP->RS,LEX_lexeme(SOP->LEX,LEX_CUR));
-            SOP->ntype = NTYP_RES;
-            }
-         else
-            val = SOP_resource_name_entry(SOP);
+		PV->fn = NULL;
+		break;
 
-         SOP_emit_constant(SOP,val);
+	case TTYP_STRLIT:
+		LEX_fetch(SOP->LEX);
 
-         PV->fn = NULL;
-         break;
+		if (SOP->ntype == NTYP_MSG) {
+			val = RS_get_MSGD_entry(SOP->RS, LEX_lexeme(SOP->LEX, LEX_CUR));
+			SOP->ntype = NTYP_RES;
+		} else
+			val = SOP_resource_name_entry(SOP);
 
-      case TTYP_NAME:
-         LEX_fetch(SOP->LEX);
-         SOP_name_reference(SOP,PV,LEX_lexeme(SOP->LEX,LEX_CUR));
-         break;
+		SOP_emit_constant(SOP, val);
 
-      default:
-         SOP_basic_error(SOP,MSG_EPE);
-         PV->fn = NULL;
-         break;
-      }
+		PV->fn = NULL;
+		break;
+
+	case TTYP_NAME:
+		LEX_fetch(SOP->LEX);
+		SOP_name_reference(SOP, PV, LEX_lexeme(SOP->LEX, LEX_CUR));
+		break;
+
+	default:
+		SOP_basic_error(SOP, MSG_EPE);
+		PV->fn = NULL;
+		break;
+	}
 }
 
 /*************************************************************/
@@ -2424,198 +2192,173 @@ void SOP_expr_primary(SOP_class *SOP, PVAL *PV)
 /*************************************************************/
 
 UWORD SOP_var_declaration(SOP_class *SOP, UWORD vsize, DICT_class *scope,
-   BYTE vtype, UWORD offset, UWORD visibility)
-{
-   BYTE *name;
-   BYTE *class;
-   DICT_entry *entry;
-   CSS_class *CSS;
-   UWORD i,ndims,dims[MAX_DIMS];
-   ULONG ninit,tsize,dsize,asize,val;
+		BYTE vtype, UWORD offset, UWORD visibility) {
+	BYTE *name;
+	BYTE *class_type;
+	DICT_entry *entry;
+	CSS_class *CSS;
+	UWORD i, ndims, dims[MAX_DIMS];
+	ULONG ninit, tsize, dsize, asize, val;
 
-   do
-      {
-      class = str_alloc("");
-      if (LEX_type(SOP->LEX,LEX_NXT) == TTYP_STRLIT)
-         {
-         LEX_fetch(SOP->LEX);
+	do {
+		class_type = str_alloc("");
+		if (LEX_type(SOP->LEX, LEX_NXT) == TTYP_STRLIT) {
+			LEX_fetch(SOP->LEX);
 
-         if (scope != SOP->XTRN)
-            SOP_basic_error(SOP,MSG_BCN);
-         else
-            {
-            free(class);
-            class = str(SOP_resource_name_entry(SOP));
-            }
-         }
+			if (scope != SOP->XTRN)
+				SOP_basic_error(SOP, MSG_BCN);
+			else {
+				free(class_type);
+				class_type = str(SOP_resource_name_entry(SOP));
+			}
+		}
 
-      LEX_fetch(SOP->LEX);
+		LEX_fetch(SOP->LEX);
 
-      name = str_alloc(LEX_lexeme(SOP->LEX,LEX_CUR));
+		name = str_alloc(LEX_lexeme(SOP->LEX, LEX_CUR));
 
-      if ((scope == SOP->XTRN) && (!strlen(class)))
-         SOP_basic_error(SOP,MSG_MCS);
+		if ((scope == SOP->XTRN) && (!strlen(class_type)))
+			SOP_basic_error(SOP, MSG_MCS);
 
-      if (LEX_type(SOP->LEX,LEX_CUR) == TTYP_KEYWORD)
-         SOP_basic_error(SOP,MSG_RWU);
+		if (LEX_type(SOP->LEX, LEX_CUR) == TTYP_KEYWORD)
+			SOP_basic_error(SOP, MSG_RWU);
 
-      else if (LEX_type(SOP->LEX,LEX_CUR) != TTYP_NAME)
-         SOP_basic_error(SOP,MSG_SYN);
+		else if (LEX_type(SOP->LEX, LEX_CUR) != TTYP_NAME)
+			SOP_basic_error(SOP, MSG_SYN);
 
-      else if (DICT_lookup(SOP->RS->dict[CRFD],name) != NULL)
-         SOP_basic_error(SOP,MSG_ICU);
+		else if (DICT_lookup(SOP->RS->dict[CRFD], name) != NULL)
+			SOP_basic_error(SOP, MSG_ICU);
 
-      else if (DICT_lookup(scope,name) != NULL)
-         SOP_basic_error(SOP,MSG_VIU);
+		else if (DICT_lookup(scope, name) != NULL)
+			SOP_basic_error(SOP, MSG_VIU);
 
-      else
-         {
-         entry = DICT_enter(scope,name,D_DEFHEAP);
+		else {
+			entry = DICT_enter(scope, name, D_DEFHEAP);
 
-         ndims = 0;
-         asize = 1L;
-         while (SOP_next_symbol(SOP,SOP_L_SQUARE))
-            {
-            LEX_fetch(SOP->LEX);
+			ndims = 0;
+			asize = 1L;
+			while (SOP_next_symbol(SOP, SOP_L_SQUARE)) {
+				LEX_fetch(SOP->LEX);
 
-            if (!SOP_next_literal_constant(SOP))
-               {
-               LEX_fetch(SOP->LEX);
-               SOP_basic_error(SOP,MSG_ELC);
-               }
-            else
-               {
-               dsize = SOP_fetch_literal_constant(SOP);
-               if (ndims == MAX_DIMS)
-                  report(E_ERROR,LEX_line(SOP->LEX,LEX_CUR),MSG_TMD,name);
-               else
-                  {
-                  dims[ndims++] = (UWORD) dsize;
-                  asize *= dsize;
-                  }
-               }
-            
-            SOP_require_symbol(SOP,SOP_R_SQUARE);
-            }
+				if (!SOP_next_literal_constant(SOP)) {
+					LEX_fetch(SOP->LEX);
+					SOP_basic_error(SOP, MSG_ELC);
+				} else {
+					dsize = SOP_fetch_literal_constant(SOP);
+					if (ndims == MAX_DIMS)
+						report(E_ERROR, LEX_line(SOP->LEX, LEX_CUR), MSG_TMD,
+								name);
+					else {
+						dims[ndims++] = (UWORD) dsize;
+						asize *= dsize;
+					}
+				}
 
-         tsize = (ULONG) vsize * asize;
+				SOP_require_symbol(SOP, SOP_R_SQUARE);
+			}
 
-         if (tsize > 65535L)
-            report(E_ERROR,LEX_line(SOP->LEX,LEX_CUR),MSG_ASX);
+			tsize = (ULONG) vsize * asize;
 
-         CSS = CSS_construct(NULL);
+			if (tsize > 65535L)
+				report(E_ERROR, LEX_line(SOP->LEX, LEX_CUR), MSG_ASX);
 
-         if (scope == SOP->AUTO)
-            {
-            offset += (UWORD) tsize;
-            CSS_add_num(CSS,offset);
-            }
-         else if (scope == SOP->ARGV)
-            {
-            CSS_add_num(CSS,offset);
-            offset -= (UWORD) tsize;
-            }
-         else if (scope == SOP->XTRN)
-            {
-            offset = SOP_import_symbol(SOP,name,class,vtype);
+			CSS = CSS_construct(NULL);
 
-            CSS_add_num(CSS,offset);
-            }
-         else
-            {
-            if (visibility == V_PUBLIC)
-               SOP_export_symbol(SOP,(ULONG) name,offset,vtype,asize);
+			if (scope == SOP->AUTO) {
+				offset += (UWORD) tsize;
+				CSS_add_num(CSS, offset);
+			} else if (scope == SOP->ARGV) {
+				CSS_add_num(CSS, offset);
+				offset -= (UWORD) tsize;
+			} else if (scope == SOP->XTRN) {
+				offset = SOP_import_symbol(SOP, name, class_type, vtype);
 
-            CSS_add_num(CSS,offset);
-            offset += (UWORD) tsize;
-            }
+				CSS_add_num(CSS, offset);
+			} else {
+				if (visibility == V_PUBLIC)
+					SOP_export_symbol(SOP, (ULONG) name, offset, vtype, asize);
 
-         CSS_add_num(CSS,ndims);
+				CSS_add_num(CSS, offset);
+				offset += (UWORD) tsize;
+			}
 
-         if (ndims > 1)
-            for (i=0;i<(ndims-1);i++)
-               {
-               tsize /= (ULONG) dims[i];
+			CSS_add_num(CSS, ndims);
 
-               CSS_add_num(CSS,tsize);
-               }
+			if (ndims > 1)
+				for (i = 0; i < (ndims - 1); i++) {
+					tsize /= (ULONG) dims[i];
 
-         CSS_add_num(CSS,vsize);
+					CSS_add_num(CSS, tsize);
+				}
 
-         entry->def = CSS_string(CSS);
+			CSS_add_num(CSS, vsize);
 
-         CSS_destroy(CSS);
-         }
+			entry->def = CSS_string(CSS);
 
-      ninit = 0;
+			CSS_destroy(CSS);
+		}
 
-      if (SOP_next_symbol(SOP,SOP_SETEQ))
-         {
-         LEX_fetch(SOP->LEX);
+		ninit = 0;
 
-         if (scope != SOP->TABL)
-            SOP_basic_error(SOP,MSG_CIA);
+		if (SOP_next_symbol(SOP, SOP_SETEQ)) {
+			LEX_fetch(SOP->LEX);
 
-         SOP_require_symbol(SOP,SOP_L_CURLY);
+			if (scope != SOP->TABL)
+				SOP_basic_error(SOP, MSG_CIA);
 
-         do
-            {
-            if (SOP_next_symbol(SOP,SOP_R_CURLY)) break;
+			SOP_require_symbol(SOP, SOP_L_CURLY);
 
-            if (!SOP_next_literal_constant(SOP))
-               {
-               LEX_fetch(SOP->LEX);
-               SOP_basic_error(SOP,MSG_ELC);
-               }
-            else
-               {
-               ++ninit;
+			do {
+				if (SOP_next_symbol(SOP, SOP_R_CURLY))
+					break;
 
-               val = SOP_fetch_literal_constant(SOP);
+				if (!SOP_next_literal_constant(SOP)) {
+					LEX_fetch(SOP->LEX);
+					SOP_basic_error(SOP, MSG_ELC);
+				} else {
+					++ninit;
 
-               switch (vsize)
-                  {
-                  case SIZE_B:
-                     SOP_emit_byte(SOP,val);
-                     break;
-                  case SIZE_W:
-                     SOP_emit_word(SOP,val);
-                     break;
-                  case SIZE_L:
-                     SOP_emit_long(SOP,val);
-                     break;
-                  }
-               }
-            }
-         while (LEX_next_comma(SOP->LEX));
+					val = SOP_fetch_literal_constant(SOP);
 
-         SOP_require_symbol(SOP,SOP_R_CURLY);
-         }
+					switch (vsize) {
+					case SIZE_B:
+						SOP_emit_byte(SOP, val);
+						break;
+					case SIZE_W:
+						SOP_emit_word(SOP, val);
+						break;
+					case SIZE_L:
+						SOP_emit_long(SOP, val);
+						break;
+					}
+				}
+			} while (LEX_next_comma(SOP->LEX));
 
-      if (scope == SOP->TABL)
-         if (SOP->context != CON_D)
-            SOP_basic_error(SOP,MSG_BPT);
-         else if (!ndims)
-            SOP_basic_error(SOP,MSG_CIA);
-         else if (offset != SOP->PC)
-            report(E_ERROR,LEX_line(SOP->LEX,LEX_CUR),MSG_TIN,name,asize,
-               ninit);
+			SOP_require_symbol(SOP, SOP_R_CURLY);
+		}
 
-      if (scope == SOP->AUTO)
-         DICT_enter(SOP->ADUS,name,D_DEFHEAP)->def =
-            str_alloc(LEX_line(SOP->LEX,LEX_CUR));
-      else if ((scope != SOP->ARGV) &&
-               (scope != SOP->XTRN) &&
-               (visibility != V_PUBLIC))
-         DICT_enter(SOP->DUSE,name,D_DEFHEAP)->def =
-            str_alloc(LEX_line(SOP->LEX,LEX_CUR));
+		if (scope == SOP->TABL)
+			if (SOP->context != CON_D)
+				SOP_basic_error(SOP, MSG_BPT);
+			else if (!ndims)
+				SOP_basic_error(SOP, MSG_CIA);
+			else if (offset != SOP->PC)
+				report(E_ERROR, LEX_line(SOP->LEX, LEX_CUR), MSG_TIN, name,
+						asize, ninit);
 
-      free(name);
-      free(class);
-      }
-   while (LEX_next_comma(SOP->LEX));
+		if (scope == SOP->AUTO)
+			DICT_enter(SOP->ADUS, name, D_DEFHEAP)->def = str_alloc(
+					LEX_line(SOP->LEX, LEX_CUR));
+		else if ((scope != SOP->ARGV) && (scope != SOP->XTRN)
+				&& (visibility != V_PUBLIC))
+			DICT_enter(SOP->DUSE, name, D_DEFHEAP)->def = str_alloc(
+					LEX_line(SOP->LEX, LEX_CUR));
 
-   return offset;
+		free(name);
+		free(class_type);
+	} while (LEX_next_comma(SOP->LEX));
+
+	return offset;
 }
 
 /*************************************************************/
@@ -2624,21 +2367,20 @@ UWORD SOP_var_declaration(SOP_class *SOP, UWORD vsize, DICT_class *scope,
 //
 /*************************************************************/
 
-void SOP_member_statement(SOP_class *SOP)
-{
-   LEX_fetch(SOP->LEX);
+void SOP_member_statement(SOP_class *SOP) {
+	LEX_fetch(SOP->LEX);
 
-   if (LEX_type(SOP->LEX,LEX_CUR) != TTYP_STRLIT)
-      SOP_basic_error(SOP,MSG_ELS);
-   else
-      {
-      SOP->parent = SOP_resource_name_entry(SOP);
+	if (LEX_type(SOP->LEX, LEX_CUR) != TTYP_STRLIT)
+		SOP_basic_error(SOP, MSG_ELS);
+	else {
+		SOP->parent = SOP_resource_name_entry(SOP);
 
-      if (!SOP_export_symbol(SOP,(ULONG) 'PARENT',(ULONG)SOP->parent, (BYTE)'N',1))
-         SOP_basic_error(SOP,MSG_NMI);
-      }
+		if (!SOP_export_symbol(SOP, (ULONG) "PARENT", (ULONG) SOP->parent,
+				(BYTE) 'N', 1))
+			SOP_basic_error(SOP, MSG_NMI);
+	}
 
-   SOP_require_symbol(SOP,SOP_SEMICOLON);
+	SOP_require_symbol(SOP, SOP_SEMICOLON);
 }
 
 /*************************************************************/
@@ -2647,20 +2389,19 @@ void SOP_member_statement(SOP_class *SOP)
 //
 /*************************************************************/
 
-UWORD *SOP_add_break(SOP_class *SOP, UWORD label)
-{
-   UWORD *old;
+UWORD *SOP_add_break(SOP_class *SOP, UWORD label) {
+	UWORD *old;
 
-   old = SOP->bsp;
+	old = SOP->bsp;
 
-   SOP->bsp = (UWORD*) add_ptr(SOP->bsp,(ULONG) sizeof(UWORD));
+	SOP->bsp = (UWORD*) add_ptr(SOP->bsp, (ULONG) sizeof(UWORD));
 
-   if (ptr_dif((ULONG*)SOP->bsp,(ULONG*)&SOP->b_stack[MAX_NEST]) < 0L)
-      *SOP->bsp = label;
-   else
-      report(E_ERROR,LEX_line(SOP->LEX,LEX_CUR),MSG_TML);
+	if (ptr_dif((ULONG*) SOP->bsp, (ULONG*) &SOP->b_stack[MAX_NEST]) < 0L)
+		*SOP->bsp = label;
+	else
+		report(E_ERROR, LEX_line(SOP->LEX, LEX_CUR), MSG_TML);
 
-   return old;
+	return old;
 }
 
 /*************************************************************/
@@ -2669,20 +2410,19 @@ UWORD *SOP_add_break(SOP_class *SOP, UWORD label)
 //
 /*************************************************************/
 
-UWORD *SOP_add_continue(SOP_class *SOP, UWORD label)
-{
-   UWORD *old;
+UWORD *SOP_add_continue(SOP_class *SOP, UWORD label) {
+	UWORD *old;
 
-   old = SOP->csp;
+	old = SOP->csp;
 
-   SOP->csp = (UWORD*) add_ptr(SOP->csp,(ULONG) sizeof(UWORD));
+	SOP->csp = (UWORD*) add_ptr(SOP->csp, (ULONG) sizeof(UWORD));
 
-   if (ptr_dif((ULONG*)SOP->csp,(ULONG*) &SOP->c_stack[MAX_NEST]) < 0L)
-      *SOP->csp = label;
-   else
-      report(E_ERROR,LEX_line(SOP->LEX,LEX_CUR),MSG_TML);
+	if (ptr_dif((ULONG*) SOP->csp, (ULONG*) &SOP->c_stack[MAX_NEST]) < 0L)
+		*SOP->csp = label;
+	else
+		report(E_ERROR, LEX_line(SOP->LEX, LEX_CUR), MSG_TML);
 
-   return old;
+	return old;
 }
 
 /*************************************************************/
@@ -2691,16 +2431,14 @@ UWORD *SOP_add_continue(SOP_class *SOP, UWORD label)
 //
 /*************************************************************/
 
-UWORD SOP_remove_break(SOP_class *SOP, UWORD *old, UWORD label)
-{
-   if (ptr_dif((ULONG*)SOP->bsp,(ULONG*)old) > 0L)
-      {
-      label = *SOP->bsp;
+UWORD SOP_remove_break(SOP_class *SOP, UWORD *old, UWORD label) {
+	if (ptr_dif((ULONG*) SOP->bsp, (ULONG*) old) > 0L) {
+		label = *SOP->bsp;
 
-      SOP->bsp = (UWORD*) add_ptr(SOP->bsp,-(ULONG) sizeof(UWORD));
-      }
+		SOP->bsp = (UWORD*) add_ptr(SOP->bsp, -(ULONG) sizeof(UWORD));
+	}
 
-   return label;
+	return label;
 }
 
 /*************************************************************/
@@ -2709,9 +2447,8 @@ UWORD SOP_remove_break(SOP_class *SOP, UWORD *old, UWORD label)
 //
 /*************************************************************/
 
-void SOP_remove_continue(SOP_class *SOP, UWORD *old)
-{
-   SOP->csp = old;
+void SOP_remove_continue(SOP_class *SOP, UWORD *old) {
+	SOP->csp = old;
 }
 
 /*************************************************************/
@@ -2720,44 +2457,39 @@ void SOP_remove_continue(SOP_class *SOP, UWORD *old)
 //
 /*************************************************************/
 
-void SOP_continue_statement(SOP_class *SOP)
-{
-   LONG lvl;
-   LONG rq_lvl;
-   UWORD *ptr;
+void SOP_continue_statement(SOP_class *SOP) {
+	LONG lvl;
+	LONG rq_lvl;
+	UWORD *ptr;
 
-   lvl = ptr_dif((ULONG*)SOP->csp,(ULONG*)SOP->c_stack);
+	lvl = ptr_dif((ULONG*) SOP->csp, (ULONG*) SOP->c_stack);
 
-   rq_lvl = 0L * (ULONG) sizeof(UWORD);
+	rq_lvl = 0L * (ULONG) sizeof(UWORD);
 
-   if (SOP_next_symbol(SOP,SOP_L_PAREN))
-      {
-      LEX_fetch(SOP->LEX);
+	if (SOP_next_symbol(SOP, SOP_L_PAREN)) {
+		LEX_fetch(SOP->LEX);
 
-      if (SOP_next_literal_constant(SOP))
-         rq_lvl = (SOP_fetch_literal_constant(SOP) - 1L) *
-            (ULONG) sizeof(UWORD);
-      else
-         {
-         LEX_fetch(SOP->LEX);
-         SOP_basic_error(SOP,MSG_ELC);
-         }
+		if (SOP_next_literal_constant(SOP))
+			rq_lvl = (SOP_fetch_literal_constant(SOP) - 1L)
+					* (ULONG) sizeof(UWORD);
+		else {
+			LEX_fetch(SOP->LEX);
+			SOP_basic_error(SOP, MSG_ELC);
+		}
 
-      SOP_require_symbol(SOP,SOP_R_PAREN);
-      }
+		SOP_require_symbol(SOP, SOP_R_PAREN);
+	}
 
-   if ((LONG) rq_lvl >= 0L)
-      if (lvl >= rq_lvl)
-         {
-         ptr = (UWORD*) add_ptr(SOP->csp,-rq_lvl);
+	if ((LONG) rq_lvl >= 0L)
+		if (lvl >= rq_lvl) {
+			ptr = (UWORD*) add_ptr(SOP->csp, -rq_lvl);
 
-         SOP_emit_opcode(SOP,OP_BRA);
-         SOP_emit_word(SOP,*ptr);
-         }
-      else
-         SOP_basic_error(SOP,MSG_GBC);
+			SOP_emit_opcode(SOP, OP_BRA);
+			SOP_emit_word(SOP, *ptr);
+		} else
+			SOP_basic_error(SOP, MSG_GBC);
 
-   SOP_require_symbol(SOP,SOP_SEMICOLON);
+	SOP_require_symbol(SOP, SOP_SEMICOLON);
 }
 
 /*************************************************************/
@@ -2766,44 +2498,39 @@ void SOP_continue_statement(SOP_class *SOP)
 //
 /*************************************************************/
 
-void SOP_break_statement(SOP_class *SOP)
-{
-   LONG lvl;
-   LONG rq_lvl;
-   UWORD *ptr;
+void SOP_break_statement(SOP_class *SOP) {
+	LONG lvl;
+	LONG rq_lvl;
+	UWORD *ptr;
 
-   lvl = ptr_dif((ULONG*)SOP->bsp,(ULONG*)SOP->b_stack);
+	lvl = ptr_dif((ULONG*) SOP->bsp, (ULONG*) SOP->b_stack);
 
-   rq_lvl = 0L * (ULONG) sizeof(UWORD);
+	rq_lvl = 0L * (ULONG) sizeof(UWORD);
 
-   if (SOP_next_symbol(SOP,SOP_L_PAREN))
-      {
-      LEX_fetch(SOP->LEX);
+	if (SOP_next_symbol(SOP, SOP_L_PAREN)) {
+		LEX_fetch(SOP->LEX);
 
-      if (SOP_next_literal_constant(SOP))
-         rq_lvl = (SOP_fetch_literal_constant(SOP) - 1L) *
-            (ULONG) sizeof(UWORD);
-      else
-         {
-         LEX_fetch(SOP->LEX);
-         SOP_basic_error(SOP,MSG_ELC);
-         }
+		if (SOP_next_literal_constant(SOP))
+			rq_lvl = (SOP_fetch_literal_constant(SOP) - 1L)
+					* (ULONG) sizeof(UWORD);
+		else {
+			LEX_fetch(SOP->LEX);
+			SOP_basic_error(SOP, MSG_ELC);
+		}
 
-      SOP_require_symbol(SOP,SOP_R_PAREN);
-      }
+		SOP_require_symbol(SOP, SOP_R_PAREN);
+	}
 
-   if ((LONG) rq_lvl >= 0L)
-      if (lvl >= rq_lvl)
-         {
-         ptr = (UWORD*) add_ptr(SOP->bsp,-rq_lvl);
+	if ((LONG) rq_lvl >= 0L)
+		if (lvl >= rq_lvl) {
+			ptr = (UWORD*) add_ptr(SOP->bsp, -rq_lvl);
 
-         SOP_emit_opcode(SOP,OP_BRA);
-         *ptr = SOP_emit_word(SOP,*ptr);
-         }
-      else
-         SOP_basic_error(SOP,MSG_GBC);
+			SOP_emit_opcode(SOP, OP_BRA);
+			*ptr = SOP_emit_word(SOP, *ptr);
+		} else
+			SOP_basic_error(SOP, MSG_GBC);
 
-   SOP_require_symbol(SOP,SOP_SEMICOLON);
+	SOP_require_symbol(SOP, SOP_SEMICOLON);
 }
 
 /*************************************************************/
@@ -2812,58 +2539,56 @@ void SOP_break_statement(SOP_class *SOP)
 //
 /*************************************************************/
 
-void SOP_for_statement(SOP_class *SOP)
-{
-   UWORD next,end,update,body;
-   UWORD *brk,*con;
+void SOP_for_statement(SOP_class *SOP) {
+	UWORD next, end, update, body;
+	UWORD *brk, *con;
 
-   SOP_require_symbol(SOP,SOP_L_PAREN);
+	SOP_require_symbol(SOP, SOP_L_PAREN);
 
-   if (!SOP_next_symbol(SOP,SOP_SEMICOLON))
-      SOP_expression(SOP);
+	if (!SOP_next_symbol(SOP, SOP_SEMICOLON))
+		SOP_expression(SOP);
 
-   SOP_require_symbol(SOP,SOP_SEMICOLON);
+	SOP_require_symbol(SOP, SOP_SEMICOLON);
 
-   next = SOP->PC;
+	next = SOP->PC;
 
-   if (!SOP_next_symbol(SOP,SOP_SEMICOLON))
-      SOP_expression(SOP);
-   else
-      {
-      SOP_emit_opcode(SOP,OP_SHTC);
-      SOP_emit_byte(SOP,1);
-      }
+	if (!SOP_next_symbol(SOP, SOP_SEMICOLON))
+		SOP_expression(SOP);
+	else {
+		SOP_emit_opcode(SOP, OP_SHTC);
+		SOP_emit_byte(SOP, 1);
+	}
 
-   SOP_require_symbol(SOP,SOP_SEMICOLON);
+	SOP_require_symbol(SOP, SOP_SEMICOLON);
 
-   SOP_emit_opcode(SOP,OP_BRT);
-   body = SOP_emit_word(SOP,0);
+	SOP_emit_opcode(SOP, OP_BRT);
+	body = SOP_emit_word(SOP, 0);
 
-   SOP_emit_opcode(SOP,OP_BRA);
-   end = SOP_emit_word(SOP,0);
+	SOP_emit_opcode(SOP, OP_BRA);
+	end = SOP_emit_word(SOP, 0);
 
-   update = SOP->PC;
+	update = SOP->PC;
 
-   if (!SOP_next_symbol(SOP,SOP_R_PAREN))
-      SOP_expression(SOP);
+	if (!SOP_next_symbol(SOP, SOP_R_PAREN))
+		SOP_expression(SOP);
 
-   SOP_require_symbol(SOP,SOP_R_PAREN);
+	SOP_require_symbol(SOP, SOP_R_PAREN);
 
-   SOP_emit_opcode(SOP,OP_BRA);
-   SOP_emit_word(SOP,next);
+	SOP_emit_opcode(SOP, OP_BRA);
+	SOP_emit_word(SOP, next);
 
-   SOP_local_fixup(SOP,body,SOP->PC);
+	SOP_local_fixup(SOP, body, SOP->PC);
 
-   brk = SOP_add_break(SOP,end);
-   con = SOP_add_continue(SOP,update);
-   SOP_statement(SOP);
-   end = SOP_remove_break(SOP,brk,end);
-   SOP_remove_continue(SOP,con);
+	brk = SOP_add_break(SOP, end);
+	con = SOP_add_continue(SOP, update);
+	SOP_statement(SOP);
+	end = SOP_remove_break(SOP, brk, end);
+	SOP_remove_continue(SOP, con);
 
-   SOP_emit_opcode(SOP,OP_BRA);
-   SOP_emit_word(SOP,update);
+	SOP_emit_opcode(SOP, OP_BRA);
+	SOP_emit_word(SOP, update);
 
-   SOP_local_fixup(SOP,end,SOP->PC);
+	SOP_local_fixup(SOP, end, SOP->PC);
 }
 
 /*************************************************************/
@@ -2872,30 +2597,29 @@ void SOP_for_statement(SOP_class *SOP)
 //
 /*************************************************************/
 
-void SOP_while_statement(SOP_class *SOP)
-{
-   UWORD next,end;
-   UWORD *brk,*con;
+void SOP_while_statement(SOP_class *SOP) {
+	UWORD next, end;
+	UWORD *brk, *con;
 
-   next = SOP->PC;
+	next = SOP->PC;
 
-   SOP_require_symbol(SOP,SOP_L_PAREN);
-   SOP_expression(SOP);
-   SOP_require_symbol(SOP,SOP_R_PAREN);
+	SOP_require_symbol(SOP, SOP_L_PAREN);
+	SOP_expression(SOP);
+	SOP_require_symbol(SOP, SOP_R_PAREN);
 
-   SOP_emit_opcode(SOP,OP_BRF);
-   end = SOP_emit_word(SOP,0);
+	SOP_emit_opcode(SOP, OP_BRF);
+	end = SOP_emit_word(SOP, 0);
 
-   brk = SOP_add_break(SOP,end);
-   con = SOP_add_continue(SOP,next);
-   SOP_statement(SOP);
-   end = SOP_remove_break(SOP,brk,end);
-   SOP_remove_continue(SOP,con);
+	brk = SOP_add_break(SOP, end);
+	con = SOP_add_continue(SOP, next);
+	SOP_statement(SOP);
+	end = SOP_remove_break(SOP, brk, end);
+	SOP_remove_continue(SOP, con);
 
-   SOP_emit_opcode(SOP,OP_BRA);
-   SOP_emit_word(SOP,next);
+	SOP_emit_opcode(SOP, OP_BRA);
+	SOP_emit_word(SOP, next);
 
-   SOP_local_fixup(SOP,end,SOP->PC);
+	SOP_local_fixup(SOP, end, SOP->PC);
 }
 
 /*************************************************************/
@@ -2904,31 +2628,30 @@ void SOP_while_statement(SOP_class *SOP)
 //
 /*************************************************************/
 
-void SOP_do_while_statement(SOP_class *SOP)
-{
-   UWORD next,end;
-   UWORD *brk,*con;
+void SOP_do_while_statement(SOP_class *SOP) {
+	UWORD next, end;
+	UWORD *brk, *con;
 
-   next = SOP->PC;
+	next = SOP->PC;
 
-   brk = SOP_add_break(SOP,0);
-   con = SOP_add_continue(SOP,next);
-   SOP_statement(SOP);
-   end = SOP_remove_break(SOP,brk,0);
-   SOP_remove_continue(SOP,con);
+	brk = SOP_add_break(SOP, 0);
+	con = SOP_add_continue(SOP, next);
+	SOP_statement(SOP);
+	end = SOP_remove_break(SOP, brk, 0);
+	SOP_remove_continue(SOP, con);
 
-   SOP_require_keyword(SOP,SOP_WHILE);
+	SOP_require_keyword(SOP, SOP_WHILE);
 
-   SOP_require_symbol(SOP,SOP_L_PAREN);
-   SOP_expression(SOP);
-   SOP_require_symbol(SOP,SOP_R_PAREN);
+	SOP_require_symbol(SOP, SOP_L_PAREN);
+	SOP_expression(SOP);
+	SOP_require_symbol(SOP, SOP_R_PAREN);
 
-   SOP_require_symbol(SOP,SOP_SEMICOLON);
+	SOP_require_symbol(SOP, SOP_SEMICOLON);
 
-   SOP_emit_opcode(SOP,OP_BRT);
-   SOP_emit_word(SOP,next);
+	SOP_emit_opcode(SOP, OP_BRT);
+	SOP_emit_word(SOP, next);
 
-   SOP_local_fixup(SOP,end,SOP->PC);
+	SOP_local_fixup(SOP, end, SOP->PC);
 }
 
 /*************************************************************/
@@ -2936,24 +2659,23 @@ void SOP_do_while_statement(SOP_class *SOP)
 // loop statement
 //
 /*************************************************************/
- 
-void SOP_loop_statement(SOP_class *SOP)
-{
-   UWORD next,end;
-   UWORD *brk,*con;
 
-   next = SOP->PC;
+void SOP_loop_statement(SOP_class *SOP) {
+	UWORD next, end;
+	UWORD *brk, *con;
 
-   brk = SOP_add_break(SOP,0);
-   con = SOP_add_continue(SOP,next);
-   SOP_statement(SOP);
-   end = SOP_remove_break(SOP,brk,0);
-   SOP_remove_continue(SOP,con);
+	next = SOP->PC;
 
-   SOP_emit_opcode(SOP,OP_BRA);
-   SOP_emit_word(SOP,next);
+	brk = SOP_add_break(SOP, 0);
+	con = SOP_add_continue(SOP, next);
+	SOP_statement(SOP);
+	end = SOP_remove_break(SOP, brk, 0);
+	SOP_remove_continue(SOP, con);
 
-   SOP_local_fixup(SOP,end,SOP->PC);
+	SOP_emit_opcode(SOP, OP_BRA);
+	SOP_emit_word(SOP, next);
+
+	SOP_local_fixup(SOP, end, SOP->PC);
 }
 
 /*************************************************************/
@@ -2963,34 +2685,32 @@ void SOP_loop_statement(SOP_class *SOP)
 //
 /*************************************************************/
 
-void SOP_if_statement(SOP_class *SOP)
-{
-   UWORD next,end;
+void SOP_if_statement(SOP_class *SOP) {
+	UWORD next, end;
 
-   SOP_require_symbol(SOP,SOP_L_PAREN);
-   SOP_expression(SOP);
-   SOP_require_symbol(SOP,SOP_R_PAREN);
+	SOP_require_symbol(SOP, SOP_L_PAREN);
+	SOP_expression(SOP);
+	SOP_require_symbol(SOP, SOP_R_PAREN);
 
-   SOP_emit_opcode(SOP,OP_BRF);
-   next = SOP_emit_word(SOP,0);
+	SOP_emit_opcode(SOP, OP_BRF);
+	next = SOP_emit_word(SOP, 0);
 
-   SOP_statement(SOP);
+	SOP_statement(SOP);
 
-   if (!SOP_next_keyword(SOP,SOP_ELSE))
-      SOP_local_fixup(SOP,next,SOP->PC);
-   else
-      {
-      LEX_fetch(SOP->LEX);
+	if (!SOP_next_keyword(SOP, SOP_ELSE))
+		SOP_local_fixup(SOP, next, SOP->PC);
+	else {
+		LEX_fetch(SOP->LEX);
 
-      SOP_emit_opcode(SOP,OP_BRA);
-      end = SOP_emit_word(SOP,0);
+		SOP_emit_opcode(SOP, OP_BRA);
+		end = SOP_emit_word(SOP, 0);
 
-      SOP_local_fixup(SOP,next,SOP->PC);
+		SOP_local_fixup(SOP, next, SOP->PC);
 
-      SOP_statement(SOP);
+		SOP_statement(SOP);
 
-      SOP_local_fixup(SOP,end,SOP->PC);
-      }
+		SOP_local_fixup(SOP, end, SOP->PC);
+	}
 }
 
 /*************************************************************/
@@ -2999,63 +2719,61 @@ void SOP_if_statement(SOP_class *SOP)
 //
 /*************************************************************/
 
-void SOP_switch_statement(SOP_class *SOP)
-{
-   UWORD test,end,ncases,case_cnt;
-   UWORD *brk;
-   UWORD def;
-   DICT_class *old;
-   DICT_entry *entry;
-   DI_class *DI;
+void SOP_switch_statement(SOP_class *SOP) {
+	UWORD test, end, ncases, case_cnt;
+	UWORD *brk;
+	UWORD def;
+	DICT_class *old;
+	DICT_entry *entry;
+	DI_class *DI;
 
-   SOP_require_symbol(SOP,SOP_L_PAREN);
-   SOP_expression(SOP);
-   SOP_require_symbol(SOP,SOP_R_PAREN);
+	SOP_require_symbol(SOP, SOP_L_PAREN);
+	SOP_expression(SOP);
+	SOP_require_symbol(SOP, SOP_R_PAREN);
 
-   SOP_emit_opcode(SOP,OP_BRA);
-   test = SOP_emit_word(SOP,0);
+	SOP_emit_opcode(SOP, OP_BRA);
+	test = SOP_emit_word(SOP, 0);
 
-   old = SOP->CASE;
-   SOP->CASE = DICT_construct(DC_LINEAR);
+	old = SOP->CASE;
+	SOP->CASE = DICT_construct(DC_LINEAR);
 
-   brk = SOP_add_break(SOP,0);
-   SOP_statement(SOP);
-   end = SOP_remove_break(SOP,brk,0);
+	brk = SOP_add_break(SOP, 0);
+	SOP_statement(SOP);
+	end = SOP_remove_break(SOP, brk, 0);
 
-   SOP_emit_opcode(SOP,OP_BRA);
-   end = SOP_emit_word(SOP,end);
+	SOP_emit_opcode(SOP, OP_BRA);
+	end = SOP_emit_word(SOP, end);
 
-   SOP_local_fixup(SOP,test,SOP->PC);
-   
-   SOP_emit_opcode(SOP,OP_CASE);
-   ncases = SOP_emit_word(SOP,0);
+	SOP_local_fixup(SOP, test, SOP->PC);
 
-   case_cnt = 0;
-   def = 0;
+	SOP_emit_opcode(SOP, OP_CASE);
+	ncases = SOP_emit_word(SOP, 0);
 
-   DI = DI_construct(SOP->CASE);
-   while ((entry = DI_fetch(DI)) != NULL)
-      if (!strcmp(entry->tag,KW_DEFAULT))
-         def = (UWORD) ascnum((BYTE*)entry->def,10);
-      else
-         {
-         SOP_emit_long(SOP,ascnum((BYTE*)entry->tag,10));
-         SOP_emit_word(SOP,(UWORD) ascnum((BYTE*)entry->def,10));
-         ++case_cnt;
-         }
-   DI_destroy(DI);
+	case_cnt = 0;
+	def = 0;
 
-   if (def)
-      SOP_emit_word(SOP,def);
-   else
-      end = SOP_emit_word(SOP,end);
-   
-   SOP_local_fixup(SOP,ncases,case_cnt);
+	DI = DI_construct(SOP->CASE);
+	while ((entry = DI_fetch(DI)) != NULL)
+		if (!strcmp(entry->tag, KW_DEFAULT))
+			def = (UWORD) ascnum((BYTE*) entry->def, 10);
+		else {
+			SOP_emit_long(SOP, ascnum((BYTE*) entry->tag, 10));
+			SOP_emit_word(SOP, (UWORD) ascnum((BYTE*) entry->def, 10));
+			++case_cnt;
+		}
+	DI_destroy(DI);
 
-   SOP_local_fixup(SOP,end,SOP->PC);
+	if (def)
+		SOP_emit_word(SOP, def);
+	else
+		end = SOP_emit_word(SOP, end);
 
-   DICT_destroy(SOP->CASE);
-   SOP->CASE = old;
+	SOP_local_fixup(SOP, ncases, case_cnt);
+
+	SOP_local_fixup(SOP, end, SOP->PC);
+
+	DICT_destroy(SOP->CASE);
+	SOP->CASE = old;
 }
 
 /*************************************************************/
@@ -3064,34 +2782,30 @@ void SOP_switch_statement(SOP_class *SOP)
 //
 /*************************************************************/
 
-void SOP_case_statement(SOP_class *SOP)
-{
-   BYTE *case_val;
+void SOP_case_statement(SOP_class *SOP) {
+	BYTE *case_val;
 
-   if (SOP->CASE == NULL)
-      SOP_basic_error(SOP,MSG_OSW);
+	if (SOP->CASE == NULL)
+		SOP_basic_error(SOP, MSG_OSW);
 
-   do
-      if (!SOP_next_literal_constant(SOP))
-         {
-         LEX_fetch(SOP->LEX);
-         SOP_basic_error(SOP,MSG_ELC);
-         }
-      else
-         {
-         case_val = str(SOP_fetch_literal_constant(SOP));
+	do
+		if (!SOP_next_literal_constant(SOP)) {
+			LEX_fetch(SOP->LEX);
+			SOP_basic_error(SOP, MSG_ELC);
+		} else {
+			case_val = str(SOP_fetch_literal_constant(SOP));
 
-         if (SOP->CASE != NULL)
-            if (DICT_lookup(SOP->CASE,case_val))
-               SOP_basic_error(SOP,MSG_RDC);
-            else
-               DICT_enter(SOP->CASE,case_val,D_DEFHEAP)->def = str(SOP->PC);
+			if (SOP->CASE != NULL)
+				if (DICT_lookup(SOP->CASE, case_val))
+					SOP_basic_error(SOP, MSG_RDC);
+				else
+					DICT_enter(SOP->CASE, case_val, D_DEFHEAP)->def = str(
+							SOP->PC);
 
-         free(case_val);
-         }
-   while (LEX_next_comma(SOP->LEX));
+			free(case_val);
+		} while (LEX_next_comma(SOP->LEX));
 
-   SOP_require_symbol(SOP,SOP_COLON);
+	SOP_require_symbol(SOP, SOP_COLON);
 }
 
 /*************************************************************/
@@ -3100,17 +2814,15 @@ void SOP_case_statement(SOP_class *SOP)
 //
 /*************************************************************/
 
-void SOP_default_statement(SOP_class *SOP)
-{
-   if (SOP->CASE == NULL)
-      SOP_basic_error(SOP,MSG_OSW);
-   else
-      if (DICT_lookup(SOP->CASE,KW_DEFAULT))
-         SOP_basic_error(SOP,MSG_RDC);
-      else
-         DICT_enter(SOP->CASE,KW_DEFAULT,D_DEFHEAP)->def = str(SOP->PC);
+void SOP_default_statement(SOP_class *SOP) {
+	if (SOP->CASE == NULL)
+		SOP_basic_error(SOP, MSG_OSW);
+	else if (DICT_lookup(SOP->CASE, KW_DEFAULT))
+		SOP_basic_error(SOP, MSG_RDC);
+	else
+		DICT_enter(SOP->CASE, KW_DEFAULT, D_DEFHEAP)->def = str(SOP->PC);
 
-   SOP_require_symbol(SOP,SOP_COLON);
+	SOP_require_symbol(SOP, SOP_COLON);
 }
 
 /*************************************************************/
@@ -3120,53 +2832,50 @@ void SOP_default_statement(SOP_class *SOP)
 //
 /*************************************************************/
 
-void SOP_message_statement(SOP_class *SOP)
-{
-   UWORD msgnum;
-   UWORD old_context;
-   MHDR *header;
+void SOP_message_statement(SOP_class *SOP) {
+	UWORD msgnum;
+	UWORD old_context;
+	MHDR *header;
 
-   old_context = SOP->context;
-   SOP->context = CON_H;
+	old_context = SOP->context;
+	SOP->context = CON_H;
 
-   LEX_fetch(SOP->LEX);
+	LEX_fetch(SOP->LEX);
 
-   if (LEX_type(SOP->LEX,LEX_CUR) != TTYP_STRLIT)
-      {
-      msgnum = -1U;
-      SOP_basic_error(SOP,MSG_BMN);
-      }
-   else
-      msgnum = RS_get_MSGD_entry(SOP->RS,LEX_lexeme(SOP->LEX,LEX_CUR));
+	if (LEX_type(SOP->LEX, LEX_CUR) != TTYP_STRLIT) {
+		msgnum = -1U;
+		SOP_basic_error(SOP, MSG_BMN);
+	} else
+		msgnum = RS_get_MSGD_entry(SOP->RS, LEX_lexeme(SOP->LEX, LEX_CUR));
 
-   if (!SOP_export_symbol(SOP,msgnum,SOP->PC,'M',1))
-      SOP_basic_error(SOP,MSG_RMN);
+	if (!SOP_export_symbol(SOP, msgnum, SOP->PC, 'M', 1))
+		SOP_basic_error(SOP, MSG_RMN);
 
-   DICT_wipe(SOP->ARGV);
-   if (LEX_next_comma(SOP->LEX))
-      SOP_var_declaration(SOP,SIZE_L,SOP->ARGV,'L',0,V_PRIVATE);
+	DICT_wipe(SOP->ARGV);
+	if (LEX_next_comma(SOP->LEX))
+		SOP_var_declaration(SOP, SIZE_L, SOP->ARGV, 'L', 0, V_PRIVATE);
 
-   DICT_wipe(SOP->ADUS);
-   DICT_wipe(SOP->AVUS);
-   DICT_wipe(SOP->APUS);
-   DICT_wipe(SOP->AUTO);
-   DICT_enter(SOP->AUTO,KW_THIS,0)->def = (BYTE*)"2,0,2";
-   SOP->auto_index = 2;
+	DICT_wipe(SOP->ADUS);
+	DICT_wipe(SOP->AVUS);
+	DICT_wipe(SOP->APUS);
+	DICT_wipe(SOP->AUTO);
+	DICT_enter(SOP->AUTO, KW_THIS, 0)->def = (BYTE*) "2,0,2";
+	SOP->auto_index = 2;
 
-   header = (MHDR *) (((UBYTE *) SOP->CODE) + SOP->PC);
-   SOP->PC += sizeof(MHDR);
+	header = (MHDR *) (((UBYTE *) SOP->CODE) + SOP->PC);
+	SOP->PC += sizeof(MHDR);
 
-   SOP_require_symbol(SOP,SOP_L_CURLY);
-   SOP_compound_statement(SOP);
-   SOP_emit_opcode(SOP,OP_END);
+	SOP_require_symbol(SOP, SOP_L_CURLY);
+	SOP_compound_statement(SOP);
+	SOP_emit_opcode(SOP, OP_END);
 
-   SOP_show_usage(E_NOTICE,SOP->ADUS,MSG_DNU);
-   SOP_show_usage(E_NOTICE,SOP->AVUS,MSG_VNU);
-   SOP_show_usage(E_WARN,SOP->APUS,MSG_PPU);
+	SOP_show_usage(E_NOTICE, SOP->ADUS, MSG_DNU);
+	SOP_show_usage(E_NOTICE, SOP->AVUS, MSG_VNU);
+	SOP_show_usage(E_WARN, SOP->APUS, MSG_PPU);
 
-   header->auto_size = SOP->auto_index;
+	header->auto_size = SOP->auto_index;
 
-   SOP->context = old_context;
+	SOP->context = old_context;
 }
 
 /*************************************************************/
@@ -3175,48 +2884,46 @@ void SOP_message_statement(SOP_class *SOP)
 //
 /*************************************************************/
 
-void SOP_procedure_statement(SOP_class *SOP)
-{
-   BYTE *name;
-   UWORD old_context;
-   MHDR *header;
+void SOP_procedure_statement(SOP_class *SOP) {
+	BYTE *name;
+	UWORD old_context;
+	MHDR *header;
 
-   old_context = SOP->context;
-   SOP->context = CON_P;
+	old_context = SOP->context;
+	SOP->context = CON_P;
 
-   LEX_fetch(SOP->LEX);
+	LEX_fetch(SOP->LEX);
 
-   name = LEX_lexeme(SOP->LEX,LEX_CUR);
+	name = LEX_lexeme(SOP->LEX, LEX_CUR);
 
-   if (LEX_type(SOP->LEX,LEX_CUR) != TTYP_NAME)
-      SOP_basic_error(SOP,MSG_BPN);
-   else
-      if (DICT_lookup(SOP->PROC,name) != NULL)
-         SOP_basic_error(SOP,MSG_RPN);
-      else
-         DICT_enter(SOP->PROC,name,D_DEFHEAP)->def = str(SOP->PC);
+	if (LEX_type(SOP->LEX, LEX_CUR) != TTYP_NAME)
+		SOP_basic_error(SOP, MSG_BPN);
+	else if (DICT_lookup(SOP->PROC, name) != NULL)
+		SOP_basic_error(SOP, MSG_RPN);
+	else
+		DICT_enter(SOP->PROC, name, D_DEFHEAP)->def = str(SOP->PC);
 
-   DICT_wipe(SOP->ADUS);
-   DICT_wipe(SOP->AVUS);
-   DICT_wipe(SOP->APUS);
-   DICT_wipe(SOP->AUTO);
-   DICT_enter(SOP->AUTO,KW_THIS,0)->def = (BYTE*)"2,0,2";
-   SOP->auto_index = 2;
+	DICT_wipe(SOP->ADUS);
+	DICT_wipe(SOP->AVUS);
+	DICT_wipe(SOP->APUS);
+	DICT_wipe(SOP->AUTO);
+	DICT_enter(SOP->AUTO, KW_THIS, 0)->def = (BYTE*) "2,0,2";
+	SOP->auto_index = 2;
 
-   header = (MHDR *) (((UBYTE *) SOP->CODE) + SOP->PC);
-   SOP->PC += sizeof(MHDR);
+	header = (MHDR *) (((UBYTE *) SOP->CODE) + SOP->PC);
+	SOP->PC += sizeof(MHDR);
 
-   SOP_require_symbol(SOP,SOP_L_CURLY);
-   SOP_compound_statement(SOP);
-   SOP_emit_opcode(SOP,OP_RTS);
+	SOP_require_symbol(SOP, SOP_L_CURLY);
+	SOP_compound_statement(SOP);
+	SOP_emit_opcode(SOP, OP_RTS);
 
-   SOP_show_usage(E_NOTICE,SOP->ADUS,MSG_DNU);
-   SOP_show_usage(E_NOTICE,SOP->AVUS,MSG_VNU);
-   SOP_show_usage(E_WARN,SOP->APUS,MSG_PPU);
+	SOP_show_usage(E_NOTICE, SOP->ADUS, MSG_DNU);
+	SOP_show_usage(E_NOTICE, SOP->AVUS, MSG_VNU);
+	SOP_show_usage(E_WARN, SOP->APUS, MSG_PPU);
 
-   header->auto_size = SOP->auto_index;
+	header->auto_size = SOP->auto_index;
 
-   SOP->context = old_context;
+	SOP->context = old_context;
 }
 
 /*************************************************************/
@@ -3225,17 +2932,16 @@ void SOP_procedure_statement(SOP_class *SOP)
 //
 /*************************************************************/
 
-void SOP_return_statement(SOP_class *SOP)
-{
-   if (!SOP_next_symbol(SOP,SOP_SEMICOLON))
-      SOP_expression(SOP);
+void SOP_return_statement(SOP_class *SOP) {
+	if (!SOP_next_symbol(SOP, SOP_SEMICOLON))
+		SOP_expression(SOP);
 
-   if (SOP->context != CON_P)
-      SOP_emit_opcode(SOP,OP_END);
-   else
-      SOP_emit_opcode(SOP,OP_RTS);
+	if (SOP->context != CON_P)
+		SOP_emit_opcode(SOP, OP_END);
+	else
+		SOP_emit_opcode(SOP, OP_RTS);
 
-   SOP_require_symbol(SOP,SOP_SEMICOLON);
+	SOP_require_symbol(SOP, SOP_SEMICOLON);
 }
 
 /*************************************************************/
@@ -3244,13 +2950,12 @@ void SOP_return_statement(SOP_class *SOP)
 //
 /*************************************************************/
 
-void SOP_trigger_statement(SOP_class *SOP)
-{
-   SOP_emit_opcode(SOP,OP_BRK);
+void SOP_trigger_statement(SOP_class *SOP) {
+	SOP_emit_opcode(SOP, OP_BRK);
 
-   SOP_require_symbol(SOP,SOP_SEMICOLON);
+	SOP_require_symbol(SOP, SOP_SEMICOLON);
 #if 0
-   asm { int 3; }
+	asm {int 3;}
 #endif
 }
 
@@ -3268,260 +2973,248 @@ void SOP_trigger_statement(SOP_class *SOP)
 //
 /*************************************************************/
 
-void SOP_statement(SOP_class *SOP)
-{
-   switch (LEX_type(SOP->LEX,LEX_NXT))
-      {
-      case TTYP_KEYWORD:
-         LEX_fetch(SOP->LEX);
+void SOP_statement(SOP_class *SOP) {
+	switch (LEX_type(SOP->LEX, LEX_NXT)) {
+	case TTYP_KEYWORD:
+		LEX_fetch(SOP->LEX);
 
-         switch (LEX_token(SOP->LEX,LEX_CUR))
-            {
-            case SOP_LONG:
-               SOP_check_auto_nest(SOP);
+		switch (LEX_token(SOP->LEX, LEX_CUR)) {
+		case SOP_LONG:
+			SOP_check_auto_nest(SOP);
 
-               SOP->auto_index = SOP_var_declaration(SOP,SIZE_L,SOP->AUTO,
-                  'L',SOP->auto_index,V_PRIVATE);
+			SOP->auto_index = SOP_var_declaration(SOP, SIZE_L, SOP->AUTO, 'L',
+					SOP->auto_index, V_PRIVATE);
 
-               SOP_require_symbol(SOP,SOP_SEMICOLON);
-               break;
+			SOP_require_symbol(SOP, SOP_SEMICOLON);
+			break;
 
-            case SOP_WORD:
-               SOP_check_auto_nest(SOP);
+		case SOP_WORD:
+			SOP_check_auto_nest(SOP);
 
-               SOP->auto_index = SOP_var_declaration(SOP,SIZE_W,SOP->AUTO,
-                  'W',SOP->auto_index,V_PRIVATE);
+			SOP->auto_index = SOP_var_declaration(SOP, SIZE_W, SOP->AUTO, 'W',
+					SOP->auto_index, V_PRIVATE);
 
-               SOP_require_symbol(SOP,SOP_SEMICOLON);
-               break;
+			SOP_require_symbol(SOP, SOP_SEMICOLON);
+			break;
 
-            case SOP_BYTE:
-               SOP_check_auto_nest(SOP);
+		case SOP_BYTE:
+			SOP_check_auto_nest(SOP);
 
-               SOP->auto_index = SOP_var_declaration(SOP,SIZE_B,SOP->AUTO,
-                  'B',SOP->auto_index,V_PRIVATE);
+			SOP->auto_index = SOP_var_declaration(SOP, SIZE_B, SOP->AUTO, 'B',
+					SOP->auto_index, V_PRIVATE);
 
-               SOP_require_symbol(SOP,SOP_SEMICOLON);
-               break;
+			SOP_require_symbol(SOP, SOP_SEMICOLON);
+			break;
 
-            case SOP_PRIVATE:
-               LEX_fetch(SOP->LEX);
-               switch (LEX_token(SOP->LEX,LEX_CUR))
-                  {
-                  case SOP_LONG:
-                     SOP->static_index = SOP_var_declaration(SOP,SIZE_L,
-                        SOP->STAT,'L',SOP->static_index,V_PRIVATE);
+		case SOP_PRIVATE:
+			LEX_fetch(SOP->LEX);
+			switch (LEX_token(SOP->LEX, LEX_CUR)) {
+			case SOP_LONG:
+				SOP->static_index = SOP_var_declaration(SOP, SIZE_L, SOP->STAT,
+						'L', SOP->static_index, V_PRIVATE);
 
-                     SOP_require_symbol(SOP,SOP_SEMICOLON);
-                     break;
+				SOP_require_symbol(SOP, SOP_SEMICOLON);
+				break;
 
-                  case SOP_WORD:
-                     SOP->static_index = SOP_var_declaration(SOP,SIZE_W,
-                        SOP->STAT,'W',SOP->static_index,V_PRIVATE);
+			case SOP_WORD:
+				SOP->static_index = SOP_var_declaration(SOP, SIZE_W, SOP->STAT,
+						'W', SOP->static_index, V_PRIVATE);
 
-                     SOP_require_symbol(SOP,SOP_SEMICOLON);
-                     break;
+				SOP_require_symbol(SOP, SOP_SEMICOLON);
+				break;
 
-                  case SOP_BYTE:
-                     SOP->static_index = SOP_var_declaration(SOP,SIZE_B,
-                        SOP->STAT,'B',SOP->static_index,V_PRIVATE);
+			case SOP_BYTE:
+				SOP->static_index = SOP_var_declaration(SOP, SIZE_B, SOP->STAT,
+						'B', SOP->static_index, V_PRIVATE);
 
-                     SOP_require_symbol(SOP,SOP_SEMICOLON);
-                     break;
+				SOP_require_symbol(SOP, SOP_SEMICOLON);
+				break;
 
-                  default:
-                     SOP_basic_error(SOP,MSG_SYN);
-                  }
-               break;
+			default:
+				SOP_basic_error(SOP, MSG_SYN);
+			}
+			break;
 
-            case SOP_PUBLIC:
-               LEX_fetch(SOP->LEX);
-               switch (LEX_token(SOP->LEX,LEX_CUR))
-                  {
-                  case SOP_LONG:
-                     SOP->static_index = SOP_var_declaration(SOP,SIZE_L,
-                        SOP->STAT,'L',SOP->static_index,V_PUBLIC);
+		case SOP_PUBLIC:
+			LEX_fetch(SOP->LEX);
+			switch (LEX_token(SOP->LEX, LEX_CUR)) {
+			case SOP_LONG:
+				SOP->static_index = SOP_var_declaration(SOP, SIZE_L, SOP->STAT,
+						'L', SOP->static_index, V_PUBLIC);
 
-                     SOP_require_symbol(SOP,SOP_SEMICOLON);
-                     break;
+				SOP_require_symbol(SOP, SOP_SEMICOLON);
+				break;
 
-                  case SOP_WORD:
-                     SOP->static_index = SOP_var_declaration(SOP,SIZE_W,
-                        SOP->STAT,'W',SOP->static_index,V_PUBLIC);
+			case SOP_WORD:
+				SOP->static_index = SOP_var_declaration(SOP, SIZE_W, SOP->STAT,
+						'W', SOP->static_index, V_PUBLIC);
 
-                     SOP_require_symbol(SOP,SOP_SEMICOLON);
-                     break;
+				SOP_require_symbol(SOP, SOP_SEMICOLON);
+				break;
 
-                  case SOP_BYTE:
-                     SOP->static_index = SOP_var_declaration(SOP,SIZE_B,
-                        SOP->STAT,'B',SOP->static_index,V_PUBLIC);
+			case SOP_BYTE:
+				SOP->static_index = SOP_var_declaration(SOP, SIZE_B, SOP->STAT,
+						'B', SOP->static_index, V_PUBLIC);
 
-                     SOP_require_symbol(SOP,SOP_SEMICOLON);
-                     break;
+				SOP_require_symbol(SOP, SOP_SEMICOLON);
+				break;
 
-                  default:
-                     SOP_basic_error(SOP,MSG_SYN);
-                  }
-               break;
+			default:
+				SOP_basic_error(SOP, MSG_SYN);
+			}
+			break;
 
-            case SOP_EXTERN:
-               LEX_fetch(SOP->LEX);
-               switch (LEX_token(SOP->LEX,LEX_CUR))
-                  {
-                  case SOP_LONG:
-                     SOP_var_declaration(SOP,SIZE_L,SOP->XTRN,'L',0,
-                        V_PRIVATE);
+		case SOP_EXTERN:
+			LEX_fetch(SOP->LEX);
+			switch (LEX_token(SOP->LEX, LEX_CUR)) {
+			case SOP_LONG:
+				SOP_var_declaration(SOP, SIZE_L, SOP->XTRN, 'L', 0, V_PRIVATE);
 
-                     SOP_require_symbol(SOP,SOP_SEMICOLON);
-                     break;
+				SOP_require_symbol(SOP, SOP_SEMICOLON);
+				break;
 
-                  case SOP_WORD:
-                     SOP_var_declaration(SOP,SIZE_W,SOP->XTRN,'W',0,
-                        V_PRIVATE);
+			case SOP_WORD:
+				SOP_var_declaration(SOP, SIZE_W, SOP->XTRN, 'W', 0, V_PRIVATE);
 
-                     SOP_require_symbol(SOP,SOP_SEMICOLON);
-                     break;
+				SOP_require_symbol(SOP, SOP_SEMICOLON);
+				break;
 
-                  case SOP_BYTE:
-                     SOP_var_declaration(SOP,SIZE_B,SOP->XTRN,'B',0,
-                        V_PRIVATE);
+			case SOP_BYTE:
+				SOP_var_declaration(SOP, SIZE_B, SOP->XTRN, 'B', 0, V_PRIVATE);
 
-                     SOP_require_symbol(SOP,SOP_SEMICOLON);
-                     break;
+				SOP_require_symbol(SOP, SOP_SEMICOLON);
+				break;
 
-                  default:
-                     SOP_basic_error(SOP,MSG_SYN);
-                  }
-               break;
+			default:
+				SOP_basic_error(SOP, MSG_SYN);
+			}
+			break;
 
-            case SOP_TABLE:
-               LEX_fetch(SOP->LEX);
-               switch (LEX_token(SOP->LEX,LEX_CUR))
-                  {
-                  case SOP_LONG:
-                     SOP->PC = SOP_var_declaration(SOP,SIZE_L,SOP->TABL,'L',
-                        SOP->PC,V_PRIVATE);
+		case SOP_TABLE:
+			LEX_fetch(SOP->LEX);
+			switch (LEX_token(SOP->LEX, LEX_CUR)) {
+			case SOP_LONG:
+				SOP->PC = SOP_var_declaration(SOP, SIZE_L, SOP->TABL, 'L',
+						SOP->PC, V_PRIVATE);
 
-                     SOP_require_symbol(SOP,SOP_SEMICOLON);
-                     break;
+				SOP_require_symbol(SOP, SOP_SEMICOLON);
+				break;
 
-                  case SOP_WORD:
-                     SOP->PC = SOP_var_declaration(SOP,SIZE_W,SOP->TABL,'W',
-                        SOP->PC,V_PRIVATE);
+			case SOP_WORD:
+				SOP->PC = SOP_var_declaration(SOP, SIZE_W, SOP->TABL, 'W',
+						SOP->PC, V_PRIVATE);
 
-                     SOP_require_symbol(SOP,SOP_SEMICOLON);
-                     break;
+				SOP_require_symbol(SOP, SOP_SEMICOLON);
+				break;
 
-                  case SOP_BYTE:
-                     SOP->PC = SOP_var_declaration(SOP,SIZE_B,SOP->TABL,'B',
-                        SOP->PC,V_PRIVATE);
+			case SOP_BYTE:
+				SOP->PC = SOP_var_declaration(SOP, SIZE_B, SOP->TABL, 'B',
+						SOP->PC, V_PRIVATE);
 
-                     SOP_require_symbol(SOP,SOP_SEMICOLON);
-                     break;
+				SOP_require_symbol(SOP, SOP_SEMICOLON);
+				break;
 
-                  default:
-                     SOP_basic_error(SOP,MSG_SYN);
-                  }
-               break;
+			default:
+				SOP_basic_error(SOP, MSG_SYN);
+			}
+			break;
 
-            case SOP_MESSAGE:
-               SOP_check_nest(SOP);
-               SOP_message_statement(SOP);
-               break;
+		case SOP_MESSAGE:
+			SOP_check_nest(SOP);
+			SOP_message_statement(SOP);
+			break;
 
-            case SOP_PROCEDURE:
-               SOP_check_nest(SOP);
-               SOP_procedure_statement(SOP);
-               break;
+		case SOP_PROCEDURE:
+			SOP_check_nest(SOP);
+			SOP_procedure_statement(SOP);
+			break;
 
-            case SOP_MEMBER:
-               SOP_member_statement(SOP);
-               break;
+		case SOP_MEMBER:
+			SOP_member_statement(SOP);
+			break;
 
-            default:
-               SOP_check_access(SOP);
+		default:
+			SOP_check_access(SOP);
 
-               switch (LEX_token(SOP->LEX,LEX_CUR))
-                  {
-                  case SOP_CONTINUE:
-                     SOP_continue_statement(SOP);
-                     break;
+			switch (LEX_token(SOP->LEX, LEX_CUR)) {
+			case SOP_CONTINUE:
+				SOP_continue_statement(SOP);
+				break;
 
-                  case SOP_BREAK:
-                     SOP_break_statement(SOP);
-                     break;
+			case SOP_BREAK:
+				SOP_break_statement(SOP);
+				break;
 
-                  case SOP_FOR:
-                     SOP_for_statement(SOP);
-                     break;
+			case SOP_FOR:
+				SOP_for_statement(SOP);
+				break;
 
-                  case SOP_WHILE:
-                     SOP_while_statement(SOP);
-                     break;
+			case SOP_WHILE:
+				SOP_while_statement(SOP);
+				break;
 
-                  case SOP_DO:
-                     SOP_do_while_statement(SOP);
-                     break;
+			case SOP_DO:
+				SOP_do_while_statement(SOP);
+				break;
 
-                  case SOP_LOOP:
-                     SOP_loop_statement(SOP);
-                     break;
+			case SOP_LOOP:
+				SOP_loop_statement(SOP);
+				break;
 
-                  case SOP_IF:
-                     SOP_if_statement(SOP);
-                     break;
+			case SOP_IF:
+				SOP_if_statement(SOP);
+				break;
 
-                  case SOP_SWITCH:
-                     SOP_switch_statement(SOP);
-                     break;
+			case SOP_SWITCH:
+				SOP_switch_statement(SOP);
+				break;
 
-                  case SOP_CASE:
-                     SOP_case_statement(SOP);
-                     break;
+			case SOP_CASE:
+				SOP_case_statement(SOP);
+				break;
 
-                  case SOP_DEFAULT:
-                     SOP_default_statement(SOP);
-                     break;
+			case SOP_DEFAULT:
+				SOP_default_statement(SOP);
+				break;
 
-                  case SOP_RETURN:
-                     SOP_return_statement(SOP);
-                     break;
+			case SOP_RETURN:
+				SOP_return_statement(SOP);
+				break;
 
-                  case SOP_TRIGGER:
-                     SOP_trigger_statement(SOP);
-                     break;
-                  }
-               break;
-            }
-         break;
+			case SOP_TRIGGER:
+				SOP_trigger_statement(SOP);
+				break;
+			}
+			break;
+		}
+		break;
 
-      case TTYP_SYMBOL:
-         SOP_check_access(SOP);
+	case TTYP_SYMBOL:
+		SOP_check_access(SOP);
 
-         switch (LEX_token(SOP->LEX,LEX_NXT))
-            {
-            case SOP_L_CURLY:
-               LEX_fetch(SOP->LEX);
-               SOP_compound_statement(SOP);
-               break;
+		switch (LEX_token(SOP->LEX, LEX_NXT)) {
+		case SOP_L_CURLY:
+			LEX_fetch(SOP->LEX);
+			SOP_compound_statement(SOP);
+			break;
 
-            case SOP_SEMICOLON:
-               LEX_fetch(SOP->LEX);
-               break;
+		case SOP_SEMICOLON:
+			LEX_fetch(SOP->LEX);
+			break;
 
-            default:
-               SOP_expression(SOP);
-               SOP_require_symbol(SOP,SOP_SEMICOLON);
-               break;
-            }
-         break;
+		default:
+			SOP_expression(SOP);
+			SOP_require_symbol(SOP, SOP_SEMICOLON);
+			break;
+		}
+		break;
 
-      default:
-         SOP_check_access(SOP);
+	default:
+		SOP_check_access(SOP);
 
-         SOP_expression(SOP);
-         SOP_require_symbol(SOP,SOP_SEMICOLON);
-      }
+		SOP_expression(SOP);
+		SOP_require_symbol(SOP, SOP_SEMICOLON);
+	}
 }
 
 /*************************************************************/
@@ -3531,24 +3224,20 @@ void SOP_statement(SOP_class *SOP)
 //
 /*************************************************************/
 
-void SOP_compound_statement(SOP_class *SOP)
-{
-   while (!SOP_next_symbol(SOP,SOP_R_CURLY))
-      {
-      if (LEX_type(SOP->LEX,LEX_NXT) == TTYP_EOF)
-         {
-         if (!SOP->EOF_reached)
-            {
-            report(E_ERROR,LEX_line(SOP->LEX,LEX_CUR),MSG_UEO);
-            SOP->EOF_reached = 1;
-            }
-         return;
-         }
+void SOP_compound_statement(SOP_class *SOP) {
+	while (!SOP_next_symbol(SOP, SOP_R_CURLY)) {
+		if (LEX_type(SOP->LEX, LEX_NXT) == TTYP_EOF) {
+			if (!SOP->EOF_reached) {
+				report(E_ERROR, LEX_line(SOP->LEX, LEX_CUR), MSG_UEO);
+				SOP->EOF_reached = 1;
+			}
+			return;
+		}
 
-      SOP_statement(SOP);
-      }
+		SOP_statement(SOP);
+	}
 
-   LEX_fetch(SOP->LEX);
+	LEX_fetch(SOP->LEX);
 }
 
 /*************************************************************/
@@ -3557,18 +3246,17 @@ void SOP_compound_statement(SOP_class *SOP)
 //
 /*************************************************************/
 
-void SOP_write_code(SOP_class *SOP, void *ptr, ULONG len)
-{
-   RF_entry_hdr RHDR;
-   ULONG ord;
+void SOP_write_code(SOP_class *SOP, void *ptr, ULONG len) {
+	RF_entry_hdr RHDR;
+	ULONG ord;
 
-   ord = RS_get_ROED_entry(SOP->RS,SOP->name);
+	ord = RS_get_ROED_entry(SOP->RS, SOP->name);
 
-   RHDR.data_attrib = SOP->attrib;
-   RHDR.data_size = len;
+	RHDR.data_attrib = SOP->attrib;
+	RHDR.data_size = len;
 
-   RF_write_entry(SOP->RS->RF,ord,ptr,&RHDR,RTYP_RAW_MEM);
-   report(E_RESCOMP,NULL,NULL);
+	RF_write_entry(SOP->RS->RF, ord, ptr, &RHDR, RTYP_RAW_MEM);
+	report(E_RESCOMP, NULL, NULL);
 }
 
 /*************************************************************/
@@ -3578,23 +3266,22 @@ void SOP_write_code(SOP_class *SOP, void *ptr, ULONG len)
 //
 /*************************************************************/
 
-ULONG SOP_write_dict(SOP_class *SOP, BYTE *suffix, DICT_class *DICT)
-{
-   BYTE *name;
-   ULONG ord;
+ULONG SOP_write_dict(SOP_class *SOP, BYTE *suffix, DICT_class *DICT) {
+	BYTE *name;
+	ULONG ord;
 
-   name = (BYTE*) mem_alloc(strlen(SOP->name)+strlen(suffix)+1L);
-   strcpy(name,SOP->name);
-   strcat(name,suffix);
+	name = (BYTE*) mem_alloc(strlen(SOP->name) + strlen(suffix) + 1L);
+	strcpy(name, SOP->name);
+	strcat(name, suffix);
 
-   ord = RS_get_ROED_entry(SOP->RS,name);
+	ord = RS_get_ROED_entry(SOP->RS, name);
 
-   DICT_save(DICT,SOP->RS->RF,ord);
-   report(E_RESCOMP,NULL,NULL);
+	DICT_save(DICT, SOP->RS->RF, ord);
+	report(E_RESCOMP, NULL, NULL);
 
-   free(name);
+	free(name);
 
-   return ord;
+	return ord;
 }
 
 /*************************************************************/
@@ -3604,28 +3291,25 @@ ULONG SOP_write_dict(SOP_class *SOP, BYTE *suffix, DICT_class *DICT)
 //
 /*************************************************************/
 
-WORD SOP_new_source_attrib(SOP_class *SOP)
-{
-   WORD new_source;
-   DICT_entry *cur;
+WORD SOP_new_source_attrib(SOP_class *SOP) {
+	WORD new_source;
+	DICT_entry *cur;
 
-   new_source = 0;
-   cur = DICT_lookup(SOP->RS->dict[RDES],SOP->fn);
+	new_source = 0;
+	cur = DICT_lookup(SOP->RS->dict[RDES], SOP->fn);
 
-   if (cur == NULL)
-      new_source = 1;
-   else
-      if (ascnum((BYTE*)cur->def,10) != SOP->attrib)
-         {
-         DICT_delete(SOP->RS->dict[RDES],SOP->fn);
-         new_source = 1;
-         }
+	if (cur == NULL)
+		new_source = 1;
+	else if (ascnum((BYTE*) cur->def, 10) != SOP->attrib) {
+		DICT_delete(SOP->RS->dict[RDES], SOP->fn);
+		new_source = 1;
+	}
 
-   if (new_source)
-      DICT_enter(SOP->RS->dict[RDES],SOP->fn,D_DEFHEAP)->def =
-         str(SOP->attrib);
+	if (new_source)
+		DICT_enter(SOP->RS->dict[RDES], SOP->fn, D_DEFHEAP)->def = str(
+				SOP->attrib);
 
-   return new_source;
+	return new_source;
 }
 
 /*************************************************************/
@@ -3635,45 +3319,44 @@ WORD SOP_new_source_attrib(SOP_class *SOP)
 //
 /*************************************************************/
 
-SOP_class *SOP_construct(RS_class *RS, ULONG def_attribs)
-{
-   SOP_class *SOP;
-   WORD bad;
+SOP_class *SOP_construct(RS_class *RS, ULONG def_attribs) {
+	SOP_class *SOP;
+	WORD bad;
 
-   SOP = (SOP_class*) mem_alloc(sizeof(SOP_class));
+	SOP = (SOP_class*) mem_alloc(sizeof(SOP_class));
 
-   SOP->RS = RS;
+	SOP->RS = RS;
 
-   LEX_fetch(RS->LEX);
+	LEX_fetch(RS->LEX);
 
-   bad=0;
-   switch (LEX_type(RS->LEX,LEX_CUR))
-      {
-      default:
-         RS_syntax_error(RS);
-         bad=1; break;
+	bad = 0;
+	switch (LEX_type(RS->LEX, LEX_CUR)) {
+	default:
+		RS_syntax_error(RS);
+		bad = 1;
+		break;
 
-      case TTYP_KEYWORD:
-         RS_reserved_word_error(RS);
-         bad=1; break;
+	case TTYP_KEYWORD:
+		RS_reserved_word_error(RS);
+		bad = 1;
+		break;
 
-      case TTYP_STRLIT:
-         SOP->fn = str_alloc(LEX_lexeme(RS->LEX,LEX_CUR));
+	case TTYP_STRLIT:
+		SOP->fn = str_alloc(LEX_lexeme(RS->LEX, LEX_CUR));
 
-         if (RS_next_attribute_specifier(RS))
-            SOP->attrib = RS_parse_attribute_list(RS);
-         else
-            SOP->attrib = def_attribs;
-         break;
-      }
+		if (RS_next_attribute_specifier(RS))
+			SOP->attrib = RS_parse_attribute_list(RS);
+		else
+			SOP->attrib = def_attribs;
+		break;
+	}
 
-   if (bad)
-      {
-      free(SOP);
-      return NULL;
-      }
+	if (bad) {
+		free(SOP);
+		return NULL;
+	}
 
-   return SOP;
+	return SOP;
 }
 
 /*************************************************************/
@@ -3682,11 +3365,10 @@ SOP_class *SOP_construct(RS_class *RS, ULONG def_attribs)
 //
 /*************************************************************/
 
-void SOP_destroy(SOP_class *SOP)
-{
-   free(SOP->fn);
+void SOP_destroy(SOP_class *SOP) {
+	free(SOP->fn);
 
-   free(SOP);
+	free(SOP);
 }
 
 /*************************************************************/
@@ -3707,28 +3389,27 @@ void SOP_destroy(SOP_class *SOP)
 //
 /*************************************************************/
 
-WORD SOP_test(SOP_class *SOP)
-{
-   WORD new_source;
-   ULONG ftime;
-   DICT_entry *cur;
+WORD SOP_test(SOP_class *SOP) {
+	WORD new_source;
+	ULONG ftime;
+	DICT_entry *cur;
 
-   new_source = SOP_new_source_attrib(SOP);
+	new_source = SOP_new_source_attrib(SOP);
 
-   cur = DICT_lookup(SOP->RS->dict[RDEP],SOP->fn);
+	cur = DICT_lookup(SOP->RS->dict[RDEP], SOP->fn);
 
-   if ((cur==NULL) || (cur->def == NULL))
-      return 1;
+	if ((cur == NULL) || (cur->def == NULL))
+		return 1;
 
-   ftime = TS_latest_file_time(SOP->RS->TS,(BYTE*)cur->def);
+	ftime = TS_latest_file_time(SOP->RS->TS, (BYTE*) cur->def);
 
-   if (!ftime)
-      return 1;
+	if (!ftime)
+		return 1;
 
-   if (SOP->RS->RES_time < ftime)
-      return 1;
+	if (SOP->RS->RES_time < ftime)
+		return 1;
 
-   return new_source;
+	return new_source;
 }
 
 /*************************************************************/
@@ -3766,122 +3447,119 @@ WORD SOP_test(SOP_class *SOP)
 //
 /*************************************************************/
 
-void SOP_compile(SOP_class *SOP)
-{
-   PP_class *PP;
-   DICT_class *depend;
-   ULONG impt,expt,init_err;
+void SOP_compile(SOP_class *SOP) {
+	PP_class *PP;
+	DICT_class *depend;
+	ULONG impt, expt, init_err;
 
-   init_err = error_message_count();
+	init_err = error_message_count();
 
-   SOP_new_source_attrib(SOP);
+	SOP_new_source_attrib(SOP);
 
-   if (!verify_file(SOP->fn))
-      {
-      report(E_ERROR,LEX_line(SOP->RS->LEX,LEX_CUR),MSG_SNF,SOP->fn,NULL);
-      return;
-      }
+	if (!verify_file(SOP->fn)) {
+		report(E_ERROR, LEX_line(SOP->RS->LEX, LEX_CUR), MSG_SNF, SOP->fn,
+				NULL);
+		return;
+	}
 
-   SOP->tfile = temp_filename(getenv(TEMP_NAME));
-   PP = PP_construct(SOP->fn,SOP->tfile,SOP->RS->predef,0);
-   PP_process(PP);
-   PP_destroy(PP);
+	SOP->tfile = temp_filename(getenv(TEMP_NAME));
+	PP = PP_construct(SOP->fn, SOP->tfile, SOP->RS->predef, 0);
+	PP_process(PP);
+	PP_destroy(PP);
 
-   depend = DICT_construct(4);
+	depend = DICT_construct(4);
 
-   SOP->LEX = LEX_construct(LEX_LININFO,SOP->tfile,
-      SOP_keywords,SOP_symbols,depend);
+	SOP->LEX = LEX_construct(LEX_LININFO, SOP->tfile, SOP_keywords, SOP_symbols,
+			depend);
 
-   SOP->EOF_reached = 0;
+	SOP->EOF_reached = 0;
 
-   while (SOP_next_definition(SOP))
-      {
-      SOP->parent = -1L;
-      SOP->import_index = 0;
-      SOP->static_index = 0;
+	while (SOP_next_definition(SOP)) {
+		SOP->parent = -1L;
+		SOP->import_index = 0;
+		SOP->static_index = 0;
 
-      SOP->CODE = mem_alloc(MAX_CODE);
-      SOP->PC = sizeof(PRG_HDR);
+		SOP->CODE = mem_alloc(MAX_CODE);
+		SOP->PC = sizeof(PRG_HDR);
 
-      SOP->IMPT = DICT_construct(DC_LINEAR);
-      SOP->EXPT = DICT_construct(DC_LINEAR);
-      SOP->AUTO = DICT_construct(16);
-      SOP->ARGV = DICT_construct(16);
-      SOP->STAT = DICT_construct(16);
-      SOP->PROC = DICT_construct(16);
-      SOP->XTRN = DICT_construct(16);
-      SOP->TABL = DICT_construct(16);
-      SOP->DUSE = DICT_construct(64);
-      SOP->VUSE = DICT_construct(64);
-      SOP->ADUS = DICT_construct(64);
-      SOP->AVUS = DICT_construct(64);
-      SOP->APUS = DICT_construct(64);
+		SOP->IMPT = DICT_construct(DC_LINEAR);
+		SOP->EXPT = DICT_construct(DC_LINEAR);
+		SOP->AUTO = DICT_construct(16);
+		SOP->ARGV = DICT_construct(16);
+		SOP->STAT = DICT_construct(16);
+		SOP->PROC = DICT_construct(16);
+		SOP->XTRN = DICT_construct(16);
+		SOP->TABL = DICT_construct(16);
+		SOP->DUSE = DICT_construct(64);
+		SOP->VUSE = DICT_construct(64);
+		SOP->ADUS = DICT_construct(64);
+		SOP->AVUS = DICT_construct(64);
+		SOP->APUS = DICT_construct(64);
 
-      SOP->bsp = (UWORD*) add_ptr(SOP->b_stack,-(ULONG) sizeof(UWORD));
-      SOP->csp = (UWORD*) add_ptr(SOP->c_stack,-(ULONG) sizeof(UWORD));
+		SOP->bsp = (UWORD*) add_ptr(SOP->b_stack, -(ULONG) sizeof(UWORD));
+		SOP->csp = (UWORD*) add_ptr(SOP->c_stack, -(ULONG) sizeof(UWORD));
 
-      SOP->CASE = NULL;
+		SOP->CASE = NULL;
 
-      SOP->context = CON_D;
-      SOP->ntype = NTYP_RES;
+		SOP->context = CON_D;
+		SOP->ntype = NTYP_RES;
 
-      LEX_fetch(SOP->LEX);
+		LEX_fetch(SOP->LEX);
 
-      LEX_fetch(SOP->LEX);
-      if (LEX_type(SOP->LEX,LEX_CUR) != TTYP_STRLIT)
-         report(E_ERROR,LEX_line(SOP->LEX,LEX_CUR),MSG_NML);
-      SOP->name = str_alloc(LEX_lexeme(SOP->LEX,LEX_CUR));
-      RS_check_name(SOP->RS,SOP->name);
+		LEX_fetch(SOP->LEX);
+		if (LEX_type(SOP->LEX, LEX_CUR) != TTYP_STRLIT)
+			report(E_ERROR, LEX_line(SOP->LEX, LEX_CUR), MSG_NML);
+		SOP->name = str_alloc(LEX_lexeme(SOP->LEX, LEX_CUR));
+		RS_check_name(SOP->RS, SOP->name);
 
-      DICT_enter(SOP->EXPT,"N:OBJECT",0)->def = SOP->name;
+		DICT_enter(SOP->EXPT, "N:OBJECT", 0)->def = SOP->name;
 
-      SOP_require_symbol(SOP,SOP_L_CURLY);
-      SOP_compound_statement(SOP);
+		SOP_require_symbol(SOP, SOP_L_CURLY);
+		SOP_compound_statement(SOP);
 
-      SOP_show_usage(E_NOTICE,SOP->DUSE,MSG_DNU);
-      SOP_show_usage(E_NOTICE,SOP->VUSE,MSG_VNU);
+		SOP_show_usage(E_NOTICE, SOP->DUSE, MSG_DNU);
+		SOP_show_usage(E_NOTICE, SOP->VUSE, MSG_VNU);
 
-      if (error_message_count() == init_err)
-         {
-         impt = SOP_write_dict(SOP,".IMPT",SOP->IMPT);
-         expt = SOP_write_dict(SOP,".EXPT",SOP->EXPT);
+		if (error_message_count() == init_err) {
+			impt = SOP_write_dict(SOP, ".IMPT", SOP->IMPT);
+			expt = SOP_write_dict(SOP, ".EXPT", SOP->EXPT);
 
-         ((PRG_HDR *) SOP->CODE)->static_size = SOP->static_index;
-         ((PRG_HDR *) SOP->CODE)->imports = impt;
-         ((PRG_HDR *) SOP->CODE)->exports = expt;
-         ((PRG_HDR *) SOP->CODE)->parent = SOP->parent;
+			((PRG_HDR *) SOP->CODE)->static_size = SOP->static_index;
+			((PRG_HDR *) SOP->CODE)->imports = impt;
+			((PRG_HDR *) SOP->CODE)->exports = expt;
+			((PRG_HDR *) SOP->CODE)->parent = SOP->parent;
 
-         SOP_write_code(SOP,SOP->CODE,SOP->PC);
-         }
+			SOP_write_code(SOP, SOP->CODE, SOP->PC);
+		}
 
-      free(SOP->name);
+		free(SOP->name);
 
-      DICT_destroy(SOP->APUS);
-      DICT_destroy(SOP->AVUS);
-      DICT_destroy(SOP->ADUS);
-      DICT_destroy(SOP->VUSE);
-      DICT_destroy(SOP->DUSE);
-      DICT_destroy(SOP->TABL);
-      DICT_destroy(SOP->XTRN);
-      DICT_destroy(SOP->PROC);
-      DICT_destroy(SOP->STAT);
-      DICT_destroy(SOP->ARGV);
-      DICT_destroy(SOP->AUTO);
-      DICT_destroy(SOP->EXPT);
-      DICT_destroy(SOP->IMPT);
+		DICT_destroy(SOP->APUS);
+		DICT_destroy(SOP->AVUS);
+		DICT_destroy(SOP->ADUS);
+		DICT_destroy(SOP->VUSE);
+		DICT_destroy(SOP->DUSE);
+		DICT_destroy(SOP->TABL);
+		DICT_destroy(SOP->XTRN);
+		DICT_destroy(SOP->PROC);
+		DICT_destroy(SOP->STAT);
+		DICT_destroy(SOP->ARGV);
+		DICT_destroy(SOP->AUTO);
+		DICT_destroy(SOP->EXPT);
+		DICT_destroy(SOP->IMPT);
 
-      free(SOP->CODE);
-      }
+		free(SOP->CODE);
+	}
 
-   if (LEX_type(SOP->LEX,LEX_NXT) != TTYP_EOF)
-      report(E_ERROR,LEX_line(SOP->LEX,LEX_NXT),MSG_EDS);
+	if (LEX_type(SOP->LEX, LEX_NXT) != TTYP_EOF)
+		report(E_ERROR, LEX_line(SOP->LEX, LEX_NXT), MSG_EDS);
 
-   if (error_message_count() != init_err)
-      DICT_enter(depend,"$obsolete",0);
+	if (error_message_count() != init_err)
+		DICT_enter(depend, "$obsolete", 0);
 
-   RS_update_RDEP(SOP->RS,SOP->fn,depend);
+	RS_update_RDEP(SOP->RS, SOP->fn, depend);
 
-   LEX_destroy(SOP->LEX);
-   DICT_destroy(depend);
-   remove_tempfile(SOP->tfile);
+	LEX_destroy(SOP->LEX);
+	DICT_destroy(depend);
+	remove_tempfile(SOP->tfile);
 }

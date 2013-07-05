@@ -11,18 +11,14 @@
 extern "C" {
 #endif
 
-typedef struct
-{
-   DICT_class *cache;         // private
-}
-TS_class;                     // DOS timestamp cache class
+typedef struct {
+	DICT_class *cache;         // private
+} TS_class;                     // DOS timestamp cache class
 
-typedef struct
-{
-   BYTE *string;              // private
-   BYTE *cur;                 // private
-}
-CSS_class;                    // comma-separated string class       
+typedef struct {
+	BYTE *string;              // private
+	BYTE *cur;                 // private
+} CSS_class;                    // comma-separated string class
 
 TS_class *TS_construct(void);
 void TS_invalidate(TS_class *TS, BYTE *filename);
@@ -31,10 +27,10 @@ ULONG TS_latest_file_time(TS_class *TS, BYTE *filelist);
 void TS_destroy(TS_class *TS);
 
 ULONG RES_store_resource(RF_class *RF, ULONG entry, void *source,
-   RF_entry_hdr *RHDR, UWORD type);
+		RF_entry_hdr *RHDR, UWORD type);
 
 UWORD RES_read_resource(RF_class *RF, ULONG entry, void *dest,
-   RF_entry_hdr *RHDR, UWORD type);
+		RF_entry_hdr *RHDR, UWORD type);
 
 ULONG RES_storage_timestamp(RF_class *RF, ULONG entry);
 

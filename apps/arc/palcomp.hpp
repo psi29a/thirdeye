@@ -12,12 +12,10 @@ extern "C" {
 #define PAL_RNGBEG 0
 #define PAL_RNGEND 1
 
-typedef struct
-{
-   IDR_class *IDR;
-   WORD parms[2];
-}
-PAL_class;
+typedef struct {
+	IDR_class *IDR;
+	WORD parms[2];
+} PAL_class;
 
 PAL_class *PAL_construct(IDR_class *IDR);
 void PAL_destroy(PAL_class *PAL);

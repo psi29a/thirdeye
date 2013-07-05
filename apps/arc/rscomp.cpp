@@ -1,27 +1,27 @@
-//лллллллллллллллллллллллллллллллллллллллллллллллллллллллллллллллллллллллллллл
-//лл                                                                        лл
-//лл  RSCOMP.C                                                              лл
-//лл                                                                        лл
-//лл  Resource script parser, compiler, and maintenance facility            лл
-//лл                                                                        лл
-//лл  Version: 1.00 of 15-Apr-92 -- Initial version                         лл
-//лл                                                                        лл
-//лл  Project: Extensible State-Object Processor (AESOP/16)                 лл
-//лл   Author: John Miles                                                   лл
-//лл                                                                        лл
-//лл  C source compatible with IBM PC ANSI C/C++ implementations            лл
-//лл  Large memory model (16-bit DOS)                                       лл
-//лл                                                                        лл
-//лллллллллллллллллллллллллллллллллллллллллллллллллллллллллллллллллллллллллллл
-//лл                                                                        лл
-//лл  Copyright (C) 1992 Miles Design, Inc.                                 лл
-//лл                                                                        лл
-//лл  Miles Design, Inc.                                                    лл
-//лл  10926 Jollyville #308                                                 лл
-//лл  Austin, TX 78759                                                      лл
-//лл  (512) 345-2642 / BBS (512) 454-9990 / FAX (512) 338-9630              лл
-//лл                                                                        лл
-//лллллллллллллллллллллллллллллллллллллллллллллллллллллллллллллллллллллллллллл
+//яПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПН
+//яПНяПН                                                                        яПНяПН
+//яПНяПН  RSCOMP.C                                                              яПНяПН
+//яПНяПН                                                                        яПНяПН
+//яПНяПН  Resource script parser, compiler, and maintenance facility            яПНяПН
+//яПНяПН                                                                        яПНяПН
+//яПНяПН  Version: 1.00 of 15-Apr-92 -- Initial version                         яПНяПН
+//яПНяПН                                                                        яПНяПН
+//яПНяПН  Project: Extensible State-Object Processor (AESOP/16)                 яПНяПН
+//яПНяПН   Author: John Miles                                                   яПНяПН
+//яПНяПН                                                                        яПНяПН
+//яПНяПН  C source compatible with IBM PC ANSI C/C++ implementations            яПНяПН
+//яПНяПН  Large memory model (16-bit DOS)                                       яПНяПН
+//яПНяПН                                                                        яПНяПН
+//яПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПН
+//яПНяПН                                                                        яПНяПН
+//яПНяПН  Copyright (C) 1992 Miles Design, Inc.                                 яПНяПН
+//яПНяПН                                                                        яПНяПН
+//яПНяПН  Miles Design, Inc.                                                    яПНяПН
+//яПНяПН  10926 Jollyville #308                                                 яПНяПН
+//яПНяПН  Austin, TX 78759                                                      яПНяПН
+//яПНяПН  (512) 345-2642 / BBS (512) 454-9990 / FAX (512) 338-9630              яПНяПН
+//яПНяПН                                                                        яПНяПН
+//яПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПНяПН
 
 //#include <io.h>
 #include <stdio.h>
@@ -41,57 +41,30 @@
 #include "mapcomp.h"
 #include "palcomp.h"
 
-BYTE *manifest_constants[] =
-{
-   "__TIMESTAMP__",
-   "__AESOP__",
-   NULL
-};
+BYTE *manifest_constants[] = { "__TIMESTAMP__", "__AESOP__", NULL };
 
-BYTE *manifest_defs[] =
-{
-   "\"01-Jan-1980 00:00:00\"",
-   "1.00",
-   NULL
-};
+BYTE *manifest_defs[] = { "\"01-Jan-1980 00:00:00\"", "1.00", NULL };
 
-BYTE *RS_keywords[] =
-{
-   KW_ATTRIB,
-   KW_SEQUENCE,
-   KW_SAMPLE,
-   KW_STRING,
-   KW_SOURCE,
-   KW_DOCUMENT,
-   KW_MAP,
-   KW_PALETTE,
-   KW_FILE,
-   KW_CODE,
-   KW_FIXED,
-   KW_MOVEABLE,
-   KW_PRECIOUS,
-   KW_DISCARD,
-   KW_TEMPORARY,
-   NULL
-};
+BYTE *RS_keywords[] = { KW_ATTRIB, KW_SEQUENCE, KW_SAMPLE, KW_STRING, KW_SOURCE,
+		KW_DOCUMENT, KW_MAP, KW_PALETTE, KW_FILE, KW_CODE, KW_FIXED,
+		KW_MOVEABLE, KW_PRECIOUS, KW_DISCARD, KW_TEMPORARY, NULL };
 
-enum
-{
-   RS_ATTRIB,
-   RS_SEQUENCE,
-   RS_SAMPLE,
-   RS_STRING,
-   RS_SOURCE,
-   RS_DOCUMENT,
-   RS_MAP,
-   RS_PALETTE,
-   RS_FILE,
-   RS_CODE,
-   RS_FIXED,
-   RS_MOVEABLE,
-   RS_PRECIOUS,
-   RS_DISCARDABLE,
-   RS_TEMPORARY,
+enum {
+	RS_ATTRIB,
+	RS_SEQUENCE,
+	RS_SAMPLE,
+	RS_STRING,
+	RS_SOURCE,
+	RS_DOCUMENT,
+	RS_MAP,
+	RS_PALETTE,
+	RS_FILE,
+	RS_CODE,
+	RS_FIXED,
+	RS_MOVEABLE,
+	RS_PRECIOUS,
+	RS_DISCARDABLE,
+	RS_TEMPORARY,
 };
 
 //
@@ -99,27 +72,13 @@ enum
 // of increasing length
 //
 
-BYTE *RS_symbols[] =
-{
-   ",",
-   "{",
-   "}",
-   ";",
-   "-",
-   NULL
-};
+BYTE *RS_symbols[] = { ",", "{", "}", ";", "-", NULL };
 
-enum
-{
-   RS_COMMA,
-   RS_LCURL,
-   RS_RCURL,
-   RS_SEMICOLON,
-   RS_MINUS
+enum {
+	RS_COMMA, RS_LCURL, RS_RCURL, RS_SEMICOLON, RS_MINUS
 };
 
 #define TEMP_NAME "TEMP"     // Name of TEMP environment variable
-
 /*************************************************************/
 //
 // Verify that no declaration for resname has previously been
@@ -128,22 +87,19 @@ enum
 //
 /*************************************************************/
 
-WORD RS_check_name(RS_class *RS, BYTE *resname)
-{
-   if (!(RS->flags & RS_NOUNIQUECHECK))
-      {
-      if (DICT_lookup(RS->names,resname))
-         {
-         report(E_ERROR,LEX_line(RS->LEX,LEX_CUR),MSG_NIU,resname);
-         return 0;
-         }
+WORD RS_check_name(RS_class *RS, BYTE *resname) {
+	if (!(RS->flags & RS_NOUNIQUECHECK)) {
+		if (DICT_lookup(RS->names, resname)) {
+			report(E_ERROR, LEX_line(RS->LEX, LEX_CUR), MSG_NIU, resname);
+			return 0;
+		}
 
-      DICT_enter(RS->names,resname,D_DEFHEAP);
-      }
+		DICT_enter(RS->names, resname, D_DEFHEAP);
+	}
 
-   DICT_delete(RS->refcr,resname);
+	DICT_delete(RS->refcr, resname);
 
-   return 1;
+	return 1;
 }
 
 /*************************************************************/
@@ -159,27 +115,24 @@ WORD RS_check_name(RS_class *RS, BYTE *resname)
 //
 /*************************************************************/
 
-void RS_update_RDEP(RS_class *RS, BYTE *resname, DICT_class *filelist)
-{
-   DICT_entry *cur;
-   BYTE *string;
+void RS_update_RDEP(RS_class *RS, BYTE *resname, DICT_class *filelist) {
+	DICT_entry *cur;
+	BYTE *string;
 
-   string = DICT_build_tag_string(filelist);
+	string = DICT_build_tag_string(filelist);
 
-   cur = DICT_lookup(RS->dict[RDEP],resname);
+	cur = DICT_lookup(RS->dict[RDEP], resname);
 
-   if (cur != NULL)
-      if (!strcasecmp(cur->def,string))
-         {
-         mem_free(string);
-         return;
-         }
-      else
-         DICT_delete(RS->dict[RDEP],resname);
-      
-   cur = DICT_enter(RS->dict[RDEP],resname,D_DEFHEAP);
+	if (cur != NULL)
+		if (!strcasecmp(cur->def, string)) {
+			mem_free(string);
+			return;
+		} else
+			DICT_delete(RS->dict[RDEP], resname);
 
-   cur->def = string; 
+	cur = DICT_enter(RS->dict[RDEP], resname, D_DEFHEAP);
+
+	cur->def = string;
 }
 
 /*************************************************************/
@@ -195,21 +148,20 @@ void RS_update_RDEP(RS_class *RS, BYTE *resname, DICT_class *filelist)
 //
 /*************************************************************/
 
-void RS_update_RDES(RS_class *RS, BYTE *resname, BYTE *speclist)
-{
-   DICT_entry *cur;
+void RS_update_RDES(RS_class *RS, BYTE *resname, BYTE *speclist) {
+	DICT_entry *cur;
 
-   cur = DICT_lookup(RS->dict[RDES],resname);
+	cur = DICT_lookup(RS->dict[RDES], resname);
 
-   if (cur != NULL)
-      if (!strcasecmp(cur->def,speclist))
-         return;
-      else
-         DICT_delete(RS->dict[RDES],resname);
-      
-   cur = DICT_enter(RS->dict[RDES],resname,D_DEFHEAP);
+	if (cur != NULL)
+		if (!strcasecmp(cur->def, speclist))
+			return;
+		else
+			DICT_delete(RS->dict[RDES], resname);
 
-   cur->def = str_alloc(speclist); 
+	cur = DICT_enter(RS->dict[RDES], resname, D_DEFHEAP);
+
+	cur->def = str_alloc(speclist);
 }
 
 /*************************************************************/
@@ -220,18 +172,17 @@ void RS_update_RDES(RS_class *RS, BYTE *resname, BYTE *speclist)
 //
 /*************************************************************/
 
-ULONG RS_depend_time(RS_class *RS, DICT_class *DICT)
-{
-   ULONG ts;
-   BYTE *string;
+ULONG RS_depend_time(RS_class *RS, DICT_class *DICT) {
+	ULONG ts;
+	BYTE *string;
 
-   string = DICT_build_tag_string(DICT);
+	string = DICT_build_tag_string(DICT);
 
-   ts = TS_latest_file_time(RS->TS,string);
+	ts = TS_latest_file_time(RS->TS, string);
 
-   mem_free(string);
+	mem_free(string);
 
-   return ts;
+	return ts;
 }
 
 /*************************************************************/
@@ -240,21 +191,19 @@ ULONG RS_depend_time(RS_class *RS, DICT_class *DICT)
 //
 /*************************************************************/
 
-ULONG RS_current_ROED_entry(RS_class *RS, BYTE *resname)
-{
-   DICT_entry *cur;
-   ULONG ord;
+ULONG RS_current_ROED_entry(RS_class *RS, BYTE *resname) {
+	DICT_entry *cur;
+	ULONG ord;
 
-   cur = DICT_lookup(RS->dict[ROED],resname);
+	cur = DICT_lookup(RS->dict[ROED], resname);
 
-   if (cur != NULL)
-      {
-      ord = ascnum(cur->def,10);
+	if (cur != NULL) {
+		ord = ascnum(cur->def, 10);
 
-      return ord;
-      }
+		return ord;
+	}
 
-   return -1L;
+	return -1L;
 }
 
 /*************************************************************/
@@ -270,26 +219,26 @@ ULONG RS_current_ROED_entry(RS_class *RS, BYTE *resname)
 //
 /*************************************************************/
 
-ULONG RS_get_ROED_entry(RS_class *RS, BYTE *resname)
-{
-   DICT_entry *cur;
-   RF_entry_hdr RHDR;
-   ULONG ord;
+ULONG RS_get_ROED_entry(RS_class *RS, BYTE *resname) {
+	DICT_entry *cur;
+	RF_entry_hdr RHDR;
+	ULONG ord;
 
-   cur = DICT_lookup(RS->dict[ROED],resname);
+	cur = DICT_lookup(RS->dict[ROED], resname);
 
-   if (cur != NULL) return ascnum(cur->def,10);
+	if (cur != NULL)
+		return ascnum(cur->def, 10);
 
-   RHDR.data_attrib = DA_PLACEHOLDER;
-   RHDR.data_size = 0L;
+	RHDR.data_attrib = DA_PLACEHOLDER;
+	RHDR.data_size = 0L;
 
-   ord = RF_new_entry(RS->RF,NULL,&RHDR,RTYP_RAW_MEM);
+	ord = RF_new_entry(RS->RF, NULL, &RHDR, RTYP_RAW_MEM);
 
-   DICT_enter(RS->dict[ROED],resname,D_DEFHEAP)->def = str(ord);
+	DICT_enter(RS->dict[ROED], resname, D_DEFHEAP)->def = str(ord);
 
-   report(E_RESNEW,NULL,NULL);
+	report(E_RESNEW, NULL, NULL);
 
-   return ord;
+	return ord;
 }
 
 /*************************************************************/
@@ -304,28 +253,28 @@ ULONG RS_get_ROED_entry(RS_class *RS, BYTE *resname)
 //
 /*************************************************************/
 
-UWORD RS_get_MSGD_entry(RS_class *RS, BYTE *msgname)
-{
-   DICT_entry *cur;
-   DI_class *DI;
-   ULONG msgnum;
+UWORD RS_get_MSGD_entry(RS_class *RS, BYTE *msgname) {
+	DICT_entry *cur;
+	DI_class *DI;
+	ULONG msgnum;
 
-   cur = DICT_lookup(RS->dict[MSGD],msgname);
+	cur = DICT_lookup(RS->dict[MSGD], msgname);
 
-   if (cur != NULL) return (UWORD) ascnum(cur->def,10);
+	if (cur != NULL)
+		return (UWORD) ascnum(cur->def, 10);
 
-   msgnum = 0L;
-   DI = DI_construct(RS->dict[MSGD]);
-   while (DI_fetch(DI) != NULL)
-      ++msgnum;
-   DI_destroy(DI);
+	msgnum = 0L;
+	DI = DI_construct(RS->dict[MSGD]);
+	while (DI_fetch(DI) != NULL)
+		++msgnum;
+	DI_destroy(DI);
 
-   if (msgnum == 65536L)
-      report(E_ERROR,LEX_line(RS->LEX,LEX_CUR),MSG_TMM);
+	if (msgnum == 65536L)
+		report(E_ERROR, LEX_line(RS->LEX, LEX_CUR), MSG_TMM);
 
-   DICT_enter(RS->dict[MSGD],msgname,D_DEFHEAP)->def = str(msgnum);
+	DICT_enter(RS->dict[MSGD], msgname, D_DEFHEAP)->def = str(msgnum);
 
-   return (UWORD) msgnum;
+	return (UWORD) msgnum;
 }
 
 /*************************************************************/
@@ -334,19 +283,17 @@ UWORD RS_get_MSGD_entry(RS_class *RS, BYTE *msgname)
 //
 /*************************************************************/
 
-WORD RS_next_attribute_specifier(RS_class *RS)
-{
-   WORD t;
+WORD RS_next_attribute_specifier(RS_class *RS) {
+	WORD t;
 
-   if (LEX_type(RS->LEX,LEX_NXT) == TTYP_KEYWORD)
-      {
-      t = LEX_token(RS->LEX,LEX_NXT);
+	if (LEX_type(RS->LEX, LEX_NXT) == TTYP_KEYWORD) {
+		t = LEX_token(RS->LEX, LEX_NXT);
 
-      if ((t >= RS_FIXED) && (t <= RS_TEMPORARY))
-         return 1;
-      }
+		if ((t >= RS_FIXED) && (t <= RS_TEMPORARY))
+			return 1;
+	}
 
-   return 0;
+	return 0;
 }
 
 /*************************************************************/
@@ -357,102 +304,92 @@ WORD RS_next_attribute_specifier(RS_class *RS)
 //
 /*************************************************************/
 
-ULONG RS_parse_attribute_list(RS_class *RS)
-{
-   ULONG attrib;
-   WORD af,am,ap,ad,at;
+ULONG RS_parse_attribute_list(RS_class *RS) {
+	ULONG attrib;
+	WORD af, am, ap, ad, at;
 
-   attrib = DA_TEMPORARY;
-   af = am = ap = ad = at = 0;
+	attrib = DA_TEMPORARY;
+	af = am = ap = ad = at = 0;
 
-   do
-      {
-      if (!RS_next_attribute_specifier(RS))
-         {
-         report(E_ERROR,LEX_line(RS->LEX,LEX_NXT),MSG_MAS,NULL);
-         return attrib;
-         }
+	do {
+		if (!RS_next_attribute_specifier(RS)) {
+			report(E_ERROR, LEX_line(RS->LEX, LEX_NXT), MSG_MAS, NULL);
+			return attrib;
+		}
 
-      LEX_fetch(RS->LEX);
+		LEX_fetch(RS->LEX);
 
-      switch (LEX_token(RS->LEX,LEX_CUR))
-         {
-         case RS_FIXED:
-            if (af)
-               report(E_WARN,LEX_line(RS->LEX,LEX_CUR),MSG_RAT,NULL);
-            else if (am)
-               report(E_ERROR,LEX_line(RS->LEX,LEX_CUR),MSG_CAT,NULL);
-            else if (at)
-               report(E_WARN,LEX_line(RS->LEX,LEX_CUR),MSG_MTT,
-                  LEX_lexeme(RS->LEX,LEX_CUR),NULL);
-            else
-               {
-               attrib |= DA_FIXED;
-               af++;
-               }
-            break;
+		switch (LEX_token(RS->LEX, LEX_CUR)) {
+		case RS_FIXED:
+			if (af)
+				report(E_WARN, LEX_line(RS->LEX, LEX_CUR), MSG_RAT, NULL);
+			else if (am)
+				report(E_ERROR, LEX_line(RS->LEX, LEX_CUR), MSG_CAT, NULL);
+			else if (at)
+				report(E_WARN, LEX_line(RS->LEX, LEX_CUR), MSG_MTT,
+						LEX_lexeme(RS->LEX, LEX_CUR), NULL);
+			else {
+				attrib |= DA_FIXED;
+				af++;
+			}
+			break;
 
-         case RS_MOVEABLE:
-            if (am)
-               report(E_WARN,LEX_line(RS->LEX,LEX_CUR),MSG_RAT,NULL);
-            else if (af)
-               report(E_ERROR,LEX_line(RS->LEX,LEX_CUR),MSG_CAT,NULL);
-            else if (at)
-               report(E_WARN,LEX_line(RS->LEX,LEX_CUR),MSG_MTT,
-                  LEX_lexeme(RS->LEX,LEX_CUR),NULL);
-            else
-               {
-               attrib &= (~DA_FIXED);
-               am++;
-               }
-            break;
+		case RS_MOVEABLE:
+			if (am)
+				report(E_WARN, LEX_line(RS->LEX, LEX_CUR), MSG_RAT, NULL);
+			else if (af)
+				report(E_ERROR, LEX_line(RS->LEX, LEX_CUR), MSG_CAT, NULL);
+			else if (at)
+				report(E_WARN, LEX_line(RS->LEX, LEX_CUR), MSG_MTT,
+						LEX_lexeme(RS->LEX, LEX_CUR), NULL);
+			else {
+				attrib &= (~DA_FIXED);
+				am++;
+			}
+			break;
 
-         case RS_PRECIOUS:
-            if (ap)
-               report(E_WARN,LEX_line(RS->LEX,LEX_CUR),MSG_RAT,NULL);
-            else if (ad)
-               report(E_ERROR,LEX_line(RS->LEX,LEX_CUR),MSG_CAT,NULL);
-            else if (at)
-               report(E_WARN,LEX_line(RS->LEX,LEX_CUR),MSG_MTT,
-                  LEX_lexeme(RS->LEX,LEX_CUR),NULL);
-            else
-               {
-               attrib |= DA_PRECIOUS;
-               ap++;
-               }
-            break;
+		case RS_PRECIOUS:
+			if (ap)
+				report(E_WARN, LEX_line(RS->LEX, LEX_CUR), MSG_RAT, NULL);
+			else if (ad)
+				report(E_ERROR, LEX_line(RS->LEX, LEX_CUR), MSG_CAT, NULL);
+			else if (at)
+				report(E_WARN, LEX_line(RS->LEX, LEX_CUR), MSG_MTT,
+						LEX_lexeme(RS->LEX, LEX_CUR), NULL);
+			else {
+				attrib |= DA_PRECIOUS;
+				ap++;
+			}
+			break;
 
-         case RS_DISCARDABLE:
-            if (ad)
-               report(E_WARN,LEX_line(RS->LEX,LEX_CUR),MSG_RAT,NULL);
-            else if (ap)
-               report(E_ERROR,LEX_line(RS->LEX,LEX_CUR),MSG_CAT,NULL);
-            else if (at)
-               report(E_WARN,LEX_line(RS->LEX,LEX_CUR),MSG_MTT,
-                  LEX_lexeme(RS->LEX,LEX_CUR),NULL);
-            else
-               {
-               attrib |= DA_DISCARDABLE;
-               ad++;
-               }
-            break;
+		case RS_DISCARDABLE:
+			if (ad)
+				report(E_WARN, LEX_line(RS->LEX, LEX_CUR), MSG_RAT, NULL);
+			else if (ap)
+				report(E_ERROR, LEX_line(RS->LEX, LEX_CUR), MSG_CAT, NULL);
+			else if (at)
+				report(E_WARN, LEX_line(RS->LEX, LEX_CUR), MSG_MTT,
+						LEX_lexeme(RS->LEX, LEX_CUR), NULL);
+			else {
+				attrib |= DA_DISCARDABLE;
+				ad++;
+			}
+			break;
 
-         case RS_TEMPORARY:
-            if (at)
-               report(E_WARN,LEX_line(RS->LEX,LEX_CUR),MSG_RAT,NULL);
-            else if (af || am || ap || ad)
-               report(E_WARN,LEX_line(RS->LEX,LEX_CUR),MSG_MAT,NULL);
-            else
-               {
-               attrib = DA_TEMPORARY;
-               at++;
-               }
-            break;
-         }
-      }
-   while (LEX_next_comma(RS->LEX));
+		case RS_TEMPORARY:
+			if (at)
+				report(E_WARN, LEX_line(RS->LEX, LEX_CUR), MSG_RAT, NULL);
+			else if (af || am || ap || ad)
+				report(E_WARN, LEX_line(RS->LEX, LEX_CUR), MSG_MAT, NULL);
+			else {
+				attrib = DA_TEMPORARY;
+				at++;
+			}
+			break;
+		}
+	} while (LEX_next_comma(RS->LEX));
 
-   return attrib;
+	return attrib;
 }
 
 /*************************************************************/
@@ -462,52 +399,49 @@ ULONG RS_parse_attribute_list(RS_class *RS)
 //
 /*************************************************************/
 
-static BYTE *RS_parse_constant_list_string(RS_class *RS)
-{
-   DICT_class *cl;
-   BYTE *string;
-   BYTE buf[64];
-   WORD neg;
-   ULONG val;
+static BYTE *RS_parse_constant_list_string(RS_class *RS) {
+	DICT_class *cl;
+	BYTE *string;
+	BYTE buf[64];
+	WORD neg;
+	ULONG val;
 
-   cl = DICT_construct(DC_LINEAR);
+	cl = DICT_construct(DC_LINEAR);
 
-   do
-      {
-      neg = ((LEX_type(RS->LEX,LEX_NXT) == TTYP_SYMBOL) &&
-             (LEX_token(RS->LEX,LEX_NXT) == RS_MINUS));
+	do {
+		neg = ((LEX_type(RS->LEX, LEX_NXT) == TTYP_SYMBOL)
+				&& (LEX_token(RS->LEX, LEX_NXT) == RS_MINUS));
 
-      if (neg) LEX_fetch(RS->LEX);
-      
-      if (!LEX_next_constant(RS->LEX))
-         {
-         report(E_ERROR,LEX_line(RS->LEX,LEX_NXT),MSG_MSC,NULL);
-         break;
-         }
+		if (neg)
+			LEX_fetch(RS->LEX);
 
-      switch (LEX_type(RS->LEX,LEX_CUR))
-         {
-         case TTYP_TXTLIT:
-         case TTYP_STRLIT:
-            DICT_enter(cl,LEX_lexeme(RS->LEX,LEX_CUR),0);
-            break;
+		if (!LEX_next_constant(RS->LEX)) {
+			report(E_ERROR, LEX_line(RS->LEX, LEX_NXT), MSG_MSC, NULL);
+			break;
+		}
 
-         case TTYP_NUM:
-            val = LEX_value(RS->LEX,LEX_CUR);
-            if (neg) val = -val;
+		switch (LEX_type(RS->LEX, LEX_CUR)) {
+		case TTYP_TXTLIT:
+		case TTYP_STRLIT:
+			DICT_enter(cl, LEX_lexeme(RS->LEX, LEX_CUR), 0);
+			break;
 
-            //DICT_enter(cl,ltoa(val,buf,10),0);
-            DICT_enter(cl,sprintf(buf,"%d",val),0);
-            break;
-         }
-      }
-   while (LEX_next_comma(RS->LEX));
+		case TTYP_NUM:
+			val = LEX_value(RS->LEX, LEX_CUR);
+			if (neg)
+				val = -val;
 
-   string = DICT_build_tag_string(cl);
+			//DICT_enter(cl,ltoa(val,buf,10),0);
+			DICT_enter(cl, sprintf(buf, "%d", val), 0);
+			break;
+		}
+	} while (LEX_next_comma(RS->LEX));
 
-   DICT_destroy(cl);
+	string = DICT_build_tag_string(cl);
 
-   return string;
+	DICT_destroy(cl);
+
+	return string;
 }
 
 /*************************************************************/
@@ -516,10 +450,9 @@ static BYTE *RS_parse_constant_list_string(RS_class *RS)
 //
 /*************************************************************/
 
-void RS_syntax_error(RS_class *RS)
-{
-   report(E_ERROR,LEX_line(RS->LEX,LEX_CUR),MSG_SYN,LEX_lexeme(RS->LEX,
-      LEX_CUR),NULL);
+void RS_syntax_error(RS_class *RS) {
+	report(E_ERROR, LEX_line(RS->LEX, LEX_CUR), MSG_SYN,
+			LEX_lexeme(RS->LEX, LEX_CUR), NULL);
 }
 
 /*************************************************************/
@@ -528,10 +461,9 @@ void RS_syntax_error(RS_class *RS)
 //
 /*************************************************************/
 
-void RS_reserved_word_error(RS_class *RS)
-{
-   report(E_ERROR,LEX_line(RS->LEX,LEX_CUR),MSG_RWU,LEX_lexeme(RS->LEX,
-      LEX_CUR),NULL);
+void RS_reserved_word_error(RS_class *RS) {
+	report(E_ERROR, LEX_line(RS->LEX, LEX_CUR), MSG_RWU,
+			LEX_lexeme(RS->LEX, LEX_CUR), NULL);
 }
 
 /*************************************************************/
@@ -540,22 +472,20 @@ void RS_reserved_word_error(RS_class *RS)
 //
 /*************************************************************/
 
-static void RS_parse_attribute_specification(RS_class *RS)
-{
-   WORD type;
+static void RS_parse_attribute_specification(RS_class *RS) {
+	WORD type;
 
-   type = LEX_token(RS->LEX,LEX_NXT) - RS_SEQUENCE;
+	type = LEX_token(RS->LEX, LEX_NXT) - RS_SEQUENCE;
 
-   if ((LEX_type(RS->LEX,LEX_NXT) != TTYP_KEYWORD) ||
-       (type >= RDAT_NTYPES) || (type < 0))
-         {
-         report(E_ERROR,LEX_line(RS->LEX,LEX_NXT),MSG_ERS,NULL);
-         return;
-         }
+	if ((LEX_type(RS->LEX, LEX_NXT) != TTYP_KEYWORD) || (type >= RDAT_NTYPES)
+			|| (type < 0)) {
+		report(E_ERROR, LEX_line(RS->LEX, LEX_NXT), MSG_ERS, NULL);
+		return;
+	}
 
-   LEX_fetch(RS->LEX);
+	LEX_fetch(RS->LEX);
 
-   RS->attribs[type] = RS_parse_attribute_list(RS);
+	RS->attribs[type] = RS_parse_attribute_list(RS);
 }
 
 /*************************************************************/
@@ -568,74 +498,70 @@ static void RS_parse_attribute_specification(RS_class *RS)
 //
 /*************************************************************/
 
-void RS_parse_code_resource_declaration(RS_class *RS)
-{
-   DICT_class *new;
-   BYTE *name;
-   WORD bad;
-   ULONG link;
+void RS_parse_code_resource_declaration(RS_class *RS) {
+	DICT_class *new;
+	BYTE *name;
+	WORD bad;
+	ULONG link;
 
-   if (!LEX_require(RS->LEX,TTYP_SYMBOL,RS_LCURL,RS_symbols[RS_LCURL]))
-      return;
+	if (!LEX_require(RS->LEX, TTYP_SYMBOL, RS_LCURL, RS_symbols[RS_LCURL]))
+		return;
 
-   new = DICT_construct(64);
-   bad = 0;
-   link = 0L;
+	new = DICT_construct(64);
+	bad = 0;
+	link = 0L;
 
-   DICT_enter(new,FN_SEND,0);
-   DICT_enter(new,FN_PASS,0);
+	DICT_enter(new,FN_SEND,0);
+	DICT_enter(new,FN_PASS,0);
 
-   do
-      {
-      if ((LEX_type(RS->LEX,LEX_NXT) == TTYP_SYMBOL) &&
-          (LEX_token(RS->LEX,LEX_NXT) == RS_RCURL))
-            break;
+	do {
+		if ((LEX_type(RS->LEX, LEX_NXT) == TTYP_SYMBOL)
+				&& (LEX_token(RS->LEX, LEX_NXT) == RS_RCURL))
+			break;
 
-      LEX_fetch(RS->LEX);
+		LEX_fetch(RS->LEX);
 
-      switch (LEX_type(RS->LEX,LEX_CUR))
-         {
-         default:
-            RS_syntax_error(RS);
-            bad=1; break;
+		switch (LEX_type(RS->LEX, LEX_CUR)) {
+		default:
+			RS_syntax_error(RS);
+			bad = 1;
+			break;
 
-         case TTYP_KEYWORD:
-            RS_reserved_word_error(RS);
-            bad=1; break;
+		case TTYP_KEYWORD:
+			RS_reserved_word_error(RS);
+			bad = 1;
+			break;
 
-         case TTYP_STRLIT:
-            report(E_ERROR,LEX_line(RS->LEX,LEX_CUR),MSG_CMI,NULL);
-            bad=1; break;
+		case TTYP_STRLIT:
+			report(E_ERROR, LEX_line(RS->LEX, LEX_CUR), MSG_CMI, NULL);
+			bad = 1;
+			break;
 
-         case TTYP_NAME:
-            name = LEX_lexeme(RS->LEX,LEX_CUR);
+		case TTYP_NAME:
+			name = LEX_lexeme(RS->LEX, LEX_CUR);
 
-            if (DICT_lookup(new,name) != NULL)
-               {
-               report(E_ERROR,LEX_line(RS->LEX,LEX_CUR),MSG_CAD,name,NULL);
-               bad=1;
-               }
-            else
-               {
-               DICT_enter(new,name,D_DEFHEAP)->def = str(link);
-               link += CR_VECTOR_SIZE;
-               }
+			if (DICT_lookup(new,name) != NULL) {
+				report(E_ERROR, LEX_line(RS->LEX, LEX_CUR), MSG_CAD, name,
+						NULL);
+				bad = 1;
+			} else {
+				DICT_enter(new,name,D_DEFHEAP)->def = str(link);
+				link += CR_VECTOR_SIZE;
+			}
 
-            break;
-         }
-      }
-   while (LEX_next_comma(RS->LEX));
+			break;
+		}
+	} while (LEX_next_comma(RS->LEX));
 
-   LEX_require(RS->LEX,TTYP_SYMBOL,RS_RCURL,RS_symbols[RS_RCURL]);
-   LEX_require(RS->LEX,TTYP_SYMBOL,RS_SEMICOLON,RS_symbols[RS_SEMICOLON]);
+	LEX_require(RS->LEX, TTYP_SYMBOL, RS_RCURL, RS_symbols[RS_RCURL]);
+	LEX_require(RS->LEX, TTYP_SYMBOL, RS_SEMICOLON, RS_symbols[RS_SEMICOLON]);
 
-   if ((!DICT_compare(new,RS->dict[CRFD])) && (!bad))
-      {
-      DICT_wipe(RS->dict[CRFD]);
-      DICT_copy(new,RS->dict[CRFD]);
-      }
+	if ((!DICT_compare(new,RS->dict[CRFD])) && (!bad)) {
+		DICT_wipe(RS->dict[CRFD]);
+	DICT_copy(new,RS->dict[CRFD]);
+}
 
-   DICT_destroy(new);
+DICT_destroy(new);
 }
 
 /*************************************************************/
@@ -644,71 +570,66 @@ void RS_parse_code_resource_declaration(RS_class *RS)
 //
 /*************************************************************/
 
-void RS_string_resource(RS_class *RS)
-{
-   BYTE *name,*text,*lexeme;
-   WORD at_opt;
-   ULONG attrib,scr_time,res_time,ord;
-   RF_entry_hdr RHDR;
+void RS_string_resource(RS_class *RS) {
+BYTE *name, *text, *lexeme;
+WORD at_opt;
+ULONG attrib, scr_time, res_time, ord;
+RF_entry_hdr RHDR;
 
-   LEX_fetch(RS->LEX);
+LEX_fetch(RS->LEX);
 
-   switch (LEX_type(RS->LEX,LEX_CUR))
-      {
-      default:
-         RS_syntax_error(RS);
-         break;
+switch (LEX_type(RS->LEX, LEX_CUR)) {
+default:
+RS_syntax_error(RS);
+break;
 
-      case TTYP_KEYWORD:
-         RS_reserved_word_error(RS);
-         break;
+case TTYP_KEYWORD:
+RS_reserved_word_error(RS);
+break;
 
-      case TTYP_STRLIT:
-      case TTYP_NAME:
-         name = str_alloc(LEX_lexeme(RS->LEX,LEX_CUR));
+case TTYP_STRLIT:
+case TTYP_NAME:
+name = str_alloc(LEX_lexeme(RS->LEX, LEX_CUR));
 
-         RS_check_name(RS,name);
+RS_check_name(RS, name);
 
-         if ((at_opt = RS_next_attribute_specifier(RS)) != 0)
-            attrib = RS_parse_attribute_list(RS);
+if ((at_opt = RS_next_attribute_specifier(RS)) != 0)
+	attrib = RS_parse_attribute_list(RS);
 
-         LEX_fetch(RS->LEX);
+LEX_fetch(RS->LEX);
 
-         switch (LEX_type(RS->LEX,LEX_CUR))
-            {
-            default:
-               RS_syntax_error(RS);
-               break;
+switch (LEX_type(RS->LEX, LEX_CUR)) {
+default:
+	RS_syntax_error(RS);
+	break;
 
-            case TTYP_TXTLIT:
-            case TTYP_STRLIT:
-               lexeme = LEX_lexeme(RS->LEX,LEX_CUR);
-               text = mem_alloc((ULONG) strlen(lexeme)+3L);
-               strcpy(text,"S:");
-               strcat(text,lexeme);
+case TTYP_TXTLIT:
+case TTYP_STRLIT:
+	lexeme = LEX_lexeme(RS->LEX, LEX_CUR);
+	text = mem_alloc((ULONG) strlen(lexeme) + 3L);
+	strcpy(text, "S:");
+	strcat(text, lexeme);
 
-               scr_time = RS_depend_time(RS,RS->depend);
-               ord = RS_get_ROED_entry(RS,name);
-               res_time = RES_storage_timestamp(RS->RF,ord);
+	scr_time = RS_depend_time(RS, RS->depend);
+	ord = RS_get_ROED_entry(RS, name);
+	res_time = RES_storage_timestamp(RS->RF, ord);
 
-               if (res_time < scr_time)
-                  {
-                  RHDR.data_attrib =
-                     (at_opt) ? attrib : RS->attribs[RDAT_STR];
-                  RHDR.data_size = (ULONG) strlen(text)+1L;
+	if (res_time < scr_time) {
+		RHDR.data_attrib = (at_opt) ? attrib : RS->attribs[RDAT_STR];
+		RHDR.data_size = (ULONG) strlen(text) + 1L;
 
-                  RF_write_entry(RS->RF,ord,text,&RHDR,RTYP_RAW_MEM);
+		RF_write_entry(RS->RF, ord, text, &RHDR, RTYP_RAW_MEM);
 
-                  report(E_RESCOMP,NULL,NULL);
-                  }
+		report(E_RESCOMP, NULL, NULL);
+	}
 
-               mem_free(text);
-               break;
-            }
+	mem_free(text);
+	break;
+}
 
-         mem_free(name);
-         break;
-      }
+mem_free(name);
+break;
+}
 }
 
 /***************************************************/
@@ -718,88 +639,85 @@ void RS_string_resource(RS_class *RS)
 //
 /***************************************************/
 
-void RS_show_contents(RS_class *RS, UWORD verbose)
-{
-   ULONG entry,nentries;
-   RF_entry_hdr *RHDR;
-   BYTE movatr[4],mematr[4];
-   DI_class *DI;
-   DICT_entry *rent;
-   BYTE *name;
+void RS_show_contents(RS_class *RS, UWORD verbose) {
+ULONG entry, nentries;
+RF_entry_hdr *RHDR;
+BYTE movatr[4], mematr[4];
+DI_class *DI;
+DICT_entry *rent;
+BYTE *name;
 
-   nentries = RF_entry_count(RS->RF);
+nentries = RF_entry_count(RS->RF);
 
-   printf("\n");
+printf("\n");
 
-   printf(MSG_RS_FIL,RS->RF->filename);
-   printf(MSG_RS_FOR,RS->RF->hdr.signature);
-   if (verbose)
-      {
-      printf(MSG_RS_SIZ,RS->RF->hdr.file_size);
-      printf(MSG_RS_USE,RS->RF->hdr.file_size - RS->RF->hdr.lost_space,
-         ((RS->RF->hdr.lost_space * 100L) / RS->RF->hdr.file_size));
-      printf(MSG_RS_NEN,nentries);
-      printf(MSG_RS_CTS,ASCII_time(RS->RF->hdr.create_time));
-      printf(MSG_RS_MTS,ASCII_time(RS->RF->hdr.modify_time));
-      }
+printf(MSG_RS_FIL, RS->RF->filename);
+printf(MSG_RS_FOR, RS->RF->hdr.signature);
+if (verbose) {
+printf(MSG_RS_SIZ, RS->RF->hdr.file_size);
+printf(MSG_RS_USE, RS->RF->hdr.file_size - RS->RF->hdr.lost_space,
+		((RS->RF->hdr.lost_space * 100L) / RS->RF->hdr.file_size));
+printf(MSG_RS_NEN, nentries);
+printf(MSG_RS_CTS, ASCII_time(RS->RF->hdr.create_time));
+printf(MSG_RS_MTS, ASCII_time(RS->RF->hdr.modify_time));
+}
 
-   if (nentries) printf("\n");
+if (nentries)
+printf("\n");
 
-   for (entry=0L;entry<nentries;entry++)
-      if (RF_flags(RS->RF,entry) & SA_DELETED)
-         printf(MSG_RS_DEL,entry);
-      else
-         {
-         RHDR = RF_header(RS->RF,entry);
-         if (RHDR==NULL)
-            report(E_ERROR,NULL,MSG_BRE,entry);
-         else
-            {
-            if (RHDR->data_attrib & DA_FIXED)
-               strcpy(movatr,MSG_RS_FIX);
-            else
-               strcpy(movatr,MSG_RS_MOV);
+for (entry = 0L; entry < nentries; entry++)
+if (RF_flags(RS->RF, entry) & SA_DELETED)
+	printf(MSG_RS_DEL, entry);
+else {
+	RHDR = RF_header(RS->RF, entry);
+	if (RHDR == NULL)
+		report(E_ERROR, NULL, MSG_BRE, entry);
+	else {
+		if (RHDR->data_attrib & DA_FIXED)
+			strcpy(movatr, MSG_RS_FIX);
+		else
+			strcpy(movatr, MSG_RS_MOV);
 
-            if (RHDR->data_attrib & DA_PRECIOUS)
-               strcpy(mematr,MSG_RS_PRE);
-            else if (RHDR->data_attrib & DA_DISCARDABLE)
-               strcpy(mematr,MSG_RS_DIS);
-            else
-               strcpy(mematr,MSG_RS_TMP);
+		if (RHDR->data_attrib & DA_PRECIOUS)
+			strcpy(mematr, MSG_RS_PRE);
+		else if (RHDR->data_attrib & DA_DISCARDABLE)
+			strcpy(mematr, MSG_RS_DIS);
+		else
+			strcpy(mematr, MSG_RS_TMP);
 
-            if (verbose)
-               {
-               name = str_alloc(MSG_RS_INV);
+		if (verbose) {
+			name = str_alloc(MSG_RS_INV);
 
-               DI = DI_construct(RS->dict[ROED]);
-               while ((rent = DI_fetch(DI)) != NULL)
-                  {
-                  if (ascnum(rent->def,10) == entry)
-                     {
-                     mem_free(name);
-                     name = str_alloc(rent->tag);
-                     break;
-                     }
-                  }
-               DI_destroy(DI);
+			DI = DI_construct(RS->dict[ROED]);
+			while ((rent = DI_fetch(DI)) != NULL) {
+				if (ascnum(rent->def, 10) == entry) {
+					mem_free(name);
+					name = str_alloc(rent->tag);
+					break;
+				}
+			}
+			DI_destroy(DI);
 
-               if (strlen(name) > 29) name[29] = 0;
+			if (strlen(name) > 29)
+				name[29] = 0;
 
-               if (RHDR->data_attrib & DA_PLACEHOLDER)
-                  printf(MSG_RS_PLA,entry,RF_index(RS->RF,entry) +
-                     sizeof(RF_entry_hdr),ASCII_time(RHDR->timestamp),name);
-               else
-                  printf(MSG_RS_VER,entry,RF_index(RS->RF,entry) +
-                     sizeof(RF_entry_hdr),movatr,mematr,RHDR->data_size,
-                     ASCII_time(RHDR->timestamp),name);
+			if (RHDR->data_attrib & DA_PLACEHOLDER)
+				printf(MSG_RS_PLA, entry,
+						RF_index(RS->RF, entry) + sizeof(RF_entry_hdr),
+						ASCII_time(RHDR->timestamp), name);
+			else
+				printf(MSG_RS_VER, entry,
+						RF_index(RS->RF, entry) + sizeof(RF_entry_hdr), movatr,
+						mematr, RHDR->data_size, ASCII_time(RHDR->timestamp),
+						name);
 
-               mem_free(name);
-               }
-            else
-               printf(MSG_RS_BRI,entry,RF_index(RS->RF,entry) +
-                  sizeof(RF_entry_hdr),movatr,mematr,RHDR->data_size);
-            }
-         }
+			mem_free(name);
+		} else
+			printf(MSG_RS_BRI, entry,
+					RF_index(RS->RF, entry) + sizeof(RF_entry_hdr), movatr,
+					mematr, RHDR->data_size);
+	}
+}
 }
 
 /*************************************************************/
@@ -812,73 +730,73 @@ void RS_show_contents(RS_class *RS, UWORD verbose)
 //
 /*************************************************************/
 
-IDR_class *IDR_construct(RS_class *RS)
-{
-   BYTE *rtype;
-   WORD i,bad;
-   IDR_class *IDR;
-   BYTE *rspec;
+IDR_class *IDR_construct(RS_class *RS) {
+BYTE *rtype;
+WORD i, bad;
+IDR_class *IDR;
+BYTE *rspec;
 
-   IDR = mem_alloc(sizeof(IDR_class));
+IDR = mem_alloc(sizeof(IDR_class));
 
-   IDR->RS = RS;
+IDR->RS = RS;
 
-   rtype = str_alloc(LEX_lexeme(RS->LEX,LEX_CUR));
+rtype = str_alloc(LEX_lexeme(RS->LEX, LEX_CUR));
 
-   IDR->type = LEX_token(RS->LEX,LEX_CUR);
+IDR->type = LEX_token(RS->LEX, LEX_CUR);
 
-   LEX_fetch(RS->LEX);
+LEX_fetch(RS->LEX);
 
-   bad=0;
-   switch (LEX_type(RS->LEX,LEX_CUR))
-      {
-      default:
-         RS_syntax_error(RS);
-         bad=1; break;
+bad = 0;
+switch (LEX_type(RS->LEX, LEX_CUR)) {
+default:
+RS_syntax_error(RS);
+bad = 1;
+break;
 
-      case TTYP_KEYWORD:
-         RS_reserved_word_error(RS);
-         bad=1; break;
+case TTYP_KEYWORD:
+RS_reserved_word_error(RS);
+bad = 1;
+break;
 
-      case TTYP_STRLIT:
-      case TTYP_NAME:
-         IDR->name = str_alloc(LEX_lexeme(RS->LEX,LEX_CUR));
+case TTYP_STRLIT:
+case TTYP_NAME:
+IDR->name = str_alloc(LEX_lexeme(RS->LEX, LEX_CUR));
 
-         RS_check_name(RS,IDR->name);
+RS_check_name(RS, IDR->name);
 
-         if (RS_next_attribute_specifier(RS))
-            IDR->attrib = RS_parse_attribute_list(RS);
-         else
-            IDR->attrib = RS->attribs[IDR->type - RS_SEQUENCE];
+if (RS_next_attribute_specifier(RS))
+	IDR->attrib = RS_parse_attribute_list(RS);
+else
+	IDR->attrib = RS->attribs[IDR->type - RS_SEQUENCE];
 
-         LEX_require(RS->LEX,TTYP_SYMBOL,RS_LCURL,RS_symbols[RS_LCURL]);
+LEX_require(RS->LEX, TTYP_SYMBOL, RS_LCURL, RS_symbols[RS_LCURL]);
 
-         rspec = RS_parse_constant_list_string(RS);
+rspec = RS_parse_constant_list_string(RS);
 
-         IDR->speclist = mem_alloc(strlen(rtype)+strlen(rspec)+4);
-         strcpy(IDR->speclist,rtype);
-         strcat(IDR->speclist,":");
-         strcat(IDR->speclist,rspec);
+IDR->speclist = mem_alloc(strlen(rtype) + strlen(rspec) + 4);
+strcpy(IDR->speclist, rtype);
+strcat(IDR->speclist, ":");
+strcat(IDR->speclist, rspec);
 
-         for (i=0;i<strlen(rspec);i++)
-            if (rspec[i] == ',') rspec[i] = 0;
+for (i = 0; i < strlen(rspec); i++)
+	if (rspec[i] == ',')
+		rspec[i] = 0;
 
-         IDR->fn = str_alloc(rspec);
+IDR->fn = str_alloc(rspec);
 
-         mem_free(rspec);
+mem_free(rspec);
 
-         LEX_require(RS->LEX,TTYP_SYMBOL,RS_RCURL,RS_symbols[RS_RCURL]);
-      }
+LEX_require(RS->LEX, TTYP_SYMBOL, RS_RCURL, RS_symbols[RS_RCURL]);
+}
 
-   mem_free(rtype);
+mem_free(rtype);
 
-   if (bad)
-      {
-      mem_free(IDR);
-      return NULL;
-      }
+if (bad) {
+mem_free(IDR);
+return NULL;
+}
 
-   return IDR;
+return IDR;
 }
 
 /*************************************************************/
@@ -888,11 +806,10 @@ IDR_class *IDR_construct(RS_class *RS)
 //
 /*************************************************************/
 
-void IDR_show(IDR_class *IDR)
-{
-   printf("IDR \"%s\" [%s] [%s]",IDR->name,IDR->fn,IDR->speclist);
-   printf(" (attr %X)",IDR->attrib);
-   printf("\n");
+void IDR_show(IDR_class *IDR) {
+printf("IDR \"%s\" [%s] [%s]", IDR->name, IDR->fn, IDR->speclist);
+printf(" (attr %X)", IDR->attrib);
+printf("\n");
 }
 
 /*************************************************************/
@@ -918,43 +835,42 @@ void IDR_show(IDR_class *IDR)
 //
 /*************************************************************/
 
-WORD IDR_test(IDR_class *IDR)
-{
-   ULONG ftime;
-   RF_entry_hdr *RHDR;
-   DICT_entry *cur;
+WORD IDR_test(IDR_class *IDR) {
+ULONG ftime;
+RF_entry_hdr *RHDR;
+DICT_entry *cur;
 
-   IDR->ord = RS_get_ROED_entry(IDR->RS,IDR->name);
+IDR->ord = RS_get_ROED_entry(IDR->RS, IDR->name);
 
-   RHDR = RF_header(IDR->RS->RF,IDR->ord);
-   if (RHDR->data_attrib & DA_PLACEHOLDER)
-      return 1;
+RHDR = RF_header(IDR->RS->RF, IDR->ord);
+if (RHDR->data_attrib & DA_PLACEHOLDER)
+return 1;
 
-   if (RHDR->data_attrib != IDR->attrib)
-      return 1;
+if (RHDR->data_attrib != IDR->attrib)
+return 1;
 
-   cur = DICT_lookup(IDR->RS->dict[RDEP],IDR->name);
+cur = DICT_lookup(IDR->RS->dict[RDEP], IDR->name);
 
-   if ((cur==NULL) || (cur->def == NULL))
-      return 1;
+if ((cur == NULL) || (cur->def == NULL))
+return 1;
 
-   ftime = TS_latest_file_time(IDR->RS->TS,cur->def);
+ftime = TS_latest_file_time(IDR->RS->TS, cur->def);
 
-   if (!ftime)
-      return 1;
+if (!ftime)
+return 1;
 
-   if (RES_storage_timestamp(IDR->RS->RF,IDR->ord) < ftime)
-      return 1;
+if (RES_storage_timestamp(IDR->RS->RF, IDR->ord) < ftime)
+return 1;
 
-   cur = DICT_lookup(IDR->RS->dict[RDES],IDR->name);
+cur = DICT_lookup(IDR->RS->dict[RDES], IDR->name);
 
-   if ((cur==NULL) || (cur->def == NULL))
-      return 1;
+if ((cur == NULL) || (cur->def == NULL))
+return 1;
 
-   if (strcasecmp(cur->def,IDR->speclist))
-      return 1;
+if (strcasecmp(cur->def, IDR->speclist))
+return 1;
 
-   return 0;
+return 0;
 }
 
 /*************************************************************/
@@ -967,63 +883,62 @@ WORD IDR_test(IDR_class *IDR)
 //
 /*************************************************************/
 
-void IDR_compile(IDR_class *IDR)
-{
-   DICT_class *depend;
-   MAP_class *MAP;
-   PAL_class *PAL;
-   RF_entry_hdr RHDR;
+void IDR_compile(IDR_class *IDR) {
+DICT_class *depend;
+MAP_class *MAP;
+PAL_class *PAL;
+RF_entry_hdr RHDR;
 
-   if (!verify_file(IDR->fn))
-      {
-      DICT_delete(IDR->RS->dict[RDEP],IDR->name);
-      report(E_ERROR,LEX_line(IDR->RS->LEX,LEX_CUR),MSG_SNF,IDR->fn,NULL);
-      return;
-      }
+if (!verify_file(IDR->fn)) {
+DICT_delete(IDR->RS->dict[RDEP], IDR->name);
+report(E_ERROR, LEX_line(IDR->RS->LEX, LEX_CUR), MSG_SNF, IDR->fn, NULL);
+return;
+}
 
-   depend = DICT_construct(4);
+depend = DICT_construct(4);
 
-   switch (IDR->type)
-      {
-      case RS_SEQUENCE:    // (temporarily same as RS_FILE)
-      case RS_SAMPLE:
+switch (IDR->type) {
+case RS_SEQUENCE:    // (temporarily same as RS_FILE)
+case RS_SAMPLE:
 
-      case RS_FILE:
-         RHDR.data_attrib = IDR->attrib;
-         RHDR.data_size = file_size(IDR->fn);
+case RS_FILE:
+RHDR.data_attrib = IDR->attrib;
+RHDR.data_size = file_size(IDR->fn);
 
-         RF_write_entry(IDR->RS->RF,IDR->ord,IDR->fn,&RHDR,RTYP_RAW_FILE);
+RF_write_entry(IDR->RS->RF, IDR->ord, IDR->fn, &RHDR, RTYP_RAW_FILE);
 
-         DICT_enter(depend,IDR->fn,0);
-         break;
+DICT_enter(depend, IDR->fn, 0);
+break;
 
-      case RS_MAP:
-         MAP = MAP_construct(IDR);
-         if (MAP == NULL) break;
+case RS_MAP:
+MAP = MAP_construct(IDR);
+if (MAP == NULL)
+	break;
 
-         MAP_compile(MAP);
-         MAP_destroy(MAP);
+MAP_compile(MAP);
+MAP_destroy(MAP);
 
-         DICT_enter(depend,IDR->fn,0);
-         break;
+DICT_enter(depend, IDR->fn, 0);
+break;
 
-      case RS_PALETTE:
-         PAL = PAL_construct(IDR);
-         if (PAL == NULL) break;
+case RS_PALETTE:
+PAL = PAL_construct(IDR);
+if (PAL == NULL)
+	break;
 
-         PAL_compile(PAL);
-         PAL_destroy(PAL);
+PAL_compile(PAL);
+PAL_destroy(PAL);
 
-         DICT_enter(depend,IDR->fn,0);
-         break;
-      }
+DICT_enter(depend, IDR->fn, 0);
+break;
+}
 
-   report(E_RESCOMP,NULL,NULL);
+report(E_RESCOMP, NULL, NULL);
 
-   RS_update_RDEP(IDR->RS,IDR->name,depend);
-   RS_update_RDES(IDR->RS,IDR->name,IDR->speclist);
+RS_update_RDEP(IDR->RS, IDR->name, depend);
+RS_update_RDES(IDR->RS, IDR->name, IDR->speclist);
 
-   DICT_destroy(depend);
+DICT_destroy(depend);
 }
 
 /*************************************************************/
@@ -1032,13 +947,12 @@ void IDR_compile(IDR_class *IDR)
 //
 /*************************************************************/
 
-void IDR_destroy(IDR_class *IDR)
-{
-   mem_free(IDR->name);
-   mem_free(IDR->fn);
-   mem_free(IDR->speclist);
+void IDR_destroy(IDR_class *IDR) {
+mem_free(IDR->name);
+mem_free(IDR->fn);
+mem_free(IDR->speclist);
 
-   mem_free(IDR);
+mem_free(IDR);
 }
 
 /*************************************************************/
@@ -1058,64 +972,60 @@ void IDR_destroy(IDR_class *IDR)
 //
 /*************************************************************/
 
-RS_class *RS_construct(BYTE *SCR_filename, BYTE *RES_filename, DICT_class
-   *predef, WORD c_threshold, UWORD flags)
-{
-   RS_class *RS;
-   UWORD i;
+RS_class *RS_construct(BYTE *SCR_filename, BYTE *RES_filename,
+DICT_class *predef, WORD c_threshold, UWORD flags) {
+RS_class *RS;
+UWORD i;
 
-   strncpy(&manifest_defs[0][1],ASCII_time(current_time()),20);
+strncpy(&manifest_defs[0][1], ASCII_time(current_time()), 20);
 
-   if (flags & RS_REBUILD)
-      unlink(RES_filename);
+if (flags & RS_REBUILD)
+unlink(RES_filename);
 
-   RS = mem_alloc(sizeof(RS_class));
+RS = mem_alloc(sizeof(RS_class));
 
-   RS->RES_fn = str_alloc(RES_filename);
-   RS->SCR_fn = str_alloc(SCR_filename);
+RS->RES_fn = str_alloc(RES_filename);
+RS->SCR_fn = str_alloc(SCR_filename);
 
-   RS->depend = DICT_construct(4);
-   RS->names = DICT_construct(64);
-   RS->refcr = DICT_construct(64);
-   RS->predef = DICT_construct(DC_LINEAR);
+RS->depend = DICT_construct(4);
+RS->names = DICT_construct(64);
+RS->refcr = DICT_construct(64);
+RS->predef = DICT_construct(DC_LINEAR);
 
-   RS->TS = TS_construct();
+RS->TS = TS_construct();
 
-   RS->flags = flags;
-   RS->c_threshold = c_threshold;
+RS->flags = flags;
+RS->c_threshold = c_threshold;
 
-   RS->RF = RF_construct(RES_filename,0);
+RS->RF = RF_construct(RES_filename, 0);
 
-   RS->RES_time = TS_file_time(RS->TS,RES_filename);
+RS->RES_time = TS_file_time(RS->TS, RES_filename);
 
-   DICT_copy(predef,RS->predef);
+DICT_copy(predef, RS->predef);
 
-   for (i=0;manifest_constants[i] != NULL;i++)
-      {
-      if (DICT_lookup(RS->predef,manifest_constants[i]))
-         {   
-         report(E_NOTICE,NULL,MSG_RDF,manifest_constants[i]);
-         DICT_delete(RS->predef,manifest_constants[i]);
-         }
+for (i = 0; manifest_constants[i] != NULL; i++) {
+if (DICT_lookup(RS->predef, manifest_constants[i])) {
+	report(E_NOTICE, NULL, MSG_RDF, manifest_constants[i]);
+	DICT_delete(RS->predef, manifest_constants[i]);
+}
 
-      DICT_enter(RS->predef,manifest_constants[i],0)->def = manifest_defs[i];
-      }                          
+DICT_enter(RS->predef, manifest_constants[i], 0)->def = manifest_defs[i];
+}
 
-   for (i=0;i<NDICTS;i++)
-      {
-      RS->dict[i] = DICT_construct(512);
+for (i = 0; i < NDICTS; i++) {
+RS->dict[i] = DICT_construct(512);
 
-      if (RF_flags(RS->RF,i) & SA_UNUSED)
-         DICT_save(RS->dict[i],RS->RF,(ULONG) -1);
-      else
-         DICT_load(RS->dict[i],RS->RF,i);
-      }
+if (RF_flags(RS->RF, i) & SA_UNUSED)
+	DICT_save(RS->dict[i], RS->RF, (ULONG) -1);
+else
+	DICT_load(RS->dict[i], RS->RF, i);
+}
 
-   RS_get_MSGD_entry(RS,MN_CREATE);
-   RS_get_MSGD_entry(RS,MN_DESTROY);
-   RS_get_MSGD_entry(RS,MN_RESTORE);
+RS_get_MSGD_entry(RS, MN_CREATE);
+RS_get_MSGD_entry(RS, MN_DESTROY);
+RS_get_MSGD_entry(RS, MN_RESTORE);
 
-   return RS;
+return RS;
 }
 
 /*************************************************************/
@@ -1126,34 +1036,33 @@ RS_class *RS_construct(BYTE *SCR_filename, BYTE *RES_filename, DICT_class
 //
 /*************************************************************/
 
-void RS_destroy(RS_class *RS)
-{
-   UWORD i;
-   DICT_entry *entry;
-   DI_class *DI;
+void RS_destroy(RS_class *RS) {
+UWORD i;
+DICT_entry *entry;
+DI_class *DI;
 
-   DI = DI_construct(RS->refcr);
+DI = DI_construct(RS->refcr);
 
-   while ((entry = DI_fetch(DI)) != NULL)
-      report(E_WARN,entry->def,MSG_PMR,entry->tag);
+while ((entry = DI_fetch(DI)) != NULL)
+report(E_WARN, entry->def, MSG_PMR, entry->tag);
 
-   DI_destroy(DI);
+DI_destroy(DI);
 
-   for (i=0;i<NDICTS;i++)
-      DICT_destroy(RS->dict[i]);
+for (i = 0; i < NDICTS; i++)
+DICT_destroy(RS->dict[i]);
 
-   RF_destroy(RS->RF,RS->c_threshold);
+RF_destroy(RS->RF, RS->c_threshold);
 
-   TS_destroy(RS->TS);
+TS_destroy(RS->TS);
 
-   DICT_destroy(RS->predef);
-   DICT_destroy(RS->refcr);
-   DICT_destroy(RS->names);
-   DICT_destroy(RS->depend);
+DICT_destroy(RS->predef);
+DICT_destroy(RS->refcr);
+DICT_destroy(RS->names);
+DICT_destroy(RS->depend);
 
-   mem_free(RS->RES_fn);
-   mem_free(RS->SCR_fn);
-   mem_free(RS);
+mem_free(RS->RES_fn);
+mem_free(RS->SCR_fn);
+mem_free(RS);
 }
 
 /*************************************************************/
@@ -1183,124 +1092,117 @@ void RS_destroy(RS_class *RS)
 //
 /*************************************************************/
 
-void RS_compile(RS_class *RS)
-{
-   UWORD i;
-   UWORD cr_defined;
-   PP_class *PP;
-   DI_class *DI;
-   IDR_class *IDR;
-   SOP_class *SOP;
-   ULONG n,latest_comp;
-   DICT_entry *cur;
+void RS_compile(RS_class *RS) {
+UWORD i;
+UWORD cr_defined;
+PP_class *PP;
+DI_class *DI;
+IDR_class *IDR;
+SOP_class *SOP;
+ULONG n, latest_comp;
+DICT_entry *cur;
 
-   DI = DI_construct(RS->dict[RDEP]);
-   latest_comp = 0L;
-   while ((cur = DI_fetch(DI)) != NULL)
-      {
-      n = TS_latest_file_time(RS->TS,cur->def);
-      if (n == 0L)
-         {
-         latest_comp = n;
-         break;
-         }
-      if (n > latest_comp) latest_comp = n;
-      }
-   DI_destroy(DI);
+DI = DI_construct(RS->dict[RDEP]);
+latest_comp = 0L;
+while ((cur = DI_fetch(DI)) != NULL) {
+n = TS_latest_file_time(RS->TS, cur->def);
+if (n == 0L) {
+	latest_comp = n;
+	break;
+}
+if (n > latest_comp)
+	latest_comp = n;
+}
+DI_destroy(DI);
 
-   if ((latest_comp) && (RS->RES_time >= latest_comp))
-      {
-      report(E_NOTICE,NULL,MSG_UTD,RS->RES_fn,NULL);
-      return;
-      }
+if ((latest_comp) && (RS->RES_time >= latest_comp)) {
+report(E_NOTICE, NULL, MSG_UTD, RS->RES_fn, NULL);
+return;
+}
 
-   for (i=0;i<RDAT_NTYPES;i++)
-      RS->attribs[i] = DA_MOVEABLE | DA_DISCARDABLE;
+for (i = 0; i < RDAT_NTYPES; i++)
+RS->attribs[i] = DA_MOVEABLE | DA_DISCARDABLE;
 
-   cr_defined = 0;
+cr_defined = 0;
 
-   RS->tfile = temp_filename(getenv(TEMP_NAME));
-   PP = PP_construct(RS->SCR_fn,RS->tfile,RS->predef,PP_TXTLIT);
-   PP_process(PP);
-   PP_destroy(PP);
+RS->tfile = temp_filename(getenv(TEMP_NAME));
+PP = PP_construct(RS->SCR_fn, RS->tfile, RS->predef, PP_TXTLIT);
+PP_process(PP);
+PP_destroy(PP);
 
-   RS->LEX = LEX_construct(LEX_LININFO | LEX_TXTLIT,RS->tfile,
-      RS_keywords,RS_symbols,RS->depend);
+RS->LEX = LEX_construct(LEX_LININFO | LEX_TXTLIT, RS->tfile, RS_keywords,
+	RS_symbols, RS->depend);
 
-   while (LEX_type(RS->LEX,LEX_NXT) != TTYP_EOF)
-      {
-      LEX_fetch(RS->LEX);
+while (LEX_type(RS->LEX, LEX_NXT) != TTYP_EOF) {
+LEX_fetch(RS->LEX);
 
-      switch (LEX_type(RS->LEX,LEX_CUR))
-         {
-         case TTYP_KEYWORD:
-            switch (LEX_token(RS->LEX,LEX_CUR))
-               {
-               case RS_ATTRIB:
-                  RS_parse_attribute_specification(RS);
-                  break;
+switch (LEX_type(RS->LEX, LEX_CUR)) {
+case TTYP_KEYWORD:
+	switch (LEX_token(RS->LEX, LEX_CUR)) {
+	case RS_ATTRIB:
+		RS_parse_attribute_specification(RS);
+		break;
 
-               case RS_CODE:
-                  if (cr_defined)
-                     report(E_ERROR,LEX_line(RS->LEX,LEX_CUR),MSG_MDT,NULL);
-                  else
-                     {
-                     RS_parse_code_resource_declaration(RS);
-                     cr_defined = 1;
-                     }
-                  break;
+	case RS_CODE:
+		if (cr_defined)
+			report(E_ERROR, LEX_line(RS->LEX, LEX_CUR), MSG_MDT, NULL);
+		else {
+			RS_parse_code_resource_declaration(RS);
+			cr_defined = 1;
+		}
+		break;
 
-               case RS_STRING:
-                  RS_string_resource(RS);
-                  break;
+	case RS_STRING:
+		RS_string_resource(RS);
+		break;
 
-               case RS_SEQUENCE:
-               case RS_SAMPLE:
-               case RS_FILE:
-               case RS_MAP:
-               case RS_PALETTE:
-                  IDR = IDR_construct(RS);
-                  if (IDR == NULL)
-                     break;
+	case RS_SEQUENCE:
+	case RS_SAMPLE:
+	case RS_FILE:
+	case RS_MAP:
+	case RS_PALETTE:
+		IDR = IDR_construct(RS);
+		if (IDR == NULL)
+			break;
 
-                  if (IDR_test(IDR))
-                     IDR_compile(IDR);
+		if (IDR_test(IDR))
+			IDR_compile(IDR);
 
-                  IDR_destroy(IDR);
-                  break;
+		IDR_destroy(IDR);
+		break;
 
-               case RS_SOURCE:
-                  SOP = SOP_construct(RS,RS->attribs[RS_SOURCE-RS_SEQUENCE]);
-                  if (SOP == NULL)
-                     break;
+	case RS_SOURCE:
+		SOP = SOP_construct(RS, RS->attribs[RS_SOURCE - RS_SEQUENCE]);
+		if (SOP == NULL)
+			break;
 
-                  if (SOP_test(SOP))
-                     SOP_compile(SOP);
+		if (SOP_test(SOP))
+			SOP_compile(SOP);
 
-                  SOP_destroy(SOP);
-                  break;
+		SOP_destroy(SOP);
+		break;
 
-               default:
-                  RS_syntax_error(RS);
-               }
-            break;
+	default:
+		RS_syntax_error(RS);
+	}
+	break;
 
-         default:
-            RS_syntax_error(RS);
-         }
-      }
+default:
+	RS_syntax_error(RS);
+}
+}
 
-   if (error_message_count())
-      DICT_enter(RS->depend,"$obsolete",0);
+if (error_message_count())
+DICT_enter(RS->depend, "$obsolete", 0);
 
-   RS_update_RDEP(RS,"$",RS->depend);
+RS_update_RDEP(RS, "$", RS->depend);
 
-   for (i=0;i<NDICTS;i++)
-      if (DICT_touched(RS->dict[i]))
-         DICT_save(RS->dict[i],RS->RF,i);
+for (i = 0; i < NDICTS; i++)
+if (DICT_touched(RS->dict[i]))
+	DICT_save(RS->dict[i], RS->RF, i);
 
-   LEX_destroy(RS->LEX);
-   remove_tempfile(RS->tfile);
+LEX_destroy(RS->LEX);
+remove_tempfile(RS->tfile);
 
-   set_file_time(RS->RES_fn,current_time());
+set_file_time(RS->RES_fn, current_time());
 }

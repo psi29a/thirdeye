@@ -9,35 +9,28 @@
 extern "C" {
 #endif
 
-typedef struct entry          
-{
-   void *def;                 // public
-   BYTE *tag;                 // public
+typedef struct entry {
+	void *def;                 // public
+	BYTE *tag;                 // public
 
-   UWORD attr;                // private
-   struct entry *next;        // private
-}
-DICT_entry;                   // dictionary entry object
+	UWORD attr;                // private
+	struct entry *next;        // private
+} DICT_entry;                   // dictionary entry object
 
-typedef struct
-{
-   DICT_entry **root;         // private
-   UWORD hash_size;           // private
-   WORD touched;              // private
-}
-DICT_class;                   // dictionary base class
+typedef struct {
+	DICT_entry **root;         // private
+	UWORD hash_size;           // private
+	WORD touched;              // private
+} DICT_class;                   // dictionary base class
 
-typedef struct
-{
-   DICT_class *base;          // private
-   UWORD bucket;              // private
-   DICT_entry *cur;           // private
-}
-DI_class;                     // serial dictionary reader (iterator) class
+typedef struct {
+	DICT_class *base;          // private
+	UWORD bucket;              // private
+	DICT_entry *cur;           // private
+} DI_class;                     // serial dictionary reader (iterator) class
 
 #define D_DEFHEAP  0x8000     // entry attribute: definition object on heap
 #define DC_LINEAR  1          // hash size = 1 to store as single linear array
-
 DICT_class *DICT_construct(UWORD hash_size);
 void DICT_destroy(DICT_class *DICT);
 
