@@ -21,6 +21,7 @@ option(SDL2_STATIC "Link static build of SDL into the binaries" FALSE)
 # Apps and tools
 option(BUILD_LAUNCHER "Build Thirdeye Launcher" ON)
 option(BUILD_DAESOP "Build Daesop" ON)
+option(BUILD_ARC "Build ARC" OFF)
 
 # We probably support older versions than this.
 cmake_minimum_required(VERSION 2.6)
@@ -224,6 +225,9 @@ endif()
 if (BUILD_DAESOP)
    add_subdirectory( apps/daesop )
 endif()
+if (BUILD_ARC)
+   add_subdirectory( apps/arc )
+endif()
 
 if (WIN32)
   if (MSVC)
@@ -411,6 +415,9 @@ if (NOT WIN32 AND NOT DPKG_PROGRAM AND NOT APPLE)
     IF(BUILD_DAESOP)
         INSTALL(PROGRAMS "${Thirdeye_BINARY_DIR}/daesop" DESTINATION "${BINDIR}" )
     ENDIF(BUILD_DAESOP)    
+    IF(BUILD_ARC)
+        INSTALL(PROGRAMS "${Thirdeye_BINARY_DIR}/arc" DESTINATION "${BINDIR}" )
+    ENDIF(BUILD_ARC) 
 
     # Install icon and .desktop
     INSTALL(FILES "${Thirdeye_SOURCE_DIR}/apps/launcher/resources/images/thirdeye.png" DESTINATION "${ICONDIR}")
