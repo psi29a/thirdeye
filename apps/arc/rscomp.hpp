@@ -19,7 +19,6 @@ extern "C" {
 #define RS_SHOWBRIEF     0x0002 // Show brief list of resource file contents
 #define RS_SHOWVERBOSE   0x0004 // Show verbose list of resource file contents
 #define RS_NOUNIQUECHECK 0x0008 // Do not verify unique resource names
-
 #define RDAT_NTYPES  8          // # of resource-specifier types
 #define RDAT_SEQ     0
 #define RDAT_SAM     1
@@ -31,50 +30,43 @@ extern "C" {
 #define RDAT_PAL     7
 
 #define CR_VECTOR_SIZE 4   // Size of code resource function address
-
 #define NDICTS 5           // # of principal dictionaries
-
 #define ROED 0             // Resource Ordinal Entry Directory
 #define RDES 1             // Resource Description Directory
 #define RDEP 2             // Resource Dependency Directory
 #define CRFD 3             // Code Resource Function Directory
 #define MSGD 4             // Message Name Directory
+typedef struct {
+	PP_class *PP;
+	RF_class *RF;
+	TS_class *TS;
+	LEX_class *LEX;
+	DICT_class *dict[NDICTS];
+	DICT_class *refcr;
+	DICT_class *predef;
+	DICT_class *depend;
+	DICT_class *names;
+	ULONG RES_time;
+	ULONG attribs[RDAT_NTYPES];
+	BYTE *RES_fn;
+	BYTE *SCR_fn;
+	BYTE *tfile;
+	UWORD flags;
+	WORD c_threshold;
+} RS_class;                  // Resource script description
 
-typedef struct
-{
-   PP_class *PP;
-   RF_class *RF;
-   TS_class *TS;
-   LEX_class *LEX;
-   DICT_class *dict[NDICTS];
-   DICT_class *refcr;
-   DICT_class *predef;
-   DICT_class *depend;
-   DICT_class *names;
-   ULONG RES_time;
-   ULONG attribs[RDAT_NTYPES];
-   BYTE *RES_fn;
-   BYTE *SCR_fn;
-   BYTE *tfile;
-   UWORD flags;
-   WORD c_threshold;
-}
-RS_class;                  // Resource script description
+typedef struct {
+	WORD type;
+	BYTE *name;
+	BYTE *fn;
+	BYTE *speclist;
+	ULONG attrib;
+	ULONG ord;
+	RS_class *RS;
+} IDR_class;                 // Indirect resource description
 
-typedef struct
-{
-   WORD type;
-   BYTE *name;
-   BYTE *fn;
-   BYTE *speclist;
-   ULONG attrib;
-   ULONG ord;
-   RS_class *RS;
-}
-IDR_class;                 // Indirect resource description
-
-RS_class *RS_construct(BYTE *SCR_filename, BYTE *RES_filename, DICT_class
-   *predef, WORD c_threshold, UWORD flags);
+RS_class *RS_construct(BYTE *SCR_filename, BYTE *RES_filename,
+		DICT_class *predef, WORD c_threshold, UWORD flags);
 void RS_destroy(RS_class *RS);
 
 void RS_compile(RS_class *RS);
