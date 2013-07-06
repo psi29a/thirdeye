@@ -28,6 +28,8 @@
 #include <stdlib.h>
 #include <fcntl.h>
 #include <sys/stat.h>
+#include <sys/types.h>
+#include <unistd.h>
 
 #include "defs.hpp"
 #include "system.hpp"
@@ -75,7 +77,7 @@ ULONG RES_store_resource(RF_class *RF, ULONG entry, void *source,
 	switch (type) {
 	case RTYP_HOUSECLEAN:
 		file = *(WORD *) source;
-		ptr = mem_alloc(BLK_SIZE);
+		ptr = (UBYTE*) mem_alloc(BLK_SIZE);
 
 		while (len > BLK_SIZE) {
 			r_read(file, ptr, (UWORD) BLK_SIZE);
@@ -90,19 +92,19 @@ ULONG RES_store_resource(RF_class *RF, ULONG entry, void *source,
 
 	case RTYP_DICTIONARY:
 	case RTYP_RAW_MEM:
-		ptr = source;
+		ptr = (UBYTE*) source;
 
 		while (len > BLK_SIZE) {
 			r_write(RF->file, ptr, (UWORD) BLK_SIZE);
 			len -= BLK_SIZE;
-			ptr = add_ptr(ptr, BLK_SIZE);
+			ptr = (UBYTE*) add_ptr(ptr, BLK_SIZE);
 		}
 		r_write(RF->file, ptr, (UWORD) len);
 		break;
 
 	case RTYP_RAW_FILE:
-		file = open(source, O_RDWR);
-		ptr = mem_alloc(BLK_SIZE);
+		file = open((BYTE*)source, O_RDWR);
+		ptr = (UBYTE*) mem_alloc(BLK_SIZE);
 
 		while (len > BLK_SIZE) {
 			r_read(file, ptr, (UWORD) BLK_SIZE);
@@ -175,10 +177,10 @@ UWORD RES_read_entry(RF_class *RF, ULONG entry, void *dest, RF_entry_hdr *RHDR,
 			if (!tl)
 				continue;
 
-			tag = mem_alloc((ULONG) tl);
+			tag = (BYTE*) mem_alloc(tl);
 			r_read(RF->file, tag, (UWORD) tl);
 
-			cur = DICT_enter(dest, tag, D_DEFHEAP);
+			cur = DICT_enter( (DICT_class*) dest, tag, D_DEFHEAP);
 			mem_free(tag);
 
 			r_read(RF->file, &dl, sizeof(dl));
@@ -273,7 +275,7 @@ ULONG DICT_save(DICT_class *DICT, RF_class *RF, ULONG entry) {
 	while ((cur = DI_fetch(DI)) != NULL) {
 		total_len += (ULONG) ((strlen(cur->tag) + 1) + (2 * sizeof(UWORD)));
 		if (cur->def != NULL)
-			total_len += (ULONG) (strlen(cur->def) + 1);
+			total_len += (ULONG) (strlen((BYTE*)cur->def) + 1);
 	}
 
 	DI_destroy(DI);
@@ -307,15 +309,15 @@ ULONG DICT_save(DICT_class *DICT, RF_class *RF, ULONG entry) {
 				*(UWORD *) ptr = 0;
 				ptr += sizeof(UWORD);
 			} else {
-				*(UWORD *) ptr = (strlen(cur->def) + 1);
+				*(UWORD *) ptr = (strlen((BYTE*)cur->def) + 1);
 				ptr += sizeof(UWORD);
 
 				strcpy(ptr, (BYTE*)cur->def);
-				ptr += (strlen(cur->def) + 1);
+				ptr += (strlen((BYTE*)cur->def) + 1);
 			}
 
 			cur = cur->next;
-			ptr = norm(ptr);
+			ptr = (BYTE*) norm(ptr);
 		}
 
 		*(UWORD *) ptr = 0;
@@ -373,7 +375,7 @@ BYTE *DICT_build_tag_string(DICT_class *DICT) {
 		len += (ULONG) (strlen(cur->tag) + 1);
 	DI_destroy(DI);
 
-	string = mem_alloc(len + 1L);
+	string = (BYTE*) mem_alloc(len + 1L);
 	string[0] = 0;
 
 	DI = DI_construct(DICT);
@@ -399,7 +401,7 @@ BYTE *DICT_build_tag_string(DICT_class *DICT) {
 TS_class *TS_construct(void) {
 	TS_class *TS;
 
-	TS = mem_alloc(sizeof(TS_class));
+	TS = (TS_class*) mem_alloc(sizeof(TS_class));
 
 	TS->cache = DICT_construct(256);
 
@@ -449,7 +451,7 @@ ULONG TS_file_time(TS_class *TS, BYTE *filename) {
 	if (cur == NULL) {
 		cur = DICT_enter(TS->cache, filename, D_DEFHEAP);
 
-		tstamp = mem_alloc(sizeof(ULONG));
+		tstamp = (ULONG*) mem_alloc(sizeof(ULONG));
 
 		*tstamp = file_time(filename);
 		cur->def = tstamp;
@@ -526,7 +528,7 @@ ULONG TS_latest_file_time(TS_class *TS, BYTE *filelist) {
 CSS_class *CSS_construct(BYTE *string) {
 	CSS_class *CSS;
 
-	CSS = mem_alloc(sizeof(CSS_class));
+	CSS = (CSS_class*) mem_alloc(sizeof(CSS_class));
 
 	if (string == NULL)
 		CSS->string = CSS->cur = str_alloc("");
@@ -631,7 +633,7 @@ void CSS_rewind(CSS_class *CSS) {
 void CSS_add_string(CSS_class *CSS, BYTE *string) {
 	BYTE *ptr;
 
-	ptr = mem_alloc((ULONG) strlen(CSS->string) + (ULONG) strlen(string) + 4L);
+	ptr = (BYTE*) mem_alloc((ULONG) strlen(CSS->string) + (ULONG) strlen(string) + 4L);
 
 	strcpy(ptr, CSS->string);
 

@@ -28,6 +28,8 @@
 #include <stdlib.h>
 #include <fcntl.h>
 #include <sys/stat.h>
+#include <sys/types.h>
+#include <unistd.h>
 
 #include "defs.hpp"
 #include "system.hpp"
@@ -54,7 +56,7 @@ RF_class *RF_construct(BYTE *filename, WORD compacting) {
 	OD_link **prev;
 	ULONG next;
 
-	RF = mem_alloc(sizeof(RF_class));
+	RF = (RF_class*) mem_alloc(sizeof(RF_class));
 
 	RF->filename = str_alloc(filename);
 
@@ -73,7 +75,7 @@ RF_class *RF_construct(BYTE *filename, WORD compacting) {
 		if (!write_file(filename, &RF->hdr, sizeof(RF_file_hdr)))
 			report(E_FATAL, NULL, MSG_CWR, filename);
 
-		tmp = mem_alloc(sizeof(OD_block));
+		tmp = (OD_block*) mem_alloc(sizeof(OD_block));
 		tmp->next = 0L;
 		for (i = 0; i < OD_SIZE; i++) {
 			tmp->flags[i] = SA_UNUSED;
@@ -96,7 +98,7 @@ RF_class *RF_construct(BYTE *filename, WORD compacting) {
 	next = RF->hdr.FOB;
 	prev = &RF->root;
 	while (next) {
-		link = mem_alloc(sizeof(OD_link));
+		link = (OD_link*) mem_alloc(sizeof(OD_link));
 
 		link->touched = 0;
 		link->origin = lseek(RF->file, next, SEEK_SET);
@@ -121,7 +123,7 @@ void RF_destroy(RF_class *RF, WORD compact_threshold) {
 	OD_link *link, *next;
 	WORD lost_percent;
 	ULONG lost_space, entry, nentries;
-	RF_class *new,*old;
+	RF_class *new_class,*old;
 	BYTE *RF_filename, *temp_fn;
 
 	if (RF->touched) {
@@ -154,19 +156,19 @@ void RF_destroy(RF_class *RF, WORD compact_threshold) {
 		rename(RF_filename, temp_fn = temp_filename(NULL));
 		old = RF_construct(temp_fn, 0);
 
-		new = RF_construct(RF_filename,1);
+		new_class = RF_construct(RF_filename,1);
 
-		new->hdr.modify_time = old->hdr.modify_time;
-		new->hdr.create_time = old->hdr.create_time;
-		new->touched = 1;
+		new_class->hdr.modify_time = old->hdr.modify_time;
+		new_class->hdr.create_time = old->hdr.create_time;
+		new_class->touched = 1;
 
 		nentries = RF_entry_count(old);
 		for (entry = 0; entry < nentries; entry++) {
-		RF_new_entry(new,&old->file,RF_header(old,entry),RTYP_HOUSECLEAN);
-		RF_set_flags(new,entry,RF_flags(old,entry));
+		RF_new_entry(new_class,&old->file,RF_header(old,entry),RTYP_HOUSECLEAN);
+		RF_set_flags(new_class,entry,RF_flags(old,entry));
 	}
 
-	RF_destroy(new,0);
+	RF_destroy(new_class,0);
 	RF_destroy(old, 100);
 	remove_tempfile(temp_fn);
 }
@@ -266,7 +268,7 @@ do                            //         i = entry within block
 
 if (!found)                   // at end of directory; must create new link
 {
-	newlink = mem_alloc(sizeof(OD_link));
+	newlink = (OD_link*) mem_alloc(sizeof(OD_link));
 
 	link->next = newlink;
 	link->blk.next = RF->hdr.file_size;
