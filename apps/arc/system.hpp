@@ -56,7 +56,7 @@ void mem_shutdown(void);
 ULONG mem_avail(void);
 void *mem_alloc(ULONG bytes);
 BYTE *str_alloc(BYTE *string);
-void mem_free(ULONG *ptr);
+void mem_free(void *ptr);
 
 // DOS
 

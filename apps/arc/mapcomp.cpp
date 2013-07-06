@@ -35,7 +35,7 @@
 #include "resource.hpp"
 #include "lexan.hpp"
 #include "rscomp.hpp"
-#include "mapcomp.h"
+#include "mapcomp.hpp"
 #include "arcmsg.hpp"
 
 /*************************************************************/

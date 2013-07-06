@@ -278,13 +278,13 @@ ULONG DICT_save(DICT_class *DICT, RF_class *RF, ULONG entry) {
 
 	DI_destroy(DI);
 
-	ptr = base = mem_alloc(total_len);
+	ptr = base = (BYTE*) mem_alloc(total_len);
 
 	*(UWORD *) ptr = DICT->hash_size;
 	ptr += sizeof(UWORD);
 
 	offset = (ULONG *) ptr;
-	ptr = add_ptr(ptr, ((ULONG) sizeof(ULONG) * (ULONG) DICT->hash_size));
+	ptr = (BYTE*) add_ptr(ptr, ((ULONG) sizeof(ULONG) * (ULONG) DICT->hash_size));
 
 	for (i = 0; i < DICT->hash_size; i++) {
 		cur = DICT->root[i];
@@ -294,7 +294,7 @@ ULONG DICT_save(DICT_class *DICT, RF_class *RF, ULONG entry) {
 			continue;
 		}
 
-		offset[i] = ptr_dif(ptr, base);
+		offset[i] = ptr_dif((ULONG*)ptr, (ULONG*)base);
 
 		while (cur != NULL) {
 			*(UWORD *) ptr = (strlen(cur->tag) + 1);
@@ -310,7 +310,7 @@ ULONG DICT_save(DICT_class *DICT, RF_class *RF, ULONG entry) {
 				*(UWORD *) ptr = (strlen(cur->def) + 1);
 				ptr += sizeof(UWORD);
 
-				strcpy(ptr, cur->def);
+				strcpy(ptr, (BYTE*)cur->def);
 				ptr += (strlen(cur->def) + 1);
 			}
 

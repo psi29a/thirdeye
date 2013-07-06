@@ -23,10 +23,11 @@
 //��                                                                        ��
 //����������������������������������������������������������������������������
 
-//#include <io.h>
+#include <sys/io.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 #include "defs.hpp"
 #include "system.hpp"
@@ -38,8 +39,8 @@
 #include "resource.hpp"
 #include "rscomp.hpp"
 #include "sopcomp.hpp"
-#include "mapcomp.h"
-#include "palcomp.h"
+#include "mapcomp.hpp"
+#include "palcomp.hpp"
 
 BYTE *manifest_constants[] = { "__TIMESTAMP__", "__AESOP__", NULL };
 
@@ -124,7 +125,7 @@ void RS_update_RDEP(RS_class *RS, BYTE *resname, DICT_class *filelist) {
 	cur = DICT_lookup(RS->dict[RDEP], resname);
 
 	if (cur != NULL)
-		if (!strcasecmp(cur->def, string)) {
+		if (!strcasecmp((BYTE*)cur->def, string)) {
 			mem_free(string);
 			return;
 		} else
@@ -154,7 +155,7 @@ void RS_update_RDES(RS_class *RS, BYTE *resname, BYTE *speclist) {
 	cur = DICT_lookup(RS->dict[RDES], resname);
 
 	if (cur != NULL)
-		if (!strcasecmp(cur->def, speclist))
+		if (!strcasecmp((BYTE*)cur->def, speclist))
 			return;
 		else
 			DICT_delete(RS->dict[RDES], resname);
@@ -198,7 +199,7 @@ ULONG RS_current_ROED_entry(RS_class *RS, BYTE *resname) {
 	cur = DICT_lookup(RS->dict[ROED], resname);
 
 	if (cur != NULL) {
-		ord = ascnum(cur->def, 10);
+		ord = ascnum((BYTE*)cur->def, 10);
 
 		return ord;
 	}
@@ -227,7 +228,7 @@ ULONG RS_get_ROED_entry(RS_class *RS, BYTE *resname) {
 	cur = DICT_lookup(RS->dict[ROED], resname);
 
 	if (cur != NULL)
-		return ascnum(cur->def, 10);
+		return ascnum((BYTE*)cur->def, 10);
 
 	RHDR.data_attrib = DA_PLACEHOLDER;
 	RHDR.data_size = 0L;
@@ -261,7 +262,7 @@ UWORD RS_get_MSGD_entry(RS_class *RS, BYTE *msgname) {
 	cur = DICT_lookup(RS->dict[MSGD], msgname);
 
 	if (cur != NULL)
-		return (UWORD) ascnum(cur->def, 10);
+		return (UWORD) ascnum((BYTE*)cur->def, 10);
 
 	msgnum = 0L;
 	DI = DI_construct(RS->dict[MSGD]);
@@ -431,8 +432,8 @@ static BYTE *RS_parse_constant_list_string(RS_class *RS) {
 			if (neg)
 				val = -val;
 
-			//DICT_enter(cl,ltoa(val,buf,10),0);
-			DICT_enter(cl, sprintf(buf, "%d", val), 0);
+			//DICT_enter(cl,atoi(val,buf,10),0);
+			DICT_enter(cl, (BYTE*)sprintf(buf, "%d", val), 0);
 			break;
 		}
 	} while (LEX_next_comma(RS->LEX));
@@ -499,7 +500,7 @@ static void RS_parse_attribute_specification(RS_class *RS) {
 /*************************************************************/
 
 void RS_parse_code_resource_declaration(RS_class *RS) {
-	DICT_class *new;
+	DICT_class *new_construct;
 	BYTE *name;
 	WORD bad;
 	ULONG link;
@@ -507,12 +508,12 @@ void RS_parse_code_resource_declaration(RS_class *RS) {
 	if (!LEX_require(RS->LEX, TTYP_SYMBOL, RS_LCURL, RS_symbols[RS_LCURL]))
 		return;
 
-	new = DICT_construct(64);
+	new_construct = DICT_construct(64);
 	bad = 0;
 	link = 0L;
 
-	DICT_enter(new,FN_SEND,0);
-	DICT_enter(new,FN_PASS,0);
+	DICT_enter(new_construct,FN_SEND,0);
+	DICT_enter(new_construct,FN_PASS,0);
 
 	do {
 		if ((LEX_type(RS->LEX, LEX_NXT) == TTYP_SYMBOL)
@@ -540,12 +541,12 @@ void RS_parse_code_resource_declaration(RS_class *RS) {
 		case TTYP_NAME:
 			name = LEX_lexeme(RS->LEX, LEX_CUR);
 
-			if (DICT_lookup(new,name) != NULL) {
+			if (DICT_lookup(new_construct,name) != NULL) {
 				report(E_ERROR, LEX_line(RS->LEX, LEX_CUR), MSG_CAD, name,
 						NULL);
 				bad = 1;
 			} else {
-				DICT_enter(new,name,D_DEFHEAP)->def = str(link);
+				DICT_enter(new_construct,name,D_DEFHEAP)->def = str(link);
 				link += CR_VECTOR_SIZE;
 			}
 
@@ -556,12 +557,12 @@ void RS_parse_code_resource_declaration(RS_class *RS) {
 	LEX_require(RS->LEX, TTYP_SYMBOL, RS_RCURL, RS_symbols[RS_RCURL]);
 	LEX_require(RS->LEX, TTYP_SYMBOL, RS_SEMICOLON, RS_symbols[RS_SEMICOLON]);
 
-	if ((!DICT_compare(new,RS->dict[CRFD])) && (!bad)) {
+	if ((!DICT_compare(new_construct,RS->dict[CRFD])) && (!bad)) {
 		DICT_wipe(RS->dict[CRFD]);
-	DICT_copy(new,RS->dict[CRFD]);
+	DICT_copy(new_construct,RS->dict[CRFD]);
 }
 
-DICT_destroy(new);
+DICT_destroy(new_construct);
 }
 
 /*************************************************************/
@@ -606,7 +607,7 @@ default:
 case TTYP_TXTLIT:
 case TTYP_STRLIT:
 	lexeme = LEX_lexeme(RS->LEX, LEX_CUR);
-	text = mem_alloc((ULONG) strlen(lexeme) + 3L);
+	text = (BYTE*) mem_alloc((ULONG) strlen(lexeme) + 3L);
 	strcpy(text, "S:");
 	strcat(text, lexeme);
 
@@ -671,7 +672,7 @@ if (RF_flags(RS->RF, entry) & SA_DELETED)
 else {
 	RHDR = RF_header(RS->RF, entry);
 	if (RHDR == NULL)
-		report(E_ERROR, NULL, MSG_BRE, entry);
+		report(E_ERROR, NULL, (BYTE*)MSG_BRE, entry);
 	else {
 		if (RHDR->data_attrib & DA_FIXED)
 			strcpy(movatr, MSG_RS_FIX);
@@ -686,11 +687,11 @@ else {
 			strcpy(mematr, MSG_RS_TMP);
 
 		if (verbose) {
-			name = str_alloc(MSG_RS_INV);
+			name = str_alloc((BYTE*)MSG_RS_INV);
 
 			DI = DI_construct(RS->dict[ROED]);
 			while ((rent = DI_fetch(DI)) != NULL) {
-				if (ascnum(rent->def, 10) == entry) {
+				if (ascnum((BYTE*)rent->def, 10) == entry) {
 					mem_free(name);
 					name = str_alloc(rent->tag);
 					break;
@@ -736,7 +737,7 @@ WORD i, bad;
 IDR_class *IDR;
 BYTE *rspec;
 
-IDR = mem_alloc(sizeof(IDR_class));
+IDR = (IDR_class*) mem_alloc(sizeof(IDR_class));
 
 IDR->RS = RS;
 
@@ -773,7 +774,7 @@ LEX_require(RS->LEX, TTYP_SYMBOL, RS_LCURL, RS_symbols[RS_LCURL]);
 
 rspec = RS_parse_constant_list_string(RS);
 
-IDR->speclist = mem_alloc(strlen(rtype) + strlen(rspec) + 4);
+IDR->speclist = (BYTE*) mem_alloc(strlen(rtype) + strlen(rspec) + 4);
 strcpy(IDR->speclist, rtype);
 strcat(IDR->speclist, ":");
 strcat(IDR->speclist, rspec);
@@ -854,7 +855,7 @@ cur = DICT_lookup(IDR->RS->dict[RDEP], IDR->name);
 if ((cur == NULL) || (cur->def == NULL))
 return 1;
 
-ftime = TS_latest_file_time(IDR->RS->TS, cur->def);
+ftime = TS_latest_file_time(IDR->RS->TS, (BYTE*)cur->def);
 
 if (!ftime)
 return 1;
@@ -867,7 +868,7 @@ cur = DICT_lookup(IDR->RS->dict[RDES], IDR->name);
 if ((cur == NULL) || (cur->def == NULL))
 return 1;
 
-if (strcasecmp(cur->def, IDR->speclist))
+if (strcasecmp((BYTE*)cur->def, IDR->speclist))
 return 1;
 
 return 0;
@@ -982,7 +983,7 @@ strncpy(&manifest_defs[0][1], ASCII_time(current_time()), 20);
 if (flags & RS_REBUILD)
 unlink(RES_filename);
 
-RS = mem_alloc(sizeof(RS_class));
+RS = (RS_class*) mem_alloc(sizeof(RS_class));
 
 RS->RES_fn = str_alloc(RES_filename);
 RS->SCR_fn = str_alloc(SCR_filename);
@@ -1044,7 +1045,7 @@ DI_class *DI;
 DI = DI_construct(RS->refcr);
 
 while ((entry = DI_fetch(DI)) != NULL)
-report(E_WARN, entry->def, MSG_PMR, entry->tag);
+report(E_WARN, (BYTE*)entry->def, (BYTE*)MSG_PMR, entry->tag);
 
 DI_destroy(DI);
 
@@ -1105,7 +1106,7 @@ DICT_entry *cur;
 DI = DI_construct(RS->dict[RDEP]);
 latest_comp = 0L;
 while ((cur = DI_fetch(DI)) != NULL) {
-n = TS_latest_file_time(RS->TS, cur->def);
+n = TS_latest_file_time(RS->TS, (BYTE*)cur->def);
 if (n == 0L) {
 	latest_comp = n;
 	break;

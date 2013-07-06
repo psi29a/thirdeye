@@ -35,7 +35,7 @@
 #include "resource.hpp"
 #include "lexan.hpp"
 #include "rscomp.hpp"
-#include "palcomp.h"
+#include "palcomp.hpp"
 #include "arcmsg.hpp"
 
 typedef struct {
