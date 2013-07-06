@@ -23,10 +23,13 @@
 //��                                                                        ��
 //����������������������������������������������������������������������������
 
-//#include <io.h>
+#include <sys/io.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/types.h>
+#include <unistd.h>
+
 
 #include "defs.hpp"
 #include "system.hpp"
