@@ -56,7 +56,7 @@ typedef struct {
 //
 /*************************************************************/
 
-UWORD remap_RGB(rgb *old, pal *new)
+UWORD remap_RGB(rgb *old, pal *new_pal)
 {
 	UWORD dif,d,i,n,best;
 	UBYTE old_r,old_g,old_b;
@@ -67,13 +67,13 @@ UWORD remap_RGB(rgb *old, pal *new)
 
 	dif = 65535U;
 
-	n = new->array_size;
+	n = new_pal->array_size;
 
 	for (i=0;i<n;i++)
 	{
-		d = abs(old_r - new->colors[i].red) +
-		abs(old_g - new->colors[i].green) +
-		abs(old_b - new->colors[i].blue);
+		d = abs(old_r - new_pal->colors[i].red) +
+		abs(old_g - new_pal->colors[i].green) +
+		abs(old_b - new_pal->colors[i].blue);
 
 		if (d <= dif)
 		{
@@ -110,7 +110,7 @@ PAL_class *PAL_construct(IDR_class *IDR) {
 	BYTE *spec, *str, *tok;
 	WORD i;
 
-	PAL = mem_alloc(sizeof(PAL_class));
+	PAL = (PAL_class*) mem_alloc(sizeof(PAL_class));
 
 	PAL->IDR = IDR;
 
@@ -181,7 +181,7 @@ void PAL_compile(PAL_class *PAL) {
 
 	flen = file_size(PAL->IDR->fn);
 
-	cmap = IFF_property("CMAP", file, flen);
+	cmap = (RGB*) IFF_property("CMAP", file, flen);
 	if (cmap == NULL) {
 		PAL_error(PAL->IDR->RS, MSG_BFT, NULL);
 		mem_free(file);
@@ -196,8 +196,8 @@ void PAL_compile(PAL_class *PAL) {
 
 	pr = mem_alloc(dsize);
 
-	phdr = pr;
-	array = add_ptr(phdr, sizeof(PAL_HDR));
+	phdr = (PAL_HDR*) pr;
+	array = (RGB*) add_ptr(phdr, sizeof(PAL_HDR));
 
 	for (i = 0; i < ncolors; i++) {
 		array[i] = cmap[i + rngbeg];
@@ -211,11 +211,11 @@ void PAL_compile(PAL_class *PAL) {
 	orig.array_size = ncolors;
 	orig.colors = (rgb *) array;
 
-	fade[0] = add_ptr(array, ncolors * sizeof(RGB));
+	fade[0] = (BYTE*) add_ptr(array, ncolors * sizeof(RGB));
 	phdr->fade[0] = sizeof(PAL_HDR) + (ncolors * sizeof(RGB));
 
 	for (i = 1; i < 11; i++) {
-		fade[i] = add_ptr(fade[i - 1], ncolors);
+		fade[i] = (BYTE*) add_ptr(fade[i - 1], ncolors);
 		phdr->fade[i] = phdr->fade[i - 1] + ncolors;
 	}
 
