@@ -86,9 +86,9 @@ static BYTE *TF_line_info(TF_info *TF) {
 static IF_class *IF_construct(void) {
 	IF_class *IF;
 
-	IF = mem_alloc(sizeof(IF_class));
+	IF = (IF_class*) mem_alloc(sizeof(IF_class));
 
-	IF->stack = mem_alloc(IF_STK_SIZE * sizeof(int));
+	IF->stack = (WORD*) mem_alloc(IF_STK_SIZE * sizeof(int));
 
 	IF->depth = -1;
 	IF->condition = 1;
@@ -209,14 +209,14 @@ PP_class *PP_construct(BYTE *in_fn, BYTE *out_fn, DICT_class *init_macs,
 		UWORD attribs) {
 	PP_class *PP;
 
-	PP = mem_alloc(sizeof(PP_class));
+	PP = (PP_class*) mem_alloc(sizeof(PP_class));
 
 	PP->parent.name = in_fn;
 	PP->cur.name = in_fn;
 	PP->cur.line = 0;
 	PP->depth = 1;
-	PP->inbuf = mem_alloc(MAX_IN_LEN);
-	PP->outbuf = mem_alloc(MAX_OUT_LEN);
+	PP->inbuf = (BYTE*) mem_alloc(MAX_IN_LEN);
+	PP->outbuf = (BYTE*) mem_alloc(MAX_OUT_LEN);
 
 	PP->tl_flag = attribs & PP_TXTLIT;              // 15: allow text literals
 	PP->ws_flag = attribs & PP_KEEP_WS;             // 14: kill leading spaces
@@ -456,7 +456,7 @@ void PP_process(PP_class *PP) {
 				if ((entry = DICT_lookup(PP->MAC, str)) == NULL)
 					text = str;
 				else
-					text = entry->def;
+					text = (BYTE*) entry->def;
 
 				outbuf[out] = 0;                    // output identifier (or
 				strcat(outbuf, text);                // expanded macro)
