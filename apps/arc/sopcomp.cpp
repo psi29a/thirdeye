@@ -2276,7 +2276,7 @@ UWORD SOP_var_declaration(SOP_class *SOP, UWORD vsize, DICT_class *scope,
 				CSS_add_num(CSS, offset);
 			} else {
 				if (visibility == V_PUBLIC)
-					SOP_export_symbol(SOP, (ULONG) name, offset, vtype, asize);
+					SOP_export_symbol(SOP, (ULONG) atoi(name), (ULONG) offset, vtype, asize);
 
 				CSS_add_num(CSS, offset);
 				offset += (UWORD) tsize;
@@ -2375,7 +2375,7 @@ void SOP_member_statement(SOP_class *SOP) {
 	else {
 		SOP->parent = SOP_resource_name_entry(SOP);
 
-		if (!SOP_export_symbol(SOP, (ULONG) "PARENT", (ULONG) SOP->parent,
+		if (!SOP_export_symbol(SOP, atoi("PARENT"), (ULONG) SOP->parent,
 				(BYTE) 'N', 1))
 			SOP_basic_error(SOP, MSG_NMI);
 	}

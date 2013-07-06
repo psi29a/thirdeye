@@ -197,14 +197,12 @@ BYTE *str_alloc(BYTE *str) {
 	return ptr;
 }
 
-/* TODO: no longer necessary?
- void mem_free(ULONG *ptr)
- {
- checksum ^= (ULONG) *ptr;
+void mem_free(void *ptr)
+{
+   //checksum ^= (ULONG*) ptr;
 
- farfree(ptr);
- }
- */
+   farfree(ptr);
+}
 //
 //  DOS services
 //
