@@ -68,7 +68,7 @@ void show_syntax(void) {
 }
 
 /*************************************************************/
-void main(int argc, BYTE *argv[]) {
+int main(int argc, BYTE *argv[]) {
 	static BYTE SCR_filename[256];
 	static BYTE RES_filename[256];
 	RS_class *RS;
@@ -96,7 +96,7 @@ void main(int argc, BYTE *argv[]) {
 
 	if ((argc < 2) || (argv[1][1] == '?')) {
 		show_syntax();
-		exit(1);
+		return 1;
 	}
 
 	atexit(summary);
@@ -199,5 +199,5 @@ void main(int argc, BYTE *argv[]) {
 	DICT_destroy(predef);
 
 	mem_shutdown();
-	exit(error_message_count() != 0);
+	return error_message_count() != 0;
 }

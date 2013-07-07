@@ -279,7 +279,7 @@ ULONG *read_file(BYTE *filename, void *dest) {
 
 	handle = fopen(filename, "rb");
 	if (handle == NULL) {
-		free(mem);
+		mem_free(mem);
 		system_err = FILE_NOT_FOUND;
 		return NULL;
 	}
@@ -287,7 +287,7 @@ ULONG *read_file(BYTE *filename, void *dest) {
 	while (len >= 4096L) {
 		i = fread(buf, 1, 4096, handle);
 		if (i != 4096) {
-			free(mem);
+			mem_free(mem);
 			system_err = CANT_READ_FILE;
 			return NULL;
 		}
@@ -297,7 +297,7 @@ ULONG *read_file(BYTE *filename, void *dest) {
 
 	i = fread(buf, 1, (UWORD) len, handle);
 	if (i != (UWORD) len) {
-		free(mem);
+		mem_free(mem);
 		system_err = CANT_READ_FILE;
 		return NULL;
 	}
@@ -541,7 +541,7 @@ void remove_tempfile(BYTE *filename) {
 	if (delete_policy)
 		unlink(filename);
 
-	free((ULONG*) filename);
+	mem_free((ULONG*) filename);
 }
 
 /*************************************************************/
@@ -810,10 +810,10 @@ void * norm(void *farptr) {
 	return farptr;
 }
 
-void * add_ptr(ULONG *farptr, LONG offset) {
+void * add_ptr(void *farptr, LONG offset) {
 	return (void *) (((ULONG*) farptr) + offset);
 }
 
-LONG ptr_dif(ULONG *sub2, ULONG *sub1) {
+LONG ptr_dif(void *sub2, void *sub1) {
 	return (LONG) ((ULONG*) sub2 - (ULONG*) sub1);
 }

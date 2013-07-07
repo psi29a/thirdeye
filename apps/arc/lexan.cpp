@@ -195,7 +195,7 @@ LEX_class *LEX_construct(UWORD flags, BYTE *filename, BYTE *keywords[],
 	WORD i;
 	DICT_entry *e;
 
-	LEX = mem_alloc(sizeof(LEX_class));
+	LEX = (LEX_class*) mem_alloc(sizeof(LEX_class));
 
 	LEX->flags = flags;
 	LEX->file_list = file_list;
@@ -204,14 +204,14 @@ LEX_class *LEX_construct(UWORD flags, BYTE *filename, BYTE *keywords[],
 	if (clear_system_error())
 		report(E_FATAL, NULL, MSG_COT, filename);
 
-	LEX->buf = mem_alloc(MAX_IN_LEN);
+	LEX->buf = (BYTE*) mem_alloc(MAX_IN_LEN);
 
-	LEX->state[0].lexeme = mem_alloc(MAX_IN_LEN);
-	LEX->state[1].lexeme = mem_alloc(MAX_IN_LEN);
+	LEX->state[0].lexeme = (BYTE*) mem_alloc(MAX_IN_LEN);
+	LEX->state[1].lexeme = (BYTE*)mem_alloc(MAX_IN_LEN);
 
 	if (LEX->flags & LEX_LININFO) {
-		LEX->state[0].line = mem_alloc(MAX_LININFO);
-		LEX->state[1].line = mem_alloc(MAX_LININFO);
+		LEX->state[0].line = (BYTE*) mem_alloc(MAX_LININFO);
+		LEX->state[1].line = (BYTE*) mem_alloc(MAX_LININFO);
 	} else {
 		LEX->state[0].line = NULL;
 		LEX->state[1].line = NULL;
@@ -232,7 +232,7 @@ LEX_class *LEX_construct(UWORD flags, BYTE *filename, BYTE *keywords[],
 	}
 
 	LEX->symbol_list = symbols;
-	LEX->symbol_key = mem_alloc(256L * sizeof(int));
+	LEX->symbol_key = (WORD*) mem_alloc(256L * sizeof(int));
 
 	for (i = 0; i < 256; i++)
 		LEX->symbol_key[i] = -1;

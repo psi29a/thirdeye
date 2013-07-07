@@ -699,15 +699,15 @@ WORD SOP_export_symbol(SOP_class *SOP, ULONG symbol, ULONG value, BYTE type,
 		DICT_enter(SOP->EXPT, tag, D_DEFHEAP)->def = CSS_string(def);
 		stat = 1;
 	} else {
-		free(CSS_string(def));
+		mem_free(CSS_string(def));
 		stat = 0;
 	}
 
-	free(tag);
+	mem_free(tag);
 	CSS_destroy(def);
 
 	if (type == 'M')
-		free(sym);
+		mem_free(sym);
 
 	return stat;
 }
@@ -757,10 +757,10 @@ UWORD SOP_import_symbol(SOP_class *SOP, BYTE *sym, BYTE *class_type,
 		entry->def = def;
 		SOP->import_index += size;
 	} else
-		free(def);
+		mem_free(def);
 
-	free(tag);
-	free(index);
+	mem_free(tag);
+	mem_free(index);
 
 	return (UWORD) ascnum((BYTE*) entry->def, 10);
 }
@@ -2208,7 +2208,7 @@ UWORD SOP_var_declaration(SOP_class *SOP, UWORD vsize, DICT_class *scope,
 			if (scope != SOP->XTRN)
 				SOP_basic_error(SOP, MSG_BCN);
 			else {
-				free(class_type);
+				mem_free(class_type);
 				class_type = str(SOP_resource_name_entry(SOP));
 			}
 		}
@@ -2354,8 +2354,8 @@ UWORD SOP_var_declaration(SOP_class *SOP, UWORD vsize, DICT_class *scope,
 			DICT_enter(SOP->DUSE, name, D_DEFHEAP)->def = str_alloc(
 					LEX_line(SOP->LEX, LEX_CUR));
 
-		free(name);
-		free(class_type);
+		mem_free(name);
+		mem_free(class_type);
 	} while (LEX_next_comma(SOP->LEX));
 
 	return offset;
@@ -2802,7 +2802,7 @@ void SOP_case_statement(SOP_class *SOP) {
 					DICT_enter(SOP->CASE, case_val, D_DEFHEAP)->def = str(
 							SOP->PC);
 
-			free(case_val);
+			mem_free(case_val);
 		} while (LEX_next_comma(SOP->LEX));
 
 	SOP_require_symbol(SOP, SOP_COLON);
@@ -3279,7 +3279,7 @@ ULONG SOP_write_dict(SOP_class *SOP, BYTE *suffix, DICT_class *DICT) {
 	DICT_save(DICT, SOP->RS->RF, ord);
 	report(E_RESCOMP, NULL, NULL);
 
-	free(name);
+	mem_free(name);
 
 	return ord;
 }
@@ -3352,7 +3352,7 @@ SOP_class *SOP_construct(RS_class *RS, ULONG def_attribs) {
 	}
 
 	if (bad) {
-		free(SOP);
+		mem_free(SOP);
 		return NULL;
 	}
 
@@ -3366,9 +3366,9 @@ SOP_class *SOP_construct(RS_class *RS, ULONG def_attribs) {
 /*************************************************************/
 
 void SOP_destroy(SOP_class *SOP) {
-	free(SOP->fn);
+	mem_free(SOP->fn);
 
-	free(SOP);
+	mem_free(SOP);
 }
 
 /*************************************************************/
@@ -3532,7 +3532,7 @@ void SOP_compile(SOP_class *SOP) {
 			SOP_write_code(SOP, SOP->CODE, SOP->PC);
 		}
 
-		free(SOP->name);
+		mem_free(SOP->name);
 
 		DICT_destroy(SOP->APUS);
 		DICT_destroy(SOP->AVUS);
@@ -3548,7 +3548,7 @@ void SOP_compile(SOP_class *SOP) {
 		DICT_destroy(SOP->EXPT);
 		DICT_destroy(SOP->IMPT);
 
-		free(SOP->CODE);
+		mem_free(SOP->CODE);
 	}
 
 	if (LEX_type(SOP->LEX, LEX_NXT) != TTYP_EOF)
