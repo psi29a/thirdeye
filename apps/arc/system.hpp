@@ -95,7 +95,7 @@ WORD set_file_time(BYTE *filename, ULONG timestamp);
 
 void * norm(void *farptr);
 void * add_ptr(void *farptr, LONG offset);
-LONG ptr_dif(ULONG *sub2, ULONG *sub1);
+LONG ptr_dif(void *sub2, void *sub1);
 
 WORD log2(ULONG value);
 

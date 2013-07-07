@@ -59,11 +59,11 @@ DICT_class *DICT_construct(UWORD hash_size) {
 	UWORD i;
 	DICT_class *DICT;
 
-	DICT = mem_alloc(sizeof(DICT_class));
+	DICT = (DICT_class*) mem_alloc(sizeof(DICT_class));
 
 	DICT->hash_size = hash_size;
 
-	DICT->root = mem_alloc(hash_size * sizeof(DICT->root[0]));
+	DICT->root = (DICT_entry**) mem_alloc(hash_size * sizeof(DICT->root[0]));
 
 	for (i = 0; i < hash_size; i++)
 		DICT->root[i] = NULL;
@@ -186,7 +186,7 @@ DICT_entry *DICT_enter(DICT_class *DICT, BYTE *name, UWORD attributes) {
 		cur = cur->next;
 	}
 
-	cur = mem_alloc(sizeof(DICT_entry));
+	cur = (DICT_entry*) mem_alloc(sizeof(DICT_entry));
 
 	cur->next = NULL;
 
@@ -247,7 +247,7 @@ void DICT_copy(DICT_class *src, DICT_class *dest) {
 	DI = DI_construct(src);
 
 	while ((entry = DI_fetch(DI)) != NULL)
-		DICT_enter(dest, entry->tag, D_DEFHEAP)->def = str_alloc(entry->def);
+		DICT_enter(dest, entry->tag, D_DEFHEAP)->def = str_alloc((BYTE*)entry->def);
 
 	DI_destroy(DI);
 }
@@ -304,7 +304,7 @@ WORD DICT_compare(DICT_class *d1, DICT_class *d2) {
 				failed = 1;
 				break;
 			}
-		} else if (strcmp(e1->def, e2->def)) {
+		} else if (strcmp((BYTE*)e1->def, (BYTE*)e2->def)) {
 			failed = 1;
 			break;
 		}
@@ -332,7 +332,7 @@ WORD DICT_compare(DICT_class *d1, DICT_class *d2) {
 DI_class *DI_construct(DICT_class *DICT) {
 	DI_class *DI;
 
-	DI = mem_alloc(sizeof(DI_class));
+	DI = (DI_class*) mem_alloc(sizeof(DI_class));
 
 	DI->base = DICT;
 	DI->cur = NULL;

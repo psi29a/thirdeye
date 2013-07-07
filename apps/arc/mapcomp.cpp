@@ -59,7 +59,7 @@ void LBM_fetch_line(UBYTE **ptr, UBYTE *buffer, UWORD width) {
 	UBYTE *body;
 	BYTE token;
 
-	body = norm(*ptr);
+	body = (UBYTE*) norm(*ptr);
 
 	x = 0;
 	do {
@@ -79,7 +79,7 @@ void LBM_fetch_line(UBYTE **ptr, UBYTE *buffer, UWORD width) {
 		}
 	} while (x < width);
 
-	*ptr = norm(body);
+	*ptr = (UBYTE*) norm(body);
 }
 
 /*************************************************************/
@@ -100,7 +100,7 @@ MAP_class *MAP_construct(IDR_class *IDR) {
 	BYTE *spec, *str, *tok;
 	WORD i;
 
-	MAP = mem_alloc(sizeof(MAP_class));
+	MAP = (MAP_class*) mem_alloc(sizeof(MAP_class));
 
 	MAP->IDR = IDR;
 
@@ -169,7 +169,7 @@ void MAP_compile(MAP_class *MAP) {
 
 	flen = file_size(MAP->IDR->fn);
 
-	prop = IFF_property("BMHD", file, flen);
+	prop = (UBYTE*) IFF_property("BMHD", file, flen);
 	if (prop == NULL) {
 		MAP_error(MAP->IDR->RS, MSG_BFT, NULL);
 		mem_free(file);
@@ -179,7 +179,7 @@ void MAP_compile(MAP_class *MAP) {
 	width = ((*(UBYTE *) prop) * 256) + (*(UBYTE *) (prop + 1));
 	height = ((*(UBYTE *) (prop + 2)) * 256) + (*(UBYTE *) (prop + 3));
 
-	body = IFF_property("BODY", file, flen);
+	body = (UBYTE*) IFF_property("BODY", file, flen);
 	if (prop == NULL) {
 		MAP_error(MAP->IDR->RS, MSG_BFT, NULL);
 		mem_free(file);
@@ -194,8 +194,8 @@ void MAP_compile(MAP_class *MAP) {
 	sx = MAP->parms[MSP_XSIZE];
 	sy = MAP->parms[MSP_YSIZE];
 
-	buffer = mem_alloc(width);
-	map = mem_alloc(sx * sy);
+	buffer = (UBYTE*) mem_alloc(width);
+	map = (UBYTE*) mem_alloc(sx * sy);
 
 	m = 0;
 
