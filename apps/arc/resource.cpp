@@ -30,7 +30,6 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
-#include <errno.h>
 
 #include "defs.hpp"
 #include "system.hpp"
@@ -532,7 +531,7 @@ CSS_class *CSS_construct(BYTE *string) {
 	CSS = (CSS_class*) mem_alloc(sizeof(CSS_class));
 
 	if (string == NULL)
-		CSS->string = CSS->cur = str_alloc("");
+		CSS->string = CSS->cur = str_alloc((BYTE*)"");
 	else
 		CSS->string = CSS->cur = string;
 

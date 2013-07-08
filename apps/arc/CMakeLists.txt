@@ -17,6 +17,7 @@ set(ARC
 
 set(ARC_HEADER
     config.hpp
+    system.hpp
 )
 
 source_group(arc FILES ${ARC} ${ARC_HEADER})

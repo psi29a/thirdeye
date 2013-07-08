@@ -345,7 +345,7 @@ UWORD SOP_emit_long(SOP_class *SOP, ULONG val) {
 	UWORD pc;
 
 	if (verbose())
-		printf("%s %.05u: %lu\n", SOP->name, SOP->PC, val);
+		printf("%s %.05u: %du\n", SOP->name, SOP->PC, val);
 
 	*((ULONG *) ((UBYTE *) SOP->CODE + (pc = SOP->PC))) = val;
 
@@ -367,7 +367,7 @@ UWORD SOP_emit_word(SOP_class *SOP, ULONG val) {
 	UWORD pc;
 
 	if (verbose())
-		printf("%s %.05u: %lu\n", SOP->name, SOP->PC, val);
+		printf("%s %.05u: %du\n", SOP->name, SOP->PC, val);
 
 	*((UWORD *) ((UBYTE *) SOP->CODE + (pc = SOP->PC))) = (UWORD) val & 0xffff;
 
@@ -389,7 +389,7 @@ UWORD SOP_emit_byte(SOP_class *SOP, ULONG val) {
 	UWORD pc;
 
 	if (verbose())
-		printf("%s %.05u: %lu\n", SOP->name, SOP->PC, val);
+		printf("%s %.05u: %du\n", SOP->name, SOP->PC, val);
 
 	*((UBYTE *) ((UBYTE *) SOP->CODE + (pc = SOP->PC))) = (UBYTE) val & 0xff;
 

@@ -38,7 +38,6 @@ extern BYTE is_namechar[256];
 #define EOF_REACHED     8
 
 // Misc. macros
-
 #define arysize(x) (sizeof((x)) / sizeof((x)[0]))
 #define MIN(a,b) \
 ({ __typeof__ (a) _a = (a); \

@@ -1,27 +1,27 @@
-//ÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛ
-//ÛÛ                                                                        ÛÛ
-//ÛÛ  ARCMSG.H                                                              ÛÛ
-//ÛÛ                                                                        ÛÛ
-//ÛÛ  AESOP Resource Compiler language-specific definitions                 ÛÛ
-//ÛÛ                                                                        ÛÛ
-//ÛÛ  Version: 1.00 of 26-Feb-92 -- Initial version                         ÛÛ
-//ÛÛ                                                                        ÛÛ
-//ÛÛ  Project: Extensible State-Object Processor (AESOP/16)                 ÛÛ
-//ÛÛ   Author: John Miles                                                   ÛÛ
-//ÛÛ                                                                        ÛÛ
-//ÛÛ  C source compatible with IBM PC ANSI C/C++ implementations            ÛÛ
-//ÛÛ  Large memory model (16-bit DOS)                                       ÛÛ
-//ÛÛ                                                                        ÛÛ
-//ÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛ
-//ÛÛ                                                                        ÛÛ
-//ÛÛ  Copyright (C) 1992 Miles Design, Inc.                                 ÛÛ
-//ÛÛ                                                                        ÛÛ
-//ÛÛ  Miles Design, Inc.                                                    ÛÛ
-//ÛÛ  10926 Jollyville #308                                                 ÛÛ
-//ÛÛ  Austin, TX 78759                                                      ÛÛ
-//ÛÛ  (512) 345-2642 / BBS (512) 454-9990                                   ÛÛ
-//ÛÛ                                                                        ÛÛ
-//ÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛÛ
+//ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
+//ï¿½ï¿½                                                                        ï¿½ï¿½
+//ï¿½ï¿½  ARCMSG.H                                                              ï¿½ï¿½
+//ï¿½ï¿½                                                                        ï¿½ï¿½
+//ï¿½ï¿½  AESOP Resource Compiler language-specific definitions                 ï¿½ï¿½
+//ï¿½ï¿½                                                                        ï¿½ï¿½
+//ï¿½ï¿½  Version: 1.00 of 26-Feb-92 -- Initial version                         ï¿½ï¿½
+//ï¿½ï¿½                                                                        ï¿½ï¿½
+//ï¿½ï¿½  Project: Extensible State-Object Processor (AESOP/16)                 ï¿½ï¿½
+//ï¿½ï¿½   Author: John Miles                                                   ï¿½ï¿½
+//ï¿½ï¿½                                                                        ï¿½ï¿½
+//ï¿½ï¿½  C source compatible with IBM PC ANSI C/C++ implementations            ï¿½ï¿½
+//ï¿½ï¿½  Large memory model (16-bit DOS)                                       ï¿½ï¿½
+//ï¿½ï¿½                                                                        ï¿½ï¿½
+//ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
+//ï¿½ï¿½                                                                        ï¿½ï¿½
+//ï¿½ï¿½  Copyright (C) 1992 Miles Design, Inc.                                 ï¿½ï¿½
+//ï¿½ï¿½                                                                        ï¿½ï¿½
+//ï¿½ï¿½  Miles Design, Inc.                                                    ï¿½ï¿½
+//ï¿½ï¿½  10926 Jollyville #308                                                 ï¿½ï¿½
+//ï¿½ï¿½  Austin, TX 78759                                                      ï¿½ï¿½
+//ï¿½ï¿½  (512) 345-2642 / BBS (512) 454-9990                                   ï¿½ï¿½
+//ï¿½ï¿½                                                                        ï¿½ï¿½
+//ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
 
 #define MSG_BANNER "AESOP/16 Resource Compiler V%s\n\
 Copyright (C) 1992, 1993 Miles Design, Inc.  All rights reserved.\n"
@@ -144,7 +144,7 @@ Copyright (C) 1992, 1993 Miles Design, Inc.  All rights reserved.\n"
 #define MSG_CMR      "Compacting resource file '%s'"
 #define MSG_CWR      "Can't create resource file '%s'"
 #define MSG_OBF      "Invalid or obsolete resource file '%s'"
-#define MSG_BRE      "Resource file entry %lu invalid"
+#define MSG_BRE      "Resource file entry %du invalid"
 #define MSG_RCR      "Can't read from file"
 #define MSG_RCW      "Can't write to file -- disk may be full"
 
@@ -206,7 +206,7 @@ Copyright (C) 1992, 1993 Miles Design, Inc.  All rights reserved.\n"
 #define MSG_NCL      "External reference needs object handle"
 #define MSG_MCS      "External variable declaration '%s' needs class specifier"
 #define MSG_CIA      "Only table arrays may be initialized"
-#define MSG_TIN      "Table '%s' requires %lu initializers (%lu present)"
+#define MSG_TIN      "Table '%s' requires %du initializers (%du present)"
 #define MSG_OCS      "Out of code space"
 #define MSG_CMT      "Illegal attempt to modify table '%s'"
 #define MSG_DNU      "Variable '%s' declared but never used"
@@ -214,15 +214,15 @@ Copyright (C) 1992, 1993 Miles Design, Inc.  All rights reserved.\n"
 #define MSG_PPU      "Possible use of variable '%s' before assignment"
 #define MSG_BPT      "Table declaration inside procedure or message handler"
 #define MSG_IVA      "Variable '%s' cannot be modified directly"
-#define MSG_NBC      "Binary constant '%s' has %lu digits"
+#define MSG_NBC      "Binary constant '%s' has %du digits"
 
-#define MSG_HER      "Heap unbalanced or corrupted (%lu init)"
+#define MSG_HER      "Heap unbalanced or corrupted (%du init)"
 
 #define MSG_RS_FIL   "     File: %s\n"
 #define MSG_RS_FOR   "   Format: %s\n"
-#define MSG_RS_SIZ   "     Size: %lu bytes\n"
-#define MSG_RS_NEN   "# entries: %lu\n"
-#define MSG_RS_USE   "   In use: %lu bytes (%lu%% fragmented)\n"
+#define MSG_RS_SIZ   "     Size: %du bytes\n"
+#define MSG_RS_NEN   "# entries: %du\n"
+#define MSG_RS_USE   "   In use: %du bytes (%du%% fragmented)\n"
 #define MSG_RS_CTS   "  Created: %s\n"
 #define MSG_RS_MTS   " Modified: %s\n"
 
@@ -240,9 +240,9 @@ Copyright (C) 1992, 1993 Miles Design, Inc.  All rights reserved.\n"
 
 #define MSG_NON      "None"
 
-#define MSG_CP_SML   "    Lines compiled: %lu\n"
-#define MSG_CP_RCO   "Resources compiled: %lu\n"
-#define MSG_CP_RCC   "   Resources added: %lu\n"
+#define MSG_CP_SML   "    Lines compiled: %du\n"
+#define MSG_CP_RCO   "Resources compiled: %du\n"
+#define MSG_CP_RCC   "   Resources added: %du\n"
 #define MSG_CP_SME   "    Error messages: %s\n"
 #define MSG_CP_SMW   "  Warning messages: %s\n"
-#define MSG_CP_MEM   "  Remaining memory: %luk\n"
+#define MSG_CP_MEM   "  Remaining memory: %duk\n"

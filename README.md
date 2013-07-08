@@ -4,9 +4,9 @@ Thirdeye is an attempt at recreating the AESOP engine for the popular
 role-playing games Eye of the Beholder 3 and Dungeon Hack. You need to own and
 install the original games for Thirdeye to work.
 
-Version: 0.86.0
-License: GPL (see GPL3.txt for more information)
-Website: http://www.mindwerks.net
+Version: 0.86.0  
+License: GPL (see GPL3.txt for more information)  
+Website: http://www.mindwerks.net  
 
 INSTALLATION
 
@@ -106,13 +106,13 @@ properly all available items. The problem of not disassembling procedures
 
 HISTORY
 
-0.51  minor bug fixes (just making the disassembled code nicer)
-0.50  fourth release (including disassembler)
-0.40  third release: added more dumps, resolving names in export tables
-0.36  internal revision: added info about special/import/export/code resources
-0.35  internal revision (major rewriting, starting to show individual resource information)
-0.31  fixed syntax help
-0.30  second release including resource extraction (061017)
-0.25  internal version
-0.20  first release (061014)
-0.1x  initial versions (development)
+0.51  minor bug fixes (just making the disassembled code nicer)  
+0.50  fourth release (including disassembler)  
+0.40  third release: added more dumps, resolving names in export tables  
+0.36  internal revision: added info about special/import/export/code resources  
+0.35  internal revision (major rewriting, starting to show individual resource information)  
+0.31  fixed syntax help  
+0.30  second release including resource extraction (061017)  
+0.25  internal version  
+0.20  first release (061014)  
+0.1x  initial versions (development)  

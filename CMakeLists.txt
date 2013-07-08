@@ -74,7 +74,7 @@ include_directories("."
     ${LIBDIR}
 )
 
-link_directories(${Boost_LIBRARY_DIRS}})
+link_directories(${Boost_LIBRARY_DIRS})
 
 # Find SDL2
 Find_package(SDL2 REQUIRED)
