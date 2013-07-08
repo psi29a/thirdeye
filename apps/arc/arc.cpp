@@ -176,15 +176,13 @@ int main(int argc, BYTE *argv[]) {
 	if (!strlen(RES_filename)) {
 		strcpy(RES_filename, SCR_filename);
 		strcat(RES_filename, RES_SUFFIX);
-		for (i = 0; RES_filename[i]; i++) {
+		for (i=0; RES_filename[i]; i++)
 			RES_filename[i] = tolower(RES_filename[i]);
-		}
 	}
 
 	strcat(SCR_filename, RS_SUFFIX);
-	for (i = 0; SCR_filename[i]; i++) {
+	for (i=0; SCR_filename[i]; i++)
 		SCR_filename[i] = tolower(SCR_filename[i]);
-	}
 
 	set_output_filename(RES_filename);
 
