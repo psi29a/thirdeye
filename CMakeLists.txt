@@ -29,6 +29,9 @@ cmake_minimum_required(VERSION 2.6)
 # Source directory: libs
 set(LIBDIR ${CMAKE_SOURCE_DIR}/libs)
 
+# Set our standards
+set(CMAKE_CXX_FLAGS "-std=c++11 -Wall -Wextra -Wno-unused-parameter -Wno-reorder -pedantic -Wno-long-long ${CMAKE_CXX_FLAGS}")
+
 # Platform specific variables
 ## Location of game data files
 if(DPKG_PROGRAM)

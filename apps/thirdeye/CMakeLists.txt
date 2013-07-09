@@ -6,11 +6,13 @@ configure_file ("${CMAKE_CURRENT_SOURCE_DIR}/config.hpp.cmake" "${CMAKE_CURRENT_
 set(GAME
     main.cpp
     engine.cpp
+    resource.cpp
 )
 
 set(GAME_HEADER
     engine.hpp
     config.hpp
+    resource.hpp
 )
 source_group(game FILES ${GAME} ${GAME_HEADER})
 
@@ -26,6 +28,7 @@ target_link_libraries(thirdeye
     ${Boost_LIBRARIES}
     ${SDL2_LIBRARY}
     ${SDL2MAIN_LIBRARY} 
+    -lGL
     components
 )
 
