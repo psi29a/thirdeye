@@ -22,10 +22,10 @@ class Engine //: private Ogre::FrameListener
 {
 	bool mNewGame;
 	bool mUseSound;
-	SDL_Window *window = NULL;
-	SDL_Renderer *renderer = NULL;
-	SDL_Surface *screen = NULL;
-	SDL_Texture *texture = NULL;
+	SDL_Window *window;
+	SDL_Renderer *renderer;
+	SDL_Surface *screen;
+	SDL_Texture *texture;
 
 	// not implemented
 	Engine(const Engine&);
