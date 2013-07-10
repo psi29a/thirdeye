@@ -10,10 +10,13 @@
 
 #include <map>
 #include <boost/filesystem.hpp>
+#include <boost/iostreams/device/file.hpp>
+
+using boost::iostreams::file_source;
 
 #define AESOP_ID "AESOP/16 V1.00"
 #define DIRECTORY_BLOCK_ITEMS 128
-#define MAX_DIRECTORIES 200
+//#define MAX_DIRECTORIES 200
 
 struct GlobalHeader {
 	char signature[16]; // must be == "AESOP/16 V1.00\0" + 1 garbage character
@@ -40,14 +43,25 @@ namespace RESOURCE {
 // Main engine class, that brings together all the components of Thirdeye
 class Resource {
 	boost::filesystem::path mResFile;
-	std::map<std::string, std::string> mResources;
+	std::map<std::string, DirectoryBlock> mDirBlocks;
+	std::map<std::string, EntryHeader> mEntryHeaders;
+	GlobalHeader fileHeader;
+	uint32_t resourceFileSize;
 public:
 	Resource(boost::filesystem::path resourcePath);
 	virtual ~Resource();
 
-	void showHeaders();
+	uint8_t getDirBlocks(file_source resourceFile, uint32_t firstBlock);
+	uint8_t getEntries(file_source resourceFile);
+
+	void getDir();
+	void getEntry();
+
+	void showFileHeader(GlobalHeader fileHeader);
 	void showDirs();
 	void showFiles();
+
+	std::string getDate(uint32_t uiDate);
 };
 }
 
