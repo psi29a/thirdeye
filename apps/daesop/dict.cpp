@@ -134,8 +134,7 @@ DICTENTRYPOINTER *readTheDictionary(int aResource, int aMaxDictionaryEntries,
 	// now read the dictionary entries
 	if (fseek(aResFile, loDictionaryStart, SEEK_SET) != 0) {
 		printf(
-				"Failure to set the file position %ld when reading the dictionary resource %d!\n",
-				loDictionaryStart, aResource);
+				"Failure to set the file position %ld when reading the dictionary resource %d!\n", loDictionaryStart, aResource);
 		free(loDictionaryArray);
 		return NULL;
 	}
@@ -157,6 +156,7 @@ DICTENTRYPOINTER *readTheDictionary(int aResource, int aMaxDictionaryEntries,
 	loCurrentIndexInDictionary = 0;
 	for (i = 0; i < loDictionaryStringListsNumber; i++) {
 		// DICTIONARY_ENTRY + sizeof(number_of_string_lists) + i * sizeof(list_index_entry)
+		printf("\n\ni: %d\n", i);
 		if (fseek(aResFile,
 				loDictionaryStart + sizeof(unsigned short)
 						+ i * sizeof(unsigned int), SEEK_SET) != 0) {
@@ -165,6 +165,9 @@ DICTENTRYPOINTER *readTheDictionary(int aResource, int aMaxDictionaryEntries,
 					loDictionaryStart, aResource);
 			return NULL;
 		}
+
+		//printf("seek: %d\n", loDictionaryStart + sizeof(unsigned short) + i * sizeof(unsigned int));
+
 		loReadSize = fread(&loStringListIndex, 1, sizeof(unsigned int),
 				aResFile);
 		if (loReadSize != sizeof(unsigned int)) {
@@ -173,10 +176,11 @@ DICTENTRYPOINTER *readTheDictionary(int aResource, int aMaxDictionaryEntries,
 					aResource);
 			return NULL;
 		}
+
 		if (loStringListIndex != 0) {
 			// not empty
 			loStringListIndex += loDictionaryStart; // add the start of the index table to get the real offset
-			//printf("String list index: %d\n", (int)loStringListIndex);
+			//printf("loStringListIndex: %u\n",loStringListIndex);
 			if (readDictionaryStringList(loDictionaryArray,
 					aMaxDictionaryEntries, &loCurrentIndexInDictionary,
 					aResFile, loStringListIndex) != true) {
@@ -187,6 +191,7 @@ DICTENTRYPOINTER *readTheDictionary(int aResource, int aMaxDictionaryEntries,
 			}
 		}
 	}
+	//exit(1);
 	return loDictionaryArray;
 }
 
@@ -209,6 +214,8 @@ int readDictionaryStringList(DICTENTRYPOINTER *aDictionaryArray,
 		return false;
 	}
 
+	//printf("index: %u\n",aStringListIndex);
+
 	for (;;) {
 		loReadSize = fread(&loStringLength, 1, sizeof(unsigned short),
 				aResFile);
@@ -220,6 +227,8 @@ int readDictionaryStringList(DICTENTRYPOINTER *aDictionaryArray,
 			// end of the string list
 			break;
 		}
+		//printf("string length: %u\n",loStringLength);
+
 		loReadSize = fread(loReadString, 1, loStringLength, aResFile);
 		if (loReadSize != loStringLength) {
 			printf("Failure to read the string from the dictionary!\n");
@@ -237,6 +246,7 @@ int readDictionaryStringList(DICTENTRYPOINTER *aDictionaryArray,
 			}
 			storeIntoDictionaryArray(aDictionaryArray,
 					aCurrentIndexInDictionary, loPreviousString, loReadString);
+			//printf("%s - %s\n", loReadString, loPreviousString);
 		} else {
 			// store the string for the future
 			strcpy(loPreviousString, loReadString);

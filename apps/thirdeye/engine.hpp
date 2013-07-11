@@ -16,12 +16,20 @@
 #include <boost/filesystem.hpp>
 #include <SDL2/SDL.h>
 
+#define GAME_UNKN	0
+#define GAME_EOB3	1
+#define GAME_HACK	2
+
 namespace THIRDEYE {
 // Main engine class, that brings together all the components of Thirdeye
-class Engine //: private Ogre::FrameListener
+class Engine
 {
 	bool mNewGame;
 	bool mUseSound;
+	bool mDebug;
+	uint8_t mGame;
+	boost::filesystem::path mGameData;
+
 	SDL_Window *window;
 	SDL_Renderer *renderer;
 	SDL_Surface *screen;
@@ -52,6 +60,11 @@ public:
 
 	/// Show version and environment
 	void displayEnvironment();
+
+	void setGame(std::string game);
+	void setGameData(std::string gameData);
+	void setDebugMode(bool debug);
+	void setSoundUsage(bool nosound);
 
 private:
 	Files::ConfigurationManager& mCfgMgr;

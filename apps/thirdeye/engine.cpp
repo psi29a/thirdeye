@@ -6,6 +6,9 @@
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_syswm.h>
 
+#include <boost/algorithm/string.hpp>
+using boost::algorithm::to_lower;
+
 #include <components/games/eob2.hpp> // temp
 
 THIRDEYE::Engine::Engine(Files::ConfigurationManager& configurationManager) :
@@ -14,7 +17,7 @@ THIRDEYE::Engine::Engine(Files::ConfigurationManager& configurationManager) :
 
 	std::srand(std::time(NULL));
 
-	Uint32 flags = SDL_INIT_VIDEO | SDL_INIT_NOPARACHUTE;
+	Uint32 flags = SDL_INIT_VIDEO;
 	if (SDL_WasInit(flags) == 0) {
 		//kindly ask SDL not to trash our OGL context
 		//might this be related to http://bugzilla.libsdl.org/show_bug.cgi?id=748 ?
@@ -36,17 +39,38 @@ THIRDEYE::Engine::Engine(Files::ConfigurationManager& configurationManager) :
 
 THIRDEYE::Engine::~Engine() {
 	// Done! Close the window, clean-up and exit the program.
-	SDL_DestroyWindow(window);
 	SDL_Quit();
 }
 
-// Initialise and enter main loop.
+// Setup engine via parameters
+void THIRDEYE::Engine::setGame(std::string game){
+	boost::algorithm::to_lower(game);
 
+	if (game == "eob3"){
+		mGame = GAME_EOB3;
+		mGameData /= "EYE.RES";
+	} else if (game == "hack") {
+		mGame = GAME_HACK;
+		mGameData /= "HACK.RES";
+	} else
+		mGame = GAME_UNKN;
+
+}
+void THIRDEYE::Engine::setGameData(std::string gameData){
+	mGameData = gameData;
+}
+void THIRDEYE::Engine::setDebugMode(bool debug){
+	mDebug = debug;
+}
+void THIRDEYE::Engine::setSoundUsage(bool nosound){
+	mUseSound = !nosound;
+}
+
+
+// Initialise and enter main loop.
 void THIRDEYE::Engine::go() {
 	displayEnvironment();
-
-	boost::filesystem::path resourcePath = "/opt/eob3/EYE.RES";
-	RESOURCE::Resource resource(resourcePath);
+	RESOURCE::Resource resource(mGameData);
 
 	/*
 	 Settings::Manager settings;
@@ -57,6 +81,7 @@ void THIRDEYE::Engine::go() {
 
 	// Play some good 'ol tunes
 	//MWBase::Environment::get().getSoundManager()->playPlaylist(std::string("Explore"));
+
 	// temp return
 	return;
 
