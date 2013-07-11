@@ -39,20 +39,40 @@ struct EntryHeader {
 	uint32_t data_size;
 };
 
+/*
+struct Dictionary {
+	char *first;
+	char *second;
+};
+*/
+
+struct Dictionary
+{
+Dictionary(char* fst, char* snd)
+: first(fst)
+, second(snd)
+{}
+std::string first;
+std::string second;
+Dictionary() {}
+};
+
 namespace RESOURCE {
 // Main engine class, that brings together all the components of Thirdeye
 class Resource {
 	boost::filesystem::path mResFile;
 	std::map<std::string, DirectoryBlock> mDirBlocks;
 	std::map<std::string, EntryHeader> mEntryHeaders;
+	std::map<std::string, Dictionary> mDictionary;
 	GlobalHeader fileHeader;
 	uint32_t resourceFileSize;
 public:
 	Resource(boost::filesystem::path resourcePath);
 	virtual ~Resource();
 
-	uint8_t getDirBlocks(file_source resourceFile, uint32_t firstBlock);
-	uint8_t getEntries(file_source resourceFile);
+	uint16_t getDirBlocks(file_source resourceFile, uint32_t firstBlock);
+	uint16_t getEntries(file_source resourceFile);
+	uint16_t getDictionary(file_source resourceFile);
 
 	void getDir();
 	void getEntry();

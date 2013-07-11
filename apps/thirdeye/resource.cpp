@@ -21,7 +21,6 @@ using boost::iostreams::seek;
 
 RESOURCE::Resource::Resource(boost::filesystem::path resourcePath) {
 	mResFile = resourcePath;
-	char buffer[sizeof(GlobalHeader)];
 
 	std::cout << "Initializing Resources:" << std::endl;
 
@@ -45,8 +44,7 @@ RESOURCE::Resource::Resource(boost::filesystem::path resourcePath) {
 
 	// reset to begin of file, read from file
 	seek(fResource, 0, BOOST_IOS::beg);
-	fResource.read(buffer, sizeof(GlobalHeader));
-	std::memcpy(&fileHeader, &buffer, sizeof(GlobalHeader));
+	fResource.read(reinterpret_cast<char*>(&fileHeader), sizeof(GlobalHeader));
 
 	// is resource a valid RES
 	if (std::string(fileHeader.signature) != AESOP_ID)
@@ -55,11 +53,22 @@ RESOURCE::Resource::Resource(boost::filesystem::path resourcePath) {
 
 	showFileHeader(fileHeader);
 
-	getDirBlocks(fResource, fileHeader.first_directory_block);
-	getEntries(fResource);
+	std::cout << "    Number of blocks:	"
+			<< getDirBlocks(fResource, fileHeader.first_directory_block)
+			<< std::endl;
+
+	std::cout << "    Number of entries:	"
+			<< getEntries(fResource)
+			<< std::endl;
+
+	std::cout << "    Dictionary size:	"
+			<< getDictionary(fResource)
+			<< std::endl;
 
 	fResource.close();
 	std::cout << std::endl;
+
+	showFiles();
 }
 
 RESOURCE::Resource::~Resource() {
@@ -89,7 +98,7 @@ void RESOURCE::Resource::showFileHeader(GlobalHeader fileHeader) {
 	std::cout << "    Modified:		" << getDate(fileHeader.modify_time) << std::endl;
 }
 
-uint8_t RESOURCE::Resource::getDirBlocks(file_source resourceFile, uint32_t firstBlock) {
+uint16_t RESOURCE::Resource::getDirBlocks(file_source resourceFile, uint32_t firstBlock) {
 	uint8_t blocks = 0;
 	uint32_t currentBlock = firstBlock;
 
@@ -108,7 +117,7 @@ uint8_t RESOURCE::Resource::getDirBlocks(file_source resourceFile, uint32_t firs
 	return mDirBlocks.size();
 }
 
-uint8_t RESOURCE::Resource::getEntries(file_source resourceFile) {
+uint16_t RESOURCE::Resource::getEntries(file_source resourceFile) {
 	uint16_t entries = 0;
 	std::map<std::string, DirectoryBlock>::iterator block;
 	for (block = mDirBlocks.begin(); block != mDirBlocks.end(); block++){
@@ -120,11 +129,90 @@ uint8_t RESOURCE::Resource::getEntries(file_source resourceFile) {
 			EntryHeader entry;
 			resourceFile.read(reinterpret_cast<char*>(&entry), sizeof(EntryHeader));
 			mEntryHeaders[boost::lexical_cast<std::string>( entries )] = entry;
-			std::cout	<< " - " << block->second.entry_header_index[i]
-			         	<< " : " << std::setw(5) << mEntryHeaders[boost::lexical_cast<std::string>( entries )].data_size
+			/*
+			std::cout	<< " Entry at position: " << block->second.entry_header_index[i]
+			         	<< " of " << std::setw(5) << mEntryHeaders[boost::lexical_cast<std::string>( entries )].data_size << " bytes"
 			         	<< " @ " << getDate(mEntryHeaders[boost::lexical_cast<std::string>( entries )].storage_time)
 			         	<< std::endl;
+			 */
 			entries++;
 		}
+	}
+	return mEntryHeaders.size();
+}
+
+uint16_t RESOURCE::Resource::getDictionary(file_source resourceFile) {
+	DirectoryBlock dictionary = mDirBlocks.begin()->second;
+	//EntryHeader entry;
+	uint64_t dictOffset;
+	uint16_t dictStringListsNumber;
+	uint32_t stringListIndex;
+	uint16_t stringLength;
+	char string[256];
+	char prevString[256];
+	uint16_t counter = 1;
+
+	for (uint8_t i = 0; i < DIRECTORY_BLOCK_ITEMS; i++){
+		//seek(resourceFile, dictionary.entry_header_index[i], BOOST_IOS::beg);
+		//resourceFile.read(reinterpret_cast<char*>(&entry), sizeof(EntryHeader));
+
+		dictOffset = dictionary.entry_header_index[i]
+					+ sizeof(struct EntryHeader);
+
+		seek(resourceFile, dictOffset, BOOST_IOS::beg);
+		resourceFile.read(reinterpret_cast<char*>(&dictStringListsNumber), sizeof(uint16_t));
+
+		break;
+	}
+
+	for (uint16_t i = 0; i < dictStringListsNumber; i++) {
+		seek(resourceFile, dictOffset + sizeof(uint16_t) + i * sizeof(uint32_t), BOOST_IOS::beg);
+		resourceFile.read(reinterpret_cast<char*>(&stringListIndex), sizeof(uint32_t));
+
+		if (stringListIndex == 0) // end of list index
+			continue;
+
+		seek(resourceFile, stringListIndex + dictOffset, BOOST_IOS::beg);
+		for (;;counter++) {
+
+			resourceFile.read(reinterpret_cast<char*>(&stringLength), sizeof(uint16_t));
+
+			if (stringLength == 0) // end of string list
+				break;
+
+			resourceFile.read(reinterpret_cast<char*>(&string), stringLength);
+			string[stringLength] = '\0'; // terminate our string
+
+			if (counter % 2 == 0){
+				mDictionary[boost::lexical_cast<std::string>( string )] = Dictionary(string, prevString);
+				//std::cout << mDictionary[boost::lexical_cast<std::string>( string )].first << " " << mDictionary[boost::lexical_cast<std::string>( string )].second << std::endl;
+			} else {
+				strcpy(prevString, string);
+			}
+		}
+	}
+	return mDictionary.size();
+}
+
+void RESOURCE::Resource::showFiles(){
+	/*
+	std::map<std::string, Dictionary>::iterator block;
+	for (block = mDictionary.begin(); block != mDictionary.end(); block++){
+		std::cout << block->second.first << "	" << block->second.second << std::endl;
+	}
+
+	return;
+	*/
+	std::cout << "NUMBER	START	REAL_START	SIZE			DATE	ATTRIB	NAME" << std::endl;
+	for (uint16_t i = 5; i < mEntryHeaders.size(); i++){
+		std::cout << i
+				<< "	"
+				<< "	"
+				<< "	"
+				<< "	" << mEntryHeaders[boost::lexical_cast<std::string>(i)].data_size
+				<< "	" << getDate(mEntryHeaders[boost::lexical_cast<std::string>(i)].storage_time)
+				<< "	"
+				<< "	" << mDictionary[boost::lexical_cast<std::string>(i)].second
+				<< std::endl;
 	}
 }

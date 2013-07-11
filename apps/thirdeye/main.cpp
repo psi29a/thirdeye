@@ -51,12 +51,14 @@ bool parseOptions(int argc, char** argv, THIRDEYE::Engine& engine,
 	bpo::options_description desc(
 			"Syntax: thirdeye <options>\nAllowed options");
 
-	desc.add_options()("help", "print help message")("version",
-			"print version information and quit")("game",
-			bpo::value<std::string>()->default_value("eob2"),
+	desc.add_options()("help", "print help message")
+
+	("version","print version information and quit")
+
+	("game",bpo::value<std::string>()->default_value("eob3"),
 			"set which game we want to play")
 
-	("game-data", bpo::value<std::string>()->default_value("/opt/eob2"),
+	("game-data", bpo::value<std::string>()->default_value("/opt/eob3"),
 			"set game data directory")
 
 	("start", bpo::value<std::string>()->default_value("LEVEL4"),
@@ -101,15 +103,15 @@ bool parseOptions(int argc, char** argv, THIRDEYE::Engine& engine,
 	if (!run)
 		return false;
 
-	/*
+
 	 // startup-settings
+	 engine.setGameData(variables["game-data"].as<std::string>());
 	 engine.setGame(variables["game"].as<std::string>());
-	 engine.setGameData(variables["game-data"].as<bool>());
 
 	 // other settings
 	 engine.setDebugMode(variables["debug"].as<bool>());
 	 engine.setSoundUsage(!variables["nosound"].as<bool>());
-	 */
+
 
 	return true;
 }
