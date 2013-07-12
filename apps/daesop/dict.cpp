@@ -156,7 +156,6 @@ DICTENTRYPOINTER *readTheDictionary(int aResource, int aMaxDictionaryEntries,
 	loCurrentIndexInDictionary = 0;
 	for (i = 0; i < loDictionaryStringListsNumber; i++) {
 		// DICTIONARY_ENTRY + sizeof(number_of_string_lists) + i * sizeof(list_index_entry)
-		printf("\n\ni: %d\n", i);
 		if (fseek(aResFile,
 				loDictionaryStart + sizeof(unsigned short)
 						+ i * sizeof(unsigned int), SEEK_SET) != 0) {
