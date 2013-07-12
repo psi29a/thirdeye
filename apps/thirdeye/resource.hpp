@@ -16,7 +16,6 @@ using boost::iostreams::file_source;
 
 #define AESOP_ID "AESOP/16 V1.00"
 #define DIRECTORY_BLOCK_ITEMS 128
-//#define MAX_DIRECTORIES 200
 
 struct GlobalHeader {
 	char signature[16]; // must be == "AESOP/16 V1.00\0" + 1 garbage character
@@ -39,22 +38,49 @@ struct EntryHeader {
 	uint32_t data_size;
 };
 
-/*
-struct Dictionary {
-	char *first;
-	char *second;
+struct Assets
+{
+	Assets(char* fst, char* snd, uint32_t thr, uint32_t frt, uint32_t fth, uint32_t sxt, uint32_t svt)
+: id(fst)
+, name(snd)
+, date(thr)
+, attributes(frt)
+, size(fth)
+, start(sxt)
+, offset(svt)
+{}
+std::string id;		// id of entry
+std::string name;	// name of entry
+uint32_t date;		// date created
+uint32_t attributes;// attribute of entry
+uint32_t size;		// size of entry
+uint32_t start;		// where entry begins in file
+uint32_t offset;	// where data of entry begins in file
+
+Assets() {
+	id = "";
+	name = "";
+	date = 0;
+	attributes = 0;
+	size = 0;
+	start = 0;
+	offset = 0;
+}
 };
-*/
 
 struct Dictionary
 {
-Dictionary(char* fst, char* snd)
+	Dictionary(char* fst, char* snd)
 : first(fst)
 , second(snd)
 {}
 std::string first;
 std::string second;
-Dictionary() {}
+
+Dictionary() {
+	first = "";
+	second = "";
+}
 };
 
 namespace RESOURCE {
@@ -63,25 +89,28 @@ class Resource {
 	boost::filesystem::path mResFile;
 	std::map<std::string, DirectoryBlock> mDirBlocks;
 	std::map<std::string, EntryHeader> mEntryHeaders;
+	std::map<std::string, Assets> mAssets;
 	std::map<std::string, Dictionary> mDictionary;
 	GlobalHeader fileHeader;
 	uint32_t resourceFileSize;
-public:
-	Resource(boost::filesystem::path resourcePath);
-	virtual ~Resource();
 
+private:
 	uint16_t getDirBlocks(file_source resourceFile, uint32_t firstBlock);
 	uint16_t getEntries(file_source resourceFile);
 	uint16_t getDictionary(file_source resourceFile);
+	uint16_t getAssets(file_source resourceFile);
+	std::string getDate(uint32_t uiDate);
+
+public:
+	Resource(boost::filesystem::path resourcePath);
+	virtual ~Resource();
 
 	void getDir();
 	void getEntry();
 
 	void showFileHeader(GlobalHeader fileHeader);
 	void showDirs();
-	void showFiles();
-
-	std::string getDate(uint32_t uiDate);
+	void showResources();
 };
 }
 

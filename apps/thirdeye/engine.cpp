@@ -12,7 +12,16 @@ using boost::algorithm::to_lower;
 #include <components/games/eob2.hpp> // temp
 
 THIRDEYE::Engine::Engine(Files::ConfigurationManager& configurationManager) :
-		mNewGame(false), mUseSound(true), mCfgMgr(configurationManager) {
+		mNewGame(false),
+		mUseSound(true),
+		mDebug(false),
+		mGame(GAME_UNKN),
+		window(NULL),
+		renderer(NULL),
+		screen(NULL),
+		texture(NULL),
+		mCfgMgr(configurationManager)
+{
 	std::cout << "Initializing Thirdeye... ";
 
 	std::srand(std::time(NULL));
@@ -27,12 +36,6 @@ THIRDEYE::Engine::Engine(Files::ConfigurationManager& configurationManager) :
 			throw std::runtime_error(
 					"Could not initialize SDL! " + std::string(SDL_GetError()));
 		}
-
-		// Create the window where we will draw.
-		SDL_Window *window = NULL;
-		SDL_Renderer *renderer = NULL;
-		SDL_Surface *screen = NULL;
-		SDL_Texture *texture = NULL;
 	}
 	std::cout << "done!" << std::endl;
 }

@@ -336,7 +336,7 @@ int getInformation(FILE *aResFile, DIRPOINTER *aDirectoryPointers,
 		loResourceEntryIndex = getResourceEntryIndex(loResourceNumber,
 				aDirectoryPointers);
 
-		// length, date
+		// length, date, attributes
 		loResEntryHeader = getResourceEntryHeader(loResourceNumber, aResFile,
 				aDirectoryPointers);
 		loDataSize = loResEntryHeader->data_size;
@@ -344,7 +344,7 @@ int getInformation(FILE *aResFile, DIRPOINTER *aDirectoryPointers,
 		loResourceAttributes = loResEntryHeader->data_attributes;
 
 		// print it
-		fprintf(loOutputFile, "%6d  %8ld  (%10ld)  %8ld   %21s  %8du  %s\n",
+		fprintf(loOutputFile, "%6d  %8ld  (%10ld)  %8ld   %21s  %8d  %s\n",
 				loResourceNumber, (long) loResourceEntryIndex,
 				(long) loResourceEntryIndex + sizeof(struct RESEntryHeader),
 				(long) loDataSize, loStorageTime, loResourceAttributes,
