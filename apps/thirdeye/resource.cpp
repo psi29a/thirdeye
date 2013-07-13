@@ -61,8 +61,24 @@ RESOURCE::Resource::Resource(boost::filesystem::path resourcePath) {
 			<< getEntries(fResource)
 			<< std::endl;
 
-	std::cout << "    Dictionary size:	"
-			<< getDictionary(fResource)
+	std::cout << "    Entries in Table0:	"
+			<< getTable(fResource, 0, mTable0)
+			<< std::endl;
+
+	std::cout << "    Entries in Table1:	"
+			<< getTable(fResource, 1, mTable1)
+			<< std::endl;
+
+	std::cout << "    Entries in Table2:	"
+			<< getTable(fResource, 2, mTable2)
+			<< std::endl;
+
+	std::cout << "    Entries in Table3:	"
+			<< getTable(fResource, 3, mTable3)
+			<< std::endl;
+
+	std::cout << "    Entries in Table4:	"
+			<< getTable(fResource, 4, mTable4)
 			<< std::endl;
 
 	//getLocations(fResource);
@@ -254,8 +270,8 @@ uint16_t RESOURCE::Resource::getAssets(file_source resourceFile) {
 }
 
 
-uint16_t RESOURCE::Resource::getDictionary(file_source resourceFile) {
-	DirectoryBlock dictionary = mDirBlocks.begin()->second;
+uint16_t RESOURCE::Resource::getTable(file_source resourceFile, uint16_t table, std::map<std::string, Dictionary> &dictionary) {
+	DirectoryBlock dirBlock = mDirBlocks.begin()->second;
 	uint32_t dictOffset;
 	uint16_t dictStringListsNumber;
 	uint32_t stringListIndex;
@@ -264,49 +280,52 @@ uint16_t RESOURCE::Resource::getDictionary(file_source resourceFile) {
 	char prevString[256];
 	uint16_t counter = 1;
 
-	for (uint8_t table=0; table < 5; table++){
-		dictOffset = dictionary.entry_header_index[table] + sizeof(EntryHeader);
-		seek(resourceFile, dictOffset, BOOST_IOS::beg);
-		resourceFile.read(reinterpret_cast<char*>(&dictStringListsNumber), sizeof(uint16_t));
+	dictOffset = dirBlock.entry_header_index[table] + sizeof(EntryHeader);
+	seek(resourceFile, dictOffset, BOOST_IOS::beg);
+	resourceFile.read(reinterpret_cast<char*>(&dictStringListsNumber), sizeof(uint16_t));
 
-		for (uint16_t i = 0; i < dictStringListsNumber; i++) {
-			seek(resourceFile, dictOffset + sizeof(uint16_t) + i * sizeof(uint32_t), BOOST_IOS::beg);
-			resourceFile.read(reinterpret_cast<char*>(&stringListIndex), sizeof(uint32_t));
+	for (uint16_t i = 0; i < dictStringListsNumber; i++) {
+		seek(resourceFile, dictOffset + sizeof(uint16_t) + i * sizeof(uint32_t), BOOST_IOS::beg);
+		resourceFile.read(reinterpret_cast<char*>(&stringListIndex), sizeof(uint32_t));
 
-			if (stringListIndex == 0) // end of list index
-				continue;
+		if (stringListIndex == 0) // end of list index
+			continue;
 
-			seek(resourceFile, stringListIndex + dictOffset, BOOST_IOS::beg);
-			for (;;counter++) {
-				resourceFile.read(reinterpret_cast<char*>(&stringLength), sizeof(uint16_t));
+		seek(resourceFile, stringListIndex + dictOffset, BOOST_IOS::beg);
+		for (;;counter++) {
+			resourceFile.read(reinterpret_cast<char*>(&stringLength), sizeof(uint16_t));
 
-				if (stringLength == 0) // end of string list
-					break;
+			if (stringLength == 0) // end of string list
+				break;
 
-				resourceFile.read(reinterpret_cast<char*>(&string), stringLength);
-				string[stringLength] = '\0'; // terminate our string
+			resourceFile.read(reinterpret_cast<char*>(&string), stringLength);
+			string[stringLength] = '\0'; // terminate our string
 
-				if (counter % 2 == 0){
-					mDictionary[boost::lexical_cast<std::string>( string )] =
-							Dictionary( string,
-									prevString
-									);
-					std::cout << " "
-							<< (int)table << " "
-							<< dictOffset << " "
-							<< dictStringListsNumber << " "
-							<< i << " " << stringListIndex << " "
-							<< counter << " "
-							<< mDictionary[boost::lexical_cast<std::string>( string )].first << " -- "
-							<< mDictionary[boost::lexical_cast<std::string>( string )].second << " "
-							<< std::endl;
-				} else {
-					std::strcpy(prevString, string);
-				}
+			if (counter % 2 == 0){
+
+				dictionary[boost::lexical_cast<std::string>( counter/2 )] =
+						Dictionary(
+								prevString,
+								string
+								);
+				/*
+				std::cout << " "
+						<< (int)table << " "
+						<< dictOffset << " "
+						<< dictStringListsNumber << " "
+						<< i << " " << stringListIndex << " "
+						<< counter << " ("
+						<< prevString << " : "
+						<< string << " "
+						<< ") "
+						<< std::endl;
+				*/
+			} else {
+				std::strcpy(prevString, string);
 			}
 		}
 	}
-	return mDictionary.size();
+	return counter/2;
 }
 
 void RESOURCE::Resource::showResources(){
