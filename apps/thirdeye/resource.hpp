@@ -90,14 +90,18 @@ class Resource {
 	std::map<std::string, DirectoryBlock> mDirBlocks;
 	std::map<std::string, EntryHeader> mEntryHeaders;
 	std::map<std::string, Assets> mAssets;
-	std::map<std::string, Dictionary> mDictionary;
+	std::map<std::string, Dictionary> mTable0;
+	std::map<std::string, Dictionary> mTable1;
+	std::map<std::string, Dictionary> mTable2;
+	std::map<std::string, Dictionary> mTable3;
+	std::map<std::string, Dictionary> mTable4;
 	GlobalHeader fileHeader;
 	uint32_t resourceFileSize;
 
 private:
 	uint16_t getDirBlocks(file_source resourceFile, uint32_t firstBlock);
 	uint16_t getEntries(file_source resourceFile);
-	uint16_t getDictionary(file_source resourceFile);
+	uint16_t getTable(file_source resourceFile, uint16_t table, std::map<std::string, Dictionary> &dictionary);
 	uint16_t getAssets(file_source resourceFile);
 	std::string getDate(uint32_t uiDate);
 
