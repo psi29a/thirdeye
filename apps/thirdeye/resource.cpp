@@ -232,7 +232,7 @@ uint16_t RESOURCE::Resource::getAssets() {
 		id = dictionary->second.second;
 		currentDirBlock = boost::lexical_cast<uint16_t>( id ) / DIRECTORY_BLOCK_ITEMS;
 		currentEntry = boost::lexical_cast<uint16_t>( id ) % DIRECTORY_BLOCK_ITEMS;
-		object = searchDictionary(mTable1, dictionary->second.second);
+		object = searchDictionary(mTable1, dictionary->second.first);
 		mAssets[boost::lexical_cast<std::string>( id )] =
 				Assets( dictionary->second.second,
 						dictionary->second.first,
@@ -306,12 +306,13 @@ uint16_t RESOURCE::Resource::getTable(file_source resourceFile, uint16_t table, 
 	return counter/2;
 }
 
-std::string RESOURCE::Resource::searchDictionary(std::map<std::string, Dictionary> &dictionary, std::string needle){
+std::string RESOURCE::Resource::searchDictionary(std::map<std::string, Dictionary> &haystack, std::string needle){
 	std::map<std::string, Dictionary>::iterator table;
-	for (table = dictionary.begin(); table != dictionary.end(); table++){
-		std::cout << " HELP " << table->second.first << " - " << table->second.second << std::endl;
-		if ( table->second.second == needle ){
-			return table->second.first;
+	for (table = haystack.begin(); table != haystack.end(); table++){
+		//std::cout << " HELP " << table->second.first << " - " << needle << std::endl;
+		if ( table->second.first.compare(needle) == 0 ){
+			//std::cout << " HELP " << table->second.first << " - " << table->second.second << std::endl;
+			return table->second.second;
 		}
 	}
 	return "";	// nothing found
