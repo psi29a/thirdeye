@@ -40,7 +40,9 @@ struct EntryHeader {
 
 struct Assets
 {
-	Assets(char* fst, char* snd, uint32_t thr, uint32_t frt, uint32_t fth, uint32_t sxt, uint32_t svt)
+	Assets(	std::string fst, std::string snd, uint32_t thr,
+			uint32_t frt, uint32_t fth, uint32_t sxt,
+			uint32_t svt, std::string ect)
 : id(fst)
 , name(snd)
 , date(thr)
@@ -48,6 +50,7 @@ struct Assets
 , size(fth)
 , start(sxt)
 , offset(svt)
+, object(ect)
 {}
 std::string id;		// id of entry
 std::string name;	// name of entry
@@ -56,6 +59,7 @@ uint32_t attributes;// attribute of entry
 uint32_t size;		// size of entry
 uint32_t start;		// where entry begins in file
 uint32_t offset;	// where data of entry begins in file
+std::string object;	// object name from table1
 
 Assets() {
 	id = "";
@@ -102,8 +106,9 @@ private:
 	uint16_t getDirBlocks(file_source resourceFile, uint32_t firstBlock);
 	uint16_t getEntries(file_source resourceFile);
 	uint16_t getTable(file_source resourceFile, uint16_t table, std::map<std::string, Dictionary> &dictionary);
-	uint16_t getAssets(file_source resourceFile);
+	uint16_t getAssets();
 	std::string getDate(uint32_t uiDate);
+	std::string searchDictionary(std::map<std::string, Dictionary> &dictionary, std::string needle);
 
 public:
 	Resource(boost::filesystem::path resourcePath);
