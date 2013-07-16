@@ -14,6 +14,9 @@ set (THIRDEYE_VERSION "${THIRDEYE_VERSION_MAJOR}.${THIRDEYE_VERSION_MINOR}.${THI
 # Doxygen main page
 configure_file ("${Thirdeye_SOURCE_DIR}/docs/mainpage.hpp.cmake" "${Thirdeye_SOURCE_DIR}/docs/mainpage.hpp")
 
+# Are we building a debug build?
+option(DEBUG "Link static build of Boost into the binaries" FALSE)
+
 # Are we building statically?
 option(BOOST_STATIC "Link static build of Boost into the binaries" FALSE)
 option(SDL2_STATIC "Link static build of SDL into the binaries" FALSE)
@@ -31,6 +34,11 @@ set(LIBDIR ${CMAKE_SOURCE_DIR}/libs)
 
 # Set our standards
 set(CMAKE_CXX_FLAGS "-std=c++03 -Wall -Wextra -Wno-unused-parameter -Wno-reorder -pedantic -Wno-long-long ${CMAKE_CXX_FLAGS}")
+
+# Set our debugging standards
+if(DEBUG)
+    set(CMAKE_CXX_FLAGS "-ggdb3 -O0 ${CMAKE_CXX_FLAGS}")
+endif(DEBUG)
 
 # Platform specific variables
 ## Location of game data files

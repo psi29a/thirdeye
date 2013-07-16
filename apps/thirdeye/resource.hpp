@@ -40,9 +40,11 @@ struct EntryHeader {
 
 struct Assets
 {
-	Assets(	std::string fst, std::string snd, uint32_t thr,
+	Assets(	uint16_t fst, std::string snd, uint32_t thr,
 			uint32_t frt, uint32_t fth, uint32_t sxt,
-			uint32_t svt, std::string ect)
+			uint32_t svt, std::string ect, std::string nth,
+			std::vector<uint8_t> ten
+			)
 : id(fst)
 , name(snd)
 , date(thr)
@@ -50,25 +52,32 @@ struct Assets
 , size(fth)
 , start(sxt)
 , offset(svt)
-, object(ect)
+, table1(ect)
+, table2(nth)
+, data(ten)
+
 {}
-std::string id;		// id of entry
+uint16_t id;		// id of entry
 std::string name;	// name of entry
 uint32_t date;		// date created
 uint32_t attributes;// attribute of entry
 uint32_t size;		// size of entry
 uint32_t start;		// where entry begins in file
 uint32_t offset;	// where data of entry begins in file
-std::string object;	// object name from table1
+std::string table1;	// object name from table1
+std::string table2;	// object name from table1
+std::vector<uint8_t>	data;	// object data
 
 Assets() {
-	id = "";
+	id = 0;
 	name = "";
 	date = 0;
 	attributes = 0;
 	size = 0;
 	start = 0;
 	offset = 0;
+	table1 = "";
+	table2 = "";
 }
 };
 
@@ -91,9 +100,9 @@ namespace RESOURCE {
 // Main engine class, that brings together all the components of Thirdeye
 class Resource {
 	boost::filesystem::path mResFile;
-	std::map<std::string, DirectoryBlock> mDirBlocks;
-	std::map<std::string, EntryHeader> mEntryHeaders;
-	std::map<std::string, Assets> mAssets;
+	std::map<uint16_t, DirectoryBlock> mDirBlocks;
+	std::map<uint16_t, EntryHeader> mEntryHeaders;
+	std::map<uint16_t, Assets> mAssets;
 	std::map<std::string, Dictionary> mTable0;
 	std::map<std::string, Dictionary> mTable1;
 	std::map<std::string, Dictionary> mTable2;
@@ -106,7 +115,7 @@ private:
 	uint16_t getDirBlocks(file_source resourceFile, uint32_t firstBlock);
 	uint16_t getEntries(file_source resourceFile);
 	uint16_t getTable(file_source resourceFile, uint16_t table, std::map<std::string, Dictionary> &dictionary);
-	uint16_t getAssets();
+	uint16_t getAssets(file_source resourceFile);
 	std::string getDate(uint32_t uiDate);
 	std::string searchDictionary(std::map<std::string, Dictionary> &dictionary, std::string needle);
 
