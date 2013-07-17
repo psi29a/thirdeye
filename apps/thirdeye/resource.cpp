@@ -247,6 +247,7 @@ uint16_t RESOURCE::Resource::getAssets(file_source resourceFile) {
 		currentDirBlock = boost::lexical_cast<uint16_t>( id ) / DIRECTORY_BLOCK_ITEMS;
 		currentEntry = boost::lexical_cast<uint16_t>( id ) % DIRECTORY_BLOCK_ITEMS;
 		table1 = searchDictionary(mTable1, dictionary->second.first);
+		table2 = searchDictionary(mTable2, dictionary->second.first);
 		start = mDirBlocks[currentDirBlock].entry_header_index[currentEntry];
 		offset = mDirBlocks[currentDirBlock].entry_header_index[currentEntry] + sizeof(EntryHeader);
 
@@ -304,7 +305,7 @@ uint16_t RESOURCE::Resource::getTable(file_source resourceFile, uint16_t table, 
 
 			if (counter % 2 == 0){
 
-				dictionary[boost::lexical_cast<std::string>( counter/2 )] =
+				dictionary[boost::lexical_cast<std::string>( prevString )] =
 						Dictionary(
 								prevString,
 								string
@@ -324,6 +325,14 @@ std::string RESOURCE::Resource::searchDictionary(std::map<std::string, Dictionar
 	else return "";
 }
 
+std::vector<uint8_t> RESOURCE::Resource::getAsset(std::string name){
+	return getAsset( boost::lexical_cast<uint16_t>( searchDictionary(mTable0, name) ) );
+}
+
+std::vector<uint8_t> RESOURCE::Resource::getAsset(uint16_t number){
+	return mAssets[number].data;
+}
+
 void RESOURCE::Resource::showResources(){
 	std::cout << "NUMBER	START	OFFSET	SIZE	DATE			ATTRIB	NAME" << std::endl;
 	for (uint16_t i = 0; i < mEntryHeaders.size(); i++){
@@ -335,6 +344,7 @@ void RESOURCE::Resource::showResources(){
 				<< "	" << mAssets[i].attributes
 				<< "	" << mAssets[i].name
 				<< "	" << mAssets[i].table1
+				<< "	" << mAssets[i].table2
 				//<< "	" << mAssets[i].data.size()
 				<< std::endl;
 	}

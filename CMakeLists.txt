@@ -91,6 +91,10 @@ link_directories(${Boost_LIBRARY_DIRS})
 Find_package(SDL2 REQUIRED)
 include_directories(${SDL2_INCLUDE_DIR})
 
+# Find WildMIDI
+Find_package(WILDMIDI REQUIRED)
+include_directories(${WILDMIDI_INCLUDE_DIR})
+
 if (APPLE)
     configure_file(${Thirdeye_SOURCE_DIR}/files/mac/Info.plist
         "${APP_BUNDLE_DIR}/Contents/Info.plist")

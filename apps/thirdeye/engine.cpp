@@ -1,5 +1,6 @@
 #include "engine.hpp"
 #include "resource.hpp"
+#include "xmidi/xmidi.hpp"
 
 #include <components/files/configurationmanager.hpp>
 
@@ -10,6 +11,8 @@
 using boost::algorithm::to_lower;
 
 #include <components/games/eob2.hpp> // temp
+
+#include <wildmidi_lib.h>
 
 THIRDEYE::Engine::Engine(Files::ConfigurationManager& configurationManager) :
 		mNewGame(false),
@@ -86,6 +89,28 @@ void THIRDEYE::Engine::go() {
 	//MWBase::Environment::get().getSoundManager()->playPlaylist(std::string("Explore"));
 
 	// temp return
+	std::vector<uint8_t> xmidi = resource.getAsset("CUE8");
+	std::cout << "xmi: " << xmidi.size() << " " << &xmidi[0];
+	std::cout << std::endl;
+
+	bool mt32 = true;
+	DataSource *xmids = new BufferDataSource (reinterpret_cast<char*> (&xmidi[0]), xmidi.size());
+	XMIDI	*xmi = new XMIDI(xmids, mt32?XMIDI_CONVERT_MT32_TO_GS:XMIDI_CONVERT_NOCONVERSION);
+
+	std::vector<uint8_t> midi(sizeof(uint8_t)*4096);
+	DataSource *xout = new BufferDataSource (reinterpret_cast<char*> (&midi[0]), midi.size());
+
+	//FILE	*fileout = fopen ("/tmp/test.midi", "wb");
+	//DataSource *destFile = new FileDataSource (fileout);
+
+	xmi->retrieve(0,xout);
+	//fclose(fileout);
+
+	std::cout << "midi: " << midi.size()
+			<< " " << &midi[0]
+			<< " " << xout->getPos()
+			<< std::endl;
+
 	return;
 
 	// Create a window.
