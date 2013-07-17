@@ -16,6 +16,10 @@ set(GAME_HEADER
 )
 source_group(game FILES ${GAME} ${GAME_HEADER})
 
+add_thirdeye_dir (xmidi
+    xmidi
+    )
+
 # Main executable
 add_executable(thirdeye
     ${THIRDEYE_LIBS} ${THIRDEYE_LIBS_HEADER}
