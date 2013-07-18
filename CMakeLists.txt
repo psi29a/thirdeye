@@ -91,6 +91,10 @@ link_directories(${Boost_LIBRARY_DIRS})
 Find_package(SDL2 REQUIRED)
 include_directories(${SDL2_INCLUDE_DIR})
 
+# Find ALSA
+Find_package(ALSA REQUIRED)
+include_directories(${ALSA_INCLUDE_DIRS})
+
 # Find WildMIDI
 Find_package(WILDMIDI REQUIRED)
 include_directories(${WILDMIDI_INCLUDE_DIR})
