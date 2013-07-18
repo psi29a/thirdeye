@@ -31,8 +31,9 @@ add_executable(thirdeye
 target_link_libraries(thirdeye
     ${Boost_LIBRARIES}
     ${SDL2_LIBRARY}
-    ${SDL2MAIN_LIBRARY} 
-    -lGL
+    ${SDL2MAIN_LIBRARY}
+    ${WILDMIDI_LIBRARY}
+    ${ALSA_LIBRARY}
     components
 )
 

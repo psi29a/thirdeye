@@ -11,7 +11,7 @@ before_install:
  - echo "yes" | sudo add-apt-repository "deb http://archive.ubuntu.com/ubuntu `lsb_release -sc` main universe restricted multiverse"
  - echo "yes" | sudo apt-add-repository ppa:openmw/deps
  - sudo apt-get update -qq
- - sudo apt-get install -qq libboost-all-dev libgtest-dev google-mock uuid-dev libwildmidi-dev
+ - sudo apt-get install -qq libboost-all-dev libgtest-dev google-mock uuid-dev libwildmidi-dev libasound2-dev
  - sudo apt-get install -qq libsdl2-static-dev
  - sudo mkdir /usr/src/gtest/build
  - cd /usr/src/gtest/build
