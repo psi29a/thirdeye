@@ -37,14 +37,6 @@ class Engine
 	SDL_Surface *screen;
 	SDL_Texture *texture;
 
-
-	void *buffer;
-	int bps;
-	int alsa_first_time;
-	snd_pcm_t  *pcm;
-	unsigned int rate;
-	char  *pcmname;
-
 	// not implemented
 	Engine(const Engine&);
 	Engine& operator=(const Engine&);
@@ -57,10 +49,6 @@ class Engine
 
 	/// Prepare engine for game play
 	//void prepareEngine (Settings::Manager & settings);
-
-	int send_output (char * output_data, int output_size);
-	void close_output ( void );
-	int open_alsa_output(void);
 
 public:
 	Engine(Files::ConfigurationManager& configurationManager);

@@ -16,8 +16,8 @@ set(GAME_HEADER
 )
 source_group(game FILES ${GAME} ${GAME_HEADER})
 
-add_thirdeye_dir (xmidi
-    xmidi
+add_thirdeye_dir (sound
+    xmidi sound
     )
 
 # Main executable
