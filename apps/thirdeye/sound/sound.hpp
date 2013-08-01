@@ -1,30 +1,11 @@
 #ifndef SOUND_HPP
 #define SOUND_HPP
 
-/* Define this to the location of the wildmidi config file */
-#define WILDMIDI_CFG "/etc/wildmidi/wildmidi.cfg"
-#define MUSIC_RATE 32072
-
-extern  "C"{
-#include <alsa/asoundlib.h>
-#include <wildmidi_lib.h>
-}
-
 #include "xmidi.hpp"
 
-#include <errno.h>
-#include <fcntl.h>
-#include <getopt.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <sys/stat.h>
-#include <sys/types.h>
-#include <unistd.h>
-
 #include <vector>
-#include <iostream>
 #include <stdint.h>
+#include <alsa/asoundlib.h>
 
 namespace MIXER {
 

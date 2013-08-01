@@ -33,7 +33,7 @@ target_link_libraries(thirdeye
     ${SDL2_LIBRARY}
     ${SDL2MAIN_LIBRARY}
     ${WILDMIDI_LIBRARY}
-    ${ALSA_LIBRARY}
+    ${OPENAL_LIBRARY}
     components
 )
 
