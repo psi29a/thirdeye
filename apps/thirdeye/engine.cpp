@@ -98,11 +98,8 @@ void THIRDEYE::Engine::go() {
 	std::cout << std::endl;
 
 	MIXER::Mixer mixer;
-
-	mixer.playMusic(xmidi);
-
-	return;
-
+	//return;
+	//mixer.playMusic(xmidi);
 	// Create a window.
 	window = SDL_CreateWindow("Thirdeye", SDL_WINDOWPOS_CENTERED,
 			SDL_WINDOWPOS_CENTERED, 320, 200, 0    //SDL_WINDOW_SHOWN
@@ -159,10 +156,12 @@ void THIRDEYE::Engine::go() {
 					done = true;
 					break;
 				case SDLK_w:
+					mixer.playSound(snd);
 					break;
 				case SDLK_a:
 					break;
 				case SDLK_s:
+					mixer.playMusic(xmidi);
 					break;
 				case SDLK_d:
 					break;
