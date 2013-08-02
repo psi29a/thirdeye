@@ -195,7 +195,7 @@ void THIRDEYE::Engine::go() {
 		// This will show the new, red contents of the window.
 		SDL_RenderPresent(renderer);
 
-		printf("Waiting 60...\n");
+		//printf("Waiting 60...\n");
 		SDL_Delay(60);      // Pause briefly before moving on to the next cycle.
 	}
 

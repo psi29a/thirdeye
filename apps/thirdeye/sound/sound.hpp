@@ -3,35 +3,29 @@
 
 #include "xmidi.hpp"
 
+#include <map>
 #include <vector>
 #include <stdint.h>
-#include <alsa/asoundlib.h>
+
+#include <AL/al.h>
+#include <AL/alc.h>
 
 namespace MIXER {
 
 class Mixer {
+private:
+	const ALCchar *defaultDeviceName;
+	ALCdevice *device;
+	ALCcontext *context;
+	bool mt32;
+	std::map<uint8_t, std::vector<uint8_t> > buffer;
 public:
-	//Mixer();
-	//virtual ~Mixer();
+	Mixer();
+	virtual ~Mixer();
 	void playMusic(std::vector<uint8_t> xmidi);
 	void playSound(std::vector<uint8_t> snd);
-};
 
-class Music {
-private:
-	bool mt32;
-	snd_pcm_t  *music;
-
-	int send_music_output (char * output_data, int output_size);
-	void close_music_output ();
-	int open_music_output();
-
-public:
-	Music();
-	virtual ~Music();
-	void play(std::vector<uint8_t> xmidi);
-	//void playSound(std::vector<uint8_t> snd);
-	//void operator()();
+	void list_audio_devices(const ALCchar *devices);
 };
 
 }
