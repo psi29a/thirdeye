@@ -68,8 +68,8 @@ void MIXER::Mixer::play(std::vector<uint8_t> pcmData, ALuint size, ALuint format
 
     ALuint sourceid;
     alGenSources(1, &sourceid);
+    source[bufferid] = sourceid;
     alSourcei(sourceid, AL_BUFFER, bufferid);
-
 	alSourcePlay(sourceid);
     std::cout << "pcm size: " << size << std::endl;
 
