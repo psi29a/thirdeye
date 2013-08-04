@@ -23,6 +23,62 @@ extern  "C"{
 #include <AL/al.h>
 #include <AL/alc.h>
 
+void MIXER::Mixer::update(){
+	std::map<ALuint, ALuint>::iterator iter;
+	std::map<ALuint, ALuint> deleteQueue;
+	ALenum state = 0;
+
+	for (iter = source.begin(); iter != source.end(); iter++){
+		alGetSourcei(iter->second, AL_SOURCE_STATE, &state);
+		if (state != AL_PLAYING){
+			std::cout << "We are done playing buffer " << iter->first << " with source " << iter->second << std::endl;
+			deleteQueue[iter->first] = iter->second;
+		}
+	}
+
+	if (deleteQueue.size() > 0){
+		std::cout << "Time for cleanup.." << std::endl;
+		cleanup(deleteQueue);
+		std::cout << "Did we get here?" << std::endl;
+	}
+}
+
+void MIXER::Mixer::cleanup(std::map<ALuint, ALuint> deleteQueue){
+	std::map<ALuint, ALuint>::iterator iter;
+
+	for (iter = deleteQueue.begin(); iter != deleteQueue.end(); iter++){
+		std::cout << "Cleaning up source: " << iter->second << " and buffer: " << iter->first << std::endl;
+		alDeleteSources(1,&iter->second);
+		alDeleteBuffers(1,&iter->first);
+		source.erase(iter->first);
+		buffer.erase(iter->first);
+		std::cout << "finished cleaning up this batch" << std::endl;
+	}
+
+	std::cout << "Finished everything." << std::endl;
+}
+
+void MIXER::Mixer::play(std::vector<uint8_t> pcmData, ALuint size, ALuint format, ALuint sampleRate, ALuint bps){
+
+	ALuint bufferid;
+    alGenBuffers(1, &bufferid);
+    buffer[bufferid] = pcmData;
+    printf("bufferid: %d\n", bufferid);
+    alBufferData(bufferid, format, &buffer[bufferid][0], size, sampleRate);
+
+    ALuint sourceid;
+    alGenSources(1, &sourceid);
+    alSourcei(sourceid, AL_BUFFER, bufferid);
+
+	alSourcePlay(sourceid);
+    std::cout << "pcm size: " << size << std::endl;
+
+	alSource3f(sourceid,AL_POSITION,0,0,0);
+	alSourcei(sourceid,AL_LOOPING,AL_FALSE);
+	float f[]={1,0,0,0,1,0};
+	alListenerfv(AL_ORIENTATION,f);
+}
+
 void MIXER::Mixer::playMusic(std::vector<uint8_t> xmidi) {
 	std::string config_file = WILDMIDI_CFG;
 	uint32_t mixer_options = 0;
@@ -53,74 +109,18 @@ void MIXER::Mixer::playMusic(std::vector<uint8_t> xmidi) {
 	void *midi_ptr = WildMidi_OpenBuffer(&midi[0], midi.size());
 	struct _WM_Info * wm_info = WildMidi_GetInfo(midi_ptr);
 
-	//std::vector<uint8_t> output_buffer(wm_info->approx_total_samples*4);
-    unsigned int bufferid, format;
-    alGenBuffers(1,&bufferid);
-    printf("bufferid: %d\n", bufferid);
-
-    buffer[bufferid].resize(wm_info->approx_total_samples*4);
+	std::vector<uint8_t> pcmData(wm_info->approx_total_samples*4);
 
 	std::cout << "approx samples: " << wm_info->approx_total_samples << std::endl
 			<< "current_sample: " << wm_info->current_sample << std::endl;
 
-	WildMidi_GetOutput(midi_ptr, reinterpret_cast<char*>(&buffer[bufferid][0]), wm_info->approx_total_samples*4);
+	WildMidi_GetOutput(midi_ptr, reinterpret_cast<char*>(&pcmData[0]), wm_info->approx_total_samples*4);
 	WildMidi_Close (midi_ptr);
 	WildMidi_Shutdown();
 
-    int channel = 2;
-    int sampleRate = MUSIC_RATE;
-    int bps = 16;
-    int size = wm_info->approx_total_samples*4;
+	play(pcmData, wm_info->approx_total_samples*4, AL_FORMAT_STEREO16, MUSIC_RATE, 16);
 
-    if(channel==1)
-    {
-            if(bps==8)
-            {
-                    format=AL_FORMAT_MONO8;
-            }else{
-                    format=AL_FORMAT_MONO16;
-            }
-    }else{
-            if(bps==8)
-            {
-                    format=AL_FORMAT_STEREO8;
-            }else{
-                    format=AL_FORMAT_STEREO16;
-            }
-    }
-
-    alBufferData(bufferid, format, (char*) &buffer[bufferid][0], size, sampleRate);
-
-    unsigned int sourceid;
-    alGenSources(1,&sourceid);
-
-    printf("sourceid: %d\n", sourceid);
-    alSourcei(sourceid, AL_BUFFER, bufferid);
-
-	float x=0,z=0;
-
-	alSourcePlay(sourceid);
-
-    std::cout << "size: " << size << std::endl;
-
-	alSource3f(sourceid,AL_POSITION,x,0,z);
-	//alSourcei(sourceid,AL_LOOPING,AL_TRUE);
-	alSourcei(sourceid,AL_LOOPING,AL_FALSE);
-	float f[]={1,0,0,0,1,0};
-	alListenerfv(AL_ORIENTATION,f);
-
-
-	std::cout << "done" << std::endl;
-	//output_buffer.clear();
-
-    //alDeleteSources(1,&sourceid);
-    //alDeleteBuffers(1,&bufferid);
-
-    //alcDestroyContext(context);
-    //alcCloseDevice(device);
-    //delete[] data;
-
-	return;
+	std::cout << "done converting xmi to midi" << std::endl;
 }
 
 void MIXER::Mixer::playSound(std::vector<uint8_t> snd) {
@@ -129,25 +129,9 @@ void MIXER::Mixer::playSound(std::vector<uint8_t> snd) {
     int bps = 8;
     int size = snd.size();
 
-    //char* data=loadWAV("test.wav",channel,sampleRate,bps,size);
-    char* data = (char*) &snd[0];
+    play(snd, size, AL_FORMAT_MONO8, sampleRate, bps);
 
-    ALCdevice* device=alcOpenDevice(NULL);
-    if(device==NULL)
-    {
-            std::cout << "cannot open sound card" << std::endl;
-            return;
-    }
-    ALCcontext* context=alcCreateContext(device,NULL);
-    if(context==NULL)
-    {
-            std::cout << "cannot open context" << std::endl;
-            return;
-    }
-    alcMakeContextCurrent(context);
-
-    unsigned int bufferid,format;
-    alGenBuffers(1,&bufferid);
+    /*
     if(channel==1)
     {
             if(bps==8)
@@ -164,40 +148,9 @@ void MIXER::Mixer::playSound(std::vector<uint8_t> snd) {
                     format=AL_FORMAT_STEREO16;
             }
     }
-    alBufferData(bufferid,format,data,size,sampleRate);
-    unsigned int sourceid;
-    alGenSources(1,&sourceid);
-    alSourcei(sourceid,AL_BUFFER,bufferid);
-	float x=0,z=0;
-	alSourcePlay(sourceid);
-
-    std::cout << "size: " << size << std::endl;
-
-	alSource3f(sourceid,AL_POSITION,x,0,z);
-	//alSourcei(sourceid,AL_LOOPING,AL_TRUE);
-	alSourcei(sourceid,AL_LOOPING,AL_FALSE);
-	float f[]={1,0,0,0,1,0};
-	alListenerfv(AL_ORIENTATION,f);
-
-    std::cout << "Got here." << std::endl;
-
-    //usleep(10000000000);
-
-    //alDeleteSources(1,&sourceid);
-    //alDeleteBuffers(1,&bufferid);
-
-    //alcDestroyContext(context);
-    //alcCloseDevice(device);
-    //delete[] data;
-}
-
-/*
-void MIXER::Music::operator()()
-{
-	std::cout << "testing" << std::endl;
-	return
-}
 */
+    std::cout << "Got here." << std::endl;
+}
 
 MIXER::Mixer::Mixer() {
 	defaultDeviceName = "OpenAL Soft";
@@ -223,7 +176,8 @@ MIXER::Mixer::Mixer() {
 }
 
 MIXER::Mixer::~Mixer() {
-	// Cleanup
+    alcDestroyContext(context);
+    alcCloseDevice(device);
 }
 
 void MIXER::Mixer::list_audio_devices(const ALCchar *devices)

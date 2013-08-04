@@ -18,10 +18,14 @@ private:
 	ALCdevice *device;
 	ALCcontext *context;
 	bool mt32;
-	std::map<uint8_t, std::vector<uint8_t> > buffer;
+	std::map<ALuint, std::vector<uint8_t> > buffer;
+	std::map<ALuint, ALuint> source;
+	void cleanup(std::map<ALuint, ALuint> deleteQueue);
+	void play(std::vector<uint8_t> pcmData, ALuint size, ALuint format, ALuint sampleRate, ALuint bps);
 public:
 	Mixer();
 	virtual ~Mixer();
+	void update();
 	void playMusic(std::vector<uint8_t> xmidi);
 	void playSound(std::vector<uint8_t> snd);
 
