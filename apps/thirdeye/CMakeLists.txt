@@ -20,6 +20,10 @@ add_thirdeye_dir (sound
     xmidi sound
     )
 
+add_thirdeye_dir (graphics
+    graphics
+    )
+
 # Main executable
 add_executable(thirdeye
     ${THIRDEYE_LIBS} ${THIRDEYE_LIBS_HEADER}

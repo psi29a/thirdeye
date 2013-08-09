@@ -1,6 +1,7 @@
 #include "engine.hpp"
 #include "resource.hpp"
 #include "sound/sound.hpp"
+#include "graphics/graphics.hpp"
 
 #include <components/files/configurationmanager.hpp>
 
@@ -74,8 +75,10 @@ void THIRDEYE::Engine::setSoundUsage(bool nosound){
 
 // Initialise and enter main loop.
 void THIRDEYE::Engine::go() {
-	displayEnvironment();
-	RESOURCE::Resource resource(mGameData);
+	displayEnvironment();	// get our environmental data
+	MIXER::Mixer mixer;		// setup our sound mixer
+	GRAPHICS::Graphics gfx;
+	RESOURCE::Resource resource(mGameData);	// get our game resources ready
 
 	/*
 	 Settings::Manager settings;
@@ -94,12 +97,21 @@ void THIRDEYE::Engine::go() {
 	os.close();
 
 	std::vector<uint8_t> xmidi = resource.getAsset("CUE1");
-	std::cout << "xmi: " << xmidi.size() << " " << &xmidi[0];
-	std::cout << std::endl;
 
-	MIXER::Mixer mixer;
+	std::vector<uint8_t> font = resource.getAsset("8x8 font");
+	std::ofstream oss ("/tmp/8x8.fnt", std::ios::binary);
+	oss.write((const char*) &font[0], font.size());
+	oss.close();
+
+	std::vector<uint8_t> bmp = resource.getAsset("Backdrop");
+	std::ofstream osss ("/tmp/backdrop.bmp", std::ios::binary);
+	osss.write((const char*) &bmp[0], bmp.size());
+	osss.close();
+
+	gfx.getBMP(bmp);
+
+	/*
 	//return;
-	//mixer.playMusic(xmidi);
 	// Create a window.
 	window = SDL_CreateWindow("Thirdeye", SDL_WINDOWPOS_CENTERED,
 			SDL_WINDOWPOS_CENTERED, 320, 200, 0    //SDL_WINDOW_SHOWN
@@ -200,7 +212,7 @@ void THIRDEYE::Engine::go() {
 		//printf("Waiting 60...\n");
 		SDL_Delay(60);      // Pause briefly before moving on to the next cycle.
 	}
-
+*/
 	// Save user settings
 	//settings.saveUser(settingspath);
 
