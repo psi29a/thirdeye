@@ -10,6 +10,8 @@
 
 namespace GRAPHICS {
 
+/*
+ //
 struct BMP
 {
    uint16_t fileSize;
@@ -19,13 +21,14 @@ struct BMP
    uint16_t unknown4;
    uint16_t width;
    uint16_t height;
-   uint8_t compressedData[];
+   uint8_t compressedData[0];
 };
+*/
 
-class Overlay
+class BMP
 {
 public:
-   Overlay(std::vector<uint8_t> vec)
+   BMP(std::vector<uint8_t> vec)
       : vec_(vec)
 {}
 
