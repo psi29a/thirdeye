@@ -107,10 +107,12 @@ void THIRDEYE::Engine::go() {
 	std::ofstream osss ("/tmp/backdrop.bmp", std::ios::binary);
 	osss.write((const char*) &bmp[0], bmp.size());
 	osss.close();
+	std::vector<uint8_t> backdrop = gfx.getBMP(bmp);
 
-	gfx.getBMP(bmp);
+	std::vector<uint8_t> basePalette = resource.getAsset("Fixed palette");
 
-	/*
+
+
 	//return;
 	// Create a window.
 	window = SDL_CreateWindow("Thirdeye", SDL_WINDOWPOS_CENTERED,
@@ -129,11 +131,41 @@ void THIRDEYE::Engine::go() {
 	SDL_SetColorKey(screen, SDL_TRUE, SDL_MapRGB(screen->format, 255, 0, 255));
 
 	// temp code to display CPS files
-	SDL_Surface** images;
-	images = new SDL_Surface*[256];
-	Games::gameInit(images);
-	SDL_BlitSurface(images[0], NULL, screen, NULL);
-	std::cout << "End of Data..." << std::endl;
+	//SDL_Surface** images;
+	//images = new SDL_Surface*[256];
+	//Games::gameInit(images);
+	//SDL_BlitSurface(images[0], NULL, screen, NULL);
+	//std::cout << "End of Data..." << std::endl;
+
+	SDL_Surface *surface = SDL_CreateRGBSurfaceFrom(&backdrop[0], 320, 200, 8, 320, 0, 0, 0, 0);
+	SDL_Palette* sdlPalette = SDL_AllocPalette(256);
+
+	bool sprite = false;
+	bool transparency = true;
+	uint16_t counter = 0;
+	for(uint i=0; i<768; i+=3)
+	{
+		// Bitshift from 8 bits to 6 bits that is which is our palette size
+		sdlPalette->colors[counter].r = basePalette[i]   << 2;
+		sdlPalette->colors[counter].g = basePalette[i+1] << 2;
+		sdlPalette->colors[counter].b = basePalette[i+2] << 2;
+
+		// Handle our black transparency and replace it with magenta
+		if(!sprite && transparency && sdlPalette->colors[counter].r == 0 && sdlPalette->colors[counter].g == 0 && sdlPalette->colors[counter].b == 0){
+			sdlPalette->colors[counter].r = 255;
+			sdlPalette->colors[counter].g = 0;
+			sdlPalette->colors[counter].b = 255;
+		}
+
+		// Debug information
+		//printf(" Byte %d has this %x\n",i, bytePAL[i]);
+		//printf("%u colour: %u,%u,%u\n", counter, palette->colors[counter].r, palette->colors[counter].g, palette->colors[counter].b);
+		counter++;
+	}
+
+	std::cout << "data: " << (int) backdrop[255] << std::endl;
+	SDL_SetPaletteColors(surface->format->palette, sdlPalette->colors, 0, 256);
+	SDL_BlitSurface(surface, NULL, screen, NULL);
 
 	// Start the main rendering loop
 	SDL_Event event;
@@ -212,7 +244,7 @@ void THIRDEYE::Engine::go() {
 		//printf("Waiting 60...\n");
 		SDL_Delay(60);      // Pause briefly before moving on to the next cycle.
 	}
-*/
+//*/
 	// Save user settings
 	//settings.saveUser(settingspath);
 

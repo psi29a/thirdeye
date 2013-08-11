@@ -13,8 +13,9 @@ GRAPHICS::Graphics::~Graphics() {
 
 }
 
-void GRAPHICS::Graphics::getBMP(std::vector<uint8_t> bmp){
+std::vector<uint8_t> GRAPHICS::Graphics::getBMP(std::vector<uint8_t> bmp){
 	BMP image(bmp);
+	std::vector<uint8_t> indexedBitmap;
 
 	std::cout << "BMP Info: " << std::endl
 		<< " " << image.getFilesize()
@@ -41,8 +42,10 @@ void GRAPHICS::Graphics::getBMP(std::vector<uint8_t> bmp){
 
 		std::cout << "   Size is " << width << " x " << height << std::endl;
 
-		unsigned char* indexedBitmap=new unsigned char[width*height];
-		memset(indexedBitmap,0,width*height);	// Default bgcolor??? Probably defined in the header...
+		//unsigned char* indexedBitmap=new unsigned char[width*height];
+		indexedBitmap.resize(width*height);
+
+		memset(&indexedBitmap[0],0,width*height);	// Default bgcolor??? Probably defined in the header...
 
 		while(true)
 		{
@@ -79,14 +82,14 @@ void GRAPHICS::Graphics::getBMP(std::vector<uint8_t> bmp){
 
 					if (mode==0)	// Copy
 					{
-						memcpy(indexedBitmap+x+y*width, &bmp[0]+pos, amount);
+						memcpy(&indexedBitmap[0]+x+y*width, &bmp[0]+pos, amount);
 						pos+=amount;
 					}
 					else if (mode==1) // Fill
 					{
 						int value=bmp[pos];
 						pos++;
-						memset(indexedBitmap+x+y*width,value, amount);
+						memset(&indexedBitmap[0]+x+y*width,value, amount);
 					}
 					x+=amount;
 					rle_width-=amount;
@@ -103,9 +106,10 @@ void GRAPHICS::Graphics::getBMP(std::vector<uint8_t> bmp){
 			}
 		}
 
-		std::ofstream osss ("/tmp/backdrop_1.bmp", std::ios::binary);
+		std::ofstream osss ("/tmp/backdrop_2.bmp", std::ios::binary);
 		osss.write((const char*) &indexedBitmap[0], width*height);
 		osss.close();
 	}
 
+	return indexedBitmap;
 }
