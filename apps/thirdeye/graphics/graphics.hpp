@@ -64,7 +64,7 @@ private:
 public:
 	Graphics();
 	virtual ~Graphics();
-	void getBMP(std::vector<uint8_t> bmp);
+	std::vector<uint8_t> getBMP(std::vector<uint8_t> bmp);
 	void getFont();
 };
 
