@@ -13,7 +13,7 @@ GRAPHICS::Graphics::~Graphics() {
 
 }
 
-std::vector<uint8_t> GRAPHICS::Graphics::getBMP(std::vector<uint8_t> bmp){
+std::vector<uint8_t> GRAPHICS::Graphics::uncompressBMP(std::vector<uint8_t> bmp){
 	BMP image(bmp);
 	std::vector<uint8_t> indexedBitmap;
 
@@ -112,4 +112,16 @@ std::vector<uint8_t> GRAPHICS::Graphics::getBMP(std::vector<uint8_t> bmp){
 	}
 
 	return indexedBitmap;
+}
+
+
+std::vector<uint8_t> GRAPHICS::Graphics::uncompressPalette(std::vector<uint8_t> pal){
+	Palette palette(pal);
+	std::vector<uint8_t> fullPalette(pal.size()-headerPalette);
+
+	for(uint16_t i = 0; i<fullPalette.size(); i++){
+		fullPalette[i] = palette[i];
+	}
+
+	return fullPalette;
 }

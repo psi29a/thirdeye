@@ -3,7 +3,7 @@
 /* Define this to the location of the wildmidi config file */
 #define WILDMIDI_CFG "/etc/wildmidi/wildmidi.cfg"
 #define MUSIC_RATE 32072
-#define SOUND_RATE 22000
+#define SOUND_RATE 8000
 #define MAX_SOURCES 16
 
 #include <iostream>

@@ -91,8 +91,8 @@ void THIRDEYE::Engine::go() {
 	//MWBase::Environment::get().getSoundManager()->playPlaylist(std::string("Explore"));
 
 	// temp return
-	std::vector<uint8_t> snd = resource.getAsset("WEASEL");
-	std::ofstream os ("/tmp/WEASEL.SND", std::ios::binary);
+	std::vector<uint8_t> snd = resource.getAsset("BIRD4");
+	std::ofstream os ("/tmp/BIRD4.SND", std::ios::binary);
 	os.write((const char*) &snd[0], snd.size());
 	os.close();
 
@@ -107,11 +107,13 @@ void THIRDEYE::Engine::go() {
 	std::ofstream osss ("/tmp/backdrop.bmp", std::ios::binary);
 	osss.write((const char*) &bmp[0], bmp.size());
 	osss.close();
-	std::vector<uint8_t> backdrop = gfx.getBMP(bmp);
+	std::vector<uint8_t> backdrop = gfx.uncompressBMP(bmp);
 
+	//std::vector<uint8_t> basePalette = resource.getAsset("Title palette");
 	std::vector<uint8_t> basePalette = resource.getAsset("Fixed palette");
-
-
+	std::cout << "basepalette size: " << basePalette.size() << std::endl;
+	std::vector<uint8_t> fullPalette = gfx.uncompressPalette(basePalette);
+	std::cout << "fullpalette size: " << fullPalette.size() << std::endl;
 
 	//return;
 	// Create a window.
@@ -143,12 +145,14 @@ void THIRDEYE::Engine::go() {
 	bool sprite = false;
 	bool transparency = true;
 	uint16_t counter = 0;
-	for(uint i=0; i<768; i+=3)
+	//uint16_t size = 3610;
+	uint16_t size = 768;
+	for(uint i=0; i<size; i+=3)
 	{
-		// Bitshift from 8 bits to 6 bits that is which is our palette size
-		sdlPalette->colors[counter].r = basePalette[i]   << 2;
-		sdlPalette->colors[counter].g = basePalette[i+1] << 2;
-		sdlPalette->colors[counter].b = basePalette[i+2] << 2;
+		// Bitshift from 6 bits (64 colours) to 8 bits (256 colours that is in our palette
+		sdlPalette->colors[counter].r = fullPalette[i]   << 2;
+		sdlPalette->colors[counter].g = fullPalette[i+1] << 2;
+		sdlPalette->colors[counter].b = fullPalette[i+2] << 2;
 
 		// Handle our black transparency and replace it with magenta
 		if(!sprite && transparency && sdlPalette->colors[counter].r == 0 && sdlPalette->colors[counter].g == 0 && sdlPalette->colors[counter].b == 0){
