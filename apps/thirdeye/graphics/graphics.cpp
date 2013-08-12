@@ -125,3 +125,56 @@ std::vector<uint8_t> GRAPHICS::Graphics::uncompressPalette(std::vector<uint8_t> 
 
 	return fullPalette;
 }
+
+
+void GRAPHICS::Graphics::drawImage(
+		uint16_t surfaceId,
+		std::vector<uint8_t> bmp,
+		std::vector<uint8_t> pal,
+		uint16_t posX,
+		uint16_t posY,
+		uint16_t width,
+		uint16_t height,
+		bool sprite = true,
+		bool transparency = true
+		){
+
+	std::vector<uint8_t> bitmap = uncompressBMP(bmp);
+	std::vector<uint8_t> palette = uncompressPalette(pal);
+
+	surface[surfaceId] = SDL_CreateRGBSurfaceFrom(&bitmap[0], 320, 200, 8, 320, 0, 0, 0, 0);
+	surfacePalette[surfaceId] = SDL_AllocPalette(256);
+
+	// assign our game palette to a SDL palette
+	uint16_t counter = 0;
+	uint16_t size = 768;
+	for(uint i=0; i<size; i+=3)
+	{
+		// Bitshift from 6 bits (64 colours) to 8 bits (256 colours that is in our palette
+		surfacePalette[surfaceId]->colors[counter].r = palette[i]   << 2;
+		surfacePalette[surfaceId]->colors[counter].g = palette[i+1] << 2;
+		surfacePalette[surfaceId]->colors[counter].b = palette[i+2] << 2;
+
+		// Handle our black transparency and replace it with magenta
+		if(!sprite && transparency
+				&& surfacePalette[surfaceId]->colors[counter].r == 0
+				&& surfacePalette[surfaceId]->colors[counter].g == 0
+				&& surfacePalette[surfaceId]->colors[counter].b == 0
+			){
+			surfacePalette[surfaceId]->colors[counter].r = 255;
+			surfacePalette[surfaceId]->colors[counter].g = 0;
+			surfacePalette[surfaceId]->colors[counter].b = 255;
+		}
+
+		// Debug information
+		//printf(" Byte %d has this %x\n",i, bytePAL[i]);
+		//printf("%u colour: %u,%u,%u\n", counter, palette->colors[counter].r, palette->colors[counter].g, palette->colors[counter].b);
+		counter++;
+	}
+
+	SDL_SetPaletteColors(surface[surfaceId]->format->palette, surfacePalette[surfaceId]->colors, 0, 256);
+}
+
+SDL_Surface* GRAPHICS::Graphics::getSurface(uint16_t surfaceId){
+	return surface[surfaceId];
+}
