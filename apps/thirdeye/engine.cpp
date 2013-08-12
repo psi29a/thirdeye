@@ -139,8 +139,9 @@ void THIRDEYE::Engine::go() {
 	//SDL_BlitSurface(images[0], NULL, screen, NULL);
 	//std::cout << "End of Data..." << std::endl;
 
+	/*
 	SDL_Surface *surface = SDL_CreateRGBSurfaceFrom(&backdrop[0], 320, 200, 8, 320, 0, 0, 0, 0);
-	SDL_Palette* sdlPalette = SDL_AllocPalette(256);
+	SDL_Palette *sdlPalette = SDL_AllocPalette(256);
 
 	bool sprite = false;
 	bool transparency = true;
@@ -169,7 +170,10 @@ void THIRDEYE::Engine::go() {
 
 	std::cout << "data: " << (int) backdrop[255] << std::endl;
 	SDL_SetPaletteColors(surface->format->palette, sdlPalette->colors, 0, 256);
-	SDL_BlitSurface(surface, NULL, screen, NULL);
+	*/
+
+	gfx.drawImage(0, bmp, basePalette, 0, 0, 320, 200, false, true);
+	SDL_BlitSurface(gfx.getSurface(0), NULL, screen, NULL);
 
 	// Start the main rendering loop
 	SDL_Event event;
