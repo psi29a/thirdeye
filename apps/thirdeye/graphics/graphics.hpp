@@ -2,6 +2,9 @@
 #define GRAPHICS_HPP
 
 #define headerBMP 14
+#define headerPalette 26
+
+#include <SDL2/SDL.h>
 
 #include <map>
 #include <vector>
@@ -25,6 +28,57 @@ struct BMP
 };
 */
 
+/*
+struct PAL_HEADER
+{
+   uint16_t numColors;
+   uint16_t offsetColorArray;
+   uint16_t offsetFadeIndexArray00;
+   uint16_t offsetFadeIndexArray10;
+   uint16_t offsetFadeIndexArray20;
+   uint16_t offsetFadeIndexArray30;
+   uint16_t offsetFadeIndexArray40;
+   uint16_t offsetFadeIndexArray50;
+   uint16_t offsetFadeIndexArray60;
+   uint16_t offsetFadeIndexArray70;
+   uint16_t offsetFadeIndexArray80;
+   uint16_t offsetFadeIndexArray90;
+   uint16_t offsetFadeIndexArray100;
+}
+ */
+
+class Palette
+{
+public:
+	Palette(std::vector<uint8_t> vec)
+      : vec_(vec)
+{}
+
+uint16_t getNumOfColours() const {
+   return *reinterpret_cast<const uint16_t*>(&vec_[0]);
+}
+
+uint16_t getOffsetColorArray() const {
+   return *reinterpret_cast<const uint16_t*>(&vec_[1]);
+}
+
+uint16_t getOffsetFadeIndexArray00() const {
+   return *reinterpret_cast<const uint16_t*>(&vec_[2]);
+}
+
+uint8_t& operator[](size_t off){
+	if (off > vec_.size() - headerPalette){
+		std::cerr << "Trying to access BMP data out of bounds." << std::endl;
+		throw;
+	}
+	//std::cout << "offset @: " << off << std::endl;
+    return vec_[off + headerPalette];
+}
+private:
+   std::vector<uint8_t> vec_;
+};
+
+
 class BMP
 {
 public:
@@ -46,14 +100,13 @@ uint16_t getHeight() const {
 
 uint8_t& operator[](size_t off){
 	if (off > vec_.size() - headerBMP){
-		std::cerr << "Trying to access BMP data out of bounds." << std::endl;
+		std::cerr << "Trying to access PAL data out of bounds." << std::endl;
 		throw;
 	}
-	std::cout << "offset @: " << off << std::endl;
+	//std::cout << "offset @: " << off << std::endl;
     return vec_[off + headerBMP];
 }
 
-// provide accessors that retrieve the header fields by casting the vector entries
 private:
    std::vector<uint8_t> vec_;
 };
@@ -64,7 +117,8 @@ private:
 public:
 	Graphics();
 	virtual ~Graphics();
-	std::vector<uint8_t> getBMP(std::vector<uint8_t> bmp);
+	std::vector<uint8_t> uncompressBMP(std::vector<uint8_t> bmp);
+	std::vector<uint8_t> uncompressPalette(std::vector<uint8_t> pal);
 	void getFont();
 };
 
