@@ -9,18 +9,6 @@ add_component_dir (files
 add_component_dir (misc
     stringops
     )
-
-add_component_dir (utils
-    fileread format40 format80 intarray2bmp 
-    )
-
-add_component_dir (media
-    video
-    )
-    
-add_component_dir (games
-    eob2
-    )
         
 add_library(components STATIC ${COMPONENT_FILES} ${MOC_SRCS})
     

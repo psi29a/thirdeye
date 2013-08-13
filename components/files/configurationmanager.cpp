@@ -106,7 +106,7 @@ void ConfigurationManager::loadConfig(const boost::filesystem::path& path,
     boost::program_options::options_description& description)
 {
     boost::filesystem::path cfgFile(path);
-    cfgFile /= std::string(thirdeyeCfgFile);
+    //cfgFile /= std::string(thirdeyeCfgFile);
     if (boost::filesystem::is_regular_file(cfgFile))
     {
         std::cout << "Loading config file: " << cfgFile.string() << "... ";

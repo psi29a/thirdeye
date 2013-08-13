@@ -104,7 +104,8 @@ bool parseOptions(int argc, char** argv, THIRDEYE::Engine& engine,
 		return false;
 
 	 // startup-settings
-	 engine.setGameData(variables["game-data"].as<std::string>());
+	 //engine.setGameData(variables["game-data"].as<std::string>());
+	engine.setGameData(variables["game-data"].as<std::string>());
 	 engine.setGame(variables["game"].as<std::string>());
 
 	 // other settings

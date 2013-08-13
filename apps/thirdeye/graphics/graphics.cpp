@@ -1,20 +1,91 @@
 #include "graphics.hpp"
 
 #include <iostream>
-#include<fstream>
+#include <fstream>
+#include <stdexcept>
+
 #include <stdio.h>
 #include <string.h>
 
-GRAPHICS::Graphics::Graphics() {
+GRAPHICS::Graphics::Graphics()
+{
+	std::cout << "Initializing SDL... ";
+	Uint32 flags = SDL_INIT_VIDEO;
+	if (SDL_WasInit(flags) == 0) {
+		//kindly ask SDL not to trash our OGL context
+		//might this be related to http://bugzilla.libsdl.org/show_bug.cgi?id=748 ?
+		//SDL_SetHint(SDL_HINT_RENDER_DRIVER, "software");
 
+		if (SDL_Init(flags) != 0) {
+			throw std::runtime_error(
+					"Could not initialize SDL! " + std::string(SDL_GetError())
+			);
+		}
+	}
+
+	SDL_SysWMinfo info;
+	SDL_VERSION(&info.version); // initialize info structure with SDL version info
+
+	// Create a window.
+	window = SDL_CreateWindow("Thirdeye", SDL_WINDOWPOS_CENTERED,
+			SDL_WINDOWPOS_CENTERED, 320, 200, 0    //SDL_WINDOW_SHOWN
+			);
+
+	if (SDL_GetWindowWMInfo(window, &info)) { // the call returns true on success
+		std::cout << "done!" << std::endl << "  Version:	"
+				<< (int) info.version.major << "." << (int) info.version.minor
+				<< "." << (int) info.version.patch << std::endl
+				<< "  Environment:	";
+		switch (info.subsystem) {
+		case SDL_SYSWM_UNKNOWN:
+			std::cout << "an unknown system!";
+			break;
+		case SDL_SYSWM_WINDOWS:
+			std::cout << "Microsoft Windows(TM)";
+			break;
+		case SDL_SYSWM_X11:
+			std::cout << "X Window System";
+			break;
+		case SDL_SYSWM_DIRECTFB:
+			std::cout << "DirectFB";
+			break;
+		case SDL_SYSWM_COCOA:
+			std::cout << "Apple OS X";
+			break;
+		case SDL_SYSWM_UIKIT:
+			std::cout << "UIKit";
+			break;
+		}
+		std::cout << std::endl;
+	} else {
+		throw std::runtime_error(
+				"Couldn't get window information: " + std::string(SDL_GetError())
+		);
+	}
+
+	// Create the renderer driver to be used in window
+	//renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
+	renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_SOFTWARE);
+
+	//SDL_GetRendererInfo(renderer, &displayRendererInfo);
+
+	// Create our game screen that will be blitted to before renderering
+	screen = SDL_CreateRGBSurface(0, 320, 200, 32, 0, 0, 0, 0);
+
+	// set magenta as our transparent colour
+	SDL_SetColorKey(screen, SDL_TRUE, SDL_MapRGB(screen->format, 255, 0, 255));
+
+	texture = NULL;
 }
 
 GRAPHICS::Graphics::~Graphics() {
-
+    SDL_DestroyRenderer(renderer);
+    SDL_DestroyWindow(window);
+	SDL_Quit();
 }
 
 std::vector<uint8_t> GRAPHICS::Graphics::uncompressBMP(std::vector<uint8_t> bmp){
-	BMP image(bmp);
+	Bitmap image(bmp);
 	std::vector<uint8_t> indexedBitmap;
 
 	std::cout << "BMP Info: " << std::endl
@@ -71,7 +142,7 @@ std::vector<uint8_t> GRAPHICS::Graphics::uncompressBMP(std::vector<uint8_t> bmp)
 				int rle_width=bmp[pos];
 				pos++;
 
-				int rle_bytes=bmp[pos];
+				//int rle_bytes=bmp[pos];
 				pos++;
 
 				while(rle_width>0)
@@ -173,8 +244,28 @@ void GRAPHICS::Graphics::drawImage(
 	}
 
 	SDL_SetPaletteColors(surface[surfaceId]->format->palette, surfacePalette[surfaceId]->colors, 0, 256);
+
+	SDL_BlitSurface(surface[surfaceId], NULL, screen, NULL);
 }
 
 SDL_Surface* GRAPHICS::Graphics::getSurface(uint16_t surfaceId){
 	return surface[surfaceId];
+}
+
+void GRAPHICS::Graphics::update(){
+
+	// generate texture from our screen surface
+	texture = SDL_CreateTextureFromSurface(renderer, screen);
+
+	// Clear the entire screen to our selected color.
+	SDL_RenderClear(renderer);
+
+	// blit texture to display
+	SDL_RenderCopy(renderer, texture, NULL, NULL);
+
+	// Up until now everything was drawn behind the scenes.
+	SDL_RenderPresent(renderer);
+
+	// cleanup
+	SDL_DestroyTexture(texture);
 }
