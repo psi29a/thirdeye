@@ -32,11 +32,6 @@ class Engine
 	uint8_t mGame;
 	boost::filesystem::path mGameData;
 
-	SDL_Window *window;
-	SDL_Renderer *renderer;
-	SDL_Surface *screen;
-	SDL_Texture *texture;
-
 	// not implemented
 	Engine(const Engine&);
 	Engine& operator=(const Engine&);

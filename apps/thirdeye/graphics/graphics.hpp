@@ -5,6 +5,7 @@
 #define headerPalette 26
 
 #include <SDL2/SDL.h>
+#include <SDL2/SDL_syswm.h>
 
 #include <map>
 #include <vector>
@@ -14,7 +15,6 @@
 namespace GRAPHICS {
 
 /*
- //
  struct BMP
  {
  uint16_t fileSize;
@@ -44,7 +44,18 @@ namespace GRAPHICS {
  uint16_t offsetFadeIndexArray80;
  uint16_t offsetFadeIndexArray90;
  uint16_t offsetFadeIndexArray100;
+ uint8_t paletteData[0];
  }
+ */
+
+/*
+struct Font
+{
+   int version;
+   int char_count;
+   int char_height;
+   int font_background;
+}
  */
 
 class Palette {
@@ -67,7 +78,7 @@ public:
 
 	uint8_t& operator[](size_t off) {
 		if (off > vec_.size() - headerPalette) {
-			std::cerr << "Trying to access BMP data out of bounds."
+			std::cerr << "Trying to access PAL data out of bounds."
 					<< std::endl;
 			throw;
 		}
@@ -78,9 +89,9 @@ private:
 	std::vector<uint8_t> vec_;
 };
 
-class BMP {
+class Bitmap {
 public:
-	BMP(std::vector<uint8_t> vec) :
+	Bitmap(std::vector<uint8_t> vec) :
 			vec_(vec) {
 	}
 
@@ -98,7 +109,7 @@ public:
 
 	uint8_t& operator[](size_t off) {
 		if (off > vec_.size() - headerBMP) {
-			std::cerr << "Trying to access PAL data out of bounds."
+			std::cerr << "Trying to access BMP data out of bounds."
 					<< std::endl;
 			throw;
 		}
@@ -114,6 +125,10 @@ class Graphics {
 private:
 	std::map<uint16_t, SDL_Surface*> surface;
 	std::map<uint16_t, SDL_Palette*> surfacePalette;
+	SDL_Window 		*window;
+	SDL_Renderer 	*renderer;
+	SDL_Surface 	*screen;
+	SDL_Texture 	*texture;
 public:
 	Graphics();
 	virtual ~Graphics();
@@ -124,6 +139,7 @@ public:
 			uint16_t width, uint16_t height, bool sprite, bool transparency);
 	void getFont();
 	SDL_Surface* getSurface(uint16_t);
+	void update();
 };
 
 }
