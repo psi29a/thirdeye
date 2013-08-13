@@ -128,7 +128,7 @@ private:
 	SDL_Window 		*window;
 	SDL_Renderer 	*renderer;
 	SDL_Surface 	*screen;
-	SDL_Texture 	*texture;
+
 public:
 	Graphics();
 	virtual ~Graphics();

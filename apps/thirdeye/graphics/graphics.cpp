@@ -75,10 +75,12 @@ GRAPHICS::Graphics::Graphics()
 	// set magenta as our transparent colour
 	SDL_SetColorKey(screen, SDL_TRUE, SDL_MapRGB(screen->format, 255, 0, 255));
 
-	texture = NULL;
 }
 
 GRAPHICS::Graphics::~Graphics() {
+	SDL_FreeSurface(surface[0]);
+	SDL_FreeSurface(screen);
+	SDL_FreePalette(surfacePalette[0]);
     SDL_DestroyRenderer(renderer);
     SDL_DestroyWindow(window);
 	SDL_Quit();
@@ -99,8 +101,8 @@ std::vector<uint8_t> GRAPHICS::Graphics::uncompressBMP(std::vector<uint8_t> bmp)
 	uint16_t nrSubPictures = bmp[4] | (bmp[5]<<8);
 	std::cout << nrSubPictures << " sub picture(s) found." << std::endl;
 
-	uint32_t* startOffsets=new uint32_t[nrSubPictures];
-	for (int32_t i=0; i<nrSubPictures; i++)
+	std::map<uint16_t, uint32_t> startOffsets;
+	for (uint32_t i=0; i<nrSubPictures; i++)
 	{
 		startOffsets[i]=bmp[6+i*4+0] | (bmp[6+i*4+1]<<8) | (bmp[6+i*4+2]<<16) | (bmp[6+i*4+3]<<24);
 		std::cout << "Sub picture "<< i << " starts at offset " << startOffsets[i] << std::endl;
@@ -255,7 +257,7 @@ SDL_Surface* GRAPHICS::Graphics::getSurface(uint16_t surfaceId){
 void GRAPHICS::Graphics::update(){
 
 	// generate texture from our screen surface
-	texture = SDL_CreateTextureFromSurface(renderer, screen);
+	SDL_Texture *texture = SDL_CreateTextureFromSurface(renderer, screen);
 
 	// Clear the entire screen to our selected color.
 	SDL_RenderClear(renderer);
