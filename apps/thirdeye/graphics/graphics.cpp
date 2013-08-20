@@ -271,3 +271,10 @@ void GRAPHICS::Graphics::update(){
 	// cleanup
 	SDL_DestroyTexture(texture);
 }
+
+void GRAPHICS::Graphics::testFont(std::vector<uint8_t> fnt)
+{
+	Font font(fnt);
+
+	std::cout << "Font: " << (int) font[618] << std::endl;
+}

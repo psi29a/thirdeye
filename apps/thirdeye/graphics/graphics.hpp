@@ -58,6 +58,53 @@ struct Font
 }
  */
 
+class Font {
+public:
+	Font(std::vector<uint8_t> vec) :
+		vec_(vec) {
+		uint16_t prev = 518;
+		uint8_t width = 0;
+		for (uint16_t i = 0; i < 128; i++){
+			index[i] = *reinterpret_cast<const uint16_t*>(&vec_[264+i*2]);
+			width = *reinterpret_cast<const uint16_t*>(&vec_[index[i]]);
+			std::cout <<  i << " " << index[i]
+			     << " " << index[i] - prev
+			     << " " << (int) width
+			     << std::endl;
+			prev = index[i];
+
+			uint8_t counter = 2;
+			uint16_t pixel = 0;
+			while (counter-2 < width * 8){
+				if ( (counter-2) % width == 0)
+					std::cout << std::endl;
+				pixel = vec_[index[i]+counter];
+				std::cout << std::hex << pixel;
+				counter++;
+
+			}
+			std::cout << std::endl;
+		}
+	}
+
+	uint8_t& operator[](size_t off) {
+		if (off > vec_.size() - 264) {
+			std::cerr << "Trying to access FONT data out of bounds."
+					<< std::endl;
+			throw;
+		}
+		return vec_[off];
+	}
+
+	uint16_t getOffset() const {
+		return index[0];
+		//return *reinterpret_cast<const uint16_t*>(&vec_[264]);
+	}
+private:
+	std::vector<uint8_t> vec_;
+	uint16_t index[128];
+};
+
 class Palette {
 public:
 	Palette(std::vector<uint8_t> vec) :
@@ -140,6 +187,7 @@ public:
 	void getFont();
 	SDL_Surface* getSurface(uint16_t);
 	void update();
+	void testFont(std::vector<uint8_t>);
 };
 
 }

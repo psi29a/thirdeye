@@ -70,21 +70,23 @@ void THIRDEYE::Engine::go() {
 	 */
 
 	std::vector<uint8_t> snd = resource.getAsset("BIRD4");
-	std::ofstream os ("/tmp/BIRD4.SND", std::ios::binary);
-	os.write((const char*) &snd[0], snd.size());
-	os.close();
-
 	std::vector<uint8_t> xmidi = resource.getAsset("CUE1");
-
 	std::vector<uint8_t> font = resource.getAsset("8x8 font");
-	std::ofstream oss ("/tmp/8x8.fnt", std::ios::binary);
-	oss.write((const char*) &font[0], font.size());
-	oss.close();
+	std::vector<uint8_t> font2 = resource.getAsset("6x8 font");
+	std::vector<uint8_t> font3 = resource.getAsset("Ornate font");
 
+	std::ofstream font_1 ("/tmp/8x8.fnt", std::ios::binary);
+	font_1.write((const char*) &font[0], font.size());
+	font_1.close();
+	std::ofstream font_2 ("/tmp/6x8.fnt", std::ios::binary);
+	font_2.write((const char*) &font2[0], font2.size());
+	font_2.close();
+
+	gfx.testFont(font);
+
+	return;
 	std::vector<uint8_t> bmp = resource.getAsset("Backdrop");
-	std::ofstream osss ("/tmp/backdrop.bmp", std::ios::binary);
-	osss.write((const char*) &bmp[0], bmp.size());
-	osss.close();
+
 	std::vector<uint8_t> backdrop = gfx.uncompressBMP(bmp);
 
 	//std::vector<uint8_t> basePalette = resource.getAsset("Title palette");
