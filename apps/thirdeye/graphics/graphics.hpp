@@ -49,121 +49,43 @@ namespace GRAPHICS {
  */
 
 /*
-struct Font
-{
-   int version;
-   int char_count;
-   int char_height;
-   int font_background;
-}
+ struct Font
+ {
+ uint16_t numberOfCharacters;
+ uint16_t charHeight;
+ }
  */
 
 class Font {
 public:
-	Font(std::vector<uint8_t> vec) :
-		vec_(vec) {
-		uint16_t prev = 518;
-		uint8_t width = 0;
-		for (uint16_t i = 0; i < 128; i++){
-			index[i] = *reinterpret_cast<const uint16_t*>(&vec_[264+i*2]);
-			width = *reinterpret_cast<const uint16_t*>(&vec_[index[i]]);
-			std::cout <<  i << " " << index[i]
-			     << " " << index[i] - prev
-			     << " " << (int) width
-			     << std::endl;
-			prev = index[i];
-
-			uint8_t counter = 2;
-			uint16_t pixel = 0;
-			while (counter-2 < width * 8){
-				if ( (counter-2) % width == 0)
-					std::cout << std::endl;
-				pixel = vec_[index[i]+counter];
-				std::cout << std::hex << pixel;
-				counter++;
-
-			}
-			std::cout << std::endl;
-		}
-	}
-
-	uint8_t& operator[](size_t off) {
-		if (off > vec_.size() - 264) {
-			std::cerr << "Trying to access FONT data out of bounds."
-					<< std::endl;
-			throw;
-		}
-		return vec_[off];
-	}
-
-	uint16_t getOffset() const {
-		return index[0];
-		//return *reinterpret_cast<const uint16_t*>(&vec_[264]);
-	}
+	Font(std::vector<uint8_t> vec);
+	virtual ~Font();
+	SDL_Surface* getCharacter(uint8_t ascii);
 private:
 	std::vector<uint8_t> vec_;
-	uint16_t index[128];
+	std::map<uint8_t, SDL_Surface*> character;
+	std::map<uint8_t, uint16_t> index;
 };
 
 class Palette {
 public:
-	Palette(std::vector<uint8_t> vec) :
-			vec_(vec) {
-	}
+	Palette(std::vector<uint8_t> vec);
 
-	uint16_t getNumOfColours() const {
-		return *reinterpret_cast<const uint16_t*>(&vec_[0]);
-	}
-
-	uint16_t getOffsetColorArray() const {
-		return *reinterpret_cast<const uint16_t*>(&vec_[1]);
-	}
-
-	uint16_t getOffsetFadeIndexArray00() const {
-		return *reinterpret_cast<const uint16_t*>(&vec_[2]);
-	}
-
-	uint8_t& operator[](size_t off) {
-		if (off > vec_.size() - headerPalette) {
-			std::cerr << "Trying to access PAL data out of bounds."
-					<< std::endl;
-			throw;
-		}
-		//std::cout << "offset @: " << off << std::endl;
-		return vec_[off + headerPalette];
-	}
+	uint16_t getNumOfColours() const;
+	uint16_t getOffsetColorArray() const;
+	uint16_t getOffsetFadeIndexArray00() const;
+	uint8_t& operator[](size_t off);
 private:
 	std::vector<uint8_t> vec_;
 };
 
 class Bitmap {
 public:
-	Bitmap(std::vector<uint8_t> vec) :
-			vec_(vec) {
-	}
-
-	uint16_t getFilesize() const {
-		return *reinterpret_cast<const uint16_t*>(&vec_[0]);
-	}
-
-	uint16_t getWidth() const {
-		return *reinterpret_cast<const uint16_t*>(&vec_[5 * 2]);
-	}
-
-	uint16_t getHeight() const {
-		return *reinterpret_cast<const uint16_t*>(&vec_[6 * 2]);
-	}
-
-	uint8_t& operator[](size_t off) {
-		if (off > vec_.size() - headerBMP) {
-			std::cerr << "Trying to access BMP data out of bounds."
-					<< std::endl;
-			throw;
-		}
-		//std::cout << "offset @: " << off << std::endl;
-		return vec_[off + headerBMP];
-	}
-
+	Bitmap(std::vector<uint8_t> vec);
+	uint16_t getFilesize() const;
+	uint16_t getWidth() const;
+	uint16_t getHeight() const;
+	uint8_t& operator[](size_t off);
 private:
 	std::vector<uint8_t> vec_;
 };
@@ -172,9 +94,9 @@ class Graphics {
 private:
 	std::map<uint16_t, SDL_Surface*> surface;
 	std::map<uint16_t, SDL_Palette*> surfacePalette;
-	SDL_Window 		*window;
-	SDL_Renderer 	*renderer;
-	SDL_Surface 	*screen;
+	SDL_Window *window;
+	SDL_Renderer *renderer;
+	SDL_Surface *screen;
 
 public:
 	Graphics();
@@ -187,7 +109,7 @@ public:
 	void getFont();
 	SDL_Surface* getSurface(uint16_t);
 	void update();
-	void testFont(std::vector<uint8_t>);
+	void loadFont(std::vector<uint8_t>);
 };
 
 }
