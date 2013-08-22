@@ -259,13 +259,14 @@ void GRAPHICS::Graphics::update() {
 void GRAPHICS::Graphics::loadFont(std::vector<uint8_t> fnt) {
 	Font font(fnt);
 	SDL_Rect rect = { 8, 181, 8, 8 }; // start at 8x180 with 8x8 pixels
-	//std::string text = "Welcome to Thirdeye!";
+	std::string text = "Welcome to Thirdeye!";
 	//std::string text = "ABDCEFGHIJKLMNOPQRSTUVWXYZ";
-	std::string text = "abcdefghijklmnopqrstuvwxyz";
+	//std::string text = "abcdefghijklmnopqrstuvwxyz";
 	//std::string text = "0123456789!@#$%^&*()[]{}\\/?<>.,:;'\"-=_+";
 	//std::string text = "hij1";
 	std::string::iterator it = text.begin();
 
+	/*
 	std::cout << std::endl;
 	int a = (unsigned char) 'i';
 
@@ -284,46 +285,41 @@ void GRAPHICS::Graphics::loadFont(std::vector<uint8_t> fnt) {
 	}
 	std::cout << std::dec << std::endl;
 	//return;
+	 */
 
 	while (it != text.end()) {
 		int ascii = (unsigned char) *it;
 		SDL_BlitSurface(font.getCharacter(ascii), NULL, screen, &rect);
 		it++;
-		rect.x += 8;
+		rect.x += font.getCharacter(ascii)->w;
 	}
 }
 
 GRAPHICS::Font::Font(std::vector<uint8_t> vec) :
 		vec_(vec) {
-	uint16_t prev = 518;
+	//uint16_t prev = 518;
 	uint8_t characters = *reinterpret_cast<const uint16_t*>(&vec_[0]);
 	uint8_t fontHeight = *reinterpret_cast<const uint16_t*>(&vec_[2]);
-	uint8_t fontWidth = 8;
-	uint8_t charWidth = 0;
 
 	for (uint16_t i = 0; i < characters; i++) {
 
 		// find character information
 		index[i] = *reinterpret_cast<const uint16_t*>(&vec_[264 + i * 2]);
-		charWidth = *reinterpret_cast<const uint16_t*>(&vec_[index[i]]);
+		uint8_t charWidth = *reinterpret_cast<const uint16_t*>(&vec_[index[i]]);
 
 		//std::cout << i << " " << index[i] << " " << index[i] - prev << " "
 		//		<< (int) charWidth << std::endl;
-
-		prev = index[i];
+		//prev = index[i];
 
 		// create a surface to draw on
-		character[i] = SDL_CreateRGBSurface(0, fontWidth, fontHeight, 32, 0, 0,
+		character[i] = SDL_CreateRGBSurface(0, charWidth, fontHeight, 32, 0, 0,
 				0, 0); // set to font dimensions
 		Uint32 white = SDL_MapRGB(character[i]->format, 255, 255, 255); // set to white
 		Uint32 black = SDL_MapRGB(character[i]->format, 0, 0, 0); // set to black
 
 		// set values before loop
 		uint8_t counter = 2;
-		uint8_t counterX = 2;
-		uint8_t counterY = 0;
 		uint16_t pixel = 0;
-		SDL_Rect rect = { 0, 0, 1, 1 }; // start at 0x0 with 1 pixel
 
 		// draw character to surface
 		for (uint16_t x = 0; x < fontHeight; x++) {
@@ -331,10 +327,12 @@ GRAPHICS::Font::Font(std::vector<uint8_t> vec) :
 				SDL_Rect rect = { y, x, 1, 1 };
 				pixel = vec_[index[i] + counter];
 
+				/*
 				if (i == 0x69)
 					std::cout << "Offset: " << index[i] + counter << " Value: "
 							<< pixel << "@" << rect.x << "x" << rect.y
 							<< std::endl;
+				*/
 
 				if (pixel > 0) {
 					SDL_FillRect(character[i], &rect, white);
@@ -342,33 +340,6 @@ GRAPHICS::Font::Font(std::vector<uint8_t> vec) :
 				counter++;
 			}
 		}
-
-		/*
-
-		 while (counterX - 2 < charWidth * fontHeight) {
-		 rect.x = (counterX - 2) % charWidth;
-		 rect.y = counterY % fontHeight;
-
-		 //if (rect.x == 0 && (counterX - 2))
-		 //std::cout << std::endl;
-
-		 pixel = vec_[index[i] + counterX];
-
-		 if (i == 0x69)
-		 std::cout << "Value: " << pixel << "@" << rect.x << "x" << rect.y << std::endl;
-
-		 if (pixel > 0){
-		 SDL_FillRect(character[i], &rect, white);
-		 }
-		 //std::cout << std::hex << pixel;
-		 counterX++;
-
-		 if (rect.x == 0 && (counterX) >= fontHeight)
-		 counterY++;
-		 }
-		 //std::cout << std::endl;
-
-		 */
 	}
 }
 
