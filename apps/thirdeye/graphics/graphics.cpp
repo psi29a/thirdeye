@@ -315,7 +315,7 @@ GRAPHICS::Font::Font(std::vector<uint8_t> vec) :
 		character[i] = SDL_CreateRGBSurface(0, charWidth, fontHeight, 32, 0, 0,
 				0, 0); // set to font dimensions
 		Uint32 white = SDL_MapRGB(character[i]->format, 255, 255, 255); // set to white
-		Uint32 black = SDL_MapRGB(character[i]->format, 0, 0, 0); // set to black
+		//Uint32 black = SDL_MapRGB(character[i]->format, 0, 0, 0); // set to black
 
 		// set values before loop
 		uint8_t counter = 2;
