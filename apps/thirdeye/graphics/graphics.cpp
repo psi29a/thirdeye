@@ -88,23 +88,22 @@ GRAPHICS::Graphics::~Graphics() {
 std::vector<uint8_t> GRAPHICS::Graphics::uncompressBMP(
 		std::vector<uint8_t> bmp) {
 	Bitmap image(bmp);
+
 	std::vector<uint8_t> indexedBitmap;
 
 	std::cout << "BMP Info: " << std::endl << " " << image.getFilesize() << " "
 			<< image.getWidth() << " " << image.getHeight() << " " << bmp.size()
 			<< " " << (int) image[0] << std::endl;
 
-	uint16_t nrSubPictures = bmp[4] | (bmp[5] << 8);
-	std::cout << nrSubPictures << " sub picture(s) found." << std::endl;
+	std::cout << image.getNumberOfBitmaps() << " sub picture(s) found." << std::endl;
 
-	std::map<uint16_t, uint32_t> startOffsets;
-	for (uint32_t i = 0; i < nrSubPictures; i++) {
-		startOffsets[i] = bmp[6 + i * 4 + 0] | (bmp[6 + i * 4 + 1] << 8)
-				| (bmp[6 + i * 4 + 2] << 16) | (bmp[6 + i * 4 + 3] << 24);
+	std::map<uint16_t, uint32_t> offsets = image.getBitmapOffsets();
+	for (uint16_t i = 0; i < image.getNumberOfBitmaps(); i++) {
+
 		std::cout << "Sub picture " << i << " starts at offset "
-				<< startOffsets[i] << std::endl;
+				<< offsets[i] << std::endl;
 
-		unsigned int pos = startOffsets[i];
+		unsigned int pos = offsets[i];
 
 		int width = bmp[pos + 0] | (bmp[pos + 1] << 8);
 		int height = bmp[pos + 2] | (bmp[pos + 3] << 8);
