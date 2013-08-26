@@ -1,14 +1,12 @@
 #include "graphics.hpp"
 
 #include <iostream>
-#include <fstream>
 #include <stdexcept>
 
-#include <stdio.h>
-#include <string.h>
-
-GRAPHICS::Graphics::Graphics() {
+GRAPHICS::Graphics::Graphics(uint16_t scale)
+{
 	std::cout << "Initializing SDL... ";
+	mScale = scale;
 	Uint32 flags = SDL_INIT_VIDEO;
 	if (SDL_WasInit(flags) == 0) {
 		//kindly ask SDL not to trash our OGL context
@@ -25,11 +23,11 @@ GRAPHICS::Graphics::Graphics() {
 	SDL_VERSION(&info.version); // initialize info structure with SDL version info
 
 	// Create a window.
-	window = SDL_CreateWindow("Thirdeye", SDL_WINDOWPOS_CENTERED,
-			SDL_WINDOWPOS_CENTERED, 320, 200, 0    //SDL_WINDOW_SHOWN
+	mWindow = SDL_CreateWindow("Thirdeye", SDL_WINDOWPOS_CENTERED,
+			SDL_WINDOWPOS_CENTERED, WIDTH*mScale, HEIGHT*mScale, 0    //SDL_WINDOW_SHOWN
 			);
 
-	if (SDL_GetWindowWMInfo(window, &info)) { // the call returns true on success
+	if (SDL_GetWindowWMInfo(mWindow, &info)) { // the call returns true on success
 		std::cout << "done!" << std::endl << "  Version:	"
 				<< (int) info.version.major << "." << (int) info.version.minor
 				<< "." << (int) info.version.patch << std::endl
@@ -62,25 +60,28 @@ GRAPHICS::Graphics::Graphics() {
 	}
 
 	// Create the renderer driver to be used in window
-	//renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
-	renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_SOFTWARE);
+	//mRenderer = SDL_CreateRenderer(mWindow, -1, SDL_RENDERER_ACCELERATED);
+	mRenderer = SDL_CreateRenderer(mWindow, -1, SDL_RENDERER_SOFTWARE);
 
-	//SDL_GetRendererInfo(renderer, &displayRendererInfo);
+	//SDL_GetRendererInfo(mRenderer, &displayRendererInfo);
 
 	// Create our game screen that will be blitted to before renderering
-	screen = SDL_CreateRGBSurface(0, 320, 200, 32, 0, 0, 0, 0);
+	mScreen = SDL_CreateRGBSurface(0, WIDTH, HEIGHT, 32, 0, 0, 0, 0);
 
 	// set magenta as our transparent colour
-	SDL_SetColorKey(screen, SDL_TRUE, SDL_MapRGB(screen->format, 255, 0, 255));
+	SDL_SetColorKey(mScreen, SDL_TRUE, SDL_MapRGB(mScreen->format, 255, 0, 255));
+
+	SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "linear");  // make the scaled rendering look smoother.
+	SDL_RenderSetLogicalSize(mRenderer, WIDTH, HEIGHT);
 
 }
 
 GRAPHICS::Graphics::~Graphics() {
-	SDL_FreeSurface(surface[0]);
-	SDL_FreeSurface(screen);
-	SDL_FreePalette(surfacePalette[0]);
-	SDL_DestroyRenderer(renderer);
-	SDL_DestroyWindow(window);
+	SDL_FreeSurface(mSurface[0]);
+	SDL_FreeSurface(mScreen);
+	SDL_FreePalette(mPalette[0]);
+	SDL_DestroyRenderer(mRenderer);
+	SDL_DestroyWindow(mWindow);
 	SDL_Quit();
 }
 
@@ -171,19 +172,14 @@ std::vector<uint8_t> GRAPHICS::Graphics::uncompressBMP(
 					break;
 			}
 		}
-
-		std::ofstream osss("/tmp/backdrop_2.bmp", std::ios::binary);
-		osss.write((const char*) &indexedBitmap[0], width * height);
-		osss.close();
 	}
-
 	return indexedBitmap;
 }
 
 std::vector<uint8_t> GRAPHICS::Graphics::uncompressPalette(
 		std::vector<uint8_t> pal) {
 	Palette palette(pal);
-	std::vector<uint8_t> fullPalette(pal.size() - headerPalette);
+	std::vector<uint8_t> fullPalette(pal.size() - PALHEADEROFFSET);
 
 	for (uint16_t i = 0; i < fullPalette.size(); i++) {
 		fullPalette[i] = palette[i];
@@ -199,27 +195,27 @@ void GRAPHICS::Graphics::drawImage(uint16_t surfaceId, std::vector<uint8_t> bmp,
 	std::vector<uint8_t> bitmap = uncompressBMP(bmp);
 	std::vector<uint8_t> palette = uncompressPalette(pal);
 
-	surface[surfaceId] = SDL_CreateRGBSurfaceFrom(&bitmap[0], 320, 200, 8, 320,
+	mSurface[surfaceId] = SDL_CreateRGBSurfaceFrom(&bitmap[0], 320, 200, 8, 320,
 			0, 0, 0, 0);
-	surfacePalette[surfaceId] = SDL_AllocPalette(256);
+	mPalette[surfaceId] = SDL_AllocPalette(256);
 
 	// assign our game palette to a SDL palette
 	uint16_t counter = 0;
 	uint16_t size = 768;
 	for (uint i = 0; i < size; i += 3) {
 		// Bitshift from 6 bits (64 colours) to 8 bits (256 colours that is in our palette
-		surfacePalette[surfaceId]->colors[counter].r = palette[i] << 2;
-		surfacePalette[surfaceId]->colors[counter].g = palette[i + 1] << 2;
-		surfacePalette[surfaceId]->colors[counter].b = palette[i + 2] << 2;
+		mPalette[surfaceId]->colors[counter].r = palette[i] << 2;
+		mPalette[surfaceId]->colors[counter].g = palette[i + 1] << 2;
+		mPalette[surfaceId]->colors[counter].b = palette[i + 2] << 2;
 
 		// Handle our black transparency and replace it with magenta
 		if (!sprite && transparency
-				&& surfacePalette[surfaceId]->colors[counter].r == 0
-				&& surfacePalette[surfaceId]->colors[counter].g == 0
-				&& surfacePalette[surfaceId]->colors[counter].b == 0) {
-			surfacePalette[surfaceId]->colors[counter].r = 255;
-			surfacePalette[surfaceId]->colors[counter].g = 0;
-			surfacePalette[surfaceId]->colors[counter].b = 255;
+				&& mPalette[surfaceId]->colors[counter].r == 0
+				&& mPalette[surfaceId]->colors[counter].g == 0
+				&& mPalette[surfaceId]->colors[counter].b == 0) {
+			mPalette[surfaceId]->colors[counter].r = 255;
+			mPalette[surfaceId]->colors[counter].g = 0;
+			mPalette[surfaceId]->colors[counter].b = 255;
 		}
 
 		// Debug information
@@ -228,29 +224,29 @@ void GRAPHICS::Graphics::drawImage(uint16_t surfaceId, std::vector<uint8_t> bmp,
 		counter++;
 	}
 
-	SDL_SetPaletteColors(surface[surfaceId]->format->palette,
-			surfacePalette[surfaceId]->colors, 0, 256);
+	SDL_SetPaletteColors(mSurface[surfaceId]->format->palette,
+			mPalette[surfaceId]->colors, 0, 256);
 
-	SDL_BlitSurface(surface[surfaceId], NULL, screen, NULL);
+	SDL_BlitSurface(mSurface[surfaceId], NULL, mScreen, NULL);
 }
 
 SDL_Surface* GRAPHICS::Graphics::getSurface(uint16_t surfaceId) {
-	return surface[surfaceId];
+	return mSurface[surfaceId];
 }
 
 void GRAPHICS::Graphics::update() {
 
 	// generate texture from our screen surface
-	SDL_Texture *texture = SDL_CreateTextureFromSurface(renderer, screen);
+	SDL_Texture *texture = SDL_CreateTextureFromSurface(mRenderer, mScreen);
 
 	// Clear the entire screen to our selected color.
-	SDL_RenderClear(renderer);
+	SDL_RenderClear(mRenderer);
 
 	// blit texture to display
-	SDL_RenderCopy(renderer, texture, NULL, NULL);
+	SDL_RenderCopy(mRenderer, texture, NULL, NULL);
 
 	// Up until now everything was drawn behind the scenes.
-	SDL_RenderPresent(renderer);
+	SDL_RenderPresent(mRenderer);
 
 	// cleanup
 	SDL_DestroyTexture(texture);
@@ -263,7 +259,6 @@ void GRAPHICS::Graphics::loadFont(std::vector<uint8_t> fnt) {
 	//std::string text = "ABDCEFGHIJKLMNOPQRSTUVWXYZ";
 	//std::string text = "abcdefghijklmnopqrstuvwxyz";
 	//std::string text = "0123456789!@#$%^&*()[]{}\\/?<>.,:;'\"-=_+";
-	//std::string text = "hij1";
 	std::string::iterator it = text.begin();
 
 	/*
@@ -289,116 +284,8 @@ void GRAPHICS::Graphics::loadFont(std::vector<uint8_t> fnt) {
 
 	while (it != text.end()) {
 		int ascii = (unsigned char) *it;
-		SDL_BlitSurface(font.getCharacter(ascii), NULL, screen, &rect);
+		SDL_BlitSurface(font.getCharacter(ascii), NULL, mScreen, &rect);
 		it++;
 		rect.x += font.getCharacter(ascii)->w;
 	}
-}
-
-GRAPHICS::Font::Font(std::vector<uint8_t> vec) :
-		vec_(vec) {
-	//uint16_t prev = 518;
-	uint8_t characters = *reinterpret_cast<const uint16_t*>(&vec_[0]);
-	uint8_t fontHeight = *reinterpret_cast<const uint16_t*>(&vec_[2]);
-
-	for (uint16_t i = 0; i < characters; i++) {
-
-		// find character information
-		index[i] = *reinterpret_cast<const uint16_t*>(&vec_[264 + i * 2]);
-		uint8_t charWidth = *reinterpret_cast<const uint16_t*>(&vec_[index[i]]);
-
-		//std::cout << i << " " << index[i] << " " << index[i] - prev << " "
-		//		<< (int) charWidth << std::endl;
-		//prev = index[i];
-
-		// create a surface to draw on
-		character[i] = SDL_CreateRGBSurface(0, charWidth, fontHeight, 32, 0, 0,
-				0, 0); // set to font dimensions
-		Uint32 white = SDL_MapRGB(character[i]->format, 255, 255, 255); // set to white
-		//Uint32 black = SDL_MapRGB(character[i]->format, 0, 0, 0); // set to black
-
-		// set values before loop
-		uint8_t counter = 2;
-		uint16_t pixel = 0;
-
-		// draw character to surface
-		for (uint16_t x = 0; x < fontHeight; x++) {
-			for (uint16_t y = 0; y < charWidth; y++) {
-				SDL_Rect rect = { y, x, 1, 1 };
-				pixel = vec_[index[i] + counter];
-
-				/*
-				if (i == 0x69)
-					std::cout << "Offset: " << index[i] + counter << " Value: "
-							<< pixel << "@" << rect.x << "x" << rect.y
-							<< std::endl;
-				*/
-
-				if (pixel > 0) {
-					SDL_FillRect(character[i], &rect, white);
-				}
-				counter++;
-			}
-		}
-	}
-}
-
-GRAPHICS::Font::~Font() {
-	std::map<uint8_t, SDL_Surface*>::iterator it;
-	for (it = character.begin(); it != character.end(); it++) {
-		SDL_FreeSurface(it->second);
-	}
-}
-SDL_Surface* GRAPHICS::Font::getCharacter(uint8_t ascii) {
-	return character[ascii];
-}
-
-GRAPHICS::Palette::Palette(std::vector<uint8_t> vec) :
-		vec_(vec) {
-}
-
-uint16_t GRAPHICS::Palette::getNumOfColours() const {
-	return *reinterpret_cast<const uint16_t*>(&vec_[0]);
-}
-
-uint16_t GRAPHICS::Palette::getOffsetColorArray() const {
-	return *reinterpret_cast<const uint16_t*>(&vec_[1]);
-}
-
-uint16_t GRAPHICS::Palette::getOffsetFadeIndexArray00() const {
-	return *reinterpret_cast<const uint16_t*>(&vec_[2]);
-}
-
-uint8_t& GRAPHICS::Palette::operator[](size_t off) {
-	if (off > vec_.size() - headerPalette) {
-		std::cerr << "Trying to access PAL data out of bounds." << std::endl;
-		throw;
-	}
-//std::cout << "offset @: " << off << std::endl;
-	return vec_[off + headerPalette];
-}
-
-GRAPHICS::Bitmap::Bitmap(std::vector<uint8_t> vec) :
-		vec_(vec) {
-}
-
-uint16_t GRAPHICS::Bitmap::getFilesize() const {
-	return *reinterpret_cast<const uint16_t*>(&vec_[0]);
-}
-
-uint16_t GRAPHICS::Bitmap::getWidth() const {
-	return *reinterpret_cast<const uint16_t*>(&vec_[5 * 2]);
-}
-
-uint16_t GRAPHICS::Bitmap::getHeight() const {
-	return *reinterpret_cast<const uint16_t*>(&vec_[6 * 2]);
-}
-
-uint8_t& GRAPHICS::Bitmap::operator[](size_t off) {
-	if (off > vec_.size() - headerBMP) {
-		std::cerr << "Trying to access BMP data out of bounds." << std::endl;
-		throw;
-	}
-//std::cout << "offset @: " << off << std::endl;
-	return vec_[off + headerBMP];
 }
