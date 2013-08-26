@@ -53,9 +53,9 @@ bool parseOptions(int argc, char** argv, THIRDEYE::Engine& engine,
 
 	desc.add_options()("help", "print help message")
 
-	("version","print version information and quit")
+	("version", "print version information and quit")
 
-	("game",bpo::value<std::string>()->default_value("eob3"),
+	("game", bpo::value<std::string>()->default_value("eob3"),
 			"set which game we want to play")
 
 	("game-data", bpo::value<std::string>()->default_value("/opt/eob3"),
@@ -63,6 +63,9 @@ bool parseOptions(int argc, char** argv, THIRDEYE::Engine& engine,
 
 	("start", bpo::value<std::string>()->default_value("LEVEL4"),
 			"set starting location")
+
+	("scale", bpo::value<uint16_t>()->default_value(1),
+			"set resolution scale: \n  0 = fullscreen\n  1 = 320x200\n  2 = 640x400\n  ...")
 
 	("debug", bpo::value<bool>()->implicit_value(true)->default_value(false),
 			"debug mode")
@@ -103,15 +106,14 @@ bool parseOptions(int argc, char** argv, THIRDEYE::Engine& engine,
 	if (!run)
 		return false;
 
-	 // startup-settings
-	 //engine.setGameData(variables["game-data"].as<std::string>());
+	// startup-settings
 	engine.setGameData(variables["game-data"].as<std::string>());
-	 engine.setGame(variables["game"].as<std::string>());
+	engine.setGame(variables["game"].as<std::string>());
 
-	 // other settings
-	 engine.setDebugMode(variables["debug"].as<bool>());
-	 engine.setSoundUsage(!variables["nosound"].as<bool>());
-
+	// other settings
+	engine.setDebugMode(variables["debug"].as<bool>());
+	engine.setSoundUsage(variables["nosound"].as<bool>());
+	engine.setScale(variables["scale"].as<uint16_t>());
 
 	return true;
 }

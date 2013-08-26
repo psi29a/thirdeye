@@ -21,7 +21,7 @@ add_thirdeye_dir (sound
     )
 
 add_thirdeye_dir (graphics
-    graphics
+    graphics font palette bitmap
     )
 
 # Main executable

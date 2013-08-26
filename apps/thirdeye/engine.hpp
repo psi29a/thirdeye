@@ -30,14 +30,12 @@ class Engine
 	bool mUseSound;
 	bool mDebug;
 	uint8_t mGame;
+	uint16_t mScale;
 	boost::filesystem::path mGameData;
 
 	// not implemented
 	Engine(const Engine&);
 	Engine& operator=(const Engine&);
-
-	/// Load RES files
-	void loadRES();
 
 	/// Load settings from various files, returns the path to the user settings file
 	//std::string loadSettings (Settings::Manager & settings);
@@ -55,14 +53,11 @@ public:
 	/// Write screenshot to file.
 	void screenshot();
 
-	/// Show version and environment
-	void displayEnvironment();
-
 	void setGame(std::string game);
 	void setGameData(std::string gameData);
 	void setDebugMode(bool debug);
 	void setSoundUsage(bool nosound);
-
+	void setScale(uint16_t);
 private:
 	Files::ConfigurationManager& mCfgMgr;
 };

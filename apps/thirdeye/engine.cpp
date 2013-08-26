@@ -15,7 +15,8 @@ THIRDEYE::Engine::Engine(Files::ConfigurationManager& configurationManager) :
 		mUseSound(true),
 		mDebug(false),
 		mGame(GAME_UNKN),
-		mCfgMgr(configurationManager)
+		mCfgMgr(configurationManager),
+		mScale(1)
 {
 	std::cout << "Initializing Thirdeye... ";
 
@@ -46,20 +47,21 @@ void THIRDEYE::Engine::setGame(std::string game){
 void THIRDEYE::Engine::setGameData(std::string gameData){
 	mGameData = boost::filesystem::path(gameData);
 }
-
 void THIRDEYE::Engine::setDebugMode(bool debug){
 	mDebug = debug;
 }
 void THIRDEYE::Engine::setSoundUsage(bool nosound){
 	mUseSound = !nosound;
 }
+void THIRDEYE::Engine::setScale(uint16_t scale){
+	mScale = scale;
+}
 
 
 // Initialise and enter main loop.
 void THIRDEYE::Engine::go() {
-	//displayEnvironment();	// get our environmental data
 	MIXER::Mixer mixer;		// setup our sound mixer
-	GRAPHICS::Graphics gfx; // setup our graphics
+	GRAPHICS::Graphics gfx(mScale); // setup our graphics
 	RESOURCE::Resource resource(mGameData);	// get our game resources ready
 
 	/*
@@ -110,9 +112,14 @@ void THIRDEYE::Engine::go() {
 				done = true;
 				break;
 				// process the mouse data by passing it to ngl class
-				//case SDL_MOUSEMOTION : ngl.mouseMoveEvent(event.motion); break;
-				//case SDL_MOUSEBUTTONDOWN : ngl.mousePressEvent(event.button); break;
-				//case SDL_MOUSEBUTTONUP : ngl.mouseReleaseEvent(event.button); break;
+				case SDL_MOUSEMOTION:
+					//ngl.mouseMoveEvent(event.motion);
+					std::cout << "Mouse moved @ " <<  event.motion.x << " " << event.motion.y << std::endl;
+					break;
+				case SDL_MOUSEBUTTONDOWN: break;
+				case SDL_MOUSEBUTTONUP:
+					std::cout << "Mouse clicked @ " << event.button.x << " " << event.button.y << std::endl;
+					break;
 				//case SDL_MOUSEWHEEL : ngl.wheelEvent(event.wheel);
 				// if the window is re-sized pass it to the ngl class to change gl viewport
 				// note this is slow as the context is re-create by SDL each time
@@ -168,9 +175,5 @@ void THIRDEYE::Engine::go() {
 	//settings.saveUser(settingspath);
 
 	std::cout << "Quitting peacefully." << std::endl;
-}
-
-void THIRDEYE::Engine::displayEnvironment() {
-
 }
 
