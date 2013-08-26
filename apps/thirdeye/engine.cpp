@@ -77,23 +77,10 @@ void THIRDEYE::Engine::go() {
 	std::vector<uint8_t> font2 = resource.getAsset("6x8 font");
 	std::vector<uint8_t> font3 = resource.getAsset("Ornate font");
 
-	std::ofstream font_1 ("/tmp/8x8.fnt", std::ios::binary);
-	font_1.write((const char*) &font[0], font.size());
-	font_1.close();
-	std::ofstream font_2 ("/tmp/6x8.fnt", std::ios::binary);
-	font_2.write((const char*) &font2[0], font2.size());
-	font_2.close();
-
 	//return;
 	std::vector<uint8_t> bmp = resource.getAsset("Backdrop");
-
-	std::vector<uint8_t> backdrop = gfx.uncompressBMP(bmp);
-
-	//std::vector<uint8_t> basePalette = resource.getAsset("Title palette");
 	std::vector<uint8_t> basePalette = resource.getAsset("Fixed palette");
 	std::cout << "basepalette size: " << basePalette.size() << std::endl;
-	std::vector<uint8_t> fullPalette = gfx.uncompressPalette(basePalette);
-	std::cout << "fullpalette size: " << fullPalette.size() << std::endl;
 
 	gfx.drawImage(0, bmp, basePalette, 0, 0, 320, 200, false, true);
 	gfx.loadFont(font);
