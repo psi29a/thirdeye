@@ -31,7 +31,9 @@ public:
 	Graphics(uint16_t scale);
 	virtual ~Graphics();
 	std::vector<uint8_t> uncompressBMP(std::vector<uint8_t> bmp);
-	std::vector<uint8_t> uncompressPalette(std::vector<uint8_t> pal);
+	std::vector<uint8_t> uncompressPalette(std::vector<uint8_t> basePalette,
+			std::vector<uint8_t> subPalette, uint8_t start = 0, uint8_t end = 0
+			);
 	void drawImage(uint16_t surfaceId, std::vector<uint8_t> bmp,
 			std::vector<uint8_t> pal, uint16_t posX, uint16_t posY,
 			uint16_t width, uint16_t height, bool sprite, bool transparency);

@@ -3,8 +3,7 @@
 #include <iostream>
 #include <stdexcept>
 
-GRAPHICS::Graphics::Graphics(uint16_t scale)
-{
+GRAPHICS::Graphics::Graphics(uint16_t scale) {
 	std::cout << "Initializing SDL... ";
 	mScale = scale;
 	Uint32 flags = SDL_INIT_VIDEO;
@@ -24,7 +23,7 @@ GRAPHICS::Graphics::Graphics(uint16_t scale)
 
 	// Create a window.
 	mWindow = SDL_CreateWindow("Thirdeye", SDL_WINDOWPOS_CENTERED,
-			SDL_WINDOWPOS_CENTERED, WIDTH*mScale, HEIGHT*mScale, 0    //SDL_WINDOW_SHOWN
+			SDL_WINDOWPOS_CENTERED, WIDTH * mScale, HEIGHT * mScale, 0 //SDL_WINDOW_SHOWN
 			);
 
 	if (SDL_GetWindowWMInfo(mWindow, &info)) { // the call returns true on success
@@ -69,9 +68,10 @@ GRAPHICS::Graphics::Graphics(uint16_t scale)
 	mScreen = SDL_CreateRGBSurface(0, WIDTH, HEIGHT, 32, 0, 0, 0, 0);
 
 	// set magenta as our transparent colour
-	SDL_SetColorKey(mScreen, SDL_TRUE, SDL_MapRGB(mScreen->format, 255, 0, 255));
+	SDL_SetColorKey(mScreen, SDL_TRUE,
+			SDL_MapRGB(mScreen->format, 255, 0, 255));
 
-	SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "linear");  // make the scaled rendering look smoother.
+	SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "linear"); // make the scaled rendering look smoother.
 	SDL_RenderSetLogicalSize(mRenderer, WIDTH, HEIGHT);
 
 }
@@ -115,7 +115,7 @@ std::vector<uint8_t> GRAPHICS::Graphics::uncompressBMP(
 		//unsigned char* indexedBitmap=new unsigned char[width*height];
 		indexedBitmap.resize(width * height);
 
-		memset(&indexedBitmap[0], 0, width * height);// Default bgcolor??? Probably defined in the header...
+		memset(&indexedBitmap[0], 0, width * height); // Default bgcolor??? Probably defined in the header...
 
 		while (true) {
 			int y = bmp[pos];
@@ -177,13 +177,18 @@ std::vector<uint8_t> GRAPHICS::Graphics::uncompressBMP(
 }
 
 std::vector<uint8_t> GRAPHICS::Graphics::uncompressPalette(
-		std::vector<uint8_t> pal) {
-	Palette palette(pal);
-	std::vector<uint8_t> fullPalette(pal.size() - PALHEADEROFFSET);
+		std::vector<uint8_t> basePalette, std::vector<uint8_t> subPalette,
+		uint8_t start, uint8_t end) {
+
+	Palette palette(basePalette);
+	std::vector<uint8_t> fullPalette(basePalette.size() - PALHEADEROFFSET);
 
 	for (uint16_t i = 0; i < fullPalette.size(); i++) {
 		fullPalette[i] = palette[i];
 	}
+
+	if (subPalette.size() > 0)
+		std::cout << "We need to apply the subpalette!" << std::endl;
 
 	return fullPalette;
 }
@@ -193,7 +198,8 @@ void GRAPHICS::Graphics::drawImage(uint16_t surfaceId, std::vector<uint8_t> bmp,
 		uint16_t height, bool sprite = true, bool transparency = true) {
 
 	std::vector<uint8_t> bitmap = uncompressBMP(bmp);
-	std::vector<uint8_t> palette = uncompressPalette(pal);
+	std::vector<uint8_t> sub;
+	std::vector<uint8_t> palette = uncompressPalette(pal,sub);
 
 	mSurface[surfaceId] = SDL_CreateRGBSurfaceFrom(&bitmap[0], 320, 200, 8, 320,
 			0, 0, 0, 0);
@@ -262,24 +268,24 @@ void GRAPHICS::Graphics::loadFont(std::vector<uint8_t> fnt) {
 	std::string::iterator it = text.begin();
 
 	/*
-	std::cout << std::endl;
-	int a = (unsigned char) 'i';
+	 std::cout << std::endl;
+	 int a = (unsigned char) 'i';
 
-	for (uint8_t x = 0; x < 8; x++) {
-		for (uint8_t y = 0; y < 8; y++) {
-			unsigned int pixel =
-					((unsigned int*) font.getCharacter(a)->pixels)[x
-							* (font.getCharacter(a)->pitch
-									/ sizeof(unsigned int)) + y];
-			if (pixel > 0)
-				std::cout << std::hex << 0xf;
-			else
-				std::cout << std::hex << 0x0;
-		}
-		std::cout << std::endl;
-	}
-	std::cout << std::dec << std::endl;
-	//return;
+	 for (uint8_t x = 0; x < 8; x++) {
+	 for (uint8_t y = 0; y < 8; y++) {
+	 unsigned int pixel =
+	 ((unsigned int*) font.getCharacter(a)->pixels)[x
+	 * (font.getCharacter(a)->pitch
+	 / sizeof(unsigned int)) + y];
+	 if (pixel > 0)
+	 std::cout << std::hex << 0xf;
+	 else
+	 std::cout << std::hex << 0x0;
+	 }
+	 std::cout << std::endl;
+	 }
+	 std::cout << std::dec << std::endl;
+	 //return;
 	 */
 
 	while (it != text.end()) {
