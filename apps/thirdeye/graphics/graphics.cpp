@@ -85,96 +85,6 @@ GRAPHICS::Graphics::~Graphics() {
 	SDL_Quit();
 }
 
-std::vector<uint8_t> GRAPHICS::Graphics::uncompressBMP(
-		std::vector<uint8_t> bmp) {
-	Bitmap image(bmp);
-
-	std::vector<uint8_t> indexedBitmap;
-
-	std::cout << "BMP Info: " << std::endl << " " << image.getFilesize() << " "
-			<< image.getWidth() << " " << image.getHeight() << " " << bmp.size()
-			<< " " << (int) image[0] << std::endl;
-
-	std::cout << image.getNumberOfBitmaps() << " sub picture(s) found." << std::endl;
-
-	std::map<uint16_t, uint32_t> offsets = image.getBitmapOffsets();
-	for (uint16_t i = 0; i < image.getNumberOfBitmaps(); i++) {
-
-		std::cout << "Sub picture " << i << " starts at offset "
-				<< offsets[i] << std::endl;
-
-		unsigned int pos = offsets[i];
-
-		int width = bmp[pos + 0] | (bmp[pos + 1] << 8);
-		int height = bmp[pos + 2] | (bmp[pos + 3] << 8);
-		pos += 4;
-
-		std::cout << "   Size is " << width << " x " << height << std::endl;
-
-		//unsigned char* indexedBitmap=new unsigned char[width*height];
-		indexedBitmap.resize(width * height);
-
-		memset(&indexedBitmap[0], 0, width * height); // Default bgcolor??? Probably defined in the header...
-
-		while (true) {
-			int y = bmp[pos];
-			if (y == 0xff)
-				break;
-
-			if ((y < 0) || (y >= height)) {
-				printf("Probably out of sync. Reported y-coord: %d\n", y);
-				throw;
-			}
-			pos++;
-
-			while (true) {
-				int x = bmp[pos];
-				pos++;
-
-				int islast = bmp[pos];
-				pos++;
-
-				int rle_width = bmp[pos];
-				pos++;
-
-				//int rle_bytes=bmp[pos];
-				pos++;
-
-				while (rle_width > 0) {
-					int mode = bmp[pos] & 1;
-					int amount = (bmp[pos] >> 1) + 1;
-					pos++;
-
-					if (mode == 0)	// Copy
-							{
-						memcpy(&indexedBitmap[0] + x + y * width, &bmp[0] + pos,
-								amount);
-						pos += amount;
-					} else if (mode == 1) // Fill
-							{
-						int value = bmp[pos];
-						pos++;
-						memset(&indexedBitmap[0] + x + y * width, value,
-								amount);
-					}
-					x += amount;
-					rle_width -= amount;
-				}
-
-				if (rle_width != 0) {
-					printf("Out of sync while depacking RLE (rle_width=%d).\n",
-							rle_width);
-					throw;
-				}
-
-				if (islast == 0x80)
-					break;
-			}
-		}
-	}
-	return indexedBitmap;
-}
-
 std::vector<uint8_t> GRAPHICS::Graphics::uncompressPalette(
 		std::vector<uint8_t> basePalette, std::vector<uint8_t> subPalette,
 		uint8_t start, uint8_t end) {
@@ -196,13 +106,17 @@ void GRAPHICS::Graphics::drawImage(uint16_t surfaceId, std::vector<uint8_t> bmp,
 		std::vector<uint8_t> pal, uint16_t posX, uint16_t posY, uint16_t width,
 		uint16_t height, bool sprite = true, bool transparency = true) {
 
-	std::vector<uint8_t> bitmap = uncompressBMP(bmp);
+	Bitmap image(bmp);
 	std::vector<uint8_t> sub;
 	std::vector<uint8_t> palette = uncompressPalette(pal,sub);
 
-	mSurface[surfaceId] = SDL_CreateRGBSurfaceFrom(&bitmap[0], 320, 200, 8, 320,
-			0, 0, 0, 0);
+	std::cout << "TEST: " << image[0] <<  std::endl;
+
+	//return;
+	mSurface[surfaceId] = SDL_CreateRGBSurfaceFrom(&image[0], 320, 200, 8, 320, 0, 0, 0, 0);
 	mPalette[surfaceId] = SDL_AllocPalette(256);
+
+	std::cout << "TEST: " << mSurface[surfaceId]->h << " " << mSurface[surfaceId]->w << std::endl;
 
 	// assign our game palette to a SDL palette
 	uint16_t counter = 0;

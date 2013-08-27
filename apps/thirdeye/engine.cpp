@@ -79,6 +79,7 @@ void THIRDEYE::Engine::go() {
 
 	//return;
 	std::vector<uint8_t> bmp = resource.getAsset("Backdrop");
+	//std::vector<uint8_t> bmp = resource.getAsset("Icons");
 	std::vector<uint8_t> basePalette = resource.getAsset("Fixed palette");
 	std::cout << "basepalette size: " << basePalette.size() << std::endl;
 

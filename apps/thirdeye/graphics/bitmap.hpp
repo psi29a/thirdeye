@@ -29,7 +29,8 @@ namespace GRAPHICS {
 class Bitmap {
 public:
 	Bitmap(std::vector<uint8_t> vec);
-	uint8_t& operator[](size_t off);
+	virtual ~Bitmap();
+	uint8_t& operator[](uint8_t number);
 	uint16_t getFilesize() const;
 	uint16_t getWidth() const;
 	uint16_t getHeight() const;
@@ -37,8 +38,8 @@ public:
 	std::map<uint16_t, uint32_t> getBitmapOffsets() const;
 	std::vector<uint8_t> getBitmap(uint8_t);
 private:
+	std::map< uint16_t, std::vector<uint8_t> > subBitmap;
 	std::vector<uint8_t> vec_;
-	std::map<uint16_t, SDL_Surface*> subBitmap;
 };
 
 }
