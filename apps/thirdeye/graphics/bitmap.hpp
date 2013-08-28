@@ -26,20 +26,23 @@ namespace GRAPHICS {
  };
  */
 
+struct SubBitmap {
+	uint16_t width;
+	uint16_t height;
+	std::vector<uint8_t> subBitmap;
+};
+
 class Bitmap {
 public:
-	Bitmap(std::vector<uint8_t> vec);
+	Bitmap(const std::vector<uint8_t> &vec);
 	virtual ~Bitmap();
-	uint8_t& operator[](uint8_t number);
-	uint16_t getFilesize() const;
-	uint16_t getWidth() const;
-	uint16_t getHeight() const;
-	uint16_t getNumberOfBitmaps() const;
-	std::map<uint16_t, uint32_t> getBitmapOffsets() const;
-	std::vector<uint8_t> getBitmap(uint8_t);
+	const uint8_t& operator[](uint16_t index);
+	uint16_t getWidth(uint16_t index) ;
+	uint16_t getHeight(uint16_t index) ;
+	uint16_t getNumberOfBitmaps();
 private:
-	std::map< uint16_t, std::vector<uint8_t> > subBitmap;
-	std::vector<uint8_t> vec_;
+	uint16_t mNumSubBitmaps;
+	std::map< uint16_t, SubBitmap > mSubBitmaps;
 };
 
 }
