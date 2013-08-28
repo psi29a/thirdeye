@@ -1,43 +1,43 @@
 #include "bitmap.hpp"
 
-GRAPHICS::Bitmap::Bitmap(std::vector<uint8_t> vec) :
-	vec_(vec)
-	{
+GRAPHICS::Bitmap::Bitmap(const std::vector<uint8_t> &vec){
 
-	std::vector<uint8_t> indexedBitmap;
+	mNumSubBitmaps = *reinterpret_cast<const uint16_t*>(&vec[2 * 2]);
 
-	std::cout << "BMP Info: " << std::endl << " " << getFilesize() << " "
-			<< getWidth() << " " << getHeight() << " " << vec.size()
-			//<< " " << (int) image[0]
-			<< std::endl;
+	std::cout << mNumSubBitmaps << " sub picture(s) found." << std::endl;
 
-	std::cout << getNumberOfBitmaps() << " sub picture(s) found." << std::endl;
+	std::map<uint16_t, uint32_t> offsets;
+	for (uint16_t i = 0; i < mNumSubBitmaps; i++) {
+		offsets[i] = *reinterpret_cast<const uint16_t*>(&vec[6 + i * 4]);
+	}
 
-	std::map<uint16_t, uint32_t> offsets = getBitmapOffsets();
 	for (uint16_t i = 0; i < offsets.size(); i++) {
 
-		std::cout << "Sub picture " << i << " starts at offset " << offsets[i]
+		std::cout << "Sub picture " << i << " @ offset " << offsets[i]
 				<< std::endl;
 
 		unsigned int pos = offsets[i];
 
-		uint16_t width = *reinterpret_cast<const uint16_t*>(&vec[pos]);
-		uint16_t height = *reinterpret_cast<const uint16_t*>(&vec[pos + 2]);
+		mSubBitmaps[i].width = *reinterpret_cast<const uint16_t*>(&vec[pos]);
+		mSubBitmaps[i].height =
+				*reinterpret_cast<const uint16_t*>(&vec[pos + 2]);
 		pos += 4;
 
-		std::cout << "   Size is " << width << " x " << height << std::endl;
+		std::cout << "   Size is " << mSubBitmaps[i].width << "x"
+				<< mSubBitmaps[i].height << std::endl;
 
-		//unsigned char* indexedBitmap=new unsigned char[width*height];
-		indexedBitmap.resize(width * height);
+		mSubBitmaps[i].subBitmap = std::vector<uint8_t>(
+				mSubBitmaps[i].width * mSubBitmaps[i].height);
 
-		memset(&indexedBitmap[0], 0, width * height); // Default bgcolor??? Probably defined in the header...
+		memset(&mSubBitmaps[i].subBitmap[0], 0,
+				mSubBitmaps[i].width * mSubBitmaps[i].height); // Default bgcolor??? Probably defined in the header...
 
 		while (true) {
 			int y = vec[pos];
 			if (y == 0xff)
 				break;
 
-			if ((y < 0) || (y >= height)) {
+			if ((y < 0) || (y >= mSubBitmaps[i].height)) {
 				printf("Probably out of sync. Reported y-coord: %d\n", y);
 				throw;
 			}
@@ -63,14 +63,18 @@ GRAPHICS::Bitmap::Bitmap(std::vector<uint8_t> vec) :
 
 					if (mode == 0)	// Copy
 							{
-						memcpy(&indexedBitmap[0] + x + y * width, &vec[0] + pos,
-								amount);
+						memcpy(
+								&mSubBitmaps[i].subBitmap[0] + x
+										+ y * mSubBitmaps[i].width,
+								&vec[0] + pos, amount);
 						pos += amount;
 					} else if (mode == 1) // Fill
 							{
 						int value = vec[pos];
 						pos++;
-						memset(&indexedBitmap[0] + x + y * width, value,
+						memset(
+								&mSubBitmaps[i].subBitmap[0] + x
+										+ y * mSubBitmaps[i].width, value,
 								amount);
 					}
 					x += amount;
@@ -94,45 +98,18 @@ GRAPHICS::Bitmap::~Bitmap() {
 
 }
 
-uint16_t GRAPHICS::Bitmap::getFilesize() const {
-	return *reinterpret_cast<const uint16_t*>(&vec_[0]);
+uint16_t GRAPHICS::Bitmap::getNumberOfBitmaps() {
+	return mNumSubBitmaps;
 }
 
-uint16_t GRAPHICS::Bitmap::getNumberOfBitmaps() const {
-	return *reinterpret_cast<const uint16_t*>(&vec_[2 * 2]);
+uint16_t GRAPHICS::Bitmap::getWidth(uint16_t index) {
+	return mSubBitmaps[index].width;
 }
 
-std::map<uint16_t, uint32_t> GRAPHICS::Bitmap::getBitmapOffsets() const {
-	std::map<uint16_t, uint32_t> offsets;
-	for (uint16_t i = 0; i < getNumberOfBitmaps(); i++) {
-		offsets[i] = *reinterpret_cast<const uint16_t*>(&vec_[6 + i * 4]);
-	}
-
-	return offsets;
+uint16_t GRAPHICS::Bitmap::getHeight(uint16_t index) {
+	return mSubBitmaps[index].height;
 }
 
-std::vector<uint8_t> GRAPHICS::Bitmap::getBitmap(uint8_t number) {
-	return subBitmap[number];
-}
-
-uint16_t GRAPHICS::Bitmap::getWidth() const {
-	return *reinterpret_cast<const uint16_t*>(&vec_[5 * 2]);
-}
-
-uint16_t GRAPHICS::Bitmap::getHeight() const {
-	return *reinterpret_cast<const uint16_t*>(&vec_[6 * 2]);
-}
-
-uint8_t& GRAPHICS::Bitmap::operator[](uint8_t number) {
-	return subBitmap[number][0];
-
-	/*
-	if (off > vec_.size() - BMPHEADEROFFSET) {
-		std::cerr << "Trying to access BMP data out of bounds." << std::endl;
-		throw;
-	}
-//std::cout << "offset @: " << off << std::endl;
-	return vec_[off + BMPHEADEROFFSET];
-	*/
-
+const uint8_t& GRAPHICS::Bitmap::operator[](uint16_t index) {
+	return mSubBitmaps[index].subBitmap[0];
 }

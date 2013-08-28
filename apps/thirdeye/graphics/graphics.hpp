@@ -30,7 +30,6 @@ private:
 public:
 	Graphics(uint16_t scale);
 	virtual ~Graphics();
-	std::vector<uint8_t> uncompressBMP(std::vector<uint8_t> bmp);
 	std::vector<uint8_t> uncompressPalette(std::vector<uint8_t> basePalette,
 			std::vector<uint8_t> subPalette, uint8_t start = 0, uint8_t end = 0
 			);

@@ -108,15 +108,16 @@ void GRAPHICS::Graphics::drawImage(uint16_t surfaceId, std::vector<uint8_t> bmp,
 
 	Bitmap image(bmp);
 	std::vector<uint8_t> sub;
-	std::vector<uint8_t> palette = uncompressPalette(pal,sub);
-
-	std::cout << "TEST: " << image[0] <<  std::endl;
+	std::vector<uint8_t> palette = uncompressPalette(pal, sub);
 
 	//return;
-	mSurface[surfaceId] = SDL_CreateRGBSurfaceFrom(&image[0], 320, 200, 8, 320, 0, 0, 0, 0);
+	mSurface[surfaceId] = SDL_CreateRGBSurfaceFrom((void*) &image[0],
+			image.getWidth(0), image.getHeight(0), 8, image.getWidth(0), 0, 0,
+			0, 0);
 	mPalette[surfaceId] = SDL_AllocPalette(256);
 
-	std::cout << "TEST: " << mSurface[surfaceId]->h << " " << mSurface[surfaceId]->w << std::endl;
+	std::cout << "TEST: " << mSurface[surfaceId]->h << " "
+			<< mSurface[surfaceId]->w << std::endl;
 
 	// assign our game palette to a SDL palette
 	uint16_t counter = 0;
