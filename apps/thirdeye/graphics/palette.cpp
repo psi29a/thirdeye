@@ -13,6 +13,7 @@ GRAPHICS::Palette::Palette(std::vector<uint8_t> base) {
 		mPalette[i].r = base[offset] << 2;
 		mPalette[i].g = base[offset + 1] << 2;
 		mPalette[i].b = base[offset + 2] << 2;
+		mPalette[i].a = 0;
 
 		//std::cout << "RGB: " << (int) i << " " << (int) mPalette[i].r << " "
 		//		<< (int) mPalette[i].g << " " << (int) mPalette[i].b << std::endl;
