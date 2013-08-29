@@ -85,30 +85,14 @@ GRAPHICS::Graphics::~Graphics() {
 	SDL_Quit();
 }
 
-std::vector<uint8_t> GRAPHICS::Graphics::uncompressPalette(
-		std::vector<uint8_t> basePalette, std::vector<uint8_t> subPalette,
-		uint8_t start, uint8_t end) {
-
-	Palette palette(basePalette);
-	std::vector<uint8_t> fullPalette(basePalette.size() - PALHEADEROFFSET);
-
-	for (uint16_t i = 0; i < fullPalette.size(); i++) {
-		fullPalette[i] = palette[i];
-	}
-
-	if (subPalette.size() > 0)
-		std::cout << "We need to apply the subpalette!" << std::endl;
-
-	return fullPalette;
-}
-
 void GRAPHICS::Graphics::drawImage(uint16_t surfaceId, std::vector<uint8_t> bmp,
 		std::vector<uint8_t> pal, uint16_t posX, uint16_t posY, uint16_t width,
-		uint16_t height, bool sprite = true, bool transparency = true) {
+		uint16_t height, bool sprite, bool transparency) {
 
+	SDL_Color magenta = { 255, 0, 255, 0 };
 	Bitmap image(bmp);
+	Palette palette(pal);
 	std::vector<uint8_t> sub;
-	std::vector<uint8_t> palette = uncompressPalette(pal, sub);
 
 	//return;
 	mSurface[surfaceId] = SDL_CreateRGBSurfaceFrom((void*) &image[0],
@@ -120,28 +104,14 @@ void GRAPHICS::Graphics::drawImage(uint16_t surfaceId, std::vector<uint8_t> bmp,
 			<< mSurface[surfaceId]->w << std::endl;
 
 	// assign our game palette to a SDL palette
-	uint16_t counter = 0;
-	uint16_t size = 768;
-	for (uint i = 0; i < size; i += 3) {
-		// Bitshift from 6 bits (64 colours) to 8 bits (256 colours that is in our palette
-		mPalette[surfaceId]->colors[counter].r = palette[i] << 2;
-		mPalette[surfaceId]->colors[counter].g = palette[i + 1] << 2;
-		mPalette[surfaceId]->colors[counter].b = palette[i + 2] << 2;
+	for (uint i = 0; i < palette.getNumOfColours(); i++) {
+		mPalette[surfaceId]->colors[i] = palette[i];
 
 		// Handle our black transparency and replace it with magenta
-		if (!sprite && transparency
-				&& mPalette[surfaceId]->colors[counter].r == 0
-				&& mPalette[surfaceId]->colors[counter].g == 0
-				&& mPalette[surfaceId]->colors[counter].b == 0) {
-			mPalette[surfaceId]->colors[counter].r = 255;
-			mPalette[surfaceId]->colors[counter].g = 0;
-			mPalette[surfaceId]->colors[counter].b = 255;
+		if (!sprite && transparency && palette[i].r == 0 && palette[i].g == 0
+				&& palette[i].b == 0) {
+			mPalette[surfaceId]->colors[i] = magenta;
 		}
-
-		// Debug information
-		//printf(" Byte %d has this %x\n",i, bytePAL[i]);
-		//printf("%u colour: %u,%u,%u\n", counter, palette->colors[counter].r, palette->colors[counter].g, palette->colors[counter].b);
-		counter++;
 	}
 
 	SDL_SetPaletteColors(mSurface[surfaceId]->format->palette,
