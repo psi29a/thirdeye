@@ -35,7 +35,7 @@ public:
 			);
 	void drawImage(uint16_t surfaceId, std::vector<uint8_t> bmp,
 			std::vector<uint8_t> pal, uint16_t posX, uint16_t posY,
-			uint16_t width, uint16_t height, bool sprite, bool transparency);
+			uint16_t width, uint16_t height, bool sprite = false, bool transparency = true);
 	void getFont();
 	SDL_Surface* getSurface(uint16_t);
 	void update();

@@ -6,6 +6,8 @@
 #include <stdint.h>
 #include <iostream>
 
+#include <SDL2/SDL.h>
+
 #define PALHEADEROFFSET 26
 
 namespace GRAPHICS {
@@ -32,14 +34,16 @@ namespace GRAPHICS {
 
 class Palette {
 public:
-	Palette(std::vector<uint8_t> vec);
-
+	Palette(std::vector<uint8_t> base);
 	uint16_t getNumOfColours() const;
-	uint16_t getOffsetColorArray() const;
-	uint16_t getOffsetFadeIndexArray00() const;
-	uint8_t& operator[](size_t off);
+	uint16_t getColorArray() const;
+	uint16_t getFadeIndexArray00() const;
+	const SDL_Color& operator[](uint16_t index);
 private:
-	std::vector<uint8_t> vec_;
+	uint16_t mNumOfColours;
+	uint16_t mColorArray;
+	uint16_t mFadeIndexArray00;
+	std::map<uint8_t,SDL_Color> mPalette;
 };
 
 }
