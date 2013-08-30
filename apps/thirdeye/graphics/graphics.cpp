@@ -173,10 +173,10 @@ void GRAPHICS::Graphics::loadMouse(std::vector<uint8_t> bitmap,
 	Bitmap image(bitmap);
 
 	SDL_Surface *cursor = SDL_CreateRGBSurface(0, image.getWidth(index), image.getHeight(index), 32,
-                                   0x00FF0000,
-                                   0x0000FF00,
-                                   0x000000FF,
-                                   0xFF000000);
+                                   0,
+                                   0,
+                                   0,
+                                   0);
 
 	SDL_Surface *bmCursor = SDL_CreateRGBSurfaceFrom((void*) &image[index],
 			image.getWidth(index), image.getHeight(index), 8,
@@ -197,11 +197,13 @@ void GRAPHICS::Graphics::loadMouse(std::vector<uint8_t> bitmap,
 	SDL_BlitSurface(cursor, NULL, mScreen, NULL);
 	printf("Check if failed: %s\n", SDL_GetError());
 
+	SDL_SetColorKey(cursor, SDL_TRUE,
+			SDL_MapRGB(cursor->format, 0, 0, 0));
 
 	//mCursor = SDL_CreateSystemCursor(SDL_SYSTEM_CURSOR_HAND);
 
 	printf("Check if failed: %s\n", SDL_GetError());
-	mCursor = SDL_CreateColorCursor(bmCursor, 0, 0);
+	mCursor = SDL_CreateColorCursor(cursor, 0, 0);
 
 	if (mCursor == NULL)
 		std::cout << "We have a loser!" << std::endl;
