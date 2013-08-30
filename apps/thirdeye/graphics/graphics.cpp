@@ -189,16 +189,16 @@ void GRAPHICS::Graphics::loadMouse(std::vector<uint8_t> bitmap,
 	SDL_SetPaletteColors(cImage->format->palette, mPalette->colors, 0, 256);
 
 	SDL_BlitSurface(cImage, NULL, cursor, NULL);
-	SDL_BlitSurface(cursor, NULL, mScreen, NULL);
+
+	SDL_FreeSurface(cImage);
 
 	SDL_SetColorKey(cursor, SDL_TRUE, SDL_MapRGB(cursor->format, 0, 0, 0));
 
 	mCursor = SDL_CreateColorCursor(cursor, 0, 0);
 
-	SDL_SetCursor(mCursor);
-
-	SDL_FreeSurface(cImage);
 	SDL_FreeSurface(cursor);
+
+	SDL_SetCursor(mCursor);
 }
 
 void GRAPHICS::Graphics::loadPalette(std::vector<uint8_t> basePal,
