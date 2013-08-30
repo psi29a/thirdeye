@@ -20,26 +20,27 @@ namespace GRAPHICS {
 
 class Graphics {
 private:
-	std::map<uint16_t, SDL_Surface*> mSurface;
-	std::map<uint16_t, SDL_Palette*> mPalette;
+	uint16_t mScale;
 	SDL_Window *mWindow;
 	SDL_Renderer *mRenderer;
 	SDL_Surface *mScreen;
-	uint16_t mScale;
+	SDL_Cursor *mCursor;
+	SDL_Palette *mPalette;
 
 public:
 	Graphics(uint16_t scale);
 	virtual ~Graphics();
-	std::vector<uint8_t> uncompressPalette(std::vector<uint8_t> basePalette,
-			std::vector<uint8_t> subPalette, uint8_t start = 0, uint8_t end = 0
-			);
-	void drawImage(uint16_t surfaceId, std::vector<uint8_t> bmp,
-			std::vector<uint8_t> pal, uint16_t posX, uint16_t posY,
-			uint16_t width, uint16_t height, bool sprite = false, bool transparency = true);
-	void getFont();
-	SDL_Surface* getSurface(uint16_t);
+
+	void drawImage(std::vector<uint8_t> bmp, uint16_t index, uint16_t posX,
+			uint16_t posY, bool transparency = false);
+	void drawText(std::vector<uint8_t> fnt, std::string text, uint16_t posX,
+			uint16_t posY);
+
+	void loadPalette(std::vector<uint8_t> basePal, std::vector<uint8_t> subPal,
+			std::string index);
+	void loadMouse(std::vector<uint8_t> bitmap, uint16_t index);
+
 	void update();
-	void loadFont(std::vector<uint8_t>);
 };
 
 }
