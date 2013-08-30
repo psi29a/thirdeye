@@ -68,60 +68,46 @@ GRAPHICS::Graphics::Graphics(uint16_t scale) {
 	mScreen = SDL_CreateRGBSurface(0, WIDTH, HEIGHT, 32, 0, 0, 0, 0);
 
 	// set magenta as our transparent colour
-	SDL_SetColorKey(mScreen, SDL_TRUE,
-			SDL_MapRGB(mScreen->format, 255, 0, 255));
+	//SDL_SetColorKey(mScreen, SDL_TRUE,
+	//		SDL_MapRGB(mScreen->format, 255, 0, 255));
 
 	SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "linear"); // make the scaled rendering look smoother.
 	SDL_RenderSetLogicalSize(mRenderer, WIDTH, HEIGHT);
 
+	mPalette = SDL_AllocPalette(256);
+	mCursor = NULL;
+
 }
 
 GRAPHICS::Graphics::~Graphics() {
-	SDL_FreeSurface(mSurface[0]);
+	SDL_FreeCursor(mCursor);
 	SDL_FreeSurface(mScreen);
-	SDL_FreePalette(mPalette[0]);
+	SDL_FreePalette(mPalette);
 	SDL_DestroyRenderer(mRenderer);
 	SDL_DestroyWindow(mWindow);
 	SDL_Quit();
 }
 
-void GRAPHICS::Graphics::drawImage(uint16_t surfaceId, std::vector<uint8_t> bmp,
-		std::vector<uint8_t> pal, uint16_t posX, uint16_t posY, uint16_t width,
-		uint16_t height, bool sprite, bool transparency) {
+void GRAPHICS::Graphics::drawImage(std::vector<uint8_t> bmp, uint16_t index,
+		uint16_t posX, uint16_t posY, bool transparency) {
 
-	SDL_Color magenta = { 255, 0, 255, 0 };
 	Bitmap image(bmp);
-	Palette palette(pal);
-	std::vector<uint8_t> sub;
 
-	//return;
-	mSurface[surfaceId] = SDL_CreateRGBSurfaceFrom((void*) &image[0],
-			image.getWidth(0), image.getHeight(0), 8, image.getWidth(0), 0, 0,
-			0, 0);
-	mPalette[surfaceId] = SDL_AllocPalette(256);
+	SDL_Surface *surface = SDL_CreateRGBSurfaceFrom((void*) &image[index],
+			image.getWidth(index), image.getHeight(index), 8,
+			image.getWidth(index), 0, 0, 0, 0);
 
-	std::cout << "TEST: " << mSurface[surfaceId]->h << " "
-			<< mSurface[surfaceId]->w << std::endl;
+	SDL_Rect dest =
+			{ posX, posY, image.getWidth(index), image.getHeight(index) };
 
-	// assign our game palette to a SDL palette
-	for (uint i = 0; i < palette.getNumOfColours(); i++) {
-		mPalette[surfaceId]->colors[i] = palette[i];
+	SDL_SetPaletteColors(surface->format->palette, mPalette->colors, 0, 256);
 
-		// Handle our black transparency and replace it with magenta
-		if (!sprite && transparency && palette[i].r == 0 && palette[i].g == 0
-				&& palette[i].b == 0) {
-			mPalette[surfaceId]->colors[i] = magenta;
-		}
+	if (transparency){
+		SDL_SetColorKey(surface, SDL_TRUE,
+				SDL_MapRGB(surface->format, 0, 0, 0));
 	}
-
-	SDL_SetPaletteColors(mSurface[surfaceId]->format->palette,
-			mPalette[surfaceId]->colors, 0, 256);
-
-	SDL_BlitSurface(mSurface[surfaceId], NULL, mScreen, NULL);
-}
-
-SDL_Surface* GRAPHICS::Graphics::getSurface(uint16_t surfaceId) {
-	return mSurface[surfaceId];
+	SDL_BlitSurface(surface, NULL, mScreen, &dest);
+	SDL_FreeSurface(surface);
 }
 
 void GRAPHICS::Graphics::update() {
@@ -142,13 +128,14 @@ void GRAPHICS::Graphics::update() {
 	SDL_DestroyTexture(texture);
 }
 
-void GRAPHICS::Graphics::loadFont(std::vector<uint8_t> fnt) {
+void GRAPHICS::Graphics::drawText(std::vector<uint8_t> fnt, std::string text,
+		uint16_t posX, uint16_t posY) {
 	Font font(fnt);
-	SDL_Rect rect = { 8, 181, 8, 8 }; // start at 8x180 with 8x8 pixels
-	std::string text = "Welcome to Thirdeye!";
-	//std::string text = "ABDCEFGHIJKLMNOPQRSTUVWXYZ";
-	//std::string text = "abcdefghijklmnopqrstuvwxyz";
-	//std::string text = "0123456789!@#$%^&*()[]{}\\/?<>.,:;'\"-=_+";
+
+	// set start positions and default width and height
+	SDL_Rect rect = { posX, posY, font.getCharacter((unsigned char) text[0])->w,
+			font.getCharacter((unsigned char) text[0])->h };
+
 	std::string::iterator it = text.begin();
 
 	/*
@@ -177,5 +164,68 @@ void GRAPHICS::Graphics::loadFont(std::vector<uint8_t> fnt) {
 		SDL_BlitSurface(font.getCharacter(ascii), NULL, mScreen, &rect);
 		it++;
 		rect.x += font.getCharacter(ascii)->w;
+	}
+}
+
+void GRAPHICS::Graphics::loadMouse(std::vector<uint8_t> bitmap,
+		uint16_t index) {
+	SDL_ClearError();
+	Bitmap image(bitmap);
+
+	SDL_Surface *cursor = SDL_CreateRGBSurface(0, image.getWidth(index), image.getHeight(index), 32,
+                                   0x00FF0000,
+                                   0x0000FF00,
+                                   0x000000FF,
+                                   0xFF000000);
+
+	SDL_Surface *bmCursor = SDL_CreateRGBSurfaceFrom((void*) &image[index],
+			image.getWidth(index), image.getHeight(index), 8,
+			image.getWidth(index), 0, 0, 0, 0);
+
+	SDL_SetPaletteColors(bmCursor->format->palette, mPalette->colors, 0, 256);
+
+	SDL_SetColorKey(bmCursor, SDL_TRUE,
+			SDL_MapRGB(bmCursor->format, 0, 0, 0));
+
+	SDL_Surface *update = SDL_ConvertSurfaceFormat(bmCursor, SDL_PIXELFORMAT_ARGB8888, 0);
+	if (!update){
+		std::cout << "WINNER" << std::endl;
+	}
+
+	SDL_BlitSurface(bmCursor, NULL, cursor, NULL);
+	printf("Check if failed: %s\n", SDL_GetError());
+	SDL_BlitSurface(cursor, NULL, mScreen, NULL);
+	printf("Check if failed: %s\n", SDL_GetError());
+
+
+	//mCursor = SDL_CreateSystemCursor(SDL_SYSTEM_CURSOR_HAND);
+
+	printf("Check if failed: %s\n", SDL_GetError());
+	mCursor = SDL_CreateColorCursor(bmCursor, 0, 0);
+
+	if (mCursor == NULL)
+		std::cout << "We have a loser!" << std::endl;
+
+	printf("Check if failed: %s\n", SDL_GetError());
+	SDL_SetCursor(mCursor);
+	//SDL_ShowCursor(1);
+
+	printf("Check if failed: %s\n", SDL_GetError());
+	std::cout << "refcount: " << bmCursor->refcount << std::endl;
+
+	SDL_FreeSurface(bmCursor);
+}
+
+void GRAPHICS::Graphics::loadPalette(std::vector<uint8_t> basePal,
+		std::vector<uint8_t> subPal, std::string index) {
+
+	SDL_FreePalette(mPalette);
+	mPalette = SDL_AllocPalette(256);
+
+	Palette palette(basePal);
+
+	// assign our game palette to a SDL palette
+	for (uint i = 0; i < palette.getNumOfColours(); i++) {
+		mPalette->colors[i] = palette[i];
 	}
 }

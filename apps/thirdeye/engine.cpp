@@ -73,18 +73,22 @@ void THIRDEYE::Engine::go() {
 
 	std::vector<uint8_t> snd = resource.getAsset("BIRD4");
 	std::vector<uint8_t> xmidi = resource.getAsset("CUE1");
+
 	std::vector<uint8_t> font = resource.getAsset("8x8 font");
 	std::vector<uint8_t> font2 = resource.getAsset("6x8 font");
 	std::vector<uint8_t> font3 = resource.getAsset("Ornate font");
 
-	//return;
 	std::vector<uint8_t> bmp = resource.getAsset("Backdrop");
-	//std::vector<uint8_t> bmp = resource.getAsset("Icons");
+	std::vector<uint8_t> icons = resource.getAsset("Icons");
 	std::vector<uint8_t> basePalette = resource.getAsset("Fixed palette");
 	std::cout << "basepalette size: " << basePalette.size() << std::endl;
 
-	gfx.drawImage(0, bmp, basePalette, 0, 0, 320, 200, false, true);
-	gfx.loadFont(font);
+	gfx.loadPalette(basePalette, basePalette, "test");
+	gfx.drawImage(bmp, 0, 0, 0);
+	gfx.drawImage(icons, 1, 25, 120, true);
+	gfx.drawText(font,"Welcome to Thirdeye!", 8, 181);
+	gfx.loadMouse(icons, 0);
+
 
 	//return;
 

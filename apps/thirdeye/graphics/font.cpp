@@ -52,6 +52,9 @@ GRAPHICS::Font::Font(std::vector<uint8_t> vec) :
 				counter++;
 			}
 		}
+		// set black as our transparency colour
+		SDL_SetColorKey(character[i], SDL_TRUE,
+				SDL_MapRGB(character[i]->format, 0, 0, 0));
 	}
 }
 

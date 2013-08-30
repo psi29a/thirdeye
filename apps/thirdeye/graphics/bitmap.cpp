@@ -13,8 +13,8 @@ GRAPHICS::Bitmap::Bitmap(const std::vector<uint8_t> &vec){
 
 	for (uint16_t i = 0; i < offsets.size(); i++) {
 
-		std::cout << "Sub picture " << i << " @ offset " << offsets[i]
-				<< std::endl;
+		//std::cout << "Sub picture " << i << " @ offset " << offsets[i]
+		//		<< std::endl;
 
 		unsigned int pos = offsets[i];
 
@@ -23,8 +23,8 @@ GRAPHICS::Bitmap::Bitmap(const std::vector<uint8_t> &vec){
 				*reinterpret_cast<const uint16_t*>(&vec[pos + 2]);
 		pos += 4;
 
-		std::cout << "   Size is " << mSubBitmaps[i].width << "x"
-				<< mSubBitmaps[i].height << std::endl;
+		//std::cout << "   Size is " << mSubBitmaps[i].width << "x"
+		//		<< mSubBitmaps[i].height << std::endl;
 
 		mSubBitmaps[i].subBitmap = std::vector<uint8_t>(
 				mSubBitmaps[i].width * mSubBitmaps[i].height);
