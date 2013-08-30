@@ -102,7 +102,7 @@ void GRAPHICS::Graphics::drawImage(std::vector<uint8_t> bmp, uint16_t index,
 
 	SDL_SetPaletteColors(surface->format->palette, mPalette->colors, 0, 256);
 
-	if (transparency){
+	if (transparency) {
 		SDL_SetColorKey(surface, SDL_TRUE,
 				SDL_MapRGB(surface->format, 0, 0, 0));
 	}
@@ -167,55 +167,38 @@ void GRAPHICS::Graphics::drawText(std::vector<uint8_t> fnt, std::string text,
 	}
 }
 
+/*
+ * Set the hardware cursor with a specified bitmap.
+ * Warning: Possible bug in SDL2, as we cannot use 8-bit RGB image.
+ * We create first a 32 ARGB8888 canvas that we paint our cursor onto,
+ * then we use that canvas as our hardware cursor. Otherwise we get a
+ * blank image.
+ */
 void GRAPHICS::Graphics::loadMouse(std::vector<uint8_t> bitmap,
 		uint16_t index) {
 	SDL_ClearError();
 	Bitmap image(bitmap);
 
-	SDL_Surface *cursor = SDL_CreateRGBSurface(0, image.getWidth(index), image.getHeight(index), 32,
-                                   0,
-                                   0,
-                                   0,
-                                   0);
+	SDL_Surface *cursor = SDL_CreateRGBSurface(0, image.getWidth(index),
+			image.getHeight(index), 32, 0, 0, 0, 0);
 
-	SDL_Surface *bmCursor = SDL_CreateRGBSurfaceFrom((void*) &image[index],
+	SDL_Surface *cImage = SDL_CreateRGBSurfaceFrom((void*) &image[index],
 			image.getWidth(index), image.getHeight(index), 8,
 			image.getWidth(index), 0, 0, 0, 0);
 
-	SDL_SetPaletteColors(bmCursor->format->palette, mPalette->colors, 0, 256);
+	SDL_SetPaletteColors(cImage->format->palette, mPalette->colors, 0, 256);
 
-	SDL_SetColorKey(bmCursor, SDL_TRUE,
-			SDL_MapRGB(bmCursor->format, 0, 0, 0));
-
-	SDL_Surface *update = SDL_ConvertSurfaceFormat(bmCursor, SDL_PIXELFORMAT_ARGB8888, 0);
-	if (!update){
-		std::cout << "WINNER" << std::endl;
-	}
-
-	SDL_BlitSurface(bmCursor, NULL, cursor, NULL);
-	printf("Check if failed: %s\n", SDL_GetError());
+	SDL_BlitSurface(cImage, NULL, cursor, NULL);
 	SDL_BlitSurface(cursor, NULL, mScreen, NULL);
-	printf("Check if failed: %s\n", SDL_GetError());
 
-	SDL_SetColorKey(cursor, SDL_TRUE,
-			SDL_MapRGB(cursor->format, 0, 0, 0));
+	SDL_SetColorKey(cursor, SDL_TRUE, SDL_MapRGB(cursor->format, 0, 0, 0));
 
-	//mCursor = SDL_CreateSystemCursor(SDL_SYSTEM_CURSOR_HAND);
-
-	printf("Check if failed: %s\n", SDL_GetError());
 	mCursor = SDL_CreateColorCursor(cursor, 0, 0);
 
-	if (mCursor == NULL)
-		std::cout << "We have a loser!" << std::endl;
-
-	printf("Check if failed: %s\n", SDL_GetError());
 	SDL_SetCursor(mCursor);
-	//SDL_ShowCursor(1);
 
-	printf("Check if failed: %s\n", SDL_GetError());
-	std::cout << "refcount: " << bmCursor->refcount << std::endl;
-
-	SDL_FreeSurface(bmCursor);
+	SDL_FreeSurface(cImage);
+	SDL_FreeSurface(cursor);
 }
 
 void GRAPHICS::Graphics::loadPalette(std::vector<uint8_t> basePal,
