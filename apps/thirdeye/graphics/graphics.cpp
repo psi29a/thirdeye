@@ -179,26 +179,31 @@ void GRAPHICS::Graphics::loadMouse(std::vector<uint8_t> bitmap,
 	SDL_ClearError();
 	Bitmap image(bitmap);
 
-	SDL_Surface *cursor = SDL_CreateRGBSurface(0, image.getWidth(index),
-			image.getHeight(index), 32, 0, 0, 0, 0);
+	SDL_Surface *cursor = SDL_CreateRGBSurface(0, image.getWidth(index)*mScale,
+			image.getHeight(index)*mScale, 32, 0, 0, 0, 0);
 
 	SDL_Surface *cImage = SDL_CreateRGBSurfaceFrom((void*) &image[index],
 			image.getWidth(index), image.getHeight(index), 8,
 			image.getWidth(index), 0, 0, 0, 0);
-
 	SDL_SetPaletteColors(cImage->format->palette, mPalette->colors, 0, 256);
 
-	SDL_BlitSurface(cImage, NULL, cursor, NULL);
+	SDL_Surface *cImage32 = SDL_CreateRGBSurface(0, image.getWidth(index),
+				image.getHeight(index), 32, 0, 0, 0, 0);
+	SDL_BlitSurface(cImage, NULL, cImage32, NULL);
 
-	SDL_FreeSurface(cImage);
+	zoomSurfaceRGBA(cImage32, cursor, 0, 0, 0);
+
+
 
 	SDL_SetColorKey(cursor, SDL_TRUE, SDL_MapRGB(cursor->format, 0, 0, 0));
 
 	mCursor = SDL_CreateColorCursor(cursor, 0, 0);
 
-	SDL_FreeSurface(cursor);
-
 	SDL_SetCursor(mCursor);
+
+	SDL_FreeSurface(cursor);
+	SDL_FreeSurface(cImage);
+	SDL_FreeSurface(cImage32);
 }
 
 void GRAPHICS::Graphics::loadPalette(std::vector<uint8_t> basePal,
@@ -213,4 +218,248 @@ void GRAPHICS::Graphics::loadPalette(std::vector<uint8_t> basePal,
 	for (uint i = 0; i < palette.getNumOfColours(); i++) {
 		mPalette->colors[i] = palette[i];
 	}
+}
+
+
+/*!
+\brief Internal 32 bit Zoomer with optional anti-aliasing by bilinear interpolation.
+
+Zooms 32 bit RGBA/ABGR 'src' surface to 'dst' surface.
+Assumes src and dst surfaces are of 32 bit depth.
+Assumes dst surface was allocated with the correct dimensions.
+
+\param src The surface to zoom (input).
+\param dst The zoomed surface (output).
+\param flipx Flag indicating if the image should be horizontally flipped.
+\param flipy Flag indicating if the image should be vertically flipped.
+\param smooth Antialiasing flag; set to SMOOTHING_ON to enable.
+
+\return 0 for success or -1 for error.
+*/
+int GRAPHICS::Graphics::zoomSurfaceRGBA(SDL_Surface * src, SDL_Surface * dst, int flipx, int flipy, int smooth)
+{
+	/*!
+	\brief A 32 bit RGBA pixel.
+	*/
+	typedef struct tColorRGBA {
+		Uint8 r;
+		Uint8 g;
+		Uint8 b;
+		Uint8 a;
+	} tColorRGBA;
+
+	int x, y, sx, sy, ssx, ssy, *sax, *say, *csax, *csay, *salast, csx, csy, ex, ey, cx, cy, sstep, sstepx, sstepy;
+	tColorRGBA *c00, *c01, *c10, *c11;
+	tColorRGBA *sp, *csp, *dp;
+	int spixelgap, spixelw, spixelh, dgap, t1, t2;
+
+	/*
+	* Allocate memory for row/column increments
+	*/
+	if ((sax = (int *) malloc((dst->w + 1) * sizeof(Uint32))) == NULL) {
+		return (-1);
+	}
+	if ((say = (int *) malloc((dst->h + 1) * sizeof(Uint32))) == NULL) {
+		free(sax);
+		return (-1);
+	}
+
+	/*
+	* Precalculate row increments
+	*/
+	spixelw = (src->w - 1);
+	spixelh = (src->h - 1);
+	if (smooth) {
+		sx = (int) (65536.0 * (float) spixelw / (float) (dst->w - 1));
+		sy = (int) (65536.0 * (float) spixelh / (float) (dst->h - 1));
+	} else {
+		sx = (int) (65536.0 * (float) (src->w) / (float) (dst->w));
+		sy = (int) (65536.0 * (float) (src->h) / (float) (dst->h));
+	}
+
+	/* Maximum scaled source size */
+	ssx = (src->w << 16) - 1;
+	ssy = (src->h << 16) - 1;
+
+	/* Precalculate horizontal row increments */
+	csx = 0;
+	csax = sax;
+	for (x = 0; x <= dst->w; x++) {
+		*csax = csx;
+		csax++;
+		csx += sx;
+
+		/* Guard from overflows */
+		if (csx > ssx) {
+			csx = ssx;
+		}
+	}
+
+	/* Precalculate vertical row increments */
+	csy = 0;
+	csay = say;
+	for (y = 0; y <= dst->h; y++) {
+		*csay = csy;
+		csay++;
+		csy += sy;
+
+		/* Guard from overflows */
+		if (csy > ssy) {
+			csy = ssy;
+		}
+	}
+
+	sp = (tColorRGBA *) src->pixels;
+	dp = (tColorRGBA *) dst->pixels;
+	dgap = dst->pitch - dst->w * 4;
+	spixelgap = src->pitch/4;
+
+	if (flipx) sp += spixelw;
+	if (flipy) sp += (spixelgap * spixelh);
+
+	/*
+	* Switch between interpolating and non-interpolating code
+	*/
+	if (smooth) {
+
+		/*
+		* Interpolating Zoom
+		*/
+		csay = say;
+		for (y = 0; y < dst->h; y++) {
+			csp = sp;
+			csax = sax;
+			for (x = 0; x < dst->w; x++) {
+				/*
+				* Setup color source pointers
+				*/
+				ex = (*csax & 0xffff);
+				ey = (*csay & 0xffff);
+				cx = (*csax >> 16);
+				cy = (*csay >> 16);
+				sstepx = cx < spixelw;
+				sstepy = cy < spixelh;
+				c00 = sp;
+				c01 = sp;
+				c10 = sp;
+				if (sstepy) {
+					if (flipy) {
+						c10 -= spixelgap;
+					} else {
+						c10 += spixelgap;
+					}
+				}
+				c11 = c10;
+				if (sstepx) {
+					if (flipx) {
+						c01--;
+						c11--;
+					} else {
+						c01++;
+						c11++;
+					}
+				}
+
+				/*
+				* Draw and interpolate colors
+				*/
+				t1 = ((((c01->r - c00->r) * ex) >> 16) + c00->r) & 0xff;
+				t2 = ((((c11->r - c10->r) * ex) >> 16) + c10->r) & 0xff;
+				dp->r = (((t2 - t1) * ey) >> 16) + t1;
+				t1 = ((((c01->g - c00->g) * ex) >> 16) + c00->g) & 0xff;
+				t2 = ((((c11->g - c10->g) * ex) >> 16) + c10->g) & 0xff;
+				dp->g = (((t2 - t1) * ey) >> 16) + t1;
+				t1 = ((((c01->b - c00->b) * ex) >> 16) + c00->b) & 0xff;
+				t2 = ((((c11->b - c10->b) * ex) >> 16) + c10->b) & 0xff;
+				dp->b = (((t2 - t1) * ey) >> 16) + t1;
+				t1 = ((((c01->a - c00->a) * ex) >> 16) + c00->a) & 0xff;
+				t2 = ((((c11->a - c10->a) * ex) >> 16) + c10->a) & 0xff;
+				dp->a = (((t2 - t1) * ey) >> 16) + t1;
+				/*
+				* Advance source pointer x
+				*/
+				salast = csax;
+				csax++;
+				sstep = (*csax >> 16) - (*salast >> 16);
+				if (flipx) {
+					sp -= sstep;
+				} else {
+					sp += sstep;
+				}
+
+				/*
+				* Advance destination pointer x
+				*/
+				dp++;
+			}
+			/*
+			* Advance source pointer y
+			*/
+			salast = csay;
+			csay++;
+			sstep = (*csay >> 16) - (*salast >> 16);
+			sstep *= spixelgap;
+			if (flipy) {
+				sp = csp - sstep;
+			} else {
+				sp = csp + sstep;
+			}
+
+			/*
+			* Advance destination pointer y
+			*/
+			dp = (tColorRGBA *) ((Uint8 *) dp + dgap);
+		}
+	} else {
+		/*
+		* Non-Interpolating Zoom
+		*/
+		csay = say;
+		for (y = 0; y < dst->h; y++) {
+			csp = sp;
+			csax = sax;
+			for (x = 0; x < dst->w; x++) {
+				/*
+				* Draw
+				*/
+				*dp = *sp;
+
+				/*
+				* Advance source pointer x
+				*/
+				salast = csax;
+				csax++;
+				sstep = (*csax >> 16) - (*salast >> 16);
+				if (flipx) sstep = -sstep;
+				sp += sstep;
+
+				/*
+				* Advance destination pointer x
+				*/
+				dp++;
+			}
+			/*
+			* Advance source pointer y
+			*/
+			salast = csay;
+			csay++;
+			sstep = (*csay >> 16) - (*salast >> 16);
+			sstep *= spixelgap;
+			if (flipy) sstep = -sstep;
+			sp = csp + sstep;
+
+			/*
+			* Advance destination pointer y
+			*/
+			dp = (tColorRGBA *) ((Uint8 *) dp + dgap);
+		}
+	}
+
+	/*
+	* Remove temp arrays
+	*/
+	free(sax);
+	free(say);
+
+	return (0);
 }

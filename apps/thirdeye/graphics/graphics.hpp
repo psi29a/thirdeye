@@ -41,6 +41,8 @@ public:
 	void loadMouse(std::vector<uint8_t> bitmap, uint16_t index);
 
 	void update();
+
+	int zoomSurfaceRGBA(SDL_Surface * src, SDL_Surface * dst, int flipx, int flipy, int smooth);
 };
 
 }
