@@ -87,7 +87,14 @@ void THIRDEYE::Engine::go() {
 	std::string text = resource.getTableEntry("Marble palette", 1);
 	gfx.loadPalette(basePalette, subPalette, text);
 	gfx.drawImage(bmp, 0, 0, 0);
+
+	gfx.drawImage(marble, 18, 0, 0, true);
 	gfx.drawImage(marble, 0, 0, 0, true);
+	gfx.drawImage(marble, 1, 24, 8, true);
+	gfx.drawImage(marble, 2, 48, 20, true);
+	gfx.drawImage(marble, 3, 64, 28, true);
+
+
 	gfx.drawImage(icons, 1, 25, 120, true);
 	gfx.drawText(font,"Welcome to Thirdeye!", 8, 181);
 	gfx.loadMouse(icons, 0);
