@@ -26,6 +26,7 @@ private:
 	SDL_Surface *mScreen;
 	SDL_Cursor *mCursor;
 	SDL_Palette *mPalette;
+	int zoomSurfaceRGBA(SDL_Surface * src, SDL_Surface * dst);
 
 public:
 	Graphics(uint16_t scale);
@@ -42,7 +43,7 @@ public:
 
 	void update();
 
-	int zoomSurfaceRGBA(SDL_Surface * src, SDL_Surface * dst, int flipx, int flipy, int smooth);
+
 };
 
 }

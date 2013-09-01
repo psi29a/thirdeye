@@ -80,11 +80,14 @@ void THIRDEYE::Engine::go() {
 
 	std::vector<uint8_t> bmp = resource.getAsset("Backdrop");
 	std::vector<uint8_t> icons = resource.getAsset("Icons");
+	std::vector<uint8_t> marble = resource.getAsset("Marble floor grate");
 	std::vector<uint8_t> basePalette = resource.getAsset("Fixed palette");
-	std::cout << "basepalette size: " << basePalette.size() << std::endl;
+	std::vector<uint8_t> subPalette = resource.getAsset("Marble palette");
 
-	gfx.loadPalette(basePalette, basePalette, "test");
+	std::string text = resource.getTableEntry("Marble palette", 1);
+	gfx.loadPalette(basePalette, subPalette, text);
 	gfx.drawImage(bmp, 0, 0, 0);
+	gfx.drawImage(marble, 0, 0, 0);
 	gfx.drawImage(icons, 1, 25, 120, true);
 	gfx.drawText(font,"Welcome to Thirdeye!", 8, 181);
 	gfx.loadMouse(icons, 0);

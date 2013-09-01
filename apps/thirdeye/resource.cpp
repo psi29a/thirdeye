@@ -17,7 +17,7 @@
 using boost::iostreams::file_source;
 using boost::iostreams::seek;
 
-#include <boost/lexical_cast.hpp> // hack!
+#include <boost/lexical_cast.hpp>
 
 RESOURCE::Resource::Resource(boost::filesystem::path resourcePath) {
 	mResFile = resourcePath;
@@ -57,28 +57,22 @@ RESOURCE::Resource::Resource(boost::filesystem::path resourcePath) {
 			<< getDirBlocks(fResource, fileHeader.first_directory_block)
 			<< std::endl;
 
-	std::cout << "    Number of entries:	"
-			<< getEntries(fResource)
+	std::cout << "    Number of entries:	" << getEntries(fResource)
 			<< std::endl;
 
-	std::cout << "    Entries in Table0:	"
-			<< getTable(fResource, 0, mTable0)
+	std::cout << "    Entries in Table0:	" << getTable(fResource, 0, mTable0)
 			<< std::endl;
 
-	std::cout << "    Entries in Table1:	"
-			<< getTable(fResource, 1, mTable1)
+	std::cout << "    Entries in Table1:	" << getTable(fResource, 1, mTable1)
 			<< std::endl;
 
-	std::cout << "    Entries in Table2:	"
-			<< getTable(fResource, 2, mTable2)
+	std::cout << "    Entries in Table2:	" << getTable(fResource, 2, mTable2)
 			<< std::endl;
 
-	std::cout << "    Entries in Table3:	"
-			<< getTable(fResource, 3, mTable3)
+	std::cout << "    Entries in Table3:	" << getTable(fResource, 3, mTable3)
 			<< std::endl;
 
-	std::cout << "    Entries in Table4:	"
-			<< getTable(fResource, 4, mTable4)
+	std::cout << "    Entries in Table4:	" << getTable(fResource, 4, mTable4)
 			<< std::endl;
 
 	getAssets(fResource);
@@ -112,11 +106,14 @@ void RESOURCE::Resource::showFileHeader(GlobalHeader fileHeader) {
 	std::cout << "    Signature:		" << fileHeader.signature << std::endl;
 	std::cout << "    Size:		" << fileHeader.file_size << std::endl;
 	std::cout << "    Lost Space:		" << fileHeader.lost_space << std::endl;
-	std::cout << "    Created:		" << getDate(fileHeader.create_time) << std::endl;
-	std::cout << "    Modified:		" << getDate(fileHeader.modify_time) << std::endl;
+	std::cout << "    Created:		" << getDate(fileHeader.create_time)
+			<< std::endl;
+	std::cout << "    Modified:		" << getDate(fileHeader.modify_time)
+			<< std::endl;
 }
 
-uint16_t RESOURCE::Resource::getDirBlocks(file_source resourceFile, uint32_t firstBlock) {
+uint16_t RESOURCE::Resource::getDirBlocks(file_source resourceFile,
+		uint32_t firstBlock) {
 	uint16_t blocks = 0;
 	uint32_t currentBlock = firstBlock;
 
@@ -133,7 +130,7 @@ uint16_t RESOURCE::Resource::getDirBlocks(file_source resourceFile, uint32_t fir
 		mDirBlocks[blocks] = block;
 		blocks++;
 	} while ( currentBlock != 0 );
-	//std::cout << "blocks: " << mDirBlocks.size() << std::endl;
+		//std::cout << "blocks: " << mDirBlocks.size() << std::endl;
 
 	return mDirBlocks.size();
 }
@@ -141,18 +138,19 @@ uint16_t RESOURCE::Resource::getDirBlocks(file_source resourceFile, uint32_t fir
 uint16_t RESOURCE::Resource::getEntries(file_source resourceFile) {
 	uint16_t entries = 0;
 
-	if (mEntryHeaders.size() > 0)	// if already initialized, return how big it is
+	if (mEntryHeaders.size() > 0)// if already initialized, return how big it is
 		return mEntryHeaders.size();
 
 	std::map<uint16_t, DirectoryBlock>::iterator block;
-	for (block = mDirBlocks.begin(); block != mDirBlocks.end(); block++){
-		for (uint8_t i = 0; i < DIRECTORY_BLOCK_ITEMS; i++){
+	for (block = mDirBlocks.begin(); block != mDirBlocks.end(); block++) {
+		for (uint8_t i = 0; i < DIRECTORY_BLOCK_ITEMS; i++) {
 			if (block->second.entry_header_index[i] == 0) // ignore non-existing entries
 				break;
 
 			seek(resourceFile, block->second.entry_header_index[i], BOOST_IOS::beg);
 			EntryHeader entry;
-			resourceFile.read(reinterpret_cast<char*>(&entry), sizeof(EntryHeader));
+			resourceFile.read(reinterpret_cast<char*>(&entry),
+					sizeof(EntryHeader));
 			mEntryHeaders[entries] = entry;
 			entries++;
 		}
@@ -176,103 +174,71 @@ uint16_t RESOURCE::Resource::getAssets(file_source resourceFile) {
 
 	blank[0] = ' ';
 	// add info about the first 5 special tables
-	mAssets[0] =
-			Assets( 0,
-				(char*)"Special table 0: Resource names",
-				fileHeader.create_time,
-				block.data_attributes[0],
-				block.entry_header_index[1] - block.entry_header_index[0] - sizeof(EntryHeader),
-				block.entry_header_index[0],
-				block.entry_header_index[0] + sizeof(EntryHeader),
-				table1,
-				table2,
-				blank
-				);
+	mAssets[0] = Assets(0, (char*) "Special table 0: Resource names",
+			fileHeader.create_time, block.data_attributes[0],
+			block.entry_header_index[1] - block.entry_header_index[0]
+					- sizeof(EntryHeader), block.entry_header_index[0],
+			block.entry_header_index[0] + sizeof(EntryHeader), table1, table2,
+			blank);
 
-	mAssets[1] =
-			Assets( 1,
-				(char*)"Special table 1 ",
-				fileHeader.create_time,
-				block.data_attributes[1],
-				block.entry_header_index[2] - block.entry_header_index[1] - sizeof(EntryHeader),
-				block.entry_header_index[1],
-				block.entry_header_index[1] + sizeof(EntryHeader),
-				table1,
-				table2,
-				blank
-				);
+	mAssets[1] = Assets(1, (char*) "Special table 1 ", fileHeader.create_time,
+			block.data_attributes[1],
+			block.entry_header_index[2] - block.entry_header_index[1]
+					- sizeof(EntryHeader), block.entry_header_index[1],
+			block.entry_header_index[1] + sizeof(EntryHeader), table1, table2,
+			blank);
 
-	mAssets[2] =
-			Assets( 2,
-				(char*)"Special table 2 ",
-				fileHeader.create_time,
-				block.data_attributes[2],
-				block.entry_header_index[3] - block.entry_header_index[2] - sizeof(EntryHeader),
-				block.entry_header_index[2],
-				block.entry_header_index[2] + sizeof(EntryHeader),
-				table1,
-				table2,
-				blank
-				);
+	mAssets[2] = Assets(2, (char*) "Special table 2 ", fileHeader.create_time,
+			block.data_attributes[2],
+			block.entry_header_index[3] - block.entry_header_index[2]
+					- sizeof(EntryHeader), block.entry_header_index[2],
+			block.entry_header_index[2] + sizeof(EntryHeader), table1, table2,
+			blank);
 
-	mAssets[3] =
-			Assets( 3,
-				(char*)"Special table 3: Low level functions ",
-				fileHeader.create_time,
-				block.data_attributes[3],
-				block.entry_header_index[4] - block.entry_header_index[3] - sizeof(EntryHeader),
-				block.entry_header_index[3],
-				block.entry_header_index[3] + sizeof(EntryHeader),
-				table1,
-				table2,
-				blank
-				);
+	mAssets[3] = Assets(3, (char*) "Special table 3: Low level functions ",
+			fileHeader.create_time, block.data_attributes[3],
+			block.entry_header_index[4] - block.entry_header_index[3]
+					- sizeof(EntryHeader), block.entry_header_index[3],
+			block.entry_header_index[3] + sizeof(EntryHeader), table1, table2,
+			blank);
 
-	mAssets[4] =
-			Assets( 4,
-				(char*)"Special table 4: Message names ",
-				fileHeader.create_time,
-				block.data_attributes[4],
-				block.entry_header_index[5] - block.entry_header_index[4] - sizeof(EntryHeader),
-				block.entry_header_index[4],
-				block.entry_header_index[4] + sizeof(EntryHeader),
-				table1,
-				table2,
-				blank
-				);
+	mAssets[4] = Assets(4, (char*) "Special table 4: Message names ",
+			fileHeader.create_time, block.data_attributes[4],
+			block.entry_header_index[5] - block.entry_header_index[4]
+					- sizeof(EntryHeader), block.entry_header_index[4],
+			block.entry_header_index[4] + sizeof(EntryHeader), table1, table2,
+			blank);
 
 	std::map<std::string, Dictionary>::iterator dictionary;
-	for (dictionary = mTable0.begin(); dictionary != mTable0.end(); dictionary++){
+	for (dictionary = mTable0.begin(); dictionary != mTable0.end();
+			dictionary++) {
 		id = boost::lexical_cast<uint16_t>(dictionary->second.second);
-		currentDirBlock = boost::lexical_cast<uint16_t>( id ) / DIRECTORY_BLOCK_ITEMS;
-		currentEntry = boost::lexical_cast<uint16_t>( id ) % DIRECTORY_BLOCK_ITEMS;
+		currentDirBlock = boost::lexical_cast<uint16_t>(
+				id) / DIRECTORY_BLOCK_ITEMS;
+		currentEntry =
+				boost::lexical_cast<uint16_t>(id) % DIRECTORY_BLOCK_ITEMS;
 		table1 = searchDictionary(mTable1, dictionary->second.first);
 		table2 = searchDictionary(mTable2, dictionary->second.first);
 		start = mDirBlocks[currentDirBlock].entry_header_index[currentEntry];
-		offset = mDirBlocks[currentDirBlock].entry_header_index[currentEntry] + sizeof(EntryHeader);
+		offset = mDirBlocks[currentDirBlock].entry_header_index[currentEntry]
+				+ sizeof(EntryHeader);
 
 		std::vector<uint8_t> data(mEntryHeaders[id].data_size);
 		seek(resourceFile, offset, BOOST_IOS::beg);
-		resourceFile.read(reinterpret_cast<char*>(&data[0]), mEntryHeaders[id].data_size);
+		resourceFile.read(reinterpret_cast<char*>(&data[0]),
+				mEntryHeaders[id].data_size);
 
-		mAssets[id] =
-				Assets( boost::lexical_cast<uint16_t>(dictionary->second.second),
-						dictionary->second.first,
-						mEntryHeaders[id].storage_time,
-						mEntryHeaders[id].data_attributes,
-						mEntryHeaders[id].data_size,
-						start,
-						offset,
-						table1,
-						table2,
-						data
-						);
+		mAssets[id] = Assets(
+				boost::lexical_cast<uint16_t>(dictionary->second.second),
+				dictionary->second.first, mEntryHeaders[id].storage_time,
+				mEntryHeaders[id].data_attributes, mEntryHeaders[id].data_size,
+				start, offset, table1, table2, data);
 	}
 	return mAssets.size();
 }
 
-
-uint16_t RESOURCE::Resource::getTable(file_source resourceFile, uint16_t table, std::map<std::string, Dictionary> &dictionary) {
+uint16_t RESOURCE::Resource::getTable(file_source resourceFile, uint16_t table,
+		std::map<std::string, Dictionary> &dictionary) {
 	DirectoryBlock dirBlock = mDirBlocks.begin()->second;
 	uint32_t dictOffset;
 	uint16_t dictStringListsNumber;
@@ -284,67 +250,85 @@ uint16_t RESOURCE::Resource::getTable(file_source resourceFile, uint16_t table, 
 
 	dictOffset = dirBlock.entry_header_index[table] + sizeof(EntryHeader);
 	seek(resourceFile, dictOffset, BOOST_IOS::beg);
-	resourceFile.read(reinterpret_cast<char*>(&dictStringListsNumber), sizeof(uint16_t));
+	resourceFile.read(reinterpret_cast<char*>(&dictStringListsNumber),
+			sizeof(uint16_t));
 
 	for (uint16_t i = 0; i < dictStringListsNumber; i++) {
-		seek(resourceFile, dictOffset + sizeof(uint16_t) + i * sizeof(uint32_t), BOOST_IOS::beg);
-		resourceFile.read(reinterpret_cast<char*>(&stringListIndex), sizeof(uint32_t));
+		seek(resourceFile, dictOffset + sizeof(uint16_t) + i * sizeof(uint32_t),
+				BOOST_IOS::beg);
+				resourceFile.read(reinterpret_cast<char*>(&stringListIndex), sizeof(uint32_t));
 
-		if (stringListIndex == 0) // end of list index
-			continue;
+				if (stringListIndex == 0) // end of list index
+				continue;
 
-		seek(resourceFile, stringListIndex + dictOffset, BOOST_IOS::beg);
-		for (;;counter++) {
-			resourceFile.read(reinterpret_cast<char*>(&stringLength), sizeof(uint16_t));
+				seek(resourceFile, stringListIndex + dictOffset, BOOST_IOS::beg);
+				for (;;counter++) {
+					resourceFile.read(reinterpret_cast<char*>(&stringLength), sizeof(uint16_t));
 
-			if (stringLength == 0) // end of string list
-				break;
+					if (stringLength == 0) // end of string list
+					break;
 
-			resourceFile.read(reinterpret_cast<char*>(&string), stringLength);
-			string[stringLength] = '\0'; // terminate our string
+					resourceFile.read(reinterpret_cast<char*>(&string), stringLength);
+					string[stringLength] = '\0';// terminate our string
 
-			if (counter % 2 == 0){
+					if (counter % 2 == 0) {
 
-				dictionary[boost::lexical_cast<std::string>( prevString )] =
+						dictionary[boost::lexical_cast<std::string>( prevString )] =
 						Dictionary(
 								prevString,
 								string
-								);
-			} else {
-				std::strcpy(prevString, string);
+						);
+					} else {
+						std::strcpy(prevString, string);
+					}
+				}
 			}
-		}
-	}
-	return counter/2;
+	return counter / 2;
 }
 
-std::string RESOURCE::Resource::searchDictionary(std::map<std::string, Dictionary> &haystack, std::string needle){
+std::string RESOURCE::Resource::searchDictionary(
+		std::map<std::string, Dictionary> &haystack, std::string needle) {
 	std::map<std::string, Dictionary>::iterator found;
 	found = haystack.find(needle);
-	if ( found != haystack.end() ) return found->second.second;
-	else return "";
+	if (found != haystack.end())
+		return found->second.second;
+	else
+		return "";
 }
 
-std::vector<uint8_t> RESOURCE::Resource::getAsset(std::string name){
-	return getAsset( boost::lexical_cast<uint16_t>( searchDictionary(mTable0, name) ) );
+std::vector<uint8_t> RESOURCE::Resource::getAsset(std::string name) {
+	return getAsset(
+			boost::lexical_cast<uint16_t>(searchDictionary(mTable0, name)));
 }
 
-std::vector<uint8_t> RESOURCE::Resource::getAsset(uint16_t number){
+std::vector<uint8_t> RESOURCE::Resource::getAsset(uint16_t number) {
 	return mAssets[number].data;
 }
 
-void RESOURCE::Resource::showResources(){
+std::string RESOURCE::Resource::getTableEntry(std::string name, uint8_t table) {
+	return getTableEntry(
+			boost::lexical_cast<uint16_t>(searchDictionary(mTable0, name)),
+			table);
+}
+
+std::string RESOURCE::Resource::getTableEntry(uint16_t number, uint8_t table) {
+	if (table == 1)
+		return mAssets[number].table1;
+	else if (table == 2)
+		return mAssets[number].table2;
+	else
+		throw std::runtime_error(
+							"Wrong table!");
+}
+
+void RESOURCE::Resource::showResources() {
 	std::cout << "NUMBER	START	OFFSET	SIZE	DATE			ATTRIB	NAME" << std::endl;
-	for (uint16_t i = 0; i < mEntryHeaders.size(); i++){
-		std::cout << mAssets[i].id
-				<< "	" << mAssets[i].start
-				<< "	" << mAssets[i].offset
-				<< "	" << mAssets[i].size
-				<< "	" << getDate(mAssets[i].date)
-				<< "	" << mAssets[i].attributes
-				<< "	" << mAssets[i].name
-				<< "	" << mAssets[i].table1
-				<< "	" << mAssets[i].table2
+	for (uint16_t i = 0; i < mEntryHeaders.size(); i++) {
+		std::cout << mAssets[i].id << "	" << mAssets[i].start << "	"
+				<< mAssets[i].offset << "	" << mAssets[i].size << "	"
+				<< getDate(mAssets[i].date) << "	" << mAssets[i].attributes
+				<< "	" << mAssets[i].name << "	" << mAssets[i].table1 << "	"
+				<< mAssets[i].table2
 				//<< "	" << mAssets[i].data.size()
 				<< std::endl;
 	}
