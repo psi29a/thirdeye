@@ -104,6 +104,8 @@ void GRAPHICS::Graphics::drawImage(std::vector<uint8_t> bmp, uint16_t index,
 	SDL_Rect dest =
 			{ posX, posY, image.getWidth(index), image.getHeight(index) };
 
+	std::cout << "width: " << surface->w << " height: " << surface->h << std::endl;
+
 	SDL_SetPaletteColors(surface->format->palette, mPalette->colors, 0, 256);
 
 	if (transparency) {
@@ -180,7 +182,6 @@ void GRAPHICS::Graphics::drawText(std::vector<uint8_t> fnt, std::string text,
  */
 void GRAPHICS::Graphics::loadMouse(std::vector<uint8_t> bitmap,
 		uint16_t index) {
-	SDL_ClearError();
 	Bitmap image(bitmap);
 
 	SDL_Surface *cursor = SDL_CreateRGBSurface(0,
