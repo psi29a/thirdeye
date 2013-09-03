@@ -40,11 +40,11 @@ struct GFFIDirectoryHeader {
 struct GFFIBlock {
 	char tag[4];					// tag
 	uint32_t number_of_elements;	// num of elements in block
-	uint32_t unique;				// unique identifier
-	uint32_t element_offset;		// location of first element
+	//uint32_t unique;				// unique identifier
+	//uint32_t element_offset;		// location of first element
 	//uint32_t resource_size;		// size of first element
 	//	...							// size of Nth element
-};
+}__attribute__((packed));
 
 struct GFFIBlock2 {
 	char tag[4];					// tag
@@ -56,7 +56,7 @@ struct GFFIBlock2 {
 	//uint32_t num_of_resources;	// number of res indexed by a row for the
 									// first item
 	// uint32_t ...
-};
+}__attribute__((packed));
 
 class GFFI {
 

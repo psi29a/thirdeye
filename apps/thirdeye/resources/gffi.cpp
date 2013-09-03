@@ -6,7 +6,6 @@
  */
 #include "gffi.hpp"
 
-
 #include <boost/filesystem.hpp>
 #include <boost/iostreams/device/file.hpp>
 #include <boost/iostreams/positioning.hpp>
@@ -46,8 +45,7 @@ RESOURCES::GFFI::GFFI(boost::filesystem::path gffiPath) {
 		throw std::runtime_error(
 				mGFFIFile.string() + " is not a valid GFFI resource");
 
-	std::cout << std::hex
-			<< "    sig: " << mGFFIHeader.signature << std::endl
+	std::cout << std::hex << "    sig: " << mGFFIHeader.signature << std::endl
 			<< "    unknown1: " << mGFFIHeader.unknown1 << std::endl
 			<< "    unknown2: " << mGFFIHeader.unknown2 << std::endl
 			<< "    start of body: " << mGFFIHeader.header << std::endl
@@ -59,42 +57,65 @@ RESOURCES::GFFI::GFFI(boost::filesystem::path gffiPath) {
 			<< std::endl;
 
 	seek(fResource, mGFFIHeader.directory_offset, BOOST_IOS::beg);
-	fResource.read(reinterpret_cast<char*>(&mGFFIDirectoryHeader), sizeof(GFFIDirectoryHeader));
+	fResource.read(reinterpret_cast<char*>(&mGFFIDirectoryHeader),
+			sizeof(GFFIDirectoryHeader));
 
-	std::cout << std::hex
-			<< "    unknown1: " << mGFFIDirectoryHeader.unknown1 << std::endl
-			<< "    dir size: " << mGFFIDirectoryHeader.directory_size << std::endl
-			<< "    num of tags: " << mGFFIDirectoryHeader.number_of_tags << std::endl
-			<< "    offset 1st tag: " << mGFFIHeader.directory_offset+sizeof(GFFIDirectoryHeader) << std::endl
-			<< std::endl;
+	std::cout << std::hex << "    unknown1: " << mGFFIDirectoryHeader.unknown1
+			<< std::endl << "    dir size: "
+			<< mGFFIDirectoryHeader.directory_size << std::endl
+			<< "    num of tags: " << mGFFIDirectoryHeader.number_of_tags
+			<< std::endl << "    offset 1st tag: "
+			<< mGFFIHeader.directory_offset + sizeof(GFFIDirectoryHeader)
+			<< std::endl << std::endl;
 
-	seek(fResource, mGFFIHeader.directory_offset+mGFFIDirectoryHeader.directory_size, BOOST_IOS::beg);
+	seek(fResource,
+			mGFFIHeader.directory_offset + mGFFIDirectoryHeader.directory_size,
+			BOOST_IOS::beg);
 	uint16_t end_tag;
-	fResource.read(reinterpret_cast<char*>(&end_tag), sizeof(char)*4);
+	fResource.read(reinterpret_cast<char*>(&end_tag), sizeof(char) * 4);
 	if (end_tag != 0)
-		throw std::runtime_error("Could not find end of directory in GFFI resource.");
+		throw std::runtime_error(
+				"Could not find end of directory in GFFI resource.");
 
-	seek(fResource, mGFFIHeader.directory_offset+sizeof(GFFIDirectoryHeader), BOOST_IOS::beg);
+	seek(fResource, mGFFIHeader.directory_offset + sizeof(GFFIDirectoryHeader),
+			BOOST_IOS::beg);
 	char tag[4];
 	fResource.read(reinterpret_cast<char*>(&tag), sizeof(tag));
 
-	std::cout << std::hex
-			<< "    size offset: " << sizeof(mGFFIHeader) << std::endl
-			<< "    size offset: " << sizeof(GFFIDirectoryHeader) << std::endl
-			<< "    end_tag: " << end_tag << std::endl
-			<< "    tag: " << tag << std::endl
+	std::cout << std::hex << "    end_tag: " << end_tag << std::endl
 			<< std::endl;
 
-	seek(fResource, mGFFIHeader.directory_offset+sizeof(GFFIDirectoryHeader), BOOST_IOS::beg);
-	GFFIBlock mGFFIBlock;
-	fResource.read(reinterpret_cast<char*>(&mGFFIBlock), sizeof(GFFIBlock));
+	seek(fResource, mGFFIHeader.directory_offset + sizeof(GFFIDirectoryHeader),
+			BOOST_IOS::beg);
 
-	std::cout << std::hex
-			<< "    tag: " << mGFFIBlock.tag << std::endl
-			<< "    elements: " << mGFFIBlock.number_of_elements << std::endl
-			<< "    unique: " << mGFFIBlock.unique << std::endl
-			<< "    offset: " << mGFFIBlock.element_offset << std::endl
-			<< std::endl;
+	for (uint16_t block = 0; block < mGFFIDirectoryHeader.number_of_tags;
+			block++) {
+
+		GFFIBlock mGFFIBlock;
+		fResource.read(reinterpret_cast<char*>(&mGFFIBlock), sizeof(GFFIBlock));
+
+		if (mGFFIBlock.tag[3] == 0x20)
+			mGFFIBlock.tag[3] = '\0';
+
+		for (uint16_t elements = 0; elements < mGFFIBlock.number_of_elements;
+				elements++) {
+			uint32_t element_unique;		// location of first element
+			fResource.read(reinterpret_cast<char*>(&element_unique),
+					sizeof(uint32_t));
+			uint32_t element_offset;		// location of first element
+			fResource.read(reinterpret_cast<char*>(&element_offset),
+					sizeof(uint32_t));
+			uint32_t element_size;		// size of first element
+			fResource.read(reinterpret_cast<char*>(&element_size),
+					sizeof(uint32_t));
+			std::cout << std::hex << "    tag: " << std::string(mGFFIBlock.tag)
+					<< std::endl << "    elements: "
+					<< mGFFIBlock.number_of_elements << std::endl
+					<< "    unique: " << element_unique << std::endl
+					<< "    offset: " << element_offset << std::endl
+					<< "    size: " << element_size << std::endl << std::endl;
+		}
+	}
 	//showResources();
 }
 
