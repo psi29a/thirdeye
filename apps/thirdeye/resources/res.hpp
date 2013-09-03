@@ -5,14 +5,16 @@
  *      Author: bcurtis
  */
 
-#ifndef RESOURCE_HPP_
-#define RESOURCE_HPP_
+#ifndef RES_HPP
+#define RES_HPP
 
 #include <map>
 #include <boost/filesystem.hpp>
 #include <boost/iostreams/device/file.hpp>
 
 using boost::iostreams::file_source;
+
+namespace RESOURCES {
 
 #define AESOP_ID "AESOP/16 V1.00"
 #define DIRECTORY_BLOCK_ITEMS 128
@@ -96,8 +98,6 @@ Dictionary() {
 }
 };
 
-namespace RESOURCE {
-// Main engine class, that brings together all the components of Thirdeye
 class Resource {
 	boost::filesystem::path mResFile;
 	std::map<uint16_t, DirectoryBlock> mDirBlocks;
@@ -133,4 +133,4 @@ public:
 };
 }
 
-#endif /* RESOURCE_HPP_ */
+#endif /* RES_HPP */

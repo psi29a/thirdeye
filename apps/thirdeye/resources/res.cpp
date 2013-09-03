@@ -1,10 +1,10 @@
 /*
- * resource.cpp
+ * res.cpp
  *
  *  Created on: Jul 9, 2013
  *      Author: bcurtis
  */
-#include "resource.hpp"
+#include "res.hpp"
 
 #include <sstream>
 #include <iomanip>
@@ -19,7 +19,7 @@ using boost::iostreams::seek;
 
 #include <boost/lexical_cast.hpp>
 
-RESOURCE::Resource::Resource(boost::filesystem::path resourcePath) {
+RESOURCES::Resource::Resource(boost::filesystem::path resourcePath) {
 	mResFile = resourcePath;
 
 	std::cout << "Initializing Resources:" << std::endl;
@@ -76,18 +76,17 @@ RESOURCE::Resource::Resource(boost::filesystem::path resourcePath) {
 			<< std::endl;
 
 	getAssets(fResource);
-
 	fResource.close();
-	std::cout << std::endl;
 
+	//std::cout << std::endl;
 	//showResources();
 }
 
-RESOURCE::Resource::~Resource() {
+RESOURCES::Resource::~Resource() {
 	//cleanup
 }
 
-std::string RESOURCE::Resource::getDate(uint32_t uiDate) {
+std::string RESOURCES::Resource::getDate(uint32_t uiDate) {
 	std::string months[12] = { "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul",
 			"Aug", "Sep", "Oct", "Nov", "Dec" };
 
@@ -102,7 +101,7 @@ std::string RESOURCE::Resource::getDate(uint32_t uiDate) {
 	return out.str();
 }
 
-void RESOURCE::Resource::showFileHeader(GlobalHeader fileHeader) {
+void RESOURCES::Resource::showFileHeader(GlobalHeader fileHeader) {
 	std::cout << "    Signature:		" << fileHeader.signature << std::endl;
 	std::cout << "    Size:		" << fileHeader.file_size << std::endl;
 	std::cout << "    Lost Space:		" << fileHeader.lost_space << std::endl;
@@ -112,7 +111,7 @@ void RESOURCE::Resource::showFileHeader(GlobalHeader fileHeader) {
 			<< std::endl;
 }
 
-uint16_t RESOURCE::Resource::getDirBlocks(file_source resourceFile,
+uint16_t RESOURCES::Resource::getDirBlocks(file_source resourceFile,
 		uint32_t firstBlock) {
 	uint16_t blocks = 0;
 	uint32_t currentBlock = firstBlock;
@@ -135,7 +134,7 @@ uint16_t RESOURCE::Resource::getDirBlocks(file_source resourceFile,
 	return mDirBlocks.size();
 }
 
-uint16_t RESOURCE::Resource::getEntries(file_source resourceFile) {
+uint16_t RESOURCES::Resource::getEntries(file_source resourceFile) {
 	uint16_t entries = 0;
 
 	if (mEntryHeaders.size() > 0)// if already initialized, return how big it is
@@ -158,7 +157,7 @@ uint16_t RESOURCE::Resource::getEntries(file_source resourceFile) {
 	return mEntryHeaders.size();
 }
 
-uint16_t RESOURCE::Resource::getAssets(file_source resourceFile) {
+uint16_t RESOURCES::Resource::getAssets(file_source resourceFile) {
 	DirectoryBlock block = mDirBlocks.begin()->second;
 	uint16_t id = 0;
 	std::string table1 = "";
@@ -237,7 +236,7 @@ uint16_t RESOURCE::Resource::getAssets(file_source resourceFile) {
 	return mAssets.size();
 }
 
-uint16_t RESOURCE::Resource::getTable(file_source resourceFile, uint16_t table,
+uint16_t RESOURCES::Resource::getTable(file_source resourceFile, uint16_t table,
 		std::map<std::string, Dictionary> &dictionary) {
 	DirectoryBlock dirBlock = mDirBlocks.begin()->second;
 	uint32_t dictOffset;
@@ -286,7 +285,7 @@ uint16_t RESOURCE::Resource::getTable(file_source resourceFile, uint16_t table,
 	return counter / 2;
 }
 
-std::string RESOURCE::Resource::searchDictionary(
+std::string RESOURCES::Resource::searchDictionary(
 		std::map<std::string, Dictionary> &haystack, std::string needle) {
 	std::map<std::string, Dictionary>::iterator found;
 	found = haystack.find(needle);
@@ -296,32 +295,32 @@ std::string RESOURCE::Resource::searchDictionary(
 		return "";
 }
 
-std::vector<uint8_t> RESOURCE::Resource::getAsset(std::string name) {
+std::vector<uint8_t> RESOURCES::Resource::getAsset(std::string name) {
 	return getAsset(
 			boost::lexical_cast<uint16_t>(searchDictionary(mTable0, name)));
 }
 
-std::vector<uint8_t> RESOURCE::Resource::getAsset(uint16_t number) {
+std::vector<uint8_t> RESOURCES::Resource::getAsset(uint16_t number) {
 	return mAssets[number].data;
 }
 
-std::string RESOURCE::Resource::getTableEntry(std::string name, uint8_t table) {
+std::string RESOURCES::Resource::getTableEntry(std::string name,
+		uint8_t table) {
 	return getTableEntry(
 			boost::lexical_cast<uint16_t>(searchDictionary(mTable0, name)),
 			table);
 }
 
-std::string RESOURCE::Resource::getTableEntry(uint16_t number, uint8_t table) {
+std::string RESOURCES::Resource::getTableEntry(uint16_t number, uint8_t table) {
 	if (table == 1)
 		return mAssets[number].table1;
 	else if (table == 2)
 		return mAssets[number].table2;
 	else
-		throw std::runtime_error(
-							"Wrong table!");
+		throw std::runtime_error("Wrong table!");
 }
 
-void RESOURCE::Resource::showResources() {
+void RESOURCES::Resource::showResources() {
 	std::cout << "NUMBER	START	OFFSET	SIZE	DATE			ATTRIB	NAME" << std::endl;
 	for (uint16_t i = 0; i < mEntryHeaders.size(); i++) {
 		std::cout << mAssets[i].id << "	" << mAssets[i].start << "	"

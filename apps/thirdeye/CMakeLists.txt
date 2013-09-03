@@ -6,15 +6,17 @@ configure_file ("${CMAKE_CURRENT_SOURCE_DIR}/config.hpp.cmake" "${CMAKE_CURRENT_
 set(GAME
     main.cpp
     engine.cpp
-    resource.cpp
 )
 
 set(GAME_HEADER
     engine.hpp
     config.hpp
-    resource.hpp
 )
 source_group(game FILES ${GAME} ${GAME_HEADER})
+
+add_thirdeye_dir (resources
+    res gffi
+    )
 
 add_thirdeye_dir (sound
     xmidi sound
