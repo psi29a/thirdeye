@@ -1,5 +1,6 @@
 #include "engine.hpp"
-#include "resource.hpp"
+#include "resources/res.hpp"
+#include "resources/gffi.hpp"
 #include "sound/sound.hpp"
 #include "graphics/graphics.hpp"
 
@@ -35,10 +36,10 @@ void THIRDEYE::Engine::setGame(std::string game){
 
 	if (game == "eob3"){
 		mGame = GAME_EOB3;
-		mGameData /= "EYE.RES";
+		mResource = "EYE.RES";
 	} else if (game == "hack") {
 		mGame = GAME_HACK;
-		mGameData /= "HACK.RES";
+		mResource = "HACK.RES";
 	} else
 		mGame = GAME_UNKN;
 
@@ -57,13 +58,13 @@ void THIRDEYE::Engine::setScale(uint16_t scale){
 	mScale = scale;
 }
 
-
 // Initialise and enter main loop.
 void THIRDEYE::Engine::go() {
 	MIXER::Mixer mixer;		// setup our sound mixer
 	GRAPHICS::Graphics gfx(mScale); // setup our graphics
-	RESOURCE::Resource resource(mGameData);	// get our game resources ready
-
+	RESOURCES::Resource resource(mGameData /= mResource);	// get our game resources ready
+	RESOURCES::GFFI gffi(mGameData.parent_path() /= "INTRO.GFF"); // get our intro cinematic
+	return;
 	/*
 	 Settings::Manager settings;
 	 std::string settingspath;

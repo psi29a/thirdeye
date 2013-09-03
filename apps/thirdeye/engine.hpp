@@ -60,6 +60,7 @@ public:
 	void setScale(uint16_t);
 private:
 	Files::ConfigurationManager& mCfgMgr;
+	std::string mResource;
 };
 }
 
