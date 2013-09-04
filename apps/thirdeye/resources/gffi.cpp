@@ -1,7 +1,7 @@
 /*
  * gffi.cpp
  *
- *  Created on: Jul 9, 2013
+ *  Created on: Sept 3, 2013
  *      Author: bcurtis
  */
 #include "gffi.hpp"
@@ -91,29 +91,26 @@ RESOURCES::GFFI::GFFI(boost::filesystem::path gffiPath) {
 	for (uint16_t block = 0; block < mGFFIDirectoryHeader.number_of_tags;
 			block++) {
 
-		GFFIBlock mGFFIBlock;
-		fResource.read(reinterpret_cast<char*>(&mGFFIBlock), sizeof(GFFIBlock));
+		GFFIBlockHeader mGFFIBlockHeader;
+		fResource.read(reinterpret_cast<char*>(&mGFFIBlockHeader), sizeof(GFFIBlockHeader));
 
-		if (mGFFIBlock.tag[3] == 0x20)
-			mGFFIBlock.tag[3] = '\0';
+		if (mGFFIBlockHeader.tag[3] == 0x20)
+			mGFFIBlockHeader.tag[3] = '\0';
 
-		for (uint16_t elements = 0; elements < mGFFIBlock.number_of_elements;
+		for (uint16_t elements = 0; elements < mGFFIBlockHeader.number_of_elements;
 				elements++) {
-			uint32_t element_unique;		// location of first element
-			fResource.read(reinterpret_cast<char*>(&element_unique),
-					sizeof(uint32_t));
-			uint32_t element_offset;		// location of first element
-			fResource.read(reinterpret_cast<char*>(&element_offset),
-					sizeof(uint32_t));
-			uint32_t element_size;		// size of first element
-			fResource.read(reinterpret_cast<char*>(&element_size),
-					sizeof(uint32_t));
-			std::cout << std::hex << "    tag: " << std::string(mGFFIBlock.tag)
+
+			GFFIBlock mGFFIBlock;
+
+			fResource.read(reinterpret_cast<char*>(&mGFFIBlock),
+					sizeof(mGFFIBlock));
+
+			std::cout << std::hex << "    tag: " << std::string(mGFFIBlockHeader.tag)
 					<< std::endl << "    elements: "
-					<< mGFFIBlock.number_of_elements << std::endl
-					<< "    unique: " << element_unique << std::endl
-					<< "    offset: " << element_offset << std::endl
-					<< "    size: " << element_size << std::endl << std::endl;
+					<< mGFFIBlockHeader.number_of_elements << std::endl
+					<< "    unique: " << mGFFIBlock.unique << std::endl
+					<< "    offset: " << mGFFIBlock.offset << std::endl
+					<< "    size: " << mGFFIBlock.size << std::endl << std::endl;
 		}
 	}
 	//showResources();
