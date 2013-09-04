@@ -1,7 +1,7 @@
 /*
  * resource.hpp
  *
- *  Created on: Jul 9, 2013
+ *  Created on: Sept 3, 2013
  *      Author: bcurtis
  */
 
@@ -34,17 +34,24 @@ struct GFFIDirectoryHeader {
 	uint32_t directory_size; 	// minus 2 bytes trailer tag
 	uint16_t number_of_tags;
 	// .. tagged blocks
-	// uint16_t trailer;		// trailer
+	// uint16_t trailer;		// 0 trailer: directory_size + 2
 }__attribute__((packed));	// because the compiler wants to pad
 
-struct GFFIBlock {
+struct GFFIBlockHeader {
 	char tag[4];					// tag
 	uint32_t number_of_elements;	// num of elements in block
 	//uint32_t unique;				// unique identifier
 	//uint32_t element_offset;		// location of first element
 	//uint32_t resource_size;		// size of first element
 	//	...							// size of Nth element
-}__attribute__((packed));
+};
+
+struct GFFIBlock {
+	uint32_t unique;				// unique identifier
+	uint32_t offset;				// location of first element
+	uint32_t size;					// size of first element
+};
+
 
 struct GFFIBlock2 {
 	char tag[4];					// tag
