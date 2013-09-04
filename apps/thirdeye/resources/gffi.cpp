@@ -12,6 +12,7 @@
 
 using boost::iostreams::file_source;
 using boost::iostreams::seek;
+using boost::iostreams::stream_offset;
 
 #include <boost/lexical_cast.hpp>
 
@@ -45,45 +46,19 @@ RESOURCES::GFFI::GFFI(boost::filesystem::path gffiPath) {
 		throw std::runtime_error(
 				mGFFIFile.string() + " is not a valid GFFI resource");
 
-	std::cout << std::hex << "    sig: " << mGFFIHeader.signature << std::endl
-			<< "    unknown1: " << mGFFIHeader.unknown1 << std::endl
-			<< "    unknown2: " << mGFFIHeader.unknown2 << std::endl
-			<< "    start of body: " << mGFFIHeader.header << std::endl
-			<< "    dir offset: " << mGFFIHeader.directory_offset << std::endl
-			<< "    dir size: " << mGFFIHeader.directory_size << std::endl
-			<< "    unknown3: " << mGFFIHeader.unknown3 << std::endl
-			<< "    unknown4: " << mGFFIHeader.unknown4 << std::endl
-			<< "    size offset: " << sizeof(GFFIDirectoryHeader) << std::endl
-			<< std::endl;
-
 	seek(fResource, mGFFIHeader.directory_offset, BOOST_IOS::beg);
 	fResource.read(reinterpret_cast<char*>(&mGFFIDirectoryHeader),
 			sizeof(GFFIDirectoryHeader));
-
-	std::cout << std::hex << "    unknown1: " << mGFFIDirectoryHeader.unknown1
-			<< std::endl << "    dir size: "
-			<< mGFFIDirectoryHeader.directory_size << std::endl
-			<< "    num of tags: " << mGFFIDirectoryHeader.number_of_tags
-			<< std::endl << "    offset 1st tag: "
-			<< mGFFIHeader.directory_offset + sizeof(GFFIDirectoryHeader)
-			<< std::endl << std::endl;
 
 	seek(fResource,
 			mGFFIHeader.directory_offset + mGFFIDirectoryHeader.directory_size,
 			BOOST_IOS::beg);
 	uint16_t end_tag;
 	fResource.read(reinterpret_cast<char*>(&end_tag), sizeof(char) * 4);
+
 	if (end_tag != 0)
 		throw std::runtime_error(
 				"Could not find end of directory in GFFI resource.");
-
-	seek(fResource, mGFFIHeader.directory_offset + sizeof(GFFIDirectoryHeader),
-			BOOST_IOS::beg);
-	char tag[4];
-	fResource.read(reinterpret_cast<char*>(&tag), sizeof(tag));
-
-	std::cout << std::hex << "    end_tag: " << end_tag << std::endl
-			<< std::endl;
 
 	seek(fResource, mGFFIHeader.directory_offset + sizeof(GFFIDirectoryHeader),
 			BOOST_IOS::beg);
@@ -111,6 +86,9 @@ RESOURCES::GFFI::GFFI(boost::filesystem::path gffiPath) {
 					<< "    unique: " << mGFFIBlock.unique << std::endl
 					<< "    offset: " << mGFFIBlock.offset << std::endl
 					<< "    size: " << mGFFIBlock.size << std::endl << std::endl;
+
+			//seek(fResource, mGFFIBlock.offset, BOOST_IOS::beg);
+			//fResource.read(reinterpret_cast<char*>(&mFiles[mGFFIBlockHeader.tag][mGFFIBlock.unique]), mGFFIBlock.size);
 		}
 	}
 	//showResources();
