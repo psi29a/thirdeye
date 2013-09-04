@@ -65,6 +65,11 @@ struct GFFIBlock2 {
 	// uint32_t ...
 }__attribute__((packed));
 
+struct File {
+	uint32_t number;
+	std::vector<uint8_t> data;
+};
+
 class GFFI {
 
 private:
@@ -72,6 +77,7 @@ private:
 	uint32_t mGFFIFileSize;
 	GFFIHeader mGFFIHeader;
 	GFFIDirectoryHeader mGFFIDirectoryHeader;
+	std::map< std::string, std::map< uint32_t, File > > mFiles;
 
 public:
 	GFFI(boost::filesystem::path gffiPath);
