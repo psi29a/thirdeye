@@ -66,7 +66,7 @@ struct GFFIBlock2 {
 }__attribute__((packed));
 
 struct File {
-	uint32_t number;
+	uint32_t offset;
 	std::vector<uint8_t> data;
 };
 
