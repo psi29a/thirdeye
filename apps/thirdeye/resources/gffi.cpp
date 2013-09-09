@@ -6,15 +6,15 @@
  */
 #include "gffi.hpp"
 
+#include <boost/lexical_cast.hpp>
 #include <boost/filesystem.hpp>
 #include <boost/iostreams/device/file.hpp>
 #include <boost/iostreams/positioning.hpp>
+#include <boost/serialization/vector.hpp>
 
 using boost::iostreams::file_source;
 using boost::iostreams::seek;
 using boost::iostreams::stream_offset;
-
-#include <boost/lexical_cast.hpp>
 
 RESOURCES::GFFI::GFFI(boost::filesystem::path gffiPath) {
 	mGFFIFile = gffiPath;
@@ -80,16 +80,41 @@ RESOURCES::GFFI::GFFI(boost::filesystem::path gffiPath) {
 			fResource.read(reinterpret_cast<char*>(&mGFFIBlock),
 					sizeof(mGFFIBlock));
 
+			/*
 			std::cout << std::hex << "    tag: " << std::string(mGFFIBlockHeader.tag)
 					<< std::endl << "    elements: "
 					<< mGFFIBlockHeader.number_of_elements << std::endl
 					<< "    unique: " << mGFFIBlock.unique << std::endl
 					<< "    offset: " << mGFFIBlock.offset << std::endl
 					<< "    size: " << mGFFIBlock.size << std::endl << std::endl;
-
-			//seek(fResource, mGFFIBlock.offset, BOOST_IOS::beg);
-			//fResource.read(reinterpret_cast<char*>(&mFiles[mGFFIBlockHeader.tag][mGFFIBlock.unique]), mGFFIBlock.size);
+			*/
+			mFiles[mGFFIBlockHeader.tag][mGFFIBlock.unique].offset = mGFFIBlock.offset;
+			mFiles[mGFFIBlockHeader.tag][mGFFIBlock.unique].data.resize(mGFFIBlock.size);
 		}
+	}
+
+	//std::cout << "Data dump:" << std::endl;
+	std::map< std::string, std::map< uint32_t, File > >::iterator tag;
+	for (tag = mFiles.begin(); tag != mFiles.end(); tag++) {
+		std::map< uint32_t, File >::iterator file;
+		for (file = tag->second.begin(); file != tag->second.end(); file++) {
+
+			seek(fResource, file->second.offset, BOOST_IOS::beg);
+			fResource.read(reinterpret_cast<char*>(&file->second.data[0]),
+					file->second.data.size());
+			/*
+			std::string Path = "/tmp/"+boost::lexical_cast<std::string>(file->first)+"."+tag->first;
+			std::ofstream FILE(Path.c_str(), std::ios::out | std::ofstream::binary);
+			size_t sz = file->second.data.size();
+			FILE.write(reinterpret_cast<const char*>(&file->second.data[0]), sz * sizeof(file->second.data[0]));
+			std::cout << std::hex << "    tag: " << std::string(tag->first)
+					<< std::endl << "    elements: " << tag->second.size() << std::endl
+					<< "    unique: " << file->first << std::endl
+					<< "    offset: " << file->second.offset << std::endl
+					<< "    size: " << file->second.data.size() << std::endl << std::endl;
+			*/
+		}
+
 	}
 	//showResources();
 }
