@@ -49,7 +49,5 @@ uint16_t GRAPHICS::Palette::getFadeIndexArray00() const {
 }
 
 const SDL_Color& GRAPHICS::Palette::operator[](uint16_t index) {
-	std::cout << std::hex << "[]: " << (int) index << " " << (int) mPalette[index].r << " "
-			<< (int) mPalette[index].g << " " << (int) mPalette[index].b << std::endl;
 	return mPalette[index];
 }
