@@ -36,10 +36,10 @@ void THIRDEYE::Engine::setGame(std::string game){
 
 	if (game == "eob3"){
 		mGame = GAME_EOB3;
-		mResource = "EYE.RES";
+		mGameData /= "EYE.RES";
 	} else if (game == "hack") {
 		mGame = GAME_HACK;
-		mResource = "HACK.RES";
+		mGameData /= "HACK.RES";
 	} else
 		mGame = GAME_UNKN;
 
@@ -62,9 +62,9 @@ void THIRDEYE::Engine::setScale(uint16_t scale){
 void THIRDEYE::Engine::go() {
 	MIXER::Mixer mixer;		// setup our sound mixer
 	GRAPHICS::Graphics gfx(mScale); // setup our graphics
-	RESOURCES::Resource resource(mGameData /= mResource);	// get our game resources ready
-	RESOURCES::GFFI gffi(mGameData.parent_path() /= "INTRO.GFF"); // get our intro cinematic
-	return;
+	RESOURCES::Resource resource(mGameData);	// get our game resources ready
+	RESOURCES::GFFI gffi(mGameData.remove_leaf() /= "INTRO.GFF"); // get our intro cinematic
+
 	/*
 	 Settings::Manager settings;
 	 std::string settingspath;
@@ -72,35 +72,40 @@ void THIRDEYE::Engine::go() {
 	 settingspath = loadSettings (settings);
 	 */
 
-	std::vector<uint8_t> snd = resource.getAsset("BIRD4");
-	std::vector<uint8_t> xmidi = resource.getAsset("CUE1");
+	std::vector<uint8_t> &snd = resource.getAsset("BIRD4");
+	std::vector<uint8_t> &xmidi = resource.getAsset("CUE1");
 
-	std::vector<uint8_t> font = resource.getAsset("8x8 font");
-	std::vector<uint8_t> font2 = resource.getAsset("6x8 font");
-	std::vector<uint8_t> font3 = resource.getAsset("Ornate font");
+	std::vector<uint8_t> &font = resource.getAsset("8x8 font");
+	std::vector<uint8_t> &font2 = resource.getAsset("6x8 font");
+	std::vector<uint8_t> &font3 = resource.getAsset("Ornate font");
 
-	std::vector<uint8_t> bmp = resource.getAsset("Backdrop");
-	std::vector<uint8_t> icons = resource.getAsset("Icons");
-	std::vector<uint8_t> marble = resource.getAsset("Marble walls");
-	std::vector<uint8_t> basePalette = resource.getAsset("Fixed palette");
-	std::vector<uint8_t> subPalette = resource.getAsset("Marble palette");
-
+	std::vector<uint8_t> &bmp = resource.getAsset("Backdrop");
+	std::vector<uint8_t> &icons = resource.getAsset("Icons");
+	std::vector<uint8_t> &marble = resource.getAsset("Marble walls");
+	std::vector<uint8_t> &basePalette = resource.getAsset("Fixed palette");
+	std::vector<uint8_t> &subPalette = resource.getAsset("Marble palette");
 	std::string text = resource.getTableEntry("Marble palette", 1);
-	gfx.loadPalette(basePalette, subPalette, text);
-	gfx.drawImage(bmp, 0, 0, 0);
 
+	/*
+	gfx.loadPalette(basePalette);
+	gfx.drawImage(bmp, 0, 0, false);
+
+	gfx.loadPalette(basePalette, subPalette, text);
 	gfx.drawImage(marble, 18, 0, 0, true);
 	gfx.drawImage(marble, 0, 0, 0, true);
 	gfx.drawImage(marble, 1, 24, 8, true);
 	gfx.drawImage(marble, 2, 48, 20, true);
 	gfx.drawImage(marble, 3, 64, 28, true);
 
-
 	gfx.drawImage(icons, 1, 25, 120, true);
 	gfx.drawText(font,"Welcome to Thirdeye!", 8, 181);
 	gfx.loadMouse(icons, 0);
 
+	*/
 
+	std::map<uint8_t, tuple<uint8_t, std::vector<uint8_t> > > seq = gffi.getSequence();
+	gfx.loadPalette(seq[0].get<1>(), false);
+	gfx.drawImage(seq[1].get<1>(), 0, 0, false);
 	//return;
 
 	// Start the main rendering loop

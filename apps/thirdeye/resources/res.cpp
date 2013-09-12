@@ -295,12 +295,12 @@ std::string RESOURCES::Resource::searchDictionary(
 		return "";
 }
 
-std::vector<uint8_t> RESOURCES::Resource::getAsset(std::string name) {
+std::vector<uint8_t> &RESOURCES::Resource::getAsset(std::string name) {
 	return getAsset(
 			boost::lexical_cast<uint16_t>(searchDictionary(mTable0, name)));
 }
 
-std::vector<uint8_t> RESOURCES::Resource::getAsset(uint16_t number) {
+std::vector<uint8_t> &RESOURCES::Resource::getAsset(uint16_t number) {
 	return mAssets[number].data;
 }
 

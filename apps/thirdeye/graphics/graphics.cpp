@@ -92,7 +92,7 @@ GRAPHICS::Graphics::~Graphics() {
 	SDL_Quit();
 }
 
-void GRAPHICS::Graphics::drawImage(std::vector<uint8_t> bmp, uint16_t index,
+void GRAPHICS::Graphics::drawImage(std::vector<uint8_t> &bmp, uint16_t index,
 		uint16_t posX, uint16_t posY, bool transparency) {
 
 	Bitmap image(bmp);
@@ -134,7 +134,7 @@ void GRAPHICS::Graphics::update() {
 	SDL_DestroyTexture(texture);
 }
 
-void GRAPHICS::Graphics::drawText(std::vector<uint8_t> fnt, std::string text,
+void GRAPHICS::Graphics::drawText(std::vector<uint8_t> &fnt, std::string text,
 		uint16_t posX, uint16_t posY) {
 	Font font(fnt);
 
@@ -180,7 +180,7 @@ void GRAPHICS::Graphics::drawText(std::vector<uint8_t> fnt, std::string text,
  * then we use that canvas as our hardware cursor. Otherwise we get a
  * blank image.
  */
-void GRAPHICS::Graphics::loadMouse(std::vector<uint8_t> bitmap,
+void GRAPHICS::Graphics::loadMouse(std::vector<uint8_t> &bitmap,
 		uint16_t index) {
 	Bitmap image(bitmap);
 
@@ -210,8 +210,8 @@ void GRAPHICS::Graphics::loadMouse(std::vector<uint8_t> bitmap,
 	SDL_FreeSurface(cImage32);
 }
 
-void GRAPHICS::Graphics::loadPalette(std::vector<uint8_t> basePal,
-		std::vector<uint8_t> subPal, std::string index) {
+void GRAPHICS::Graphics::loadPalette(std::vector<uint8_t> &basePal,
+		std::vector<uint8_t> &subPal, std::string index) {
 
 	boost::char_separator<char> sep(",");
 	boost::tokenizer<boost::char_separator<char> > tokens(index, sep);
@@ -232,11 +232,27 @@ void GRAPHICS::Graphics::loadPalette(std::vector<uint8_t> basePal,
 	Palette subPalette(subPal);
 
 	// assign our game palette to a SDL palette
-	for (uint i = 0; i < basePalette.getNumOfColours(); i++) {
+	for (uint16_t i = 0; i < basePalette.getNumOfColours(); i++) {
 		if (i >= start && i <= end)
 			mPalette->colors[i] = subPalette[counter++];
 		else
 			mPalette->colors[i] = basePalette[i];
+	}
+}
+
+void GRAPHICS::Graphics::loadPalette(std::vector<uint8_t> &basePal, bool isRes) {
+	SDL_FreePalette(mPalette);
+	mPalette = SDL_AllocPalette(256);
+	Palette basePalette(basePal, isRes);
+
+	// assign our game palette to a SDL palette
+	for (uint16_t i = 0; i < basePalette.getNumOfColours(); i++) {
+			mPalette->colors[i] = basePalette[i];
+			std::cout << std::hex << "Colour: " << i
+					<< " " << (int)basePalette[i].r
+					<< " " << (int)basePalette[i].g
+					<< " " << (int)basePalette[i].b
+					<< std::endl;
 	}
 }
 
