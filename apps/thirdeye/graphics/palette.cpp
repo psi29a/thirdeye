@@ -16,18 +16,21 @@ GRAPHICS::Palette::Palette(const std::vector<uint8_t> &pal, bool isRes) {
 			mPalette[i].g = pal[offset + 1] << 2;
 			mPalette[i].b = pal[offset + 2] << 2;
 			mPalette[i].a = 0;
-
 			//std::cout << "RGB: " << (int) i << " " << (int) mPalette[i].r << " "
 			//		<< (int) mPalette[i].g << " " << (int) mPalette[i].b << std::endl;
 		}
 	} else {
 		mNumOfColours = 256;
+		uint16_t counter = 0;
 		for(uint i=0; i<768; i+=3){
 			// Bitshift from 8 bits to 6 bits that is which is our palette size
-			mPalette[i].r = pal[i] << 2;
-			mPalette[i].g = pal[i+1] << 2;
-			mPalette[i].b = pal[i+2] << 2;
-			mPalette[i].a = 0;
+			mPalette[counter].r = pal[i] << 2;
+			mPalette[counter].g = pal[i+1] << 2;
+			mPalette[counter].b = pal[i+2] << 2;
+			mPalette[counter].a = 0;
+			//std::cout << std::hex << "RGB: " << (int) i << " " << (int) mPalette[counter].r << " "
+			//		<< (int) mPalette[counter].g << " " << (int) mPalette[counter].b << std::endl;
+			counter++;
 		}
 	}
 
@@ -46,5 +49,7 @@ uint16_t GRAPHICS::Palette::getFadeIndexArray00() const {
 }
 
 const SDL_Color& GRAPHICS::Palette::operator[](uint16_t index) {
+	std::cout << std::hex << "[]: " << (int) index << " " << (int) mPalette[index].r << " "
+			<< (int) mPalette[index].g << " " << (int) mPalette[index].b << std::endl;
 	return mPalette[index];
 }
