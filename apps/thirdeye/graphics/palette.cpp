@@ -1,22 +1,34 @@
 #include "palette.hpp"
 
-GRAPHICS::Palette::Palette(std::vector<uint8_t> base) {
-	mNumOfColours = *reinterpret_cast<const uint16_t*>(&base[0]);
-	mColorArray = *reinterpret_cast<const uint16_t*>(&base[1]);
-	mFadeIndexArray00 = *reinterpret_cast<const uint16_t*>(&base[2]);
+GRAPHICS::Palette::Palette(const std::vector<uint8_t> &pal, bool isRes) {
 
-	std::cout << "Colours: " << mNumOfColours << std::endl;
+	if (isRes){
+		mNumOfColours = *reinterpret_cast<const uint16_t*>(&pal[0]);
+		mColorArray = *reinterpret_cast<const uint16_t*>(&pal[1]);
+		mFadeIndexArray00 = *reinterpret_cast<const uint16_t*>(&pal[2]);
 
-	// Bitshift from 6 bits (64 colours) to 8 bits (256 colours that is in our palette
-	for (uint16_t i = 0; i < mNumOfColours; i++) {
-		uint16_t offset = (i * 3) + PALHEADEROFFSET;
-		mPalette[i].r = base[offset] << 2;
-		mPalette[i].g = base[offset + 1] << 2;
-		mPalette[i].b = base[offset + 2] << 2;
-		mPalette[i].a = 0;
+		std::cout << "Colours: " << mNumOfColours << std::endl;
 
-		//std::cout << "RGB: " << (int) i << " " << (int) mPalette[i].r << " "
-		//		<< (int) mPalette[i].g << " " << (int) mPalette[i].b << std::endl;
+		// Bitshift from 6 bits (64 colours) to 8 bits (256 colours that is in our palette
+		for (uint16_t i = 0; i < mNumOfColours; i++) {
+			uint16_t offset = (i * 3) + PALHEADEROFFSET;
+			mPalette[i].r = pal[offset] << 2;
+			mPalette[i].g = pal[offset + 1] << 2;
+			mPalette[i].b = pal[offset + 2] << 2;
+			mPalette[i].a = 0;
+
+			//std::cout << "RGB: " << (int) i << " " << (int) mPalette[i].r << " "
+			//		<< (int) mPalette[i].g << " " << (int) mPalette[i].b << std::endl;
+		}
+	} else {
+		mNumOfColours = 256;
+		for(uint i=0; i<768; i+=3){
+			// Bitshift from 8 bits to 6 bits that is which is our palette size
+			mPalette[i].r = pal[i] << 2;
+			mPalette[i].g = pal[i+1] << 2;
+			mPalette[i].b = pal[i+2] << 2;
+			mPalette[i].a = 0;
+		}
 	}
 
 }

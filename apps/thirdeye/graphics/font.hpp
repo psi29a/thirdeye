@@ -21,7 +21,7 @@ namespace GRAPHICS {
 
 class Font {
 public:
-	Font(std::vector<uint8_t> vec);
+	Font(const std::vector<uint8_t> vec);
 	virtual ~Font();
 	SDL_Surface* getCharacter(uint8_t ascii);
 private:

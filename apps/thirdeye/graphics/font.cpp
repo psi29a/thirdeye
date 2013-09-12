@@ -7,7 +7,7 @@
 #include <stdio.h>
 #include <string.h>
 
-GRAPHICS::Font::Font(std::vector<uint8_t> vec) :
+GRAPHICS::Font::Font(const std::vector<uint8_t> vec) :
 		vec_(vec) {
 	//uint16_t prev = 518;
 	uint8_t characters = *reinterpret_cast<const uint16_t*>(&vec_[0]);

@@ -31,19 +31,15 @@ private:
 public:
 	Graphics(uint16_t scale);
 	virtual ~Graphics();
-
-	void drawImage(std::vector<uint8_t> bmp, uint16_t index, uint16_t posX,
+	void drawImage(std::vector<uint8_t> &bmp, uint16_t index, uint16_t posX,
 			uint16_t posY, bool transparency = false);
-	void drawText(std::vector<uint8_t> fnt, std::string text, uint16_t posX,
+	void drawText(std::vector<uint8_t> &fnt, std::string text, uint16_t posX,
 			uint16_t posY);
-
-	void loadPalette(std::vector<uint8_t> basePal, std::vector<uint8_t> subPal,
+	void loadPalette(std::vector<uint8_t> &basePal, bool isRes=true);
+	void loadPalette(std::vector<uint8_t> &basePal, std::vector<uint8_t> &subPal,
 			std::string index);
-	void loadMouse(std::vector<uint8_t> bitmap, uint16_t index);
-
+	void loadMouse(std::vector<uint8_t> &bitmap, uint16_t index);
 	void update();
-
-
 };
 
 }

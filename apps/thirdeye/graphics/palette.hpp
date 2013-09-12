@@ -34,7 +34,7 @@ namespace GRAPHICS {
 
 class Palette {
 public:
-	Palette(std::vector<uint8_t> base);
+	Palette(const std::vector<uint8_t> &pal, bool isRes = true);
 	uint16_t getNumOfColours() const;
 	uint16_t getColorArray() const;
 	uint16_t getFadeIndexArray00() const;

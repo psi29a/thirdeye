@@ -123,8 +123,8 @@ public:
 	Resource(boost::filesystem::path resourcePath);
 	virtual ~Resource();
 
-	std::vector<uint8_t> getAsset(std::string name);
-	std::vector<uint8_t> getAsset(uint16_t number);
+	std::vector<uint8_t> &getAsset(std::string name);
+	std::vector<uint8_t> &getAsset(uint16_t number);
 	std::string getTableEntry(std::string name, uint8_t table);
 	std::string getTableEntry(uint16_t number, uint8_t table);
 

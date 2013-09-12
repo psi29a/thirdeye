@@ -11,12 +11,26 @@
 #include <map>
 #include <boost/filesystem.hpp>
 #include <boost/iostreams/device/file.hpp>
+#include "boost/tuple/tuple.hpp"
 
 using boost::iostreams::file_source;
+using boost::tuples::tuple;
+using boost::tuples::tie;
 
 namespace RESOURCES {
 
 #define GFFI_ID "GFFI"
+
+#define PLAY_MUSIC 	0
+#define SETT_PAL	1
+#define DISP_BMP	2
+#define PLAY_ANIM	3
+#define FADE_LEFT	4
+#define FADE_RIGHT	5
+#define FADE_CENTER	6
+
+#define T_TAG		0
+#define	T_DATA		1
 
 struct GFFIHeader {
 	char signature[4]; 	// must be == GFFI"
@@ -59,7 +73,7 @@ struct GFFIBlock2 {
 	uint32_t unknown2;				// number in the block
 	uint32_t unique_table;			// number of the resource table for this block
 	uint32_t unknown3;				// number in the block
-	uint32_t unqiue_number;			// unique res number of 1st item
+	//uint32_t unqiue_number;			// unique res number of 1st item
 	//uint32_t num_of_resources;	// number of res indexed by a row for the
 									// first item
 	// uint32_t ...
@@ -81,6 +95,7 @@ private:
 
 public:
 	GFFI(boost::filesystem::path gffiPath);
+	std::map<uint8_t, tuple<uint8_t, std::vector<uint8_t> > > getSequence();
 	virtual ~GFFI();
 };
 }
