@@ -86,7 +86,6 @@ void THIRDEYE::Engine::go() {
 	std::vector<uint8_t> &subPalette = resource.getAsset("Marble palette");
 	std::string text = resource.getTableEntry("Marble palette", 1);
 
-	/*
 	gfx.loadPalette(basePalette);
 	gfx.drawImage(bmp, 0, 0, false);
 
@@ -100,8 +99,6 @@ void THIRDEYE::Engine::go() {
 	gfx.drawImage(icons, 1, 25, 120, true);
 	gfx.drawText(font,"Welcome to Thirdeye!", 8, 181);
 	gfx.loadMouse(icons, 0);
-
-	*/
 
 	std::map<uint8_t, tuple<uint8_t, std::vector<uint8_t> > > seq = gffi.getSequence();
 	gfx.loadPalette(seq[0].get<1>(), false);

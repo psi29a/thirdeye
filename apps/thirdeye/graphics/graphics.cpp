@@ -248,11 +248,6 @@ void GRAPHICS::Graphics::loadPalette(std::vector<uint8_t> &basePal, bool isRes) 
 	// assign our game palette to a SDL palette
 	for (uint16_t i = 0; i < basePalette.getNumOfColours(); i++) {
 			mPalette->colors[i] = basePalette[i];
-			std::cout << std::hex << "Colour: " << i
-					<< " " << (int)basePalette[i].r
-					<< " " << (int)basePalette[i].g
-					<< " " << (int)basePalette[i].b
-					<< std::endl;
 	}
 }
 
