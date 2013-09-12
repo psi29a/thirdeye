@@ -76,8 +76,8 @@ void THIRDEYE::Engine::go() {
 	std::vector<uint8_t> &xmidi = resource.getAsset("CUE1");
 
 	std::vector<uint8_t> &font = resource.getAsset("8x8 font");
-	std::vector<uint8_t> &font2 = resource.getAsset("6x8 font");
-	std::vector<uint8_t> &font3 = resource.getAsset("Ornate font");
+	//std::vector<uint8_t> &font2 = resource.getAsset("6x8 font");
+	//std::vector<uint8_t> &font3 = resource.getAsset("Ornate font");
 
 	std::vector<uint8_t> &bmp = resource.getAsset("Backdrop");
 	std::vector<uint8_t> &icons = resource.getAsset("Icons");
