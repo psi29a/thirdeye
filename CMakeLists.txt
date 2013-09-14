@@ -15,15 +15,18 @@ set (THIRDEYE_VERSION "${THIRDEYE_VERSION_MAJOR}.${THIRDEYE_VERSION_MINOR}.${THI
 configure_file ("${Thirdeye_SOURCE_DIR}/docs/mainpage.hpp.cmake" "${Thirdeye_SOURCE_DIR}/docs/mainpage.hpp")
 
 # Are we building a debug build?
-option(DEBUG "Link static build of Boost into the binaries" FALSE)
+option(DEBUG "Use debug build options" FALSE)
+
+# Are we running unit tests?
+option(UNIT_TESTS "Run unit tests" FALSE)
 
 # Are we building statically?
 option(BOOST_STATIC "Link static build of Boost into the binaries" FALSE)
 option(SDL2_STATIC "Link static build of SDL into the binaries" FALSE)
 
 # Apps and tools
-option(BUILD_LAUNCHER "Build Thirdeye Launcher" ON)
 option(BUILD_DAESOP "Build Daesop" ON)
+option(BUILD_LAUNCHER "Build Thirdeye Launcher" OFF)
 option(BUILD_ARC "Build ARC" OFF)
 
 # We probably support older versions than this.
@@ -86,6 +89,16 @@ include_directories("."
 )
 
 link_directories(${Boost_LIBRARY_DIRS})
+
+if (UNIT_TESTS)
+    # Locate GTest
+    find_package(GTest REQUIRED)
+    include_directories(${GTEST_INCLUDE_DIRS})
+     
+    # Link runTests with what we want to test and the GTest and pthread library
+    #add_executable(runTests my_test.cpp)
+    #target_link_libraries(runTests ${GTEST_LIBRARIES} ${GTEST_MAIN_LIBRARIES} pthread)
+endif()
 
 # Find SDL2
 Find_package(SDL2 REQUIRED)
