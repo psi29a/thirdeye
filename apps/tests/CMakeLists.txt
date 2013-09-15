@@ -12,10 +12,15 @@ set(UNITTEST_HEADER
 )
 source_group(game FILES ${UNITTEST} ${UNITTEST_HEADER})
 
+add_runtests_dir (graphics
+    graphics font palette bitmap
+    )
 
 # Main executable
 add_executable(runtests
     ${UNITTEST} ${UNITTEST_HEADER}
+    ${UNITTEST_LIBS} ${UNITTEST_LIBS_HEADER}
+    ${UNITTEST_FILES}
 )
 
 target_link_libraries(runtests
