@@ -1,4 +1,5 @@
 #include "gtest/gtest.h"
+#include "../thirdeye/graphics/graphics.hpp"
 
 /*
 TEST(SquareRootTest, PositiveNos) {
@@ -13,6 +14,15 @@ TEST (SquareRootTest, ZeroAndNegativeNos) {
 }
 
 */
+
+TEST (PaletteTest, Test){
+	std::vector<uint8_t> data(3);
+	GRAPHICS::Palette pal(data);
+	EXPECT_EQ(0, pal[0].r);
+	EXPECT_EQ(0, pal[0].g);
+	EXPECT_EQ(0, pal[0].b);
+	EXPECT_EQ(0, pal[0].a);
+}
 
 int main(int argc, char **argv) {
   ::testing::InitGoogleTest(&argc, argv);
