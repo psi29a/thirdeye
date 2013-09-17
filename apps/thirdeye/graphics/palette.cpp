@@ -7,7 +7,7 @@ GRAPHICS::Palette::Palette(const std::vector<uint8_t> &pal, bool isRes) {
 		mColorArray = *reinterpret_cast<const uint16_t*>(&pal[1]);
 		mFadeIndexArray00 = *reinterpret_cast<const uint16_t*>(&pal[2]);
 
-		std::cout << "Colours: " << mNumOfColours << std::endl;
+		//std::cout << "Colours: " << mNumOfColours << std::endl;
 
 		// Bitshift from 6 bits (64 colours) to 8 bits (256 colours that is in our palette
 		for (uint16_t i = 0; i < mNumOfColours; i++) {
@@ -20,9 +20,9 @@ GRAPHICS::Palette::Palette(const std::vector<uint8_t> &pal, bool isRes) {
 			//		<< (int) mPalette[i].g << " " << (int) mPalette[i].b << std::endl;
 		}
 	} else {
-		mNumOfColours = 256;
+		mNumOfColours = pal.size()/3; // 3 is rgb
 		uint16_t counter = 0;
-		for(uint i=0; i<768; i+=3){
+		for(uint i=0; i<pal.size(); i+=3){
 			// Bitshift from 8 bits to 6 bits that is which is our palette size
 			mPalette[counter].r = pal[i] << 2;
 			mPalette[counter].g = pal[i+1] << 2;
