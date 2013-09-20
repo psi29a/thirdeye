@@ -126,10 +126,11 @@ RESOURCES::GFFI::~GFFI() {
 	//cleanup
 }
 
-std::map<uint8_t, tuple<uint8_t, std::vector<uint8_t> > > RESOURCES::GFFI::getSequence(){
-	std::map<uint8_t, tuple<uint8_t, std::vector<uint8_t> > > sequences;
-	sequences[0] = boost::make_tuple(SETT_PAL, mFiles["PAL"][1].data);
-	sequences[1] = boost::make_tuple(DISP_BMP, mFiles["BMP"][1].data);
+std::map<uint8_t, tuple<uint8_t, uint8_t, std::vector<uint8_t> > > RESOURCES::GFFI::getSequence(){
+	std::map<uint8_t, tuple<uint8_t, uint8_t, std::vector<uint8_t> > > sequences;
+	sequences[0] = boost::make_tuple(SETT_PAL, 0, mFiles["PAL"][1].data);
+	sequences[1] = boost::make_tuple(DISP_BMP, 5, mFiles["BMP"][1].data);
+	sequences[2] = boost::make_tuple(DISP_BMP, 5, mFiles["BMA"][1].data);
 	//sequences[1] = boost::make_tuple(PLAY_MUSIC, mFiles["LSEQ"][1].data);
 	return sequences;
 }
