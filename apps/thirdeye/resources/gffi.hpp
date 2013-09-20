@@ -95,7 +95,7 @@ private:
 
 public:
 	GFFI(boost::filesystem::path gffiPath);
-	std::map<uint8_t, tuple<uint8_t, std::vector<uint8_t> > > getSequence();
+	std::map<uint8_t, tuple<uint8_t, uint8_t, std::vector<uint8_t> > > getSequence();
 	virtual ~GFFI();
 };
 }

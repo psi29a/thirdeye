@@ -100,9 +100,13 @@ void THIRDEYE::Engine::go() {
 	gfx.drawText(font,"Welcome to Thirdeye!", 8, 181);
 	gfx.loadMouse(icons, 0);
 
-	std::map<uint8_t, tuple<uint8_t, std::vector<uint8_t> > > seq = gffi.getSequence();
-	gfx.loadPalette(seq[0].get<1>(), false);
-	gfx.drawImage(seq[1].get<1>(), 0, 0, false);
+	Uint32 clock = 0;
+	clock = SDL_GetTicks();
+
+	std::map<uint8_t, tuple<uint8_t, uint8_t, std::vector<uint8_t> > > seq = gffi.getSequence();
+	gfx.loadPalette(seq[0].get<2>(), false);
+	gfx.drawImage(seq[1].get<2>(), 0, 0, 0, false);
+	gfx.drawImage(seq[2].get<2>(), 1, 0, 0, false);
 	//return;
 
 	// Start the main rendering loop
@@ -110,6 +114,7 @@ void THIRDEYE::Engine::go() {
 	bool done = false;
 	while (!done)  // Enter main loop.
 	{
+		clock = SDL_GetTicks();
 		while (SDL_PollEvent(&event)) {
 			switch (event.type) {
 			// this is the window x being clicked.
@@ -172,8 +177,10 @@ void THIRDEYE::Engine::go() {
 		gfx.update();		// update our screen
 		mixer.update();		// update our sounds
 
+		std::cout << "Clock " << clock/1000 << std::endl;
+
 		//printf("Waiting 60...\n");
-		SDL_Delay(60);      // Pause briefly before moving on to the next cycle.
+		SDL_Delay(1000);      // Pause briefly before moving on to the next cycle.
 	}
 
 	// Save user settings

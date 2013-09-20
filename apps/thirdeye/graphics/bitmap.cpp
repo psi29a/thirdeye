@@ -53,7 +53,7 @@ GRAPHICS::Bitmap::Bitmap(const std::vector<uint8_t> &vec){
 				int rle_width = vec[pos];
 				pos++;
 
-				//int rle_bytes=bmp[pos];
+				//int rle_bytes=vec[pos];
 				pos++;
 
 				while (rle_width > 0) {
@@ -84,7 +84,7 @@ GRAPHICS::Bitmap::Bitmap(const std::vector<uint8_t> &vec){
 				if (rle_width != 0) {
 					printf("Out of sync while depacking RLE (rle_width=%d).\n",
 							rle_width);
-					throw;
+					//throw;
 				}
 
 				if (islast == 0x80)
