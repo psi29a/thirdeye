@@ -84,7 +84,7 @@ GRAPHICS::Bitmap::Bitmap(const std::vector<uint8_t> &vec){
 				if (rle_width != 0) {
 					printf("Out of sync while depacking RLE (rle_width=%d).\n",
 							rle_width);
-					//throw;
+					throw;
 				}
 
 				if (islast == 0x80)
