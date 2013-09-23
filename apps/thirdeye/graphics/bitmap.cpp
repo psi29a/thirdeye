@@ -1,3 +1,7 @@
+/*
+ * RLE decoding technique from Andreas Larsson (Jackasser)
+ */
+
 #include "bitmap.hpp"
 
 GRAPHICS::Bitmap::Bitmap(const std::vector<uint8_t> &vec){
@@ -44,7 +48,7 @@ GRAPHICS::Bitmap::Bitmap(const std::vector<uint8_t> &vec){
 			pos++;
 
 			while (true) {
-				int x = vec[pos+0] | ( ( vec[pos+1] &0x7f ) << 8);
+				int x = vec[pos+0] | ( ( vec[pos+1] & 0x7f ) << 8);
 				int islast = vec[pos+1] & 0x80;
 				int rle_width = vec[pos+2];
 				int rle_bytes = vec[pos+3];
