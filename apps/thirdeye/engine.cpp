@@ -106,7 +106,7 @@ void THIRDEYE::Engine::go() {
 	std::map<uint8_t, tuple<uint8_t, uint8_t, std::vector<uint8_t> > > seq = gffi.getSequence();
 	gfx.loadPalette(seq[0].get<2>(), false);
 	gfx.drawImage(seq[1].get<2>(), 0, 0, 0, false);
-	gfx.drawImage(seq[2].get<2>(), 1, 0, 0, false);
+	gfx.drawImage(seq[2].get<2>(), 0, 0, 0, false);
 	//return;
 
 	// Start the main rendering loop

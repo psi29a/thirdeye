@@ -44,17 +44,11 @@ GRAPHICS::Bitmap::Bitmap(const std::vector<uint8_t> &vec){
 			pos++;
 
 			while (true) {
-				int x = vec[pos];
-				pos++;
-
-				int islast = vec[pos];
-				pos++;
-
-				int rle_width = vec[pos];
-				pos++;
-
-				//int rle_bytes=vec[pos];
-				pos++;
+				int x = vec[pos+0] | ( ( vec[pos+1] &0x7f ) << 8);
+				int islast = vec[pos+1] & 0x80;
+				int rle_width = vec[pos+2];
+				int rle_bytes = vec[pos+3];
+				pos += 4;
 
 				while (rle_width > 0) {
 					int mode = vec[pos] & 1;
