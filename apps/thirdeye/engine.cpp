@@ -106,8 +106,8 @@ void THIRDEYE::Engine::go() {
 	std::map<uint8_t, tuple<uint8_t, uint8_t, std::vector<uint8_t> > > seq = gffi.getSequence();
 	gfx.loadPalette(seq[0].get<2>(), false);
 	gfx.drawImage(seq[1].get<2>(), 0, 0, 0, false);
-	gfx.drawImage(seq[2].get<2>(), 0, 0, 0, false);
-	//return;
+	gfx.drawImage(seq[2].get<2>(), 0, 0, 0, true);
+	gfx.playVideo(seq[3].get<2>());
 
 	// Start the main rendering loop
 	SDL_Event event;
@@ -180,7 +180,7 @@ void THIRDEYE::Engine::go() {
 		std::cout << "Clock " << clock/1000 << std::endl;
 
 		//printf("Waiting 60...\n");
-		SDL_Delay(1000);      // Pause briefly before moving on to the next cycle.
+		SDL_Delay(60*2);      // Pause briefly before moving on to the next cycle.
 	}
 
 	// Save user settings
