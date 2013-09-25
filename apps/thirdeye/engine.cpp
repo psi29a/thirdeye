@@ -107,6 +107,7 @@ void THIRDEYE::Engine::go() {
 	gfx.loadPalette(seq[0].get<2>(), false);
 	gfx.drawImage(seq[1].get<2>(), 0, 0, 0, false);
 	gfx.drawImage(seq[2].get<2>(), 0, 0, 0, true);
+	gfx.drawImage(seq[3].get<2>(), 0, 0, 0, false);
 	gfx.playVideo(seq[3].get<2>());
 
 	// Start the main rendering loop
@@ -177,7 +178,7 @@ void THIRDEYE::Engine::go() {
 		gfx.update();		// update our screen
 		mixer.update();		// update our sounds
 
-		std::cout << "Clock " << clock/1000 << std::endl;
+		//std::cout << "Clock " << clock/1000 << std::endl;
 
 		//printf("Waiting 60...\n");
 		SDL_Delay(60*2);      // Pause briefly before moving on to the next cycle.
