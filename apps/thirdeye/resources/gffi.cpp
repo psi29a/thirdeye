@@ -81,7 +81,7 @@ RESOURCES::GFFI::GFFI(boost::filesystem::path gffiPath) {
 					sizeof(mGFFIBlock));
 
 			std::string tag = mGFFIBlockHeader.tag;
-			tag[4] =  '\0';
+			tag[3] =  '\0';	// needs null, but we loose last char
 			/*
 			std::cout << std::hex << "    tag: " << tag
 					<< std::endl << "    elements: "

@@ -80,6 +80,8 @@ GRAPHICS::Graphics::Graphics(uint16_t scale) {
 
 	mPalette = SDL_AllocPalette(256);
 	mCursor = NULL;
+	mFrames = 0;
+	mCounter = 0;
 
 }
 
@@ -104,8 +106,7 @@ void GRAPHICS::Graphics::drawImage(std::vector<uint8_t> &bmp, uint16_t index,
 	SDL_Rect dest =
 			{ posX, posY, image.getWidth(index), image.getHeight(index) };
 
-	std::cout << "width: " << surface->w << " height: " << surface->h
-			<< std::endl;
+	//std::cout << "width: " << surface->w << " height: " << surface->h << std::endl;
 
 	SDL_SetPaletteColors(surface->format->palette, mPalette->colors, 0, 256);
 
@@ -117,39 +118,24 @@ void GRAPHICS::Graphics::drawImage(std::vector<uint8_t> &bmp, uint16_t index,
 	SDL_FreeSurface(surface);
 }
 
-void GRAPHICS::Graphics::playVideo(std::vector<uint8_t> &videoData) {
+void GRAPHICS::Graphics::playVideo(std::vector<uint8_t> videoData) {
 	Bitmap video(videoData);
-	uint8_t frames = video.getNumberOfBitmaps();
-
-	for (uint8_t i = 0; i < frames; i++) {
-		if (i == 1 or i == 2) // hack, something wrong with 2nd and 3rd frame of INTRO
-			continue;
-
-		mVideoQueue[i] = SDL_CreateRGBSurfaceFrom((void*) &video[i],
-				video.getWidth(i), video.getHeight(i), 8, video.getWidth(i), 0,
-				0, 0, 0);
-
-		SDL_SetPaletteColors(mVideoQueue[i]->format->palette, mPalette->colors,
-				0, 256);
-
-		if (i > 0) {
-			SDL_SetColorKey(mVideoQueue[i], SDL_TRUE,
-					SDL_MapRGB(mVideoQueue[i]->format, 0, 0, 0));
-		}
-
-	}
+	mFrames = video.getNumberOfBitmaps();
+	mCounter = 0;
+	mVideo = videoData;
 }
 
 void GRAPHICS::Graphics::update() {
 
 	// anything in our queue to display?
-	if (mVideoQueue.size() > 0) {
-		std::map<uint8_t, SDL_Surface*>::iterator frame;
-		//for (block = mDirBlocks.begin(); block != mDirBlocks.end(); block++) {
-		frame = mVideoQueue.begin();
-		SDL_BlitSurface(frame->second, NULL, mScreen, NULL);
-		SDL_FreeSurface(frame->second);
-		mVideoQueue.erase(frame);
+	if (mFrames > 0 and mFrames > mCounter) {
+		bool transparency = false;
+		if (mCounter > 0)
+			transparency = true;
+
+		drawImage(mVideo, mCounter, 0, 0, transparency);
+		std::cout << "  Frame: " << (int) mCounter << std::endl;
+		mCounter++;
 	}
 
 	// generate texture from our screen surface

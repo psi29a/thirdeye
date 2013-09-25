@@ -8,7 +8,7 @@ GRAPHICS::Bitmap::Bitmap(const std::vector<uint8_t> &vec){
 
 	mNumSubBitmaps = *reinterpret_cast<const uint16_t*>(&vec[2 * 2]);
 
-	std::cout << mNumSubBitmaps << " sub picture(s) found." << std::endl;
+	//std::cout << mNumSubBitmaps << " sub picture(s) found." << std::endl;
 
 	std::map<uint16_t, uint32_t> offsets;
 	for (uint16_t i = 0; i < mNumSubBitmaps; i++) {
@@ -51,7 +51,7 @@ GRAPHICS::Bitmap::Bitmap(const std::vector<uint8_t> &vec){
 				int x = vec[pos+0] | ( ( vec[pos+1] & 0x7f ) << 8);
 				int islast = vec[pos+1] & 0x80;
 				int rle_width = vec[pos+2];
-				int rle_bytes = vec[pos+3];
+				//int rle_bytes = vec[pos+3];
 				pos += 4;
 
 				while (rle_width > 0) {
