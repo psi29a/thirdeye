@@ -24,7 +24,7 @@ namespace RESOURCES {
 #define PLAY_MUSIC 	0
 #define SETT_PAL	1
 #define DISP_BMP	2
-#define PLAY_ANIM	3
+#define DISP_BMA	3
 #define FADE_LEFT	4
 #define FADE_RIGHT	5
 #define FADE_CENTER	6

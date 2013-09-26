@@ -98,17 +98,22 @@ void THIRDEYE::Engine::go() {
 
 	gfx.drawImage(icons, 1, 25, 120, true);
 	gfx.drawText(font,"Welcome to Thirdeye!", 8, 181);
+
 	gfx.loadMouse(icons, 0);
 
-	Uint32 clock = 0;
-	clock = SDL_GetTicks();
+	Uint32 	clock = 0;
+	Uint32 	currentSecond = 0;
+	Uint32 	wait = 0;
+	bool 	update = false;
 
-	std::map<uint8_t, tuple<uint8_t, uint8_t, std::vector<uint8_t> > > seq = gffi.getSequence();
-	gfx.loadPalette(seq[0].get<2>(), false);
-	gfx.drawImage(seq[1].get<2>(), 0, 0, 0, false);
-	gfx.drawImage(seq[2].get<2>(), 0, 0, 0, true);
-	gfx.drawImage(seq[3].get<2>(), 0, 0, 0, false);
-	gfx.playVideo(seq[3].get<2>());
+	std::map<uint8_t, tuple<uint8_t, uint8_t, std::vector<uint8_t> > > cutscene = gffi.getSequence();
+	/*
+	gfx.loadPalette(cutscene[0].get<2>(), false);
+	gfx.drawImage(cutscene[1].get<2>(), 0, 0, 0, false);
+	gfx.drawImage(cutscene[2].get<2>(), 0, 0, 0, true);
+	gfx.drawImage(cutscene[3].get<2>(), 0, 0, 0, false);
+	gfx.playAnimation(cutscene[3].get<2>());
+	*/
 
 	// Start the main rendering loop
 	SDL_Event event;
@@ -116,6 +121,14 @@ void THIRDEYE::Engine::go() {
 	while (!done)  // Enter main loop.
 	{
 		clock = SDL_GetTicks();
+		if (clock/1000 > currentSecond){
+			currentSecond = clock/1000;
+			update = true;
+		}
+
+		if (wait > 0 and update)
+			wait--;
+
 		while (SDL_PollEvent(&event)) {
 			switch (event.type) {
 			// this is the window x being clicked.
@@ -175,12 +188,38 @@ void THIRDEYE::Engine::go() {
 			} // end of event switch
 		} // end pool loop
 
+		if (cutscene.size() > 0 and wait == 0){
+			//std::map<uint8_t, tuple<uint8_t, uint8_t, std::vector<uint8_t> > > cutscene = gffi.getSequence();
+			uint8_t index = cutscene.begin()->first;
+			tuple<uint8_t, uint8_t, std::vector<uint8_t> > scene = cutscene.begin()->second;
+			switch (scene.get<0>()){
+			case SETT_PAL:
+				gfx.loadPalette(scene.get<2>(), false);
+				break;
+			case DISP_BMP:
+				gfx.drawImage(scene.get<2>(), 0, 0, 0, false);
+				break;
+			case DISP_BMA:
+				gfx.playAnimation(scene.get<2>());
+				break;
+			case FADE_LEFT:
+				gfx.drawImage(scene.get<2>(), 0, 0, 0, true);
+				break;
+			default:
+				std::cerr << "Case not yet implemented." << std::endl;
+				throw;
+			}
+			wait = scene.get<1>();
+			cutscene.erase(index);
+		}
+
 		gfx.update();		// update our screen
 		mixer.update();		// update our sounds
 
-		//std::cout << "Clock " << clock/1000 << std::endl;
+		std::cout << "Clock " << clock/1000 << std::endl;
 
 		//printf("Waiting 60...\n");
+		update = false;
 		SDL_Delay(60*2);      // Pause briefly before moving on to the next cycle.
 	}
 
