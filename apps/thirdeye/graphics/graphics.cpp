@@ -71,10 +71,6 @@ GRAPHICS::Graphics::Graphics(uint16_t scale) {
 	// Create our game screen that will be blitted to before renderering
 	mScreen = SDL_CreateRGBSurface(0, WIDTH, HEIGHT, 32, 0, 0, 0, 0);
 
-	// set magenta as our transparent colour
-	//SDL_SetColorKey(mScreen, SDL_TRUE,
-	//		SDL_MapRGB(mScreen->format, 255, 0, 255));
-
 	SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "linear"); // make the scaled rendering look smoother.
 	SDL_RenderSetLogicalSize(mRenderer, WIDTH, HEIGHT);
 
@@ -98,8 +94,9 @@ void GRAPHICS::Graphics::drawImage(std::vector<uint8_t> &bmp, uint16_t index,
 		uint16_t posX, uint16_t posY, bool transparency) {
 
 	Bitmap image(bmp);
+	std::vector<uint8_t> imageData = image[index];
 
-	SDL_Surface *surface = SDL_CreateRGBSurfaceFrom((void*) &image[index],
+	SDL_Surface *surface = SDL_CreateRGBSurfaceFrom((void*) &imageData[0],
 			image.getWidth(index), image.getHeight(index), 8,
 			image.getWidth(index), 0, 0, 0, 0);
 
@@ -118,20 +115,20 @@ void GRAPHICS::Graphics::drawImage(std::vector<uint8_t> &bmp, uint16_t index,
 	SDL_FreeSurface(surface);
 }
 
-void GRAPHICS::Graphics::playVideo(std::vector<uint8_t> videoData) {
-	Bitmap video(videoData);
-	mFrames = video.getNumberOfBitmaps();
+void GRAPHICS::Graphics::playAnimation(std::vector<uint8_t> animationData) {
+	Bitmap animation(animationData);
+	mFrames = animation.getNumberOfBitmaps();
 	mCounter = 0;
-	mVideo = videoData;
+	mVideo = animationData;
 }
 
 void GRAPHICS::Graphics::update() {
 
-	// anything in our queue to display?
+	// anything in our animation queue to display?
 	if (mFrames > 0 and mFrames > mCounter) {
-		bool transparency = false;
-		if (mCounter > 0)
-			transparency = true;
+		bool transparency = true;
+		if (mCounter == 0)	// only first frame is is not transparent
+			transparency = false;
 
 		drawImage(mVideo, mCounter, 0, 0, transparency);
 		std::cout << "  Frame: " << (int) mCounter << std::endl;
@@ -203,12 +200,13 @@ void GRAPHICS::Graphics::drawText(std::vector<uint8_t> &fnt, std::string text,
 void GRAPHICS::Graphics::loadMouse(std::vector<uint8_t> &bitmap,
 		uint16_t index) {
 	Bitmap image(bitmap);
+	std::vector<uint8_t> cursorData = image[index];
 
 	SDL_Surface *cursor = SDL_CreateRGBSurface(0,
 			image.getWidth(index) * mScale, image.getHeight(index) * mScale, 32,
 			0, 0, 0, 0);
 
-	SDL_Surface *cImage = SDL_CreateRGBSurfaceFrom((void*) &image[index],
+	SDL_Surface *cImage = SDL_CreateRGBSurfaceFrom((void*) &cursorData[0],
 			image.getWidth(index), image.getHeight(index), 8,
 			image.getWidth(index), 0, 0, 0, 0);
 	SDL_SetPaletteColors(cImage->format->palette, mPalette->colors, 0, 256);

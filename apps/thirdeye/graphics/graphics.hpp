@@ -39,7 +39,7 @@ public:
 			uint16_t posY, bool transparency = false);
 	void drawText(std::vector<uint8_t> &fnt, std::string text, uint16_t posX,
 			uint16_t posY);
-	void playVideo(std::vector<uint8_t> video);
+	void playAnimation(std::vector<uint8_t> video);
 	void loadPalette(std::vector<uint8_t> &basePal, bool isRes=true);
 	void loadPalette(std::vector<uint8_t> &basePal, std::vector<uint8_t> &subPal,
 			std::string index);

@@ -36,13 +36,15 @@ class Bitmap {
 public:
 	Bitmap(const std::vector<uint8_t> &vec);
 	virtual ~Bitmap();
-	const uint8_t& operator[](uint16_t index);
+	std::vector<uint8_t> operator[](uint16_t index);
 	uint16_t getWidth(uint16_t index) ;
 	uint16_t getHeight(uint16_t index) ;
 	uint16_t getNumberOfBitmaps();
 private:
 	uint16_t mNumSubBitmaps;
+	std::map<uint16_t, uint32_t> mBitmapOffets;
 	std::map< uint16_t, SubBitmap > mSubBitmaps;
+	std::vector<uint8_t> mBitmapData;
 };
 
 }
