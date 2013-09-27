@@ -26,7 +26,9 @@ private:
 	SDL_Surface *mScreen;
 	SDL_Cursor *mCursor;
 	SDL_Palette *mPalette;
-	std::map<uint16_t, SDL_Surface*> mVideoQueue;
+	bool mFadeIn;
+	bool mFadeOut;
+	int16_t mAlpha;
 	uint8_t mFrames;
 	uint8_t mCounter;
 	std::vector<uint8_t> mVideo;
@@ -40,6 +42,7 @@ public:
 	void drawText(std::vector<uint8_t> &fnt, std::string text, uint16_t posX,
 			uint16_t posY);
 	void playAnimation(std::vector<uint8_t> video);
+	void fadeIn();
 	void loadPalette(std::vector<uint8_t> &basePal, bool isRes=true);
 	void loadPalette(std::vector<uint8_t> &basePal, std::vector<uint8_t> &subPal,
 			std::string index);

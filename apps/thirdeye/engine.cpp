@@ -75,6 +75,7 @@ void THIRDEYE::Engine::go() {
 	std::vector<uint8_t> &snd = resource.getAsset("BIRD4");
 	std::vector<uint8_t> &xmidi = resource.getAsset("CUE1");
 
+	/*
 	std::vector<uint8_t> &font = resource.getAsset("8x8 font");
 	//std::vector<uint8_t> &font2 = resource.getAsset("6x8 font");
 	//std::vector<uint8_t> &font3 = resource.getAsset("Ornate font");
@@ -100,6 +101,7 @@ void THIRDEYE::Engine::go() {
 	gfx.drawText(font,"Welcome to Thirdeye!", 8, 181);
 
 	gfx.loadMouse(icons, 0);
+	*/
 
 	Uint32 	clock = 0;
 	Uint32 	currentSecond = 0;
@@ -107,13 +109,26 @@ void THIRDEYE::Engine::go() {
 	bool 	update = false;
 
 	std::map<uint8_t, tuple<uint8_t, uint8_t, std::vector<uint8_t> > > cutscene = gffi.getSequence();
-	/*
+
 	gfx.loadPalette(cutscene[0].get<2>(), false);
-	gfx.drawImage(cutscene[1].get<2>(), 0, 0, 0, false);
-	gfx.drawImage(cutscene[2].get<2>(), 0, 0, 0, true);
-	gfx.drawImage(cutscene[3].get<2>(), 0, 0, 0, false);
-	gfx.playAnimation(cutscene[3].get<2>());
-	*/
+	//gfx.drawImage(cutscene[1].get<2>(), 0, 0, 0, false);
+	//gfx.drawImage(cutscene[2].get<2>(), 0, 0, 0, true);
+	//gfx.drawImage(cutscene[3].get<2>(), 0, 0, 0, false);
+	gfx.playAnimation(cutscene[6].get<2>());
+	gfx.update();
+	SDL_Delay(1000);
+	gfx.update();
+	gfx.playAnimation(cutscene[7].get<2>());
+	SDL_Delay(1000);
+	gfx.update();
+	SDL_Delay(1000);
+	gfx.update();
+	gfx.playAnimation(cutscene[8].get<2>());
+	SDL_Delay(1000);
+	gfx.update();
+	SDL_Delay(1000);
+	return;
+
 
 	// Start the main rendering loop
 	SDL_Event event;
@@ -201,6 +216,10 @@ void THIRDEYE::Engine::go() {
 				break;
 			case DISP_BMA:
 				gfx.playAnimation(scene.get<2>());
+				break;
+			case FADE_IN:
+				gfx.drawImage(scene.get<2>(), 0, 0, 0, false);
+				gfx.fadeIn();
 				break;
 			case FADE_LEFT:
 				gfx.drawImage(scene.get<2>(), 0, 0, 0, true);

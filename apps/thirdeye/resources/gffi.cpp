@@ -93,6 +93,10 @@ RESOURCES::GFFI::GFFI(boost::filesystem::path gffiPath) {
 
 			mFiles[tag][mGFFIBlock.unique].offset = mGFFIBlock.offset;
 			mFiles[tag][mGFFIBlock.unique].data.resize(mGFFIBlock.size);
+
+			/*TODO: search in BMAs for 0xFF to see if there sub-Animations
+			 * that need their own file.
+			 */
 		}
 	}
 
@@ -129,11 +133,16 @@ RESOURCES::GFFI::~GFFI() {
 std::map<uint8_t, tuple<uint8_t, uint8_t, std::vector<uint8_t> > > RESOURCES::GFFI::getSequence(){
 	std::map<uint8_t, tuple<uint8_t, uint8_t, std::vector<uint8_t> > > sequences;
 	sequences[0] = boost::make_tuple(SETT_PAL, 0, mFiles["PAL"][1].data);
-	sequences[1] = boost::make_tuple(DISP_BMP, 5, mFiles["BMP"][1].data);
+	sequences[1] = boost::make_tuple(FADE_IN, 5, mFiles["BMP"][1].data);
 	sequences[2] = boost::make_tuple(FADE_LEFT, 5, mFiles["BMP"][2].data);
 	sequences[3] = boost::make_tuple(DISP_BMP, 5, mFiles["BMP"][1].data);
 	sequences[4] = boost::make_tuple(FADE_LEFT, 5, mFiles["BMP"][3].data);
 	sequences[5] = boost::make_tuple(DISP_BMA, 5, mFiles["BMA"][1].data);
+	sequences[6] = boost::make_tuple(DISP_BMA, 5, mFiles["BMA"][2].data);
+	sequences[7] = boost::make_tuple(DISP_BMA, 5, mFiles["BMA"][3].data);
+	sequences[8] = boost::make_tuple(DISP_BMA, 5, mFiles["BMA"][4].data);
+	sequences[9] = boost::make_tuple(DISP_BMA, 5, mFiles["BMA"][5].data);
+	sequences[10] = boost::make_tuple(DISP_BMA, 5, mFiles["BMA"][6].data);
 	//sequences[1] = boost::make_tuple(PLAY_MUSIC, mFiles["LSEQ"][1].data);
 	return sequences;
 }
