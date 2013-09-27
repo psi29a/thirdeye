@@ -66,10 +66,15 @@ GRAPHICS::Graphics::Graphics(uint16_t scale) {
 	//mRenderer = SDL_CreateRenderer(mWindow, -1, SDL_RENDERER_ACCELERATED);
 	mRenderer = SDL_CreateRenderer(mWindow, -1, SDL_RENDERER_SOFTWARE);
 
-	//SDL_GetRendererInfo(mRenderer, &displayRendererInfo);
+	//SDL_RendererInfo* displayRendererInfo;
+	//SDL_GetRendererInfo(mRenderer, displayRendererInfo);
+	//std::cout << displayRendererInfo->name << std::endl;
 
 	// Create our game screen that will be blitted to before renderering
 	mScreen = SDL_CreateRGBSurface(0, WIDTH, HEIGHT, 32, 0, 0, 0, 0);
+
+	SDL_SetColorKey(mScreen, SDL_TRUE,
+			SDL_MapRGB(mScreen->format, 0, 0, 0));
 
 	SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "linear"); // make the scaled rendering look smoother.
 	SDL_RenderSetLogicalSize(mRenderer, WIDTH, HEIGHT);
@@ -78,6 +83,9 @@ GRAPHICS::Graphics::Graphics(uint16_t scale) {
 	mCursor = NULL;
 	mFrames = 0;
 	mCounter = 0;
+	mFadeIn = false;
+	mFadeOut = false;
+	mAlpha = 0;
 
 }
 
@@ -122,6 +130,11 @@ void GRAPHICS::Graphics::playAnimation(std::vector<uint8_t> animationData) {
 	mVideo = animationData;
 }
 
+void GRAPHICS::Graphics::fadeIn() {
+	mFadeIn = True;
+	mAlpha = 0;
+}
+
 void GRAPHICS::Graphics::update() {
 
 	// anything in our animation queue to display?
@@ -133,6 +146,21 @@ void GRAPHICS::Graphics::update() {
 		drawImage(mVideo, mCounter, 0, 0, transparency);
 		std::cout << "  Frame: " << (int) mCounter << std::endl;
 		mCounter++;
+	}
+
+	// are we fading in or out?
+	if (mFadeIn or mFadeOut){
+		if (mFadeIn and mAlpha > SDL_ALPHA_OPAQUE){
+			mFadeIn = false;
+			mAlpha = SDL_ALPHA_OPAQUE;
+		}
+		if (mFadeOut and mAlpha < SDL_ALPHA_TRANSPARENT){
+			mFadeOut = false;
+			mAlpha = SDL_ALPHA_TRANSPARENT;
+		}
+		int value = SDL_SetSurfaceAlphaMod(mScreen, mAlpha);
+		printf("Sleeping: %d - %d  \n", value, mAlpha);
+		(mFadeIn) ? mAlpha+=10 : mAlpha-=10;
 	}
 
 	// generate texture from our screen surface

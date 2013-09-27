@@ -25,9 +25,10 @@ namespace RESOURCES {
 #define SETT_PAL	1
 #define DISP_BMP	2
 #define DISP_BMA	3
-#define FADE_LEFT	4
-#define FADE_RIGHT	5
-#define FADE_CENTER	6
+#define FADE_IN		4
+#define FADE_OUT	5
+#define FADE_LEFT	6
+#define FADE_RIGHT	7
 
 #define T_TAG		0
 #define	T_DATA		1
