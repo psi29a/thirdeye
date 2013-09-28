@@ -60,17 +60,17 @@ RESOURCES::GFFI::GFFI(boost::filesystem::path gffiPath) {
 		throw std::runtime_error(
 				"Could not find end of directory in GFFI resource.");
 
+	// Now we read the header information
 	seek(fResource, mGFFIHeader.directory_offset + sizeof(GFFIDirectoryHeader),
 			BOOST_IOS::beg);
-
 	for (uint16_t block = 0; block < mGFFIDirectoryHeader.number_of_tags;
 			block++) {
 
 		GFFIBlockHeader mGFFIBlockHeader;
 		fResource.read(reinterpret_cast<char*>(&mGFFIBlockHeader), sizeof(GFFIBlockHeader));
 
-		if (mGFFIBlockHeader.tag[3] == 0x20)
-			mGFFIBlockHeader.tag[3] = '\0';
+		//if (mGFFIBlockHeader.tag[3] == 0x20)
+		mGFFIBlockHeader.tag[3] = '\0';
 
 		for (uint16_t elements = 0; elements < mGFFIBlockHeader.number_of_elements;
 				elements++) {
@@ -81,15 +81,16 @@ RESOURCES::GFFI::GFFI(boost::filesystem::path gffiPath) {
 					sizeof(mGFFIBlock));
 
 			std::string tag = mGFFIBlockHeader.tag;
-			tag[3] =  '\0';	// needs null, but we loose last char
-			/*
+			//tag[3] =  '\0';	// needs null, but we loose last char
+
+			if (tag == "BMA"){
 			std::cout << std::hex << "    tag: " << tag
 					<< std::endl << "    elements: "
 					<< mGFFIBlockHeader.number_of_elements << std::endl
 					<< "    unique: " << mGFFIBlock.unique << std::endl
 					<< "    offset: " << mGFFIBlock.offset << std::endl
 					<< "    size: " << mGFFIBlock.size << std::endl << std::endl;
-			*/
+			}
 
 			mFiles[tag][mGFFIBlock.unique].offset = mGFFIBlock.offset;
 			mFiles[tag][mGFFIBlock.unique].data.resize(mGFFIBlock.size);
@@ -100,6 +101,7 @@ RESOURCES::GFFI::GFFI(boost::filesystem::path gffiPath) {
 		}
 	}
 
+	// Now we dump the data
 	//std::cout << "Data dump:" << std::endl;
 	std::map< std::string, std::map< uint32_t, File > >::iterator tag;
 	for (tag = mFiles.begin(); tag != mFiles.end(); tag++) {
@@ -137,7 +139,7 @@ std::map<uint8_t, tuple<uint8_t, uint8_t, std::vector<uint8_t> > > RESOURCES::GF
 	sequences[2] = boost::make_tuple(FADE_LEFT, 5, mFiles["BMP"][2].data);
 	sequences[3] = boost::make_tuple(DISP_BMP, 5, mFiles["BMP"][1].data);
 	sequences[4] = boost::make_tuple(FADE_LEFT, 5, mFiles["BMP"][3].data);
-	sequences[5] = boost::make_tuple(DISP_BMA, 5, mFiles["BMA"][1].data);
+	sequences[5] = boost::make_tuple(DISP_BMA, 10, mFiles["BMA"][1].data);
 	sequences[6] = boost::make_tuple(DISP_BMA, 5, mFiles["BMA"][2].data);
 	sequences[7] = boost::make_tuple(DISP_BMA, 5, mFiles["BMA"][3].data);
 	sequences[8] = boost::make_tuple(DISP_BMA, 5, mFiles["BMA"][4].data);

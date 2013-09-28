@@ -85,5 +85,13 @@ std::vector<uint8_t> GRAPHICS::Bitmap::operator[](uint16_t index) {
 		}
 	}
 
+
+	if (pos+1 == mBitmapData.size())
+		std::cout << "We're at the end!" << std::endl;
+	else
+		std::cout << "Pos: " << pos << " size of file: " << mBitmapData.size() << std::endl;
+
+
+
 	return bitmap;
 }
