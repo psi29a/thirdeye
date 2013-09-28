@@ -5,6 +5,7 @@
  *      Author: bcurtis
  */
 #include "gffi.hpp"
+#include "../graphics/bitmap.hpp"
 
 #include <boost/lexical_cast.hpp>
 #include <boost/filesystem.hpp>
@@ -95,9 +96,6 @@ RESOURCES::GFFI::GFFI(boost::filesystem::path gffiPath) {
 			mFiles[tag][mGFFIBlock.unique].offset = mGFFIBlock.offset;
 			mFiles[tag][mGFFIBlock.unique].data.resize(mGFFIBlock.size);
 
-			/*TODO: search in BMAs for 0xFF to see if there sub-Animations
-			 * that need their own file.
-			 */
 		}
 	}
 
@@ -111,6 +109,12 @@ RESOURCES::GFFI::GFFI(boost::filesystem::path gffiPath) {
 			seek(fResource, file->second.offset, BOOST_IOS::beg);
 			fResource.read(reinterpret_cast<char*>(&file->second.data[0]),
 					file->second.data.size());
+
+			if (tag->first == "BMA"){
+				GRAPHICS::Bitmap anim(file->second.data);
+				anim[anim.getNumberOfBitmaps()-1];
+				printf("Is more: %d @ offset: %d\n", anim.isMoreBitmap(), anim.getNextBitmapPos());
+			}
 			/*
 			std::string Path = "/tmp/"+boost::lexical_cast<std::string>(file->first)+"."+tag->first;
 			std::ofstream FILE(Path.c_str(), std::ios::out | std::ofstream::binary);

@@ -40,11 +40,14 @@ public:
 	uint16_t getWidth(uint16_t index) ;
 	uint16_t getHeight(uint16_t index) ;
 	uint16_t getNumberOfBitmaps();
+	bool isMoreBitmap();
+	uint32_t getNextBitmapPos();
 private:
 	uint16_t mNumSubBitmaps;
 	std::map<uint16_t, uint32_t> mBitmapOffets;
 	std::map< uint16_t, SubBitmap > mSubBitmaps;
 	std::vector<uint8_t> mBitmapData;
+	uint32_t nextBitmapPos;
 };
 
 }

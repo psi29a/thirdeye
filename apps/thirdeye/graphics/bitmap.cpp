@@ -6,6 +6,7 @@
 
 GRAPHICS::Bitmap::Bitmap(const std::vector<uint8_t> &vec) {
 	mBitmapData = vec;
+	nextBitmapPos = 0;
 	mNumSubBitmaps = *reinterpret_cast<const uint16_t*>(&vec[2 * 2]);
 
 	for (uint16_t i = 0; i < mNumSubBitmaps; i++) {
@@ -15,6 +16,14 @@ GRAPHICS::Bitmap::Bitmap(const std::vector<uint8_t> &vec) {
 
 GRAPHICS::Bitmap::~Bitmap() {
 
+}
+
+bool GRAPHICS::Bitmap::isMoreBitmap(){
+	return (bool) nextBitmapPos;
+}
+
+uint32_t GRAPHICS::Bitmap::getNextBitmapPos(){
+	return nextBitmapPos;
 }
 
 uint16_t GRAPHICS::Bitmap::getNumberOfBitmaps() {
@@ -86,11 +95,14 @@ std::vector<uint8_t> GRAPHICS::Bitmap::operator[](uint16_t index) {
 	}
 
 
-	if (pos+1 == mBitmapData.size())
+	if (pos+1 == mBitmapData.size()){
 		std::cout << "We're at the end!" << std::endl;
-	else
+		nextBitmapPos = 0;
+	}
+	else {
 		std::cout << "Pos: " << pos << " size of file: " << mBitmapData.size() << std::endl;
-
+		nextBitmapPos = pos+1;
+	}
 
 
 	return bitmap;
