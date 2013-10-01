@@ -140,8 +140,8 @@ void GRAPHICS::Graphics::update() {
 	// anything in our animation queue to display?
 	if (mFrames > 0 and mFrames > mCounter) {
 		bool transparency = true;
-		if (mCounter == 0)	// only first frame is is not transparent
-			transparency = false;
+		//if (mCounter == 0)	// only first frame is is not transparent
+		//	transparency = false;
 
 		drawImage(mVideo, mCounter, 0, 0, transparency);
 		std::cout << "  Frame: " << (int) mCounter << std::endl;

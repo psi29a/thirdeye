@@ -75,7 +75,7 @@ void THIRDEYE::Engine::go() {
 	std::vector<uint8_t> &snd = resource.getAsset("BIRD4");
 	std::vector<uint8_t> &xmidi = resource.getAsset("CUE1");
 
-	/*
+
 	std::vector<uint8_t> &font = resource.getAsset("8x8 font");
 	//std::vector<uint8_t> &font2 = resource.getAsset("6x8 font");
 	//std::vector<uint8_t> &font3 = resource.getAsset("Ornate font");
@@ -101,7 +101,7 @@ void THIRDEYE::Engine::go() {
 	gfx.drawText(font,"Welcome to Thirdeye!", 8, 181);
 
 	gfx.loadMouse(icons, 0);
-	*/
+
 
 	Uint32 	clock = 0;
 	Uint32 	currentSecond = 0;
@@ -110,6 +110,7 @@ void THIRDEYE::Engine::go() {
 
 	std::map<uint8_t, tuple<uint8_t, uint8_t, std::vector<uint8_t> > > cutscene = gffi.getSequence();
 
+	/*
 	gfx.loadPalette(cutscene[0].get<2>(), false);
 	gfx.drawImage(cutscene[1].get<2>(), 0, 0, 0, false);
 	std::vector<uint8_t> test = cutscene[1].get<2>();
