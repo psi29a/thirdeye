@@ -108,13 +108,39 @@ void THIRDEYE::Engine::go() {
 	Uint32 	wait = 0;
 	bool 	update = false;
 
+	return;
+
 	std::map<uint8_t, tuple<uint8_t, uint8_t, std::vector<uint8_t> > > cutscene = gffi.getSequence();
-	/*
+
 	gfx.loadPalette(cutscene[0].get<2>(), false);
-	//gfx.drawImage(cutscene[1].get<2>(), 0, 0, 0, false);
+	gfx.drawImage(cutscene[1].get<2>(), 0, 0, 0, false);
+	std::vector<uint8_t> test = cutscene[1].get<2>();
+	uint32_t numOfBitmaps = *reinterpret_cast<const uint16_t*>(&test[2 * 2]);
+	uint32_t offset = *reinterpret_cast<const uint16_t*>(&test[6 + 0 * 4]);
+	printf("What: %x @ %x \n", numOfBitmaps, offset);
+	test = cutscene[2].get<2>();
+	numOfBitmaps = *reinterpret_cast<const uint16_t*>(&test[2 * 2]);
+	offset = *reinterpret_cast<const uint16_t*>(&test[6 + 0 * 4]);
+	printf("What: %x @ %x \n", numOfBitmaps, offset);
+	test = cutscene[5].get<2>();
+	numOfBitmaps = *reinterpret_cast<const uint16_t*>(&test[2 * 2]);
+	offset = *reinterpret_cast<const uint16_t*>(&test[6 + 0 * 4]);
+	printf("What: %x @ %x \n", numOfBitmaps, offset);
 	//gfx.drawImage(cutscene[2].get<2>(), 0, 0, 0, true);
 	//gfx.drawImage(cutscene[3].get<2>(), 0, 0, 0, false);
-	gfx.playAnimation(cutscene[5].get<2>());
+	//gfx.drawImage(cutscene[6].get<2>(), 0, 0, 0, true);
+	test = cutscene[6].get<2>();
+	numOfBitmaps = *reinterpret_cast<const uint16_t*>(&test[2 * 2]);
+	offset = *reinterpret_cast<const uint16_t*>(&test[6 + 0 * 4]);
+	printf("What: %x @ %x \n", numOfBitmaps, offset);
+	test = cutscene[7].get<2>();
+	numOfBitmaps = *reinterpret_cast<const uint16_t*>(&test[2 * 2]);
+	offset = *reinterpret_cast<const uint16_t*>(&test[6 + 0 * 4]);
+	printf("What: %x @ %x \n", numOfBitmaps, offset);
+	test = cutscene[8].get<2>();
+	numOfBitmaps = *reinterpret_cast<const uint16_t*>(&test[2 * 2]);
+	offset = *reinterpret_cast<const uint16_t*>(&test[6 + 0 * 4]);
+	printf("What: %x @ %x \n", numOfBitmaps, offset);
 	gfx.update();
 	SDL_Delay(1000);
 	gfx.update();
@@ -129,6 +155,8 @@ void THIRDEYE::Engine::go() {
 	SDL_Delay(1000);
 	gfx.update();
 	SDL_Delay(1000);
+	return;
+	/*
 	gfx.playAnimation(cutscene[6].get<2>());
 	gfx.update();
 	SDL_Delay(1000);
@@ -219,8 +247,8 @@ void THIRDEYE::Engine::go() {
 		} // end pool loop
 
 		if (cutscene.size() > 0 and wait == 0){
-			//std::map<uint8_t, tuple<uint8_t, uint8_t, std::vector<uint8_t> > > cutscene = gffi.getSequence();
 			uint8_t index = cutscene.begin()->first;
+			std::cout << "Playing cutscene: " << (int) index << std::endl;
 			tuple<uint8_t, uint8_t, std::vector<uint8_t> > scene = cutscene.begin()->second;
 			switch (scene.get<0>()){
 			case SETT_PAL:

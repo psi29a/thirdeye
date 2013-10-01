@@ -65,8 +65,7 @@ struct GFFIBlock {
 	uint32_t unique;				// unique identifier
 	uint32_t offset;				// location of first element
 	uint32_t size;					// size of first element
-};
-
+}__attribute__((packed));
 
 struct GFFIBlock2 {
 	char tag[4];					// tag
@@ -82,7 +81,8 @@ struct GFFIBlock2 {
 
 struct File {
 	uint32_t offset;
-	std::vector<uint8_t> data;
+	//std::vector<uint8_t> data;
+	std::map<uint8_t, std::vector<uint8_t> > data;
 };
 
 class GFFI {
