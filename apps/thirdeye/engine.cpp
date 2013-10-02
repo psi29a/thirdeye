@@ -224,11 +224,11 @@ void THIRDEYE::Engine::go() {
 				gfx.loadPalette(scene.get<2>(), false);
 				break;
 			case PANB_LEFT:
-				gfx.drawImage(scene.get<2>(), 0, 0, 0, true);
+				gfx.drawImage(scene.get<2>(), 0, 0, 2, true);
 				cutscene.erase(index); // just a test
 				index = cutscene.begin()->first;
 				scene = cutscene.begin()->second;
-				gfx.drawImage(scene.get<2>(), 0, 0, 0, true);
+				gfx.drawImage(scene.get<2>(), 0, 0, 2, true);
 				break;
 			case DISP_BMP:
 				gfx.drawImage(scene.get<2>(), 0, 0, 0, false);
