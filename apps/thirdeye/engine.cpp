@@ -224,7 +224,11 @@ void THIRDEYE::Engine::go() {
 				gfx.loadPalette(scene.get<2>(), false);
 				break;
 			case PANB_LEFT:
-				gfx.drawImage(scene.get<2>(), 0, 0, 0, false);
+				gfx.drawImage(scene.get<2>(), 0, 0, 0, true);
+				cutscene.erase(index); // just a test
+				index = cutscene.begin()->first;
+				scene = cutscene.begin()->second;
+				gfx.drawImage(scene.get<2>(), 0, 0, 0, true);
 				break;
 			case DISP_BMP:
 				gfx.drawImage(scene.get<2>(), 0, 0, 0, false);
@@ -232,7 +236,6 @@ void THIRDEYE::Engine::go() {
 			case PANF_LEFT:
 				gfx.drawImage(scene.get<2>(), 0, 0, 0, true);
 				break;
-
 			case DISP_BMA:
 				gfx.playAnimation(scene.get<2>());
 				break;
