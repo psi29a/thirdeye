@@ -114,43 +114,28 @@ void THIRDEYE::Engine::go() {
 	gfx.loadPalette(cutscene[0].get<2>(), false);
 	gfx.drawImage(cutscene[1].get<2>(), 0, 0, 0, false);
 	std::vector<uint8_t> test = cutscene[1].get<2>();
-	uint32_t numOfBitmaps = *reinterpret_cast<const uint16_t*>(&test[2 * 2]);
-	uint32_t offset = *reinterpret_cast<const uint16_t*>(&test[6 + 0 * 4]);
-	printf("What: %x @ %x \n", numOfBitmaps, offset);
-	test = cutscene[6].get<2>();
-	numOfBitmaps = *reinterpret_cast<const uint16_t*>(&test[2 * 2]);
-	offset = *reinterpret_cast<const uint16_t*>(&test[6 + 0 * 4]);
-	printf("What: %x @ %x \n", numOfBitmaps, offset);
-	gfx.playAnimation(cutscene[6].get<2>());
+	gfx.playAnimation(cutscene[10].get<2>());
 	gfx.update();
 	SDL_Delay(1000);
 	gfx.update();
 	SDL_Delay(1000);
 	gfx.update();
-	gfx.playAnimation(cutscene[7].get<2>());
+	gfx.playAnimation(cutscene[11].get<2>());
 	SDL_Delay(1000);
 	gfx.update();
 	SDL_Delay(1000);
 	gfx.update();
-	gfx.playAnimation(cutscene[8].get<2>());
-	SDL_Delay(1000);
-	gfx.update();
-	SDL_Delay(1000);
-	gfx.playAnimation(cutscene[9].get<2>());
-	gfx.update();
-	SDL_Delay(1000);
-	return;
-	/*
-	gfx.playAnimation(cutscene[6].get<2>());
-	gfx.update();
-	SDL_Delay(1000);
-	gfx.update();
-	gfx.playAnimation(cutscene[7].get<2>());
+	gfx.playAnimation(cutscene[13].get<2>());
 	SDL_Delay(1000);
 	gfx.update();
 	SDL_Delay(1000);
 	gfx.update();
-	gfx.playAnimation(cutscene[8].get<2>());
+	gfx.playAnimation(cutscene[14].get<2>());
+	SDL_Delay(1000);
+	gfx.update();
+	SDL_Delay(1000);
+	gfx.update();
+	gfx.playAnimation(cutscene[15].get<2>());
 	SDL_Delay(1000);
 	gfx.update();
 	SDL_Delay(1000);
@@ -238,9 +223,16 @@ void THIRDEYE::Engine::go() {
 			case SETT_PAL:
 				gfx.loadPalette(scene.get<2>(), false);
 				break;
+			case PANB_LEFT:
+				gfx.drawImage(scene.get<2>(), 0, 0, 0, false);
+				break;
 			case DISP_BMP:
 				gfx.drawImage(scene.get<2>(), 0, 0, 0, false);
 				break;
+			case PANF_LEFT:
+				gfx.drawImage(scene.get<2>(), 0, 0, 0, true);
+				break;
+
 			case DISP_BMA:
 				gfx.playAnimation(scene.get<2>());
 				break;
