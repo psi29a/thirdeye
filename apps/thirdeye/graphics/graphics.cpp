@@ -138,31 +138,36 @@ void GRAPHICS::Graphics::panDirection(uint8_t panDir,
 		std::vector<uint8_t> bgRight, std::vector<uint8_t> bgLeft,
 		std::vector<uint8_t> fgRight, std::vector<uint8_t> fgLeft) {
 
-	std::vector<uint8_t> imageData;
+
 
 	Bitmap bBGRight(bgRight);
-	imageData = bBGRight[0];
+	std::vector<uint8_t> bBGRightD = bBGRight[0];
 	SDL_Surface *bgRightSurface = SDL_CreateRGBSurfaceFrom(
-			(void*) &imageData[0], bBGRight.getWidth(0), bBGRight.getHeight(0),
+			(void*) &bBGRightD[0], bBGRight.getWidth(0), bBGRight.getHeight(0),
 			8, bBGRight.getWidth(0), 0, 0, 0, 0);
+	SDL_SetPaletteColors(bgRightSurface->format->palette, mPalette->colors, 0,
+			256);
 
 	Bitmap bBGLeft(bgLeft);
-	imageData = bBGLeft[0];
-	SDL_Surface *bgLeftSurface = SDL_CreateRGBSurfaceFrom((void*) &imageData[0],
+	std::vector<uint8_t> bBGLeftD = bBGLeft[0];
+	SDL_Surface *bgLeftSurface = SDL_CreateRGBSurfaceFrom((void*) &bBGLeftD[0],
 			bBGLeft.getWidth(0), bBGLeft.getHeight(0), 8, bBGLeft.getWidth(0),
 			0, 0, 0, 0);
+	SDL_SetPaletteColors(bgLeftSurface->format->palette, mPalette->colors, 0,
+			256);
 
 	SDL_Surface *bgScene = SDL_CreateRGBSurface(0, bBGLeft.getWidth(0) * 2,
-			bBGLeft.getHeight(0), 32, 0, 0, 0, 0);
+			bBGLeft.getHeight(0), 8, 0, 0, 0, 0);
+	SDL_SetPaletteColors(bgScene->format->palette, mPalette->colors, 0,
+				256);
 
-	SDL_Rect dest = { bBGLeft.getWidth(0), 0, bBGLeft.getWidth(0) * 2,
-			bBGLeft.getHeight(0) };
-
+	SDL_Rect dest = { bBGLeft.getWidth(0), 0, 0, 0 };
 	SDL_BlitSurface(bgLeftSurface, NULL, bgScene, NULL);
 	SDL_BlitSurface(bgRightSurface, NULL, bgScene, &dest);
 
+	SDL_Rect sRect = { 160, 0, bBGLeft.getWidth(0), bBGLeft.getHeight(0) };
 
-	SDL_BlitSurface(bgScene, NULL, mScreen, NULL);
+	SDL_BlitSurface(bgScene, &sRect, mScreen, NULL);
 }
 
 void GRAPHICS::Graphics::update() {
