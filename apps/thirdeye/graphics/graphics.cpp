@@ -73,8 +73,7 @@ GRAPHICS::Graphics::Graphics(uint16_t scale) {
 	// Create our game screen that will be blitted to before renderering
 	mScreen = SDL_CreateRGBSurface(0, WIDTH, HEIGHT, 32, 0, 0, 0, 0);
 
-	SDL_SetColorKey(mScreen, SDL_TRUE,
-			SDL_MapRGB(mScreen->format, 0, 0, 0));
+	SDL_SetColorKey(mScreen, SDL_TRUE, SDL_MapRGB(mScreen->format, 0, 0, 0));
 
 	SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "linear"); // make the scaled rendering look smoother.
 	SDL_RenderSetLogicalSize(mRenderer, WIDTH, HEIGHT);
@@ -135,6 +134,37 @@ void GRAPHICS::Graphics::fadeIn() {
 	mAlpha = 0;
 }
 
+void GRAPHICS::Graphics::panDirection(uint8_t panDir,
+		std::vector<uint8_t> bgRight, std::vector<uint8_t> bgLeft,
+		std::vector<uint8_t> fgRight, std::vector<uint8_t> fgLeft) {
+
+	std::vector<uint8_t> imageData;
+
+	Bitmap bBGRight(bgRight);
+	imageData = bBGRight[0];
+	SDL_Surface *bgRightSurface = SDL_CreateRGBSurfaceFrom(
+			(void*) &imageData[0], bBGRight.getWidth(0), bBGRight.getHeight(0),
+			8, bBGRight.getWidth(0), 0, 0, 0, 0);
+
+	Bitmap bBGLeft(bgLeft);
+	imageData = bBGLeft[0];
+	SDL_Surface *bgLeftSurface = SDL_CreateRGBSurfaceFrom((void*) &imageData[0],
+			bBGLeft.getWidth(0), bBGLeft.getHeight(0), 8, bBGLeft.getWidth(0),
+			0, 0, 0, 0);
+
+	SDL_Surface *bgScene = SDL_CreateRGBSurface(0, bBGLeft.getWidth(0) * 2,
+			bBGLeft.getHeight(0), 32, 0, 0, 0, 0);
+
+	SDL_Rect dest = { bBGLeft.getWidth(0), 0, bBGLeft.getWidth(0) * 2,
+			bBGLeft.getHeight(0) };
+
+	SDL_BlitSurface(bgLeftSurface, NULL, bgScene, NULL);
+	SDL_BlitSurface(bgRightSurface, NULL, bgScene, &dest);
+
+
+	SDL_BlitSurface(bgScene, NULL, mScreen, NULL);
+}
+
 void GRAPHICS::Graphics::update() {
 
 	// anything in our animation queue to display?
@@ -149,18 +179,18 @@ void GRAPHICS::Graphics::update() {
 	}
 
 	// are we fading in or out?
-	if (mFadeIn or mFadeOut){
-		if (mFadeIn and mAlpha > SDL_ALPHA_OPAQUE){
+	if (mFadeIn or mFadeOut) {
+		if (mFadeIn and mAlpha > SDL_ALPHA_OPAQUE) {
 			mFadeIn = false;
 			mAlpha = SDL_ALPHA_OPAQUE;
 		}
-		if (mFadeOut and mAlpha < SDL_ALPHA_TRANSPARENT){
+		if (mFadeOut and mAlpha < SDL_ALPHA_TRANSPARENT) {
 			mFadeOut = false;
 			mAlpha = SDL_ALPHA_TRANSPARENT;
 		}
 		int value = SDL_SetSurfaceAlphaMod(mScreen, mAlpha);
 		printf("Sleeping: %d - %d  \n", value, mAlpha);
-		(mFadeIn) ? mAlpha+=10 : mAlpha-=10;
+		(mFadeIn) ? mAlpha += 10 : mAlpha -= 10;
 	}
 
 	// generate texture from our screen surface

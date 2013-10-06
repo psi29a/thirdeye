@@ -43,9 +43,12 @@ public:
 			uint16_t posY);
 	void playAnimation(std::vector<uint8_t> video);
 	void fadeIn();
-	void loadPalette(std::vector<uint8_t> &basePal, bool isRes=true);
-	void loadPalette(std::vector<uint8_t> &basePal, std::vector<uint8_t> &subPal,
-			std::string index);
+	void panDirection(uint8_t panDir, std::vector<uint8_t> bgRight,
+			std::vector<uint8_t> bgLeft, std::vector<uint8_t> fgRight = NULL,
+			std::vector<uint8_t> fgLeft = NULL);
+	void loadPalette(std::vector<uint8_t> &basePal, bool isRes = true);
+	void loadPalette(std::vector<uint8_t> &basePal,
+			std::vector<uint8_t> &subPal, std::string index);
 	void loadMouse(std::vector<uint8_t> &bitmap, uint16_t index);
 	void update();
 };
