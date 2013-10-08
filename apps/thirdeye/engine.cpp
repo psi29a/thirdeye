@@ -115,30 +115,32 @@ void THIRDEYE::Engine::go() {
 
 	gfx.panDirection(0, cutscene[16].get<2>(), cutscene[17].get<2>(), cutscene[16].get<2>(), cutscene[17].get<2>());
 	gfx.update();
-	SDL_Delay(1000);
+	SDL_Delay(100);
 	gfx.update();
-	SDL_Delay(1000);
+	SDL_Delay(100);
 	gfx.update();
-	return;
-	gfx.playAnimation(cutscene[11].get<2>());
-	SDL_Delay(1000);
+	//return;
+	//gfx.playAnimation(cutscene[11].get<2>());
+	SDL_Delay(100);
 	gfx.update();
-	SDL_Delay(1000);
+	SDL_Delay(100);
 	gfx.update();
-	gfx.playAnimation(cutscene[13].get<2>());
-	SDL_Delay(1000);
+	//gfx.playAnimation(cutscene[13].get<2>());
+	SDL_Delay(100);
 	gfx.update();
-	SDL_Delay(1000);
+	SDL_Delay(100);
 	gfx.update();
-	gfx.playAnimation(cutscene[14].get<2>());
-	SDL_Delay(1000);
+	//gfx.playAnimation(cutscene[14].get<2>());
+	SDL_Delay(100);
 	gfx.update();
-	SDL_Delay(1000);
+	SDL_Delay(100);
 	gfx.update();
-	gfx.playAnimation(cutscene[15].get<2>());
-	SDL_Delay(1000);
-	gfx.update();
-	SDL_Delay(1000);
+	//gfx.playAnimation(cutscene[15].get<2>());
+	SDL_Delay(100);
+	while (true){
+	  gfx.update();
+	  SDL_Delay(100);
+	}
 	return;
 
 

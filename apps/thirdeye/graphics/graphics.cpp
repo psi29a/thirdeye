@@ -84,6 +84,7 @@ GRAPHICS::Graphics::Graphics(uint16_t scale) {
 	mCounter = 0;
 	mFadeIn = false;
 	mFadeOut = false;
+	mPanning = false;
 	mAlpha = 0;
 
 }
@@ -138,8 +139,6 @@ void GRAPHICS::Graphics::panDirection(uint8_t panDir,
 		std::vector<uint8_t> bgRight, std::vector<uint8_t> bgLeft,
 		std::vector<uint8_t> fgRight, std::vector<uint8_t> fgLeft) {
 
-
-
 	Bitmap bBGRight(bgRight);
 	std::vector<uint8_t> bBGRightD = bBGRight[0];
 	SDL_Surface *bgRightSurface = SDL_CreateRGBSurfaceFrom(
@@ -156,21 +155,31 @@ void GRAPHICS::Graphics::panDirection(uint8_t panDir,
 	SDL_SetPaletteColors(bgLeftSurface->format->palette, mPalette->colors, 0,
 			256);
 
-	SDL_Surface *bgScene = SDL_CreateRGBSurface(0, bBGLeft.getWidth(0) * 2,
+	mBGSurface = SDL_CreateRGBSurface(0, bBGLeft.getWidth(0) * 2,
 			bBGLeft.getHeight(0), 8, 0, 0, 0, 0);
-	SDL_SetPaletteColors(bgScene->format->palette, mPalette->colors, 0,
+	SDL_SetPaletteColors(mBGSurface->format->palette, mPalette->colors, 0,
 				256);
 
 	SDL_Rect dest = { bBGLeft.getWidth(0), 0, 0, 0 };
-	SDL_BlitSurface(bgLeftSurface, NULL, bgScene, NULL);
-	SDL_BlitSurface(bgRightSurface, NULL, bgScene, &dest);
-
-	SDL_Rect sRect = { 160, 0, bBGLeft.getWidth(0), bBGLeft.getHeight(0) };
-
-	SDL_BlitSurface(bgScene, &sRect, mScreen, NULL);
+	SDL_BlitSurface(bgLeftSurface, NULL, mBGSurface, NULL);
+	SDL_BlitSurface(bgRightSurface, NULL, mBGSurface, &dest);
+	mPanning = true;
+	mCounter = 320;
+	SDL_FreeSurface(bgLeftSurface);
+	SDL_FreeSurface(bgRightSurface);
 }
 
 void GRAPHICS::Graphics::update() {
+
+	// panning are we panning?
+	if (mPanning){
+		SDL_Rect sRect = { mCounter, 0, 320, 200 };
+		SDL_BlitSurface(mBGSurface, &sRect, mScreen, NULL);
+		if (mCounter == 0)
+			mPanning = false;
+		else
+			mCounter--;
+	}
 
 	// anything in our animation queue to display?
 	if (mFrames > 0 and mFrames > mCounter) {

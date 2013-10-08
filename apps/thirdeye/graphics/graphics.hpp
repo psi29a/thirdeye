@@ -28,10 +28,13 @@ private:
 	SDL_Palette *mPalette;
 	bool mFadeIn;
 	bool mFadeOut;
+	bool mPanning;
 	int16_t mAlpha;
-	uint8_t mFrames;
-	uint8_t mCounter;
+	uint16_t mFrames;
+	uint16_t mCounter;
 	std::vector<uint8_t> mVideo;
+	SDL_Surface *mBGSurface;
+	SDL_Surface *mFGSurface;
 	int zoomSurfaceRGBA(SDL_Surface * src, SDL_Surface * dst);
 
 public:
