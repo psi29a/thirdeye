@@ -113,7 +113,7 @@ void THIRDEYE::Engine::go() {
 
 	gfx.loadPalette(cutscene[0].get<2>(), false);
 
-	gfx.panDirection(0, cutscene[16].get<2>(), cutscene[17].get<2>(), cutscene[16].get<2>(), cutscene[17].get<2>());
+	gfx.panDirection(0, cutscene[16].get<2>(), cutscene[17].get<2>(), cutscene[18].get<2>(), cutscene[19].get<2>());
 	gfx.update();
 	SDL_Delay(100);
 	gfx.update();
@@ -139,7 +139,7 @@ void THIRDEYE::Engine::go() {
 	SDL_Delay(100);
 	while (true){
 	  gfx.update();
-	  SDL_Delay(100);
+	  SDL_Delay(0.1);
 	}
 	return;
 
