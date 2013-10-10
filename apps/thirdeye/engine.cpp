@@ -109,37 +109,21 @@ void THIRDEYE::Engine::go() {
 	bool 	update = false;
 
 	std::map<uint8_t, tuple<uint8_t, uint8_t, std::vector<uint8_t> > > cutscene = gffi.getSequence();
-
-
 	gfx.loadPalette(cutscene[0].get<2>(), false);
-
+	gfx.drawImage(cutscene[12].get<2>(), 0, 0, 0, false);
+	gfx.update();
+	SDL_Delay(10);
 	gfx.panDirection(0, cutscene[16].get<2>(), cutscene[17].get<2>(), cutscene[18].get<2>(), cutscene[19].get<2>());
 	gfx.update();
-	SDL_Delay(100);
+	SDL_Delay(10);
 	gfx.update();
-	SDL_Delay(100);
-	gfx.update();
-	//return;
-	//gfx.playAnimation(cutscene[11].get<2>());
-	SDL_Delay(100);
-	gfx.update();
-	SDL_Delay(100);
-	gfx.update();
-	//gfx.playAnimation(cutscene[13].get<2>());
-	SDL_Delay(100);
-	gfx.update();
-	SDL_Delay(100);
-	gfx.update();
-	//gfx.playAnimation(cutscene[14].get<2>());
-	SDL_Delay(100);
-	gfx.update();
-	SDL_Delay(100);
+	SDL_Delay(10);
 	gfx.update();
 	//gfx.playAnimation(cutscene[15].get<2>());
-	SDL_Delay(100);
+	SDL_Delay(10);
 	while (true){
 	  gfx.update();
-	  SDL_Delay(0.1);
+	  SDL_Delay(10);
 	}
 	return;
 

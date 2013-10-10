@@ -139,7 +139,10 @@ void GRAPHICS::Graphics::panDirection(uint8_t panDir,
 		std::vector<uint8_t> bgRight, std::vector<uint8_t> bgLeft,
 		std::vector<uint8_t> fgRight, std::vector<uint8_t> fgLeft) {
 
-	SDL_Rect dest = { 320, 0, 0, 0 };
+	mBGSurface = SDL_CreateRGBSurface(0, 320 * 2, 200, 8, 0, 0, 0, 0);
+	SDL_SetPaletteColors(mBGSurface->format->palette, mPalette->colors, 0, 256);
+	mFGSurface = SDL_CreateRGBSurface(0, 320 * 2, 200, 8, 0, 0, 0, 0);
+	SDL_SetPaletteColors(mFGSurface->format->palette, mPalette->colors, 0, 256);
 
 	Bitmap bBGRight(bgRight);
 	std::vector<uint8_t> bBGRightD = bBGRight[0];
@@ -157,12 +160,6 @@ void GRAPHICS::Graphics::panDirection(uint8_t panDir,
 	SDL_SetPaletteColors(bgLeftSurface->format->palette, mPalette->colors, 0,
 			256);
 
-	SDL_BlitSurface(bgLeftSurface, NULL, mBGSurface, NULL);
-	SDL_BlitSurface(bgRightSurface, NULL, mBGSurface, &dest);
-	SDL_FreeSurface(bgLeftSurface);
-	SDL_FreeSurface(bgRightSurface);
-
-
 	Bitmap bFGRight(fgRight);
 	std::vector<uint8_t> bFGRightD = bFGRight[0];
 	SDL_Surface *fgRightSurface = SDL_CreateRGBSurfaceFrom(
@@ -170,11 +167,6 @@ void GRAPHICS::Graphics::panDirection(uint8_t panDir,
 			8, bFGRight.getWidth(0), 0, 0, 0, 0);
 	SDL_SetPaletteColors(fgRightSurface->format->palette, mPalette->colors, 0,
 			256);
-
-	mBGSurface = SDL_CreateRGBSurface(0, bBGLeft.getWidth(0) * 2,
-			bBGLeft.getHeight(0), 8, 0, 0, 0, 0);
-	SDL_SetPaletteColors(mBGSurface->format->palette, mPalette->colors, 0,
-				256);
 
 	Bitmap bFGLeft(fgLeft);
 	std::vector<uint8_t> bFGLeftD = bFGLeft[0];
@@ -184,16 +176,21 @@ void GRAPHICS::Graphics::panDirection(uint8_t panDir,
 	SDL_SetPaletteColors(fgLeftSurface->format->palette, mPalette->colors, 0,
 			256);
 
-	mBGSurface = SDL_CreateRGBSurface(0, bBGLeft.getWidth(0) * 2,
-			bBGLeft.getHeight(0), 8, 0, 0, 0, 0);
-	SDL_SetPaletteColors(mBGSurface->format->palette, mPalette->colors, 0,
-				256);
+	SDL_Rect dest = { 320, 0, 0, 0 };
+
+	SDL_BlitSurface(bgLeftSurface, NULL, mBGSurface, NULL);
+	SDL_BlitSurface(bgRightSurface, NULL, mBGSurface, &dest);
+	SDL_SetColorKey(mBGSurface, SDL_TRUE,
+				SDL_MapRGB(mFGSurface->format, 0, 0, 0));
+	SDL_FreeSurface(bgLeftSurface);
+	SDL_FreeSurface(bgRightSurface);
 
 	SDL_BlitSurface(fgLeftSurface, NULL, mFGSurface, NULL);
 	SDL_BlitSurface(fgRightSurface, NULL, mFGSurface, &dest);
+	SDL_SetColorKey(mFGSurface, SDL_TRUE,
+			SDL_MapRGB(mFGSurface->format, 0, 0, 0));
 	SDL_FreeSurface(fgLeftSurface);
 	SDL_FreeSurface(fgRightSurface);
-
 
 	mPanning = true;
 	mCounter = 320;
@@ -202,9 +199,10 @@ void GRAPHICS::Graphics::panDirection(uint8_t panDir,
 void GRAPHICS::Graphics::update() {
 
 	// panning are we panning?
-	if (mPanning){
-		SDL_Rect sRect = { mCounter, 0, 320, 200 };
+	if (mPanning) {
+		SDL_Rect sRect = { mCounter, -2, 320, 200 };
 		SDL_BlitSurface(mBGSurface, &sRect, mScreen, NULL);
+		sRect.x = 320 - ((320-mCounter)*2) ;
 		SDL_BlitSurface(mFGSurface, &sRect, mScreen, NULL);
 		if (mCounter == 0)
 			mPanning = false;
