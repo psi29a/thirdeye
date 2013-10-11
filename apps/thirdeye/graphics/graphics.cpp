@@ -200,10 +200,11 @@ void GRAPHICS::Graphics::update() {
 
 	// panning are we panning?
 	if (mPanning) {
-		SDL_Rect sRect = { mCounter, -2, 320, 200 };
-		SDL_BlitSurface(mBGSurface, &sRect, mScreen, NULL);
+		SDL_Rect sRect = { mCounter, 0, 320-6, 115 };
+		SDL_Rect dRect = {3, 3, 0, 0 }; // last 2 are ignored
+		SDL_BlitSurface(mBGSurface, &sRect, mScreen, &dRect);
 		sRect.x = 320 - ((320-mCounter)*2) ;
-		SDL_BlitSurface(mFGSurface, &sRect, mScreen, NULL);
+		SDL_BlitSurface(mFGSurface, &sRect, mScreen, &dRect);
 		if (mCounter == 0)
 			mPanning = false;
 		else

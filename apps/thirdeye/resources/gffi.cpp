@@ -126,11 +126,12 @@ RESOURCES::GFFI::GFFI(boost::filesystem::path gffiPath) {
 					printf(" is there more: %x ", isMore);
 					mFiles[tag->first][file->first].data[counter] = subBitmap;
 
+					/* we write out the files
 					 std::string Path = "/tmp/"+boost::lexical_cast<std::string>(file->first)+"_"+boost::lexical_cast<std::string>(counter)+".BMA";
 					 std::ofstream FILE(Path.c_str(), std::ios::out | std::ofstream::binary);
 					 size_t sz = mFiles[tag->first][file->first].data[counter].size();
 					 FILE.write(reinterpret_cast<const char*>(&mFiles[tag->first][file->first].data[counter][0]), sz * sizeof(mFiles[tag->first][file->first].data[counter][0]));
-
+					*/
 
 					if (isMore) {
 						printf(" new bitmap found @ offset: %x", anim.getNextBitmapPos());
@@ -186,10 +187,11 @@ sequences[12] = boost::make_tuple(DISP_BMA, 1, mFiles["BMA"][3].data[1]);
 sequences[13] = boost::make_tuple(DISP_BMA, 1, mFiles["BMA"][3].data[2]);
 sequences[14] = boost::make_tuple(DISP_BMA, 1, mFiles["BMA"][3].data[3]);
 sequences[15] = boost::make_tuple(DISP_BMA, 1, mFiles["BMA"][3].data[4]);
-sequences[16] = boost::make_tuple(PANB_LEFT, 0, mFiles["BMP"][4].data[0]);
+sequences[16] = boost::make_tuple(PANB_LEFT, 30, mFiles["BMP"][4].data[0]);
 sequences[17] = boost::make_tuple(PANB_LEFT, 0, mFiles["BMP"][5].data[0]);
 sequences[18] = boost::make_tuple(PANF_LEFT, 0, mFiles["BMP"][6].data[0]);
 sequences[19] = boost::make_tuple(PANF_LEFT, 0, mFiles["BMP"][7].data[0]);
+sequences[20] = boost::make_tuple(DISP_BMP, 0, mFiles["BMP"][8].data[0]);
 //sequences[1] = boost::make_tuple(PLAY_MUSIC, mFiles["LSEQ"][1].data);
 return sequences;
 }
