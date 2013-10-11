@@ -220,6 +220,10 @@ void GRAPHICS::Graphics::update() {
 		drawImage(mVideo, mCounter, 0, 0, transparency);
 		std::cout << "  Frame: " << (int) mCounter << std::endl;
 		mCounter++;
+	} else if (mFrames > 0 and mFrames <= mCounter){ // we're finished
+		std::cout << "   Finished playing @ " << (int) mCounter << std::endl;
+		mFrames = 0;
+		mCounter = 0;
 	}
 
 	// are we fading in or out?
