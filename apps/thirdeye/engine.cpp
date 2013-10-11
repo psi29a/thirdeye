@@ -109,11 +109,13 @@ void THIRDEYE::Engine::go() {
 	bool 	update = false;
 
 	std::map<uint8_t, tuple<uint8_t, uint8_t, std::vector<uint8_t> > > cutscene = gffi.getSequence();
+
+	/*
 	gfx.loadPalette(cutscene[0].get<2>(), false);
-	gfx.drawImage(cutscene[12].get<2>(), 0, 0, 0, false);
+	gfx.drawImage(cutscene[20].get<2>(), 0, 0, 0, false);
 	gfx.update();
-	SDL_Delay(10);
-	gfx.panDirection(0, cutscene[16].get<2>(), cutscene[17].get<2>(), cutscene[18].get<2>(), cutscene[19].get<2>());
+	SDL_Delay(10000);
+	return;
 	gfx.update();
 	SDL_Delay(10);
 	gfx.update();
@@ -126,7 +128,7 @@ void THIRDEYE::Engine::go() {
 	  SDL_Delay(10);
 	}
 	return;
-
+	*/
 
 	// Start the main rendering loop
 	SDL_Event event;
@@ -151,11 +153,11 @@ void THIRDEYE::Engine::go() {
 				// process the mouse data by passing it to ngl class
 				case SDL_MOUSEMOTION:
 					//ngl.mouseMoveEvent(event.motion);
-					std::cout << "Mouse moved @ " <<  event.motion.x << " " << event.motion.y << std::endl;
+					//std::cout << "Mouse moved @ " <<  event.motion.x << " " << event.motion.y << std::endl;
 					break;
 				case SDL_MOUSEBUTTONDOWN: break;
 				case SDL_MOUSEBUTTONUP:
-					std::cout << "Mouse clicked @ " << event.button.x << " " << event.button.y << std::endl;
+					//std::cout << "Mouse clicked @ " << event.button.x << " " << event.button.y << std::endl;
 					break;
 				//case SDL_MOUSEWHEEL : ngl.wheelEvent(event.wheel);
 				// if the window is re-sized pass it to the ngl class to change gl viewport
@@ -205,16 +207,25 @@ void THIRDEYE::Engine::go() {
 			uint8_t index = cutscene.begin()->first;
 			std::cout << "Playing cutscene: " << (int) index << std::endl;
 			tuple<uint8_t, uint8_t, std::vector<uint8_t> > scene = cutscene.begin()->second;
+			wait = scene.get<1>();
 			switch (scene.get<0>()){
 			case SETT_PAL:
 				gfx.loadPalette(scene.get<2>(), false);
 				break;
 			case PANB_LEFT:
-				gfx.drawImage(scene.get<2>(), 0, 0, 3, true);
-				cutscene.erase(index); // just a test
-				index = cutscene.begin()->first;
+			{
+				std::vector<uint8_t> bgright = scene.get<2>();
+				cutscene.erase(index++);
 				scene = cutscene.begin()->second;
-				gfx.drawImage(scene.get<2>(), 0, 0, 3, true);
+				std::vector<uint8_t> bgleft = scene.get<2>();
+				cutscene.erase(index++);
+				scene = cutscene.begin()->second;
+				std::vector<uint8_t> fgright = scene.get<2>();
+				cutscene.erase(index++);
+				scene = cutscene.begin()->second;
+				std::vector<uint8_t> fgleft = scene.get<2>();
+				gfx.panDirection(0, bgright, bgleft, fgright, fgleft);
+			}
 				break;
 			case DISP_BMP:
 				gfx.drawImage(scene.get<2>(), 0, 0, 0, false);
@@ -236,7 +247,6 @@ void THIRDEYE::Engine::go() {
 				std::cerr << "Case not yet implemented." << std::endl;
 				throw;
 			}
-			wait = scene.get<1>();
 			cutscene.erase(index);
 		}
 
@@ -247,7 +257,7 @@ void THIRDEYE::Engine::go() {
 
 		//printf("Waiting 60...\n");
 		update = false;
-		SDL_Delay(60*2);      // Pause briefly before moving on to the next cycle.
+		SDL_Delay(60);      // Pause briefly before moving on to the next cycle.
 	}
 
 	// Save user settings

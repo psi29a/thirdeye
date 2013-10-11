@@ -96,11 +96,11 @@ std::vector<uint8_t> GRAPHICS::Bitmap::operator[](uint16_t index) {
 
 
 	if (pos+1 == mBitmapData.size()){
-		std::cout << "We're at the end!" << std::endl;
+		//std::cout << "We're at the end!" << std::endl;
 		nextBitmapPos = 0;
 	}
 	else {
-		std::cout << "Pos: " << pos << " size of file: " << mBitmapData.size() << std::endl;
+		//std::cout << "Pos: " << pos << " size of file: " << mBitmapData.size() << std::endl;
 		nextBitmapPos = pos+1;
 	}
 
