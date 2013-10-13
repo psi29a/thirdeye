@@ -230,9 +230,6 @@ void THIRDEYE::Engine::go() {
 			case DISP_BMP:
 				gfx.drawImage(scene.get<2>(), 0, 0, 0, false);
 				break;
-			case PANF_LEFT:
-				gfx.drawImage(scene.get<2>(), 0, 0, 0, true);
-				break;
 			case DISP_BMA:
 				gfx.playAnimation(scene.get<2>());
 				break;
@@ -240,7 +237,10 @@ void THIRDEYE::Engine::go() {
 				gfx.drawImage(scene.get<2>(), 0, 0, 0, false);
 				gfx.fadeIn();
 				break;
-			case FADE_LEFT:
+			case FADE_LEFT: // TODO: real fade to left
+				gfx.drawImage(scene.get<2>(), 0, 0, 0, true);
+				break;
+			case DISP_CURT:
 				gfx.drawImage(scene.get<2>(), 0, 0, 0, true);
 				break;
 			default:

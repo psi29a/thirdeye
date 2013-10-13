@@ -30,7 +30,7 @@ namespace RESOURCES {
 #define FADE_LEFT	6
 #define FADE_RIGHT	7
 #define PANB_LEFT	8
-#define PANF_LEFT	9
+#define DISP_CURT	9
 
 #define T_TAG		0
 #define	T_DATA		1
