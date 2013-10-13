@@ -127,13 +127,19 @@ void GRAPHICS::Graphics::playAnimation(std::vector<uint8_t> animationData) {
 	Bitmap animation(animationData);
 	mFrames = animation.getNumberOfBitmaps();
 	mCounter = 0;
-	mVideo = animationData;
+	mBuffer = animationData;
 }
 
 void GRAPHICS::Graphics::fadeIn() {
 	mFadeIn = True;
 	mAlpha = 0;
 }
+
+void GRAPHICS::Graphics::drawCurtain(std::vector<uint8_t> bmp){
+	mBuffer = bmp;
+	mCounter = 0;
+}
+
 
 void GRAPHICS::Graphics::panDirection(uint8_t panDir,
 		std::vector<uint8_t> bgRight, std::vector<uint8_t> bgLeft,
@@ -217,7 +223,7 @@ void GRAPHICS::Graphics::update() {
 		//if (mCounter == 0)	// only first frame is is not transparent
 		//	transparency = false;
 
-		drawImage(mVideo, mCounter, 0, 0, transparency);
+		drawImage(mBuffer, mCounter, 0, 0, transparency);
 		std::cout << "  Frame: " << (int) mCounter << std::endl;
 		mCounter++;
 	} else if (mFrames > 0 and mFrames <= mCounter){ // we're finished
