@@ -47,8 +47,8 @@ public:
 	void playAnimation(std::vector<uint8_t> video);
 	void fadeIn();
 	void panDirection(uint8_t panDir, std::vector<uint8_t> bgRight,
-			std::vector<uint8_t> bgLeft, std::vector<uint8_t> fgRight = NULL,
-			std::vector<uint8_t> fgLeft = NULL);
+			std::vector<uint8_t> bgLeft, std::vector<uint8_t> fgRight,
+			std::vector<uint8_t> fgLeft);
 	void drawCurtain(std::vector<uint8_t> bmp);
 	void loadPalette(std::vector<uint8_t> &basePal, bool isRes = true);
 	void loadPalette(std::vector<uint8_t> &basePal,
