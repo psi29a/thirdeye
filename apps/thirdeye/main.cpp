@@ -46,7 +46,6 @@ bool parseOptions(int argc, char** argv, THIRDEYE::Engine& engine,
 		Files::ConfigurationManager& cfgMgr) {
 	// Create a local alias for brevity
 	namespace bpo = boost::program_options;
-	typedef std::vector<std::string> StringsVector;
 
 	bpo::options_description desc(
 			"Syntax: thirdeye <options>\nAllowed options");
