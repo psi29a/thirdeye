@@ -85,6 +85,7 @@ GRAPHICS::Graphics::Graphics(uint16_t scale) {
 	mFadeIn = false;
 	mFadeOut = false;
 	mPanning = false;
+	mDrawCurtain = false;
 	mAlpha = 0;
 
 }
@@ -135,6 +136,17 @@ void GRAPHICS::Graphics::fadeIn() {
 	mAlpha = 0;
 }
 
+void GRAPHICS::Graphics::drawCurtain(std::vector<uint8_t> swap) {
+	Bitmap bSwap(swap);
+	std::vector<uint8_t> bSwapD = bSwap[0];
+	mBuffer = SDL_CreateRGBSurfaceFrom((void*) &bSwapD[0], bSwap.getWidth(0),
+			bSwap.getHeight(0), 8, bSwap.getWidth(0), 0, 0, 0, 0);
+	SDL_SetPaletteColors(mBuffer->format->palette, mPalette->colors, 0, 256);
+	SDL_SetColorKey(mBuffer, SDL_TRUE, SDL_MapRGB(mBuffer->format, 0, 0, 0));
+	mDrawCurtain = true;
+	mCounter = 1;
+}
+
 void GRAPHICS::Graphics::panDirection(uint8_t panDir,
 		std::vector<uint8_t> bgRight, std::vector<uint8_t> bgLeft,
 		std::vector<uint8_t> fgRight, std::vector<uint8_t> fgLeft) {
@@ -181,7 +193,7 @@ void GRAPHICS::Graphics::panDirection(uint8_t panDir,
 	SDL_BlitSurface(bgLeftSurface, NULL, mBGSurface, NULL);
 	SDL_BlitSurface(bgRightSurface, NULL, mBGSurface, &dest);
 	SDL_SetColorKey(mBGSurface, SDL_TRUE,
-				SDL_MapRGB(mFGSurface->format, 0, 0, 0));
+			SDL_MapRGB(mFGSurface->format, 0, 0, 0));
 	SDL_FreeSurface(bgLeftSurface);
 	SDL_FreeSurface(bgRightSurface);
 
@@ -198,16 +210,40 @@ void GRAPHICS::Graphics::panDirection(uint8_t panDir,
 
 void GRAPHICS::Graphics::update() {
 
+	// are we curtain-ing to another image?
+	if (mDrawCurtain) {
+		uint16_t width = mCounter;
+		uint16_t lines = 10;
+		for (uint16_t line = 1; line < lines; line++) {
+			// going right
+			SDL_Rect rectRright = { mBuffer->w / lines * line, 0, width, 200 };
+			//std::cout << std::dec << line * lines + mCounter << " " << width <<  std::endl;
+			SDL_BlitSurface(mBuffer, &rectRright, mScreen, &rectRright);
+
+			// going left
+			SDL_Rect rectLeft = { mBuffer->w / lines * line - mCounter, 0, width, 200 };
+			//std::cout << std::dec << line * lines + mCounter << " " << width <<  std::endl;
+			SDL_BlitSurface(mBuffer, &rectLeft, mScreen, &rectLeft);
+		}
+		if (mCounter == mBuffer->w / lines / 2) {
+			mDrawCurtain = false;
+			SDL_FreeSurface(mBuffer);
+		} else
+			mCounter++;
+	}
+
 	// panning are we panning?
 	if (mPanning) {
-		SDL_Rect sRect = { mCounter, 0, 320-6, 115 };
-		SDL_Rect dRect = {3, 3, 0, 0 }; // last 2 are ignored
+		SDL_Rect sRect = { mCounter, 0, 320 - 6, 115 };
+		SDL_Rect dRect = { 3, 3, 0, 0 }; // last 2 are ignored
 		SDL_BlitSurface(mBGSurface, &sRect, mScreen, &dRect);
-		sRect.x = 320 - ((320-mCounter)*2) ;
+		sRect.x = 320 - ((320 - mCounter) * 2);
 		SDL_BlitSurface(mFGSurface, &sRect, mScreen, &dRect);
-		if (mCounter == 0)
+		if (mCounter == 0) {
 			mPanning = false;
-		else
+			SDL_FreeSurface(mBGSurface);
+			SDL_FreeSurface(mFGSurface);
+		} else
 			mCounter--;
 	}
 
@@ -220,7 +256,7 @@ void GRAPHICS::Graphics::update() {
 		drawImage(mVideo, mCounter, 0, 0, transparency);
 		std::cout << "  Frame: " << (int) mCounter << std::endl;
 		mCounter++;
-	} else if (mFrames > 0 and mFrames <= mCounter){ // we're finished
+	} else if (mFrames > 0 and mFrames <= mCounter) { // we're finished
 		std::cout << "   Finished playing @ " << (int) mCounter << std::endl;
 		mFrames = 0;
 		mCounter = 0;
