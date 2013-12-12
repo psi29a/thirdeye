@@ -29,10 +29,12 @@ private:
 	bool mFadeIn;
 	bool mFadeOut;
 	bool mPanning;
+	bool mDrawCurtain;
 	int16_t mAlpha;
 	uint16_t mFrames;
 	uint16_t mCounter;
 	std::vector<uint8_t> mVideo;
+	SDL_Surface *mBuffer;
 	SDL_Surface *mBGSurface;
 	SDL_Surface *mFGSurface;
 	int zoomSurfaceRGBA(SDL_Surface * src, SDL_Surface * dst);
@@ -49,6 +51,7 @@ public:
 	void panDirection(uint8_t panDir, std::vector<uint8_t> bgRight,
 			std::vector<uint8_t> bgLeft, std::vector<uint8_t> fgRight,
 			std::vector<uint8_t> fgLeft);
+	void drawCurtain(std::vector<uint8_t> swap);
 	void loadPalette(std::vector<uint8_t> &basePal, bool isRes = true);
 	void loadPalette(std::vector<uint8_t> &basePal,
 			std::vector<uint8_t> &subPal, std::string index);

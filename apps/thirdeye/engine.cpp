@@ -243,6 +243,9 @@ void THIRDEYE::Engine::go() {
 			case FADE_LEFT:
 				gfx.drawImage(scene.get<2>(), 0, 0, 0, true);
 				break;
+			case SWAP_IN:
+				gfx.drawCurtain(scene.get<2>());
+				break;
 			default:
 				std::cerr << "Case not yet implemented." << std::endl;
 				throw;
@@ -257,7 +260,7 @@ void THIRDEYE::Engine::go() {
 
 		//printf("Waiting 60...\n");
 		update = false;
-		SDL_Delay(60);      // Pause briefly before moving on to the next cycle.
+		SDL_Delay(10);      // Pause briefly before moving on to the next cycle.
 	}
 
 	// Save user settings
