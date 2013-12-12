@@ -29,9 +29,8 @@ namespace RESOURCES {
 #define FADE_OUT	5
 #define FADE_LEFT	6
 #define FADE_RIGHT	7
-#define PANB_LEFT	8
-#define PANF_LEFT	9
-#define SWAP_IN		10
+#define PAN_LEFT	8
+#define DRAW_CURT	9
 
 #define T_TAG		0
 #define	T_DATA		1

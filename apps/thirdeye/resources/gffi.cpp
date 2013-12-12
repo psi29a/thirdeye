@@ -190,11 +190,12 @@ sequences[13] = boost::make_tuple(DISP_BMA, 1, mFiles["BMA"][3].data[2]);
 sequences[14] = boost::make_tuple(DISP_BMA, 1, mFiles["BMA"][3].data[3]);
 sequences[15] = boost::make_tuple(DISP_BMA, 1, mFiles["BMA"][3].data[4]);
 */
-sequences[16] = boost::make_tuple(PANB_LEFT, 10, mFiles["BMP"][4].data[0]);
-sequences[17] = boost::make_tuple(PANB_LEFT, 0, mFiles["BMP"][5].data[0]);
-sequences[18] = boost::make_tuple(PANF_LEFT, 0, mFiles["BMP"][6].data[0]);
-sequences[19] = boost::make_tuple(PANF_LEFT, 0, mFiles["BMP"][7].data[0]);
-sequences[20] = boost::make_tuple(SWAP_IN, 0, mFiles["BMP"][8].data[0]);
+sequences[16] = boost::make_tuple(PAN_LEFT, 10, mFiles["BMP"][4].data[0]);
+sequences[17] = boost::make_tuple(PAN_LEFT, 0, mFiles["BMP"][5].data[0]);
+sequences[18] = boost::make_tuple(PAN_LEFT, 0, mFiles["BMP"][6].data[0]);
+sequences[19] = boost::make_tuple(PAN_LEFT, 0, mFiles["BMP"][7].data[0]);
+sequences[20] = boost::make_tuple(DRAW_CURT, 0, mFiles["BMP"][8].data[0]);
+
 //sequences[1] = boost::make_tuple(PLAY_MUSIC, mFiles["LSEQ"][1].data);
 return sequences;
 }

@@ -212,7 +212,7 @@ void THIRDEYE::Engine::go() {
 			case SETT_PAL:
 				gfx.loadPalette(scene.get<2>(), false);
 				break;
-			case PANB_LEFT:
+			case PAN_LEFT:
 			{
 				std::vector<uint8_t> bgright = scene.get<2>();
 				cutscene.erase(index++);
@@ -230,9 +230,6 @@ void THIRDEYE::Engine::go() {
 			case DISP_BMP:
 				gfx.drawImage(scene.get<2>(), 0, 0, 0, false);
 				break;
-			case PANF_LEFT:
-				gfx.drawImage(scene.get<2>(), 0, 0, 0, true);
-				break;
 			case DISP_BMA:
 				gfx.playAnimation(scene.get<2>());
 				break;
@@ -240,10 +237,10 @@ void THIRDEYE::Engine::go() {
 				gfx.drawImage(scene.get<2>(), 0, 0, 0, false);
 				gfx.fadeIn();
 				break;
-			case FADE_LEFT:
+			case FADE_LEFT: // TODO: real fade to left
 				gfx.drawImage(scene.get<2>(), 0, 0, 0, true);
 				break;
-			case SWAP_IN:
+			case DRAW_CURT:
 				gfx.drawCurtain(scene.get<2>());
 				break;
 			default:
