@@ -128,7 +128,7 @@ void GRAPHICS::Graphics::playAnimation(std::vector<uint8_t> animationData) {
 	Bitmap animation(animationData);
 	mFrames = animation.getNumberOfBitmaps();
 	mCounter = 0;
-	mVideo = animationData;
+	mBuffer = animationData;
 }
 
 void GRAPHICS::Graphics::fadeIn() {
@@ -136,13 +136,13 @@ void GRAPHICS::Graphics::fadeIn() {
 	mAlpha = 0;
 }
 
-void GRAPHICS::Graphics::drawCurtain(std::vector<uint8_t> swap) {
-	Bitmap bSwap(swap);
-	std::vector<uint8_t> bSwapD = bSwap[0];
-	mBuffer = SDL_CreateRGBSurfaceFrom((void*) &bSwapD[0], bSwap.getWidth(0),
-			bSwap.getHeight(0), 8, bSwap.getWidth(0), 0, 0, 0, 0);
-	SDL_SetPaletteColors(mBuffer->format->palette, mPalette->colors, 0, 256);
-	SDL_SetColorKey(mBuffer, SDL_TRUE, SDL_MapRGB(mBuffer->format, 0, 0, 0));
+void GRAPHICS::Graphics::drawCurtain(std::vector<uint8_t> &bmp) {
+	Bitmap bImage(bmp);
+	std::vector<uint8_t> bImageD = bImage[0];
+	mSurfaceBuffer = SDL_CreateRGBSurfaceFrom((void*) &bImageD[0], bImage.getWidth(0),
+			bImage.getHeight(0), 8, bImage.getWidth(0), 0, 0, 0, 0);
+	SDL_SetPaletteColors(mSurfaceBuffer->format->palette, mPalette->colors, 0, 256);
+	SDL_SetColorKey(mSurfaceBuffer, SDL_TRUE, SDL_MapRGB(mSurfaceBuffer->format, 0, 0, 0));
 	mDrawCurtain = true;
 	mCounter = 1;
 }
@@ -216,18 +216,18 @@ void GRAPHICS::Graphics::update() {
 		uint16_t lines = 10;
 		for (uint16_t line = 1; line < lines; line++) {
 			// going right
-			SDL_Rect rectRright = { mBuffer->w / lines * line, 0, width, 200 };
+			SDL_Rect rectRright = { mSurfaceBuffer->w / lines * line, 0, width, 200 };
 			//std::cout << std::dec << line * lines + mCounter << " " << width <<  std::endl;
-			SDL_BlitSurface(mBuffer, &rectRright, mScreen, &rectRright);
+			SDL_BlitSurface(mSurfaceBuffer, &rectRright, mScreen, &rectRright);
 
 			// going left
-			SDL_Rect rectLeft = { mBuffer->w / lines * line - mCounter, 0, width, 200 };
+			SDL_Rect rectLeft = { mSurfaceBuffer->w / lines * line - mCounter, 0, width, 200 };
 			//std::cout << std::dec << line * lines + mCounter << " " << width <<  std::endl;
-			SDL_BlitSurface(mBuffer, &rectLeft, mScreen, &rectLeft);
+			SDL_BlitSurface(mSurfaceBuffer, &rectLeft, mScreen, &rectLeft);
 		}
-		if (mCounter == mBuffer->w / lines / 2) {
+		if (mCounter == mSurfaceBuffer->w / lines / 2) {
 			mDrawCurtain = false;
-			SDL_FreeSurface(mBuffer);
+			SDL_FreeSurface(mSurfaceBuffer);
 		} else
 			mCounter++;
 	}
@@ -253,7 +253,7 @@ void GRAPHICS::Graphics::update() {
 		//if (mCounter == 0)	// only first frame is is not transparent
 		//	transparency = false;
 
-		drawImage(mVideo, mCounter, 0, 0, transparency);
+		drawImage(mBuffer, mCounter, 0, 0, transparency);
 		std::cout << "  Frame: " << (int) mCounter << std::endl;
 		mCounter++;
 	} else if (mFrames > 0 and mFrames <= mCounter) { // we're finished
