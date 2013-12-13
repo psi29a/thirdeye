@@ -137,15 +137,17 @@ void GRAPHICS::Graphics::fadeIn() {
 }
 
 void GRAPHICS::Graphics::drawCurtain(std::vector<uint8_t> bmp) {
-
 	Bitmap bImage(bmp);
 	std::vector<uint8_t> bImageD = bImage[0];
-	mSurfaceBuffer = SDL_CreateRGBSurfaceFrom((void*) &bImageD[0], bImage.getWidth(0),
+	SDL_Surface *sImage = SDL_CreateRGBSurfaceFrom((void*) &bImageD[0], bImage.getWidth(0),
 			bImage.getHeight(0), 8, bImage.getWidth(0), 0, 0, 0, 0);
+	mSurfaceBuffer = SDL_CreateRGBSurface(0, 320, 200, 8, 0, 0, 0, 0);
+	SDL_BlitSurface(sImage, NULL, mSurfaceBuffer, NULL);
 	SDL_SetPaletteColors(mSurfaceBuffer->format->palette, mPalette->colors, 0, 256);
 	SDL_SetColorKey(mSurfaceBuffer, SDL_TRUE, SDL_MapRGB(mSurfaceBuffer->format, 0, 0, 0));
 	mDrawCurtain = true;
 	mCounter = 1;
+	SDL_FreeSurface(sImage);
 }
 
 void GRAPHICS::Graphics::panDirection(uint8_t panDir,
@@ -215,11 +217,12 @@ void GRAPHICS::Graphics::update() {
 	if (mDrawCurtain) {
 		uint16_t width = mCounter;
 		uint16_t lines = 10;
+
 		for (uint16_t line = 0; line < lines; line++) {
 			// going right
-			SDL_Rect rectRright = { mSurfaceBuffer->w / lines * line, 0, width, 200 };
+			SDL_Rect rectRight = { mSurfaceBuffer->w / lines * line, 0, width, 200 };
 			//std::cout << std::dec << line * lines + mCounter << " " << width <<  std::endl;
-			SDL_BlitSurface(mSurfaceBuffer, &rectRright, mScreen, &rectRright);
+			SDL_BlitSurface(mSurfaceBuffer, &rectRight, mScreen, &rectRight);
 
 			// going left
 			SDL_Rect rectLeft = { mSurfaceBuffer->w / lines * line - mCounter, 0, width, 200 };
@@ -228,7 +231,7 @@ void GRAPHICS::Graphics::update() {
 		}
 		if (mCounter == mSurfaceBuffer->w / lines / 2) {
 			mDrawCurtain = false;
-			//SDL_FreeSurface(mSurfaceBuffer);
+			SDL_FreeSurface(mSurfaceBuffer);
 		} else
 			mCounter++;
 	}
