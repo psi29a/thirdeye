@@ -218,7 +218,7 @@ void GRAPHICS::Graphics::update() {
 		uint16_t width = mCounter;
 		uint16_t lines = 10;
 
-		for (uint16_t line = 0; line < lines; line++) {
+		for (uint16_t line = 0; line <= lines; line++) {
 			// going right
 			SDL_Rect rectRight = { mSurfaceBuffer->w / lines * line, 0, width, 200 };
 			//std::cout << std::dec << line * lines + mCounter << " " << width <<  std::endl;
