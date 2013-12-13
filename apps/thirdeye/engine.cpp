@@ -242,6 +242,7 @@ void THIRDEYE::Engine::go() {
 				break;
 			case DRAW_CURT:
 				gfx.drawCurtain(scene.get<2>());
+				std::cerr << "How many times do we run this?" << std::endl;
 				break;
 			default:
 				std::cerr << "Case not yet implemented." << std::endl;
@@ -257,7 +258,7 @@ void THIRDEYE::Engine::go() {
 
 		//printf("Waiting 60...\n");
 		update = false;
-		SDL_Delay(10);      // Pause briefly before moving on to the next cycle.
+		SDL_Delay(60);      // Pause briefly before moving on to the next cycle.
 	}
 
 	// Save user settings

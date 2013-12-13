@@ -136,7 +136,8 @@ void GRAPHICS::Graphics::fadeIn() {
 	mAlpha = 0;
 }
 
-void GRAPHICS::Graphics::drawCurtain(std::vector<uint8_t> &bmp) {
+void GRAPHICS::Graphics::drawCurtain(std::vector<uint8_t> bmp) {
+
 	Bitmap bImage(bmp);
 	std::vector<uint8_t> bImageD = bImage[0];
 	mSurfaceBuffer = SDL_CreateRGBSurfaceFrom((void*) &bImageD[0], bImage.getWidth(0),
@@ -214,7 +215,7 @@ void GRAPHICS::Graphics::update() {
 	if (mDrawCurtain) {
 		uint16_t width = mCounter;
 		uint16_t lines = 10;
-		for (uint16_t line = 1; line < lines; line++) {
+		for (uint16_t line = 0; line < lines; line++) {
 			// going right
 			SDL_Rect rectRright = { mSurfaceBuffer->w / lines * line, 0, width, 200 };
 			//std::cout << std::dec << line * lines + mCounter << " " << width <<  std::endl;
@@ -227,7 +228,7 @@ void GRAPHICS::Graphics::update() {
 		}
 		if (mCounter == mSurfaceBuffer->w / lines / 2) {
 			mDrawCurtain = false;
-			SDL_FreeSurface(mSurfaceBuffer);
+			//SDL_FreeSurface(mSurfaceBuffer);
 		} else
 			mCounter++;
 	}
