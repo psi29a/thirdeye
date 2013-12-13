@@ -173,6 +173,7 @@ std::map<uint8_t, tuple<uint8_t, uint8_t, std::vector<uint8_t> > > RESOURCES::GF
 std::map<uint8_t, tuple<uint8_t, uint8_t, std::vector<uint8_t> > > sequences;
 
 sequences[0] = boost::make_tuple(SETT_PAL, 0, mFiles["PAL"][1].data[0]);
+/*
 sequences[1] = boost::make_tuple(FADE_IN, 5, mFiles["BMP"][1].data[0]);
 sequences[2] = boost::make_tuple(FADE_LEFT, 5, mFiles["BMP"][2].data[0]);
 sequences[3] = boost::make_tuple(DISP_BMP, 5, mFiles["BMP"][1].data[0]);
@@ -188,6 +189,7 @@ sequences[12] = boost::make_tuple(DISP_BMA, 1, mFiles["BMA"][3].data[1]);
 sequences[13] = boost::make_tuple(DISP_BMA, 1, mFiles["BMA"][3].data[2]);
 sequences[14] = boost::make_tuple(DISP_BMA, 1, mFiles["BMA"][3].data[3]);
 sequences[15] = boost::make_tuple(DISP_BMA, 1, mFiles["BMA"][3].data[4]);
+*/
 sequences[16] = boost::make_tuple(PAN_LEFT, 30, mFiles["BMP"][4].data[0]);
 sequences[17] = boost::make_tuple(PAN_LEFT, 0, mFiles["BMP"][5].data[0]);
 sequences[18] = boost::make_tuple(PAN_LEFT, 0, mFiles["BMP"][6].data[0]);
