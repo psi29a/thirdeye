@@ -209,7 +209,7 @@ void THIRDEYE::Engine::go() {
 			tuple<uint8_t, uint8_t, std::vector<uint8_t> > scene = cutscene.begin()->second;
 			wait = scene.get<1>();
 			switch (scene.get<0>()){
-			case SETT_PAL:
+			case SET_PAL:
 				gfx.loadPalette(scene.get<2>(), false);
 				break;
 			case PAN_LEFT:
