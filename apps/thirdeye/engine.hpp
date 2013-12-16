@@ -29,6 +29,7 @@ class Engine
 	bool mNewGame;
 	bool mUseSound;
 	bool mDebug;
+	bool mRenderer;
 	uint8_t mGame;
 	uint16_t mScale;
 	boost::filesystem::path mGameData;
@@ -57,6 +58,7 @@ public:
 	void setGameData(std::string gameData);
 	void setDebugMode(bool debug);
 	void setSoundUsage(bool nosound);
+	void setRenderer(bool renderer);
 	void setScale(uint16_t);
 private:
 	Files::ConfigurationManager& mCfgMgr;
