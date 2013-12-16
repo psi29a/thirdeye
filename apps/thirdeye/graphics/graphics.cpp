@@ -7,7 +7,11 @@
 #include <boost/foreach.hpp>
 #include <boost/lexical_cast.hpp>
 
-GRAPHICS::Graphics::Graphics(uint16_t scale) {
+#define SOFTWARE	0
+#define HARDWARE	1
+
+
+GRAPHICS::Graphics::Graphics(uint16_t scale, bool renderer) {
 	std::cout << "Initializing SDL... ";
 	mScale = scale;
 	Uint32 flags = SDL_INIT_VIDEO;
@@ -63,8 +67,10 @@ GRAPHICS::Graphics::Graphics(uint16_t scale) {
 	}
 
 	// Create the renderer driver to be used in window
-	//mRenderer = SDL_CreateRenderer(mWindow, -1, SDL_RENDERER_ACCELERATED);
-	mRenderer = SDL_CreateRenderer(mWindow, -1, SDL_RENDERER_SOFTWARE);
+	if (renderer == HARDWARE)
+		mRenderer = SDL_CreateRenderer(mWindow, -1, SDL_RENDERER_ACCELERATED);
+	else
+		mRenderer = SDL_CreateRenderer(mWindow, -1, SDL_RENDERER_SOFTWARE);
 
 	//SDL_RendererInfo* displayRendererInfo;
 	//SDL_GetRendererInfo(mRenderer, displayRendererInfo);

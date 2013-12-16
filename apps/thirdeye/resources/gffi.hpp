@@ -21,16 +21,16 @@ namespace RESOURCES {
 
 #define GFFI_ID "GFFI"
 
-#define PLAY_MUSIC 	0
-#define SET_PAL	1
-#define DISP_BMP	2
-#define DISP_BMA	3
-#define FADE_IN		4
-#define FADE_OUT	5
-#define FADE_LEFT	6
-#define FADE_RIGHT	7
-#define PAN_LEFT	8
-#define DRAW_CURT	9
+#define PLAY_MUSIC 		0
+#define SET_PAL			1
+#define DISP_BMP		2
+#define DISP_BMA		3
+#define FADE_IN			4
+#define FADE_LEFT		5
+#define PAN_LEFT		6
+#define DRAW_CURTAIN	7
+#define MATERIALIZE 	8
+#define DISP_OVERLAY	9
 
 #define T_TAG		0
 #define	T_DATA		1

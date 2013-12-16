@@ -66,6 +66,9 @@ bool parseOptions(int argc, char** argv, THIRDEYE::Engine& engine,
 	("scale", bpo::value<uint16_t>()->default_value(1),
 			"set resolution scale: \n  0 = fullscreen\n  1 = 320x200\n  2 = 640x400\n  ...")
 
+	("renderer", bpo::value<bool>()->implicit_value(true)->default_value(false),
+			"renderer: \n  0 = software (linear scaling)\n  1 = hardware (OpenGL scaling)")
+
 	("debug", bpo::value<bool>()->implicit_value(true)->default_value(false),
 			"debug mode")
 

@@ -41,7 +41,7 @@ private:
 	int zoomSurfaceRGBA(SDL_Surface * src, SDL_Surface * dst);
 
 public:
-	Graphics(uint16_t scale);
+	Graphics(uint16_t scale = 1, bool renderer = false);
 	virtual ~Graphics();
 	void drawImage(std::vector<uint8_t> &bmp, uint16_t index, uint16_t posX,
 			uint16_t posY, bool transparency = false);

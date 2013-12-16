@@ -17,7 +17,8 @@ THIRDEYE::Engine::Engine(Files::ConfigurationManager& configurationManager) :
 		mDebug(false),
 		mGame(GAME_UNKN),
 		mCfgMgr(configurationManager),
-		mScale(1)
+		mScale(1),
+		mRenderer(false)
 {
 	std::cout << "Initializing Thirdeye... ";
 
@@ -56,6 +57,9 @@ void THIRDEYE::Engine::setSoundUsage(bool nosound){
 }
 void THIRDEYE::Engine::setScale(uint16_t scale){
 	mScale = scale;
+}
+void THIRDEYE::Engine::setRenderer(bool renderer){
+	mRenderer = renderer;
 }
 
 // Initialise and enter main loop.
@@ -230,6 +234,9 @@ void THIRDEYE::Engine::go() {
 			case DISP_BMP:
 				gfx.drawImage(scene.get<2>(), 0, 0, 0, false);
 				break;
+			case DISP_OVERLAY:
+				gfx.drawImage(scene.get<2>(), 0, 0, 0, true);
+				break;
 			case DISP_BMA:
 				gfx.playAnimation(scene.get<2>());
 				break;
@@ -240,9 +247,11 @@ void THIRDEYE::Engine::go() {
 			case FADE_LEFT: // TODO: real fade to left
 				gfx.drawImage(scene.get<2>(), 0, 0, 0, true);
 				break;
-			case DRAW_CURT:
+			case DRAW_CURTAIN:
 				gfx.drawCurtain(scene.get<2>());
-				std::cerr << "How many times do we run this?" << std::endl;
+				break;
+			case MATERIALIZE: // TODO: real materialize
+				gfx.drawImage(scene.get<2>(), 0, 0, 0, true);
 				break;
 			default:
 				std::cerr << "Case not yet implemented." << std::endl;
