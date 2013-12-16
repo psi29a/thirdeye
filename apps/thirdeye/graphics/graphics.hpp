@@ -7,6 +7,7 @@
 #include "font.hpp"
 #include "palette.hpp"
 #include "bitmap.hpp"
+#include "../resources/gffi.hpp"
 
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_syswm.h>
@@ -15,6 +16,7 @@
 #include <vector>
 #include <stdint.h>
 #include <iostream>
+
 
 namespace GRAPHICS {
 
@@ -26,18 +28,13 @@ private:
 	SDL_Surface *mScreen;
 	SDL_Cursor *mCursor;
 	SDL_Palette *mPalette;
-	bool mFadeIn;
-	bool mFadeOut;
-	bool mPanning;
-	bool mDrawCurtain;
+	uint8_t mState;
 	int16_t mAlpha;
 	uint16_t mFrames;
 	uint16_t mCounter;
 	std::vector<uint8_t> mVideo;
 	std::vector<uint8_t> mBuffer;
-	SDL_Surface *mSurfaceBuffer;
-	SDL_Surface *mBGSurface;
-	SDL_Surface *mFGSurface;
+	std::map<uint8_t, SDL_Surface*> mSurface;
 	int zoomSurfaceRGBA(SDL_Surface * src, SDL_Surface * dst);
 
 public:
