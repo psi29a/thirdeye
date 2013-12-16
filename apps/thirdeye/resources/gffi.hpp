@@ -21,7 +21,7 @@ namespace RESOURCES {
 
 #define GFFI_ID "GFFI"
 
-#define PLAY_MUSIC 		0
+#define NOOP	 		0
 #define SET_PAL			1
 #define DISP_BMP		2
 #define DISP_BMA		3

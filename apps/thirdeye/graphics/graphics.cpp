@@ -88,10 +88,7 @@ GRAPHICS::Graphics::Graphics(uint16_t scale, bool renderer) {
 	mCursor = NULL;
 	mFrames = 0;
 	mCounter = 0;
-	mFadeIn = false;
-	mFadeOut = false;
-	mPanning = false;
-	mDrawCurtain = false;
+	mState = NOOP;
 	mAlpha = 0;
 
 }
@@ -135,10 +132,11 @@ void GRAPHICS::Graphics::playAnimation(std::vector<uint8_t> animationData) {
 	mFrames = animation.getNumberOfBitmaps();
 	mCounter = 0;
 	mBuffer = animationData;
+	mState = DISP_BMA;
 }
 
 void GRAPHICS::Graphics::fadeIn() {
-	mFadeIn = True;
+	mState = FADE_IN;
 	mAlpha = 0;
 }
 
@@ -147,11 +145,11 @@ void GRAPHICS::Graphics::drawCurtain(std::vector<uint8_t> bmp) {
 	std::vector<uint8_t> bImageD = bImage[0];
 	SDL_Surface *sImage = SDL_CreateRGBSurfaceFrom((void*) &bImageD[0], bImage.getWidth(0),
 			bImage.getHeight(0), 8, bImage.getWidth(0), 0, 0, 0, 0);
-	mSurfaceBuffer = SDL_CreateRGBSurface(0, 320, 200, 8, 0, 0, 0, 0);
-	SDL_BlitSurface(sImage, NULL, mSurfaceBuffer, NULL);
-	SDL_SetPaletteColors(mSurfaceBuffer->format->palette, mPalette->colors, 0, 256);
-	SDL_SetColorKey(mSurfaceBuffer, SDL_TRUE, SDL_MapRGB(mSurfaceBuffer->format, 0, 0, 0));
-	mDrawCurtain = true;
+	mSurface[0] = SDL_CreateRGBSurface(0, 320, 200, 8, 0, 0, 0, 0);
+	SDL_BlitSurface(sImage, NULL, mSurface[0], NULL);
+	SDL_SetPaletteColors(mSurface[0]->format->palette, mPalette->colors, 0, 256);
+	SDL_SetColorKey(mSurface[0], SDL_TRUE, SDL_MapRGB(mSurface[0]->format, 0, 0, 0));
+	mState = DRAW_CURTAIN;
 	mCounter = 1;
 	SDL_FreeSurface(sImage);
 }
@@ -160,10 +158,10 @@ void GRAPHICS::Graphics::panDirection(uint8_t panDir,
 		std::vector<uint8_t> bgRight, std::vector<uint8_t> bgLeft,
 		std::vector<uint8_t> fgRight, std::vector<uint8_t> fgLeft) {
 
-	mBGSurface = SDL_CreateRGBSurface(0, 320 * 2, 200, 8, 0, 0, 0, 0);
-	SDL_SetPaletteColors(mBGSurface->format->palette, mPalette->colors, 0, 256);
-	mFGSurface = SDL_CreateRGBSurface(0, 320 * 2, 200, 8, 0, 0, 0, 0);
-	SDL_SetPaletteColors(mFGSurface->format->palette, mPalette->colors, 0, 256);
+	mSurface[0] = SDL_CreateRGBSurface(0, 320 * 2, 200, 8, 0, 0, 0, 0);
+	SDL_SetPaletteColors(mSurface[0]->format->palette, mPalette->colors, 0, 256);
+	mSurface[1] = SDL_CreateRGBSurface(0, 320 * 2, 200, 8, 0, 0, 0, 0);
+	SDL_SetPaletteColors(mSurface[1]->format->palette, mPalette->colors, 0, 256);
 
 	Bitmap bBGRight(bgRight);
 	std::vector<uint8_t> bBGRightD = bBGRight[0];
@@ -199,93 +197,100 @@ void GRAPHICS::Graphics::panDirection(uint8_t panDir,
 
 	SDL_Rect dest = { 320, 0, 0, 0 };
 
-	SDL_BlitSurface(bgLeftSurface, NULL, mBGSurface, NULL);
-	SDL_BlitSurface(bgRightSurface, NULL, mBGSurface, &dest);
-	SDL_SetColorKey(mBGSurface, SDL_TRUE,
-			SDL_MapRGB(mFGSurface->format, 0, 0, 0));
+	SDL_BlitSurface(bgLeftSurface, NULL, mSurface[0], NULL);
+	SDL_BlitSurface(bgRightSurface, NULL, mSurface[0], &dest);
+	SDL_SetColorKey(mSurface[0], SDL_TRUE,
+			SDL_MapRGB(mSurface[0]->format, 0, 0, 0));
 	SDL_FreeSurface(bgLeftSurface);
 	SDL_FreeSurface(bgRightSurface);
 
-	SDL_BlitSurface(fgLeftSurface, NULL, mFGSurface, NULL);
-	SDL_BlitSurface(fgRightSurface, NULL, mFGSurface, &dest);
-	SDL_SetColorKey(mFGSurface, SDL_TRUE,
-			SDL_MapRGB(mFGSurface->format, 0, 0, 0));
+	SDL_BlitSurface(fgLeftSurface, NULL, mSurface[1], NULL);
+	SDL_BlitSurface(fgRightSurface, NULL, mSurface[1], &dest);
+	SDL_SetColorKey(mSurface[1], SDL_TRUE,
+			SDL_MapRGB(mSurface[1]->format, 0, 0, 0));
 	SDL_FreeSurface(fgLeftSurface);
 	SDL_FreeSurface(fgRightSurface);
 
-	mPanning = true;
+	mState = PAN_LEFT;
 	mCounter = 320;
 }
 
 void GRAPHICS::Graphics::update() {
 
 	// are we curtain-ing to another image?
-	if (mDrawCurtain) {
+	if (mState == DRAW_CURTAIN) {
 		uint16_t width = mCounter;
 		uint16_t lines = 10;
 
 		for (uint16_t line = 0; line <= lines; line++) {
 			// going right
-			SDL_Rect rectRight = { mSurfaceBuffer->w / lines * line, 0, width, 200 };
+			SDL_Rect rectRight = { mSurface[0]->w / lines * line, 0, width, 200 };
 			//std::cout << std::dec << line * lines + mCounter << " " << width <<  std::endl;
-			SDL_BlitSurface(mSurfaceBuffer, &rectRight, mScreen, &rectRight);
+			SDL_BlitSurface(mSurface[0], &rectRight, mScreen, &rectRight);
 
 			// going left
-			SDL_Rect rectLeft = { mSurfaceBuffer->w / lines * line - mCounter, 0, width, 200 };
+			SDL_Rect rectLeft = { mSurface[0]->w / lines * line - mCounter, 0, width, 200 };
 			//std::cout << std::dec << line * lines + mCounter << " " << width <<  std::endl;
-			SDL_BlitSurface(mSurfaceBuffer, &rectLeft, mScreen, &rectLeft);
+			SDL_BlitSurface(mSurface[0], &rectLeft, mScreen, &rectLeft);
 		}
-		if (mCounter == mSurfaceBuffer->w / lines / 2) {
-			mDrawCurtain = false;
-			SDL_FreeSurface(mSurfaceBuffer);
+		if (mCounter == mSurface[0]->w / lines / 2) {
+			mState = NOOP;
+			SDL_FreeSurface(mSurface[0]);
 		} else
 			mCounter++;
 	}
 
 	// panning are we panning?
-	if (mPanning) {
+	if (mState == PAN_LEFT) {
 		SDL_Rect sRect = { mCounter, 0, 320 - 6, 115 };
 		SDL_Rect dRect = { 3, 3, 0, 0 }; // last 2 are ignored
-		SDL_BlitSurface(mBGSurface, &sRect, mScreen, &dRect);
+		SDL_BlitSurface(mSurface[0], &sRect, mScreen, &dRect);
 		sRect.x = 320 - ((320 - mCounter) * 2);
-		SDL_BlitSurface(mFGSurface, &sRect, mScreen, &dRect);
+		SDL_BlitSurface(mSurface[1], &sRect, mScreen, &dRect);
 		if (mCounter == 0) {
-			mPanning = false;
-			SDL_FreeSurface(mBGSurface);
-			SDL_FreeSurface(mFGSurface);
+			mState = NOOP;
+			SDL_FreeSurface(mSurface[0]);
+			SDL_FreeSurface(mSurface[1]);
 		} else
 			mCounter--;
 	}
 
 	// anything in our animation queue to display?
-	if (mFrames > 0 and mFrames > mCounter) {
-		bool transparency = true;
-		//if (mCounter == 0)	// only first frame is is not transparent
-		//	transparency = false;
-
-		drawImage(mBuffer, mCounter, 0, 0, transparency);
-		std::cout << "  Frame: " << (int) mCounter << std::endl;
-		mCounter++;
-	} else if (mFrames > 0 and mFrames <= mCounter) { // we're finished
-		std::cout << "   Finished playing @ " << (int) mCounter << std::endl;
-		mFrames = 0;
-		mCounter = 0;
+	if (mState == DISP_BMA){
+		if (mFrames > mCounter) {
+			drawImage(mBuffer, mCounter, 0, 0, true);
+			std::cout << "  Frame: " << (int) mCounter << std::endl;
+			mCounter++;
+		} else {
+			std::cout << "   Finished playing @ " << (int) mCounter << std::endl;
+			mFrames = 0;
+			mCounter = 0;
+			mState = NOOP;
+		}
 	}
 
 	// are we fading in or out?
-	if (mFadeIn or mFadeOut) {
-		if (mFadeIn and mAlpha > SDL_ALPHA_OPAQUE) {
-			mFadeIn = false;
+	if (mState == FADE_IN) {
+		if (mAlpha > SDL_ALPHA_OPAQUE) {
+			mState = NOOP;
 			mAlpha = SDL_ALPHA_OPAQUE;
 		}
-		if (mFadeOut and mAlpha < SDL_ALPHA_TRANSPARENT) {
-			mFadeOut = false;
+		int value = SDL_SetSurfaceAlphaMod(mScreen, mAlpha);
+		printf("Sleeping: %d - %d  \n", value, mAlpha);
+		mAlpha += 10;
+	}
+
+	/*
+	if (mState == FADE_OUT) {
+		if (mAlpha < SDL_ALPHA_TRANSPARENT) {
+			mState = NOOP;
 			mAlpha = SDL_ALPHA_TRANSPARENT;
 		}
 		int value = SDL_SetSurfaceAlphaMod(mScreen, mAlpha);
 		printf("Sleeping: %d - %d  \n", value, mAlpha);
-		(mFadeIn) ? mAlpha += 10 : mAlpha -= 10;
+		mAlpha -= 10;
 	}
+	*/
 
 	// generate texture from our screen surface
 	SDL_Texture *texture = SDL_CreateTextureFromSurface(mRenderer, mScreen);
