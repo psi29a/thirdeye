@@ -90,6 +90,9 @@ GRAPHICS::Graphics::Graphics(uint16_t scale, bool renderer) {
 	mCounter = 0;
 	mState = NOOP;
 	mAlpha = 0;
+	mClock = SDL_GetTicks();
+	mCutsceneWait = 0;
+	mRunningClock = 0;
 
 }
 
@@ -125,6 +128,10 @@ void GRAPHICS::Graphics::drawImage(std::vector<uint8_t> &bmp, uint16_t index,
 	}
 	SDL_BlitSurface(surface, NULL, mScreen, &dest);
 	SDL_FreeSurface(surface);
+}
+
+void GRAPHICS::Graphics::playVideo(RESOURCES::GFFI gffi) {
+	mCutscene = gffi.getSequence();
 }
 
 void GRAPHICS::Graphics::playAnimation(std::vector<uint8_t> animationData) {
@@ -216,6 +223,71 @@ void GRAPHICS::Graphics::panDirection(uint8_t panDir,
 }
 
 void GRAPHICS::Graphics::update() {
+	bool updateScene = false;
+	mClock = SDL_GetTicks();
+	if (mClock/1000 > mRunningClock){
+		mRunningClock = mClock/1000;
+		updateScene = true;
+	}
+
+	if (mCutsceneWait > 0 and updateScene)
+		mCutsceneWait--;
+
+	// what are we playing now?
+	if (mState == NOOP and mCutscene.size() > 0 and mCutsceneWait == 0){
+		uint8_t index = mCutscene.begin()->first;
+		std::cout << "Playing mCutscene: " << std::dec << (int) index << std::endl;
+		tuple<uint8_t, uint8_t, std::vector<uint8_t> > scene = mCutscene.begin()->second;
+		mCutsceneWait = scene.get<1>();
+		switch (scene.get<0>()){
+		case SET_PAL:
+			loadPalette(scene.get<2>(), false);
+			break;
+		case PAN_LEFT:
+		{
+			std::vector<uint8_t> bgright = scene.get<2>();
+			mCutscene.erase(index++);
+			scene = mCutscene.begin()->second;
+			std::vector<uint8_t> bgleft = scene.get<2>();
+			mCutscene.erase(index++);
+			scene = mCutscene.begin()->second;
+			std::vector<uint8_t> fgright = scene.get<2>();
+			mCutscene.erase(index++);
+			scene = mCutscene.begin()->second;
+			std::vector<uint8_t> fgleft = scene.get<2>();
+			panDirection(0, bgright, bgleft, fgright, fgleft);
+		}
+			break;
+		case DISP_BMP:
+			drawImage(scene.get<2>(), 0, 0, 0, false);
+			break;
+		case DISP_OVERLAY:
+			drawImage(scene.get<2>(), 0, 0, 0, true);
+			break;
+		case DISP_BMA:
+			playAnimation(scene.get<2>());
+			break;
+		case FADE_IN:
+			drawImage(scene.get<2>(), 0, 0, 0, false);
+			fadeIn();
+			break;
+		case FADE_LEFT: // TODO: real fade to left
+			drawImage(scene.get<2>(), 0, 0, 0, true);
+			break;
+		case DRAW_CURTAIN:
+			drawCurtain(scene.get<2>());
+			break;
+		case MATERIALIZE: // TODO: real materialize
+			drawImage(scene.get<2>(), 0, 0, 0, true);
+			break;
+		default:
+			std::cerr << "Case not yet implemented." << std::endl;
+			throw;
+		}
+		mCutscene.erase(index);
+	}
+
+
 
 	// are we curtain-ing to another image?
 	if (mState == DRAW_CURTAIN) {
@@ -225,12 +297,10 @@ void GRAPHICS::Graphics::update() {
 		for (uint16_t line = 0; line <= lines; line++) {
 			// going right
 			SDL_Rect rectRight = { mSurface[0]->w / lines * line, 0, width, 200 };
-			//std::cout << std::dec << line * lines + mCounter << " " << width <<  std::endl;
 			SDL_BlitSurface(mSurface[0], &rectRight, mScreen, &rectRight);
 
 			// going left
 			SDL_Rect rectLeft = { mSurface[0]->w / lines * line - mCounter, 0, width, 200 };
-			//std::cout << std::dec << line * lines + mCounter << " " << width <<  std::endl;
 			SDL_BlitSurface(mSurface[0], &rectLeft, mScreen, &rectLeft);
 		}
 		if (mCounter == mSurface[0]->w / lines / 2) {
@@ -238,6 +308,8 @@ void GRAPHICS::Graphics::update() {
 			SDL_FreeSurface(mSurface[0]);
 		} else
 			mCounter++;
+
+		SDL_Delay(100);
 	}
 
 	// panning are we panning?
@@ -253,6 +325,8 @@ void GRAPHICS::Graphics::update() {
 			SDL_FreeSurface(mSurface[1]);
 		} else
 			mCounter--;
+
+		SDL_Delay(50);
 	}
 
 	// anything in our animation queue to display?
@@ -267,6 +341,8 @@ void GRAPHICS::Graphics::update() {
 			mCounter = 0;
 			mState = NOOP;
 		}
+
+		SDL_Delay(100);
 	}
 
 	// are we fading in or out?
@@ -275,9 +351,11 @@ void GRAPHICS::Graphics::update() {
 			mState = NOOP;
 			mAlpha = SDL_ALPHA_OPAQUE;
 		}
-		int value = SDL_SetSurfaceAlphaMod(mScreen, mAlpha);
-		printf("Sleeping: %d - %d  \n", value, mAlpha);
+		SDL_SetSurfaceAlphaMod(mScreen, mAlpha);
+		//printf("Applying alpha: %d  \n", mAlpha);
 		mAlpha += 10;
+
+		SDL_Delay(100);
 	}
 
 	/*
@@ -306,6 +384,7 @@ void GRAPHICS::Graphics::update() {
 
 	// cleanup
 	SDL_DestroyTexture(texture);
+
 }
 
 void GRAPHICS::Graphics::drawText(std::vector<uint8_t> &fnt, std::string text,
