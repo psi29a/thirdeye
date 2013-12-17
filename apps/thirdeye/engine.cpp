@@ -67,7 +67,8 @@ void THIRDEYE::Engine::go() {
 	MIXER::Mixer mixer;		// setup our sound mixer
 	GRAPHICS::Graphics gfx(mScale); // setup our graphics
 	RESOURCES::Resource resource(mGameData);	// get our game resources ready
-	RESOURCES::GFFI gffi(mGameData.remove_leaf() /= "INTRO.GFF"); // get our intro cinematic
+	RESOURCES::GFFI introVideo(mGameData.remove_leaf() /= "INTRO.GFF"); // get our intro cinematic
+	std::vector<uint8_t> &introMusic = resource.getAsset("AVAD");
 
 	/*
 	 Settings::Manager settings;
@@ -109,10 +110,13 @@ void THIRDEYE::Engine::go() {
 
 	Uint32 	clock = 0;
 	Uint32 	currentSecond = 0;
-	Uint32 	wait = 0;
-	bool 	update = false;
+	//bool 	update = false;
 
-	std::map<uint8_t, tuple<uint8_t, uint8_t, std::vector<uint8_t> > > cutscene = gffi.getSequence();
+	//mixer.playMusic(introMusic);
+	//mixer.playMusic(introVideo.getMusic());
+	gfx.playVideo(introVideo);
+
+	//std::map<uint8_t, tuple<uint8_t, uint8_t, std::vector<uint8_t> > > cutscene = gffi.getSequence();
 
 	/*
 	gfx.loadPalette(cutscene[0].get<2>(), false);
@@ -137,16 +141,15 @@ void THIRDEYE::Engine::go() {
 	// Start the main rendering loop
 	SDL_Event event;
 	bool done = false;
+	bool isSecond = false;
 	while (!done)  // Enter main loop.
 	{
 		clock = SDL_GetTicks();
 		if (clock/1000 > currentSecond){
 			currentSecond = clock/1000;
-			update = true;
+			//update = true;
+			isSecond = true;
 		}
-
-		if (wait > 0 and update)
-			wait--;
 
 		while (SDL_PollEvent(&event)) {
 			switch (event.type) {
@@ -207,67 +210,16 @@ void THIRDEYE::Engine::go() {
 			} // end of event switch
 		} // end pool loop
 
-		if (cutscene.size() > 0 and wait == 0){
-			uint8_t index = cutscene.begin()->first;
-			std::cout << "Playing cutscene: " << (int) index << std::endl;
-			tuple<uint8_t, uint8_t, std::vector<uint8_t> > scene = cutscene.begin()->second;
-			wait = scene.get<1>();
-			switch (scene.get<0>()){
-			case SET_PAL:
-				gfx.loadPalette(scene.get<2>(), false);
-				break;
-			case PAN_LEFT:
-			{
-				std::vector<uint8_t> bgright = scene.get<2>();
-				cutscene.erase(index++);
-				scene = cutscene.begin()->second;
-				std::vector<uint8_t> bgleft = scene.get<2>();
-				cutscene.erase(index++);
-				scene = cutscene.begin()->second;
-				std::vector<uint8_t> fgright = scene.get<2>();
-				cutscene.erase(index++);
-				scene = cutscene.begin()->second;
-				std::vector<uint8_t> fgleft = scene.get<2>();
-				gfx.panDirection(0, bgright, bgleft, fgright, fgleft);
-			}
-				break;
-			case DISP_BMP:
-				gfx.drawImage(scene.get<2>(), 0, 0, 0, false);
-				break;
-			case DISP_OVERLAY:
-				gfx.drawImage(scene.get<2>(), 0, 0, 0, true);
-				break;
-			case DISP_BMA:
-				gfx.playAnimation(scene.get<2>());
-				break;
-			case FADE_IN:
-				gfx.drawImage(scene.get<2>(), 0, 0, 0, false);
-				gfx.fadeIn();
-				break;
-			case FADE_LEFT: // TODO: real fade to left
-				gfx.drawImage(scene.get<2>(), 0, 0, 0, true);
-				break;
-			case DRAW_CURTAIN:
-				gfx.drawCurtain(scene.get<2>());
-				break;
-			case MATERIALIZE: // TODO: real materialize
-				gfx.drawImage(scene.get<2>(), 0, 0, 0, true);
-				break;
-			default:
-				std::cerr << "Case not yet implemented." << std::endl;
-				throw;
-			}
-			cutscene.erase(index);
-		}
-
 		gfx.update();		// update our screen
 		mixer.update();		// update our sounds
 
-		std::cout << "Clock " << clock/1000 << std::endl;
-
-		//printf("Waiting 60...\n");
-		update = false;
-		SDL_Delay(60);      // Pause briefly before moving on to the next cycle.
+		if (isSecond){
+			std::cout << "Clock " << std::dec << clock/1000 << std::endl;
+			isSecond = false;
+		}
+		//printf("Waiting 100...\n");
+		//update = false;
+		//SDL_Delay(100);      // Pause briefly before moving on to the next cycle.
 	}
 
 	// Save user settings
