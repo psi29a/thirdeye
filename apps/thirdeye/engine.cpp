@@ -67,7 +67,6 @@ void THIRDEYE::Engine::go() {
 	MIXER::Mixer mixer;		// setup our sound mixer
 	GRAPHICS::Graphics gfx(mScale); // setup our graphics
 	RESOURCES::Resource resource(mGameData);	// get our game resources ready
-	RESOURCES::GFFI introVideo(mGameData.remove_leaf() /= "INTRO.GFF"); // get our intro cinematic
 
 	/*
 	 Settings::Manager settings;
@@ -78,7 +77,6 @@ void THIRDEYE::Engine::go() {
 
 	std::vector<uint8_t> &snd = resource.getAsset("BIRD4");
 	std::vector<uint8_t> &xmidi = resource.getAsset("CUE1");
-
 
 	std::vector<uint8_t> &font = resource.getAsset("8x8 font");
 	//std::vector<uint8_t> &font2 = resource.getAsset("6x8 font");
@@ -111,41 +109,11 @@ void THIRDEYE::Engine::go() {
 
 	Uint32 	clock = 0;
 	Uint32 	currentSecond = 0;
-	//bool 	update = false;
 
-	//std::vector<uint8_t> &introMusic = resource.getAsset("XYZ");
-	std::vector<uint8_t> introMusic = introVideo.getMusic();
-
-	std::string Path = "/tmp/TEST.xmi";
-	std::ofstream FILE(Path.c_str(), std::ios::out | std::ofstream::binary);
-	size_t sz = introMusic.size();
-	FILE.write(reinterpret_cast<const char*>(&introMusic[0]), sz * sizeof(introMusic[0]));
-
-	mixer.playMusic(introMusic);
-	//mixer.playMusic(introVideo.getMusic());
+	// get our intro cinematic
+	RESOURCES::GFFI introVideo(mGameData.remove_leaf() /= "INTRO.GFF");
+	mixer.playMusic(introVideo.getMusic());
 	gfx.playVideo(introVideo);
-
-	//std::map<uint8_t, tuple<uint8_t, uint8_t, std::vector<uint8_t> > > cutscene = gffi.getSequence();
-
-	/*
-	gfx.loadPalette(cutscene[0].get<2>(), false);
-	gfx.drawImage(cutscene[20].get<2>(), 0, 0, 0, false);
-	gfx.update();
-	SDL_Delay(10000);
-	return;
-	gfx.update();
-	SDL_Delay(10);
-	gfx.update();
-	SDL_Delay(10);
-	gfx.update();
-	//gfx.playAnimation(cutscene[15].get<2>());
-	SDL_Delay(10);
-	while (true){
-	  gfx.update();
-	  SDL_Delay(10);
-	}
-	return;
-	*/
 
 	// Start the main rendering loop
 	SDL_Event event;
