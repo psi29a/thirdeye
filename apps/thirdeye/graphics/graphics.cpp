@@ -10,7 +10,6 @@
 #define SOFTWARE	0
 #define HARDWARE	1
 
-
 GRAPHICS::Graphics::Graphics(uint16_t scale, bool renderer) {
 	std::cout << "Initializing SDL... ";
 	mScale = scale;
@@ -286,8 +285,6 @@ void GRAPHICS::Graphics::update() {
 		}
 		mCutscene.erase(index);
 	}
-
-
 
 	// are we curtain-ing to another image?
 	if (mState == DRAW_CURTAIN) {
