@@ -68,7 +68,6 @@ void THIRDEYE::Engine::go() {
 	GRAPHICS::Graphics gfx(mScale); // setup our graphics
 	RESOURCES::Resource resource(mGameData);	// get our game resources ready
 	RESOURCES::GFFI introVideo(mGameData.remove_leaf() /= "INTRO.GFF"); // get our intro cinematic
-	std::vector<uint8_t> &introMusic = resource.getAsset("AVAD");
 
 	/*
 	 Settings::Manager settings;
@@ -93,6 +92,9 @@ void THIRDEYE::Engine::go() {
 	std::string text = resource.getTableEntry("Marble palette", 1);
 
 	gfx.loadPalette(basePalette);
+	gfx.loadMouse(icons, 0);
+
+	/*
 	gfx.drawImage(bmp, 0, 0, false);
 
 	gfx.loadPalette(basePalette, subPalette, text);
@@ -104,15 +106,22 @@ void THIRDEYE::Engine::go() {
 
 	gfx.drawImage(icons, 1, 25, 120, true);
 	gfx.drawText(font,"Welcome to Thirdeye!", 8, 181);
-
-	gfx.loadMouse(icons, 0);
+	*/
 
 
 	Uint32 	clock = 0;
 	Uint32 	currentSecond = 0;
 	//bool 	update = false;
 
-	//mixer.playMusic(introMusic);
+	//std::vector<uint8_t> &introMusic = resource.getAsset("XYZ");
+	std::vector<uint8_t> introMusic = introVideo.getMusic();
+
+	std::string Path = "/tmp/TEST.xmi";
+	std::ofstream FILE(Path.c_str(), std::ios::out | std::ofstream::binary);
+	size_t sz = introMusic.size();
+	FILE.write(reinterpret_cast<const char*>(&introMusic[0]), sz * sizeof(introMusic[0]));
+
+	mixer.playMusic(introMusic);
 	//mixer.playMusic(introVideo.getMusic());
 	gfx.playVideo(introVideo);
 
@@ -214,7 +223,7 @@ void THIRDEYE::Engine::go() {
 		mixer.update();		// update our sounds
 
 		if (isSecond){
-			std::cout << "Clock " << std::dec << clock/1000 << std::endl;
+			std::cout << "Wall Clock: " << std::dec << clock/1000  << "s\r" << std::flush;
 			isSecond = false;
 		}
 		//printf("Waiting 100...\n");

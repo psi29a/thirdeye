@@ -8,7 +8,7 @@
 
 #include <iostream>
 
-extern  "C"{
+extern "C" {
 #include <wildmidi_lib.h>
 }
 
@@ -25,15 +25,17 @@ extern  "C"{
 #include <AL/al.h>
 #include <AL/alc.h>
 
-void MIXER::Mixer::update(){
+void MIXER::Mixer::update() {
 	ALenum state = 0;
-	for (std::map<ALuint, Sources>::iterator iter = mSources.begin(); iter != mSources.end(); iter++){
+	for (std::map<ALuint, Sources>::iterator iter = mSources.begin();
+			iter != mSources.end(); iter++) {
 		alGetSourcei(iter->second.sourceId, AL_SOURCE_STATE, &state);
-		if (state != AL_PLAYING && iter->second.bufferId > 0){
-			std::cout << "We are done playing buffer " << iter->second.bufferId << " with source " << iter->second.sourceId << std::endl;
+		if (state != AL_PLAYING && iter->second.bufferId > 0) {
+			std::cout << "We are done playing buffer " << iter->second.bufferId
+					<< " with source " << iter->second.sourceId << std::endl;
 			alSourceStop(iter->second.sourceId);			// stop playing
 			alSourcei(iter->second.sourceId, AL_BUFFER, 0); // unload buffer from source
-			alDeleteBuffers(1,&iter->second.bufferId);		// delete buffer
+			alDeleteBuffers(1, &iter->second.bufferId);		// delete buffer
 			mSources[iter->first].buffer.clear();			// purge data
 			mSources[iter->first].bufferId = 0;				// reset bufferId
 			//std::cout << "Error: " << alGetError() << std::endl;
@@ -49,28 +51,29 @@ void MIXER::Mixer::playMusic(std::vector<uint8_t> xmidi) {
 
 	// is there music loaded? If so, we stop and unload.
 	alSourceStop(mSources[musicId].sourceId);				// stop music
-	alSourcei(mSources[musicId].sourceId, AL_BUFFER, 0);  // unload buffer from source
-	alDeleteBuffers(1, &mSources[musicId].bufferId);		// delete buffer itself
+	alSourcei(mSources[musicId].sourceId, AL_BUFFER, 0); // unload buffer from source
+	alDeleteBuffers(1, &mSources[musicId].bufferId);	// delete buffer itself
 	mSources[musicId].buffer.clear();			// purge data
 	mSources[musicId].bufferId = 0;
-	std::cout << "Error: " << alGetError() << std::endl;
+	//std::cout << "Error: " << alGetError() << std::endl;
 
 	DataSource *xmids = new BufferDataSource(reinterpret_cast<char*>(&xmidi[0]),
 			xmidi.size());
 	XMIDI *xmi = new XMIDI(xmids,
 			mt32 ? XMIDI_CONVERT_MT32_TO_GS : XMIDI_CONVERT_NOCONVERSION);
 
-	std::vector<uint8_t> midi(sizeof(uint8_t) * 4096);
+	std::vector<uint8_t> midi(sizeof(uint8_t) * 1024 * 16); // buffer needs to be big enough
 	DataSource *xout = new BufferDataSource(reinterpret_cast<char*>(&midi[0]),
 			midi.size());
 
 	xmi->retrieve(0, xout);
 
-	std::cout << "midi: " << midi.size() << " " << &midi[0] << " "
-			<< xout->getPos() << std::endl;
+	//std::cout << "midi: " << midi.size() << " " << &midi[0] << " "
+	//		<< xout->getPos() << std::endl;
+
 	midi.resize(xout->getPos());
 
-	std::cout << "midi: " << midi.size() << " " << &midi[0] << std::endl;
+	//std::cout << "midi: " << midi.size() << " " << &midi[0] << std::endl;
 
 	if (WildMidi_Init(config_file.c_str(), MUSIC_RATE, mixer_options) == -1) {
 		std::cerr << "Could not initialise WildMIDI." << std::endl;
@@ -80,55 +83,64 @@ void MIXER::Mixer::playMusic(std::vector<uint8_t> xmidi) {
 	void *midi_ptr = WildMidi_OpenBuffer(&midi[0], midi.size());
 	struct _WM_Info * wm_info = WildMidi_GetInfo(midi_ptr);
 
-	mSources[musicId].buffer.resize(wm_info->approx_total_samples*4);
+	mSources[musicId].buffer.resize(wm_info->approx_total_samples * 4);
 
-	WildMidi_GetOutput(midi_ptr, reinterpret_cast<char*>(&mSources[musicId].buffer[0]), mSources[musicId].buffer.size());
-	WildMidi_Close (midi_ptr);
+	WildMidi_GetOutput(midi_ptr,
+			reinterpret_cast<char*>(&mSources[musicId].buffer[0]),
+			mSources[musicId].buffer.size());
+	WildMidi_Close(midi_ptr);
 	WildMidi_Shutdown();
-	std::cout << "done converting xmi to midi" << std::endl;
+	//std::cout << "done converting xmi to midi" << std::endl;
 
 	// play our new music
-    alGenBuffers(1, &mSources[musicId].bufferId);
-    alBufferData(mSources[musicId].bufferId, AL_FORMAT_STEREO16, &mSources[musicId].buffer[0], mSources[musicId].buffer.size(), MUSIC_RATE);
-    alSourcei(mSources[musicId].sourceId, AL_BUFFER, mSources[musicId].bufferId);
+	alGenBuffers(1, &mSources[musicId].bufferId);
+	alBufferData(mSources[musicId].bufferId, AL_FORMAT_STEREO16,
+			&mSources[musicId].buffer[0], mSources[musicId].buffer.size(),
+			MUSIC_RATE);
+	alSourcei(mSources[musicId].sourceId, AL_BUFFER,
+			mSources[musicId].bufferId);
 	alSourcePlay(mSources[musicId].sourceId);
 
 	/*
-	std::cout << mSources[musicId].sourceId << " " << mSources[musicId].bufferId << " "
-			<< mSources[musicId].buffer.size() << " "
-			<< alGetError()
-			<< std::endl;
-	*/
+	 std::cout << mSources[musicId].sourceId << " " << mSources[musicId].bufferId << " "
+	 << mSources[musicId].buffer.size() << " "
+	 << alGetError()
+	 << std::endl;
+	 */
 }
 
 void MIXER::Mixer::playSound(std::vector<uint8_t> snd) {
 	uint8_t mSourceId = 0;
 	// find first unused source
-	for (std::map<ALuint, Sources>::iterator iter = mSources.begin(); iter != mSources.end(); iter++){
-		if (iter->first > 0 && iter->second.bufferId == 0){
+	for (std::map<ALuint, Sources>::iterator iter = mSources.begin();
+			iter != mSources.end(); iter++) {
+		if (iter->first > 0 && iter->second.bufferId == 0) {
 			mSourceId = iter->first;
 			//std::cout << "Free source found: " << iter->second.sourceId << std::endl;
 			break;
 		}
 	}
 
-	if ( mSourceId == 0 ) {
+	if (mSourceId == 0) {
 		//std::cout << "Couldn't play sound, no more available sources." << std::endl;
 		return;
 	}
 
 	mSources[mSourceId].buffer = snd;
 	alGenBuffers(1, &mSources[mSourceId].bufferId);
-	alBufferData(mSources[mSourceId].bufferId, AL_FORMAT_MONO8, &mSources[mSourceId].buffer[0], mSources[mSourceId].buffer.size(), SOUND_RATE);
-	alSourcei(mSources[mSourceId].sourceId, AL_BUFFER, mSources[mSourceId].bufferId);
+	alBufferData(mSources[mSourceId].bufferId, AL_FORMAT_MONO8,
+			&mSources[mSourceId].buffer[0], mSources[mSourceId].buffer.size(),
+			SOUND_RATE);
+	alSourcei(mSources[mSourceId].sourceId, AL_BUFFER,
+			mSources[mSourceId].bufferId);
 	alSourcePlay(mSources[mSourceId].sourceId);
 
 	/*
-	std::cout << mSources[mSourceId].sourceId << " " << mSources[mSourceId].bufferId << " "
-			<< mSources[mSourceId].buffer.size() << " "
-			<< alGetError()
-			<< std::endl;
-	*/
+	 std::cout << mSources[mSourceId].sourceId << " " << mSources[mSourceId].bufferId << " "
+	 << mSources[mSourceId].buffer.size() << " "
+	 << alGetError()
+	 << std::endl;
+	 */
 }
 
 MIXER::Mixer::Mixer() {
@@ -143,16 +155,18 @@ MIXER::Mixer::Mixer() {
 		return;
 	}
 
-	std::cout << "  Using: " << alcGetString(device, ALC_DEVICE_SPECIFIER) << std::endl;
+	std::cout << "  Using: " << alcGetString(device, ALC_DEVICE_SPECIFIER)
+			<< std::endl;
 
 	context = alcCreateContext(device, NULL);
 	if (!alcMakeContextCurrent(context)) {
-		std::cerr << "OpenAL: Failed to create the default context." << std::endl;
+		std::cerr << "OpenAL: Failed to create the default context."
+				<< std::endl;
 		return;
 	}
 
 	// setup our sources
-	for (uint8_t i = 0; i < MAX_SOURCES; i++){
+	for (uint8_t i = 0; i < MAX_SOURCES; i++) {
 		mSources[i] = Sources();
 		alGenSources(1, &mSources[i].sourceId);
 		//std::cout << "SourceId: " << mSources[i].sourceId << std::endl;
@@ -162,25 +176,24 @@ MIXER::Mixer::Mixer() {
 
 MIXER::Mixer::~Mixer() {
 	std::map<ALuint, Sources>::iterator iter;
-	for (iter = mSources.begin(); iter != mSources.end(); iter++){
+	for (iter = mSources.begin(); iter != mSources.end(); iter++) {
 		//std::cout << "  Cleaning up source: " << iter->second.sourceId << " and buffer: " << iter->second.bufferId << std::endl;
 		alSourceStop(iter->second.sourceId);			// stop playing
 		alSourcei(iter->second.sourceId, AL_BUFFER, 0); // unload buffer from source
-		alDeleteBuffers(1,&iter->second.bufferId);
-		alDeleteSources(1,&iter->second.sourceId);
+		alDeleteBuffers(1, &iter->second.bufferId);
+		alDeleteSources(1, &iter->second.sourceId);
 	}
 
-    alcDestroyContext(context);
-    alcCloseDevice(device);
+	alcDestroyContext(context);
+	alcCloseDevice(device);
 }
 
-void MIXER::Mixer::list_audio_devices(const ALCchar *devices)
-{
+void MIXER::Mixer::list_audio_devices(const ALCchar *devices) {
 	const ALCchar *device = devices, *next = devices + 1;
 	size_t len = 0;
 
 	std::cout << "Initializing Sound:" << std::endl
-		<< "  Available audio devices:" << std::endl;
+			<< "  Available audio devices:" << std::endl;
 
 	while (device && *device != '\0' && next && *next != '\0') {
 		std::cout << "    * " << device << std::endl;

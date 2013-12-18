@@ -236,7 +236,7 @@ void GRAPHICS::Graphics::update() {
 	// what are we playing now?
 	if (mState == NOOP and mCutscene.size() > 0 and mCutsceneWait == 0){
 		uint8_t index = mCutscene.begin()->first;
-		std::cout << "Playing mCutscene: " << std::dec << (int) index << std::endl;
+		//std::cout << "Playing mCutscene: " << std::dec << (int) index << std::endl;
 		tuple<uint8_t, uint8_t, std::vector<uint8_t> > scene = mCutscene.begin()->second;
 		mCutsceneWait = scene.get<1>();
 		switch (scene.get<0>()){
@@ -309,7 +309,7 @@ void GRAPHICS::Graphics::update() {
 		} else
 			mCounter++;
 
-		SDL_Delay(100);
+		SDL_Delay(150);
 	}
 
 	// panning are we panning?
@@ -326,23 +326,23 @@ void GRAPHICS::Graphics::update() {
 		} else
 			mCounter--;
 
-		SDL_Delay(50);
+		SDL_Delay(5);
 	}
 
 	// anything in our animation queue to display?
 	if (mState == DISP_BMA){
 		if (mFrames > mCounter) {
 			drawImage(mBuffer, mCounter, 0, 0, true);
-			std::cout << "  Frame: " << (int) mCounter << std::endl;
+			//std::cout << "  Frame: " << (int) mCounter << std::endl;
 			mCounter++;
 		} else {
-			std::cout << "   Finished playing @ " << (int) mCounter << std::endl;
+			//std::cout << "   Finished playing @ " << (int) mCounter << std::endl;
 			mFrames = 0;
 			mCounter = 0;
 			mState = NOOP;
 		}
 
-		SDL_Delay(100);
+		SDL_Delay(150);
 	}
 
 	// are we fading in or out?
