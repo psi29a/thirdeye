@@ -78,15 +78,15 @@ void THIRDEYE::Engine::go() {
 	std::vector<uint8_t> &snd = resource.getAsset("BIRD4");
 	std::vector<uint8_t> &xmidi = resource.getAsset("CUE1");
 
-	std::vector<uint8_t> &font = resource.getAsset("8x8 font");
+	//std::vector<uint8_t> &font = resource.getAsset("8x8 font");
 	//std::vector<uint8_t> &font2 = resource.getAsset("6x8 font");
 	//std::vector<uint8_t> &font3 = resource.getAsset("Ornate font");
 
-	std::vector<uint8_t> &bmp = resource.getAsset("Backdrop");
+	//std::vector<uint8_t> &bmp = resource.getAsset("Backdrop");
 	std::vector<uint8_t> &icons = resource.getAsset("Icons");
-	std::vector<uint8_t> &marble = resource.getAsset("Marble walls");
+	//std::vector<uint8_t> &marble = resource.getAsset("Marble walls");
 	std::vector<uint8_t> &basePalette = resource.getAsset("Fixed palette");
-	std::vector<uint8_t> &subPalette = resource.getAsset("Marble palette");
+	//std::vector<uint8_t> &subPalette = resource.getAsset("Marble palette");
 	std::string text = resource.getTableEntry("Marble palette", 1);
 
 	gfx.loadPalette(basePalette);

@@ -34,11 +34,10 @@ private:
 	uint16_t mCounter;
 	uint32_t mClock;
 	uint32_t mRunningClock;
-	uint32_t mCutsceneWait;
-	std::vector<uint8_t> mVideo;
+	uint32_t mVideoWait;
 	std::vector<uint8_t> mBuffer;
 	std::map<uint8_t, SDL_Surface*> mSurface;
-	std::map<uint8_t, tuple<uint8_t, uint8_t, std::vector<uint8_t> > > mCutscene;
+	std::map<uint8_t, tuple<uint8_t, uint8_t, std::vector<uint8_t> > > mVideo;
 	int zoomSurfaceRGBA(SDL_Surface * src, SDL_Surface * dst);
 
 public:
@@ -51,11 +50,14 @@ public:
 			uint16_t posY);
 
 	void playVideo(RESOURCES::GFFI gffi);
+	void stopVideo();
+	bool isVideoPlaying();
+
 	void fadeIn();
 	void playAnimation(std::vector<uint8_t> video);
 	void panDirection(uint8_t panDir, std::vector<uint8_t> bgRight,
-			std::vector<uint8_t> bgLeft, std::vector<uint8_t> fgRight,
-			std::vector<uint8_t> fgLeft);
+			std::vector<uint8_t> bgLeft, std::vector<uint8_t> bgFarLeft,
+			std::vector<uint8_t> fgRight, std::vector<uint8_t> fgLeft);
 	void drawCurtain(std::vector<uint8_t> bmp);
 
 	void loadPalette(std::vector<uint8_t> &basePal, bool isRes = true);
