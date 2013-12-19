@@ -7,7 +7,6 @@
 #include "font.hpp"
 #include "palette.hpp"
 #include "bitmap.hpp"
-#include "../resources/gffi.hpp"
 
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_syswm.h>
@@ -17,6 +16,21 @@
 #include <stdint.h>
 #include <iostream>
 
+#include "boost/tuple/tuple.hpp"
+using boost::tuples::tuple;
+
+#define NOOP	 		0
+#define SET_PAL			1
+#define DISP_BMP		2
+#define DISP_BMA		3
+#define FADE_IN			4
+#define FADE_LEFT		5
+#define PAN_LEFT		6
+#define DRAW_CURTAIN	7
+#define MATERIALIZE 	8
+#define DISP_OVERLAY	9
+
+typedef std::map<uint8_t, tuple<uint8_t, uint8_t, std::vector<uint8_t> > > sequence;
 
 namespace GRAPHICS {
 
@@ -49,7 +63,7 @@ public:
 	void drawText(std::vector<uint8_t> &fnt, std::string text, uint16_t posX,
 			uint16_t posY);
 
-	void playVideo(RESOURCES::GFFI gffi);
+	void playVideo(sequence);
 	void stopVideo();
 	bool isVideoPlaying();
 

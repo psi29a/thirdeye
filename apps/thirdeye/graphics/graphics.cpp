@@ -129,8 +129,8 @@ void GRAPHICS::Graphics::drawImage(std::vector<uint8_t> &bmp, uint16_t index,
 	SDL_FreeSurface(surface);
 }
 
-void GRAPHICS::Graphics::playVideo(RESOURCES::GFFI gffi) {
-	mVideo = gffi.getSequence();
+void GRAPHICS::Graphics::playVideo(sequence video) {
+	mVideo = video;
 }
 
 bool GRAPHICS::Graphics::isVideoPlaying() {
