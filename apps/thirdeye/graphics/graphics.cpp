@@ -92,6 +92,7 @@ GRAPHICS::Graphics::Graphics(uint16_t scale, bool renderer) {
 	mClock = SDL_GetTicks();
 	mVideoWait = 0;
 	mRunningClock = 0;
+	mSleep = 0;
 
 }
 
@@ -268,6 +269,8 @@ void GRAPHICS::Graphics::panDirection(uint8_t panDir,
 void GRAPHICS::Graphics::update() {
 	bool updateScene = false;
 	mClock = SDL_GetTicks();
+	mSleep = 0;
+
 	if (mClock / 1000 > mRunningClock) {
 		mRunningClock = mClock / 1000;
 		updateScene = true;
@@ -364,7 +367,7 @@ void GRAPHICS::Graphics::update() {
 		} else
 			mCounter++;
 
-		SDL_Delay(150);
+		mSleep = 150;
 	}
 
 	// panning are we panning?
@@ -373,7 +376,7 @@ void GRAPHICS::Graphics::update() {
 		SDL_Rect sRect = { mCounter, 0, mSurface[0]->w - 6, 115 };
 		SDL_Rect dRect = { 3, 3, 0, 0 }; // last 2 are ignored
 		SDL_BlitSurface(mSurface[0], &sRect, mScreen, &dRect);
-		sRect.x = mSurface[0]->w - 320 - ((mSurface[0]->w - 320 - mCounter) * 2);
+		sRect.x = mSurface[0]->w - ((mSurface[0]->w - mCounter) * 2);
 		SDL_BlitSurface(mSurface[1], &sRect, mScreen, &dRect);
 		if (mCounter == 0) {
 			mState = NOOP;
@@ -382,7 +385,7 @@ void GRAPHICS::Graphics::update() {
 		} else
 			mCounter--;
 
-		SDL_Delay(5);
+		mSleep = 5;
 	}
 
 	// anything in our animation queue to display?
@@ -398,7 +401,7 @@ void GRAPHICS::Graphics::update() {
 			mState = NOOP;
 		}
 
-		SDL_Delay(150);
+		mSleep = 150;
 	}
 
 	// are we fading in or out?
@@ -411,7 +414,7 @@ void GRAPHICS::Graphics::update() {
 		//printf("Applying alpha: %d  \n", mAlpha);
 		mAlpha += 10;
 
-		SDL_Delay(100);
+		mSleep = 100;
 	}
 
 	/*
@@ -441,6 +444,10 @@ void GRAPHICS::Graphics::update() {
 	// cleanup
 	SDL_DestroyTexture(texture);
 
+}
+
+uint32_t GRAPHICS::Graphics::getSleep() {
+	return mSleep;
 }
 
 void GRAPHICS::Graphics::drawText(std::vector<uint8_t> &fnt, std::string text,

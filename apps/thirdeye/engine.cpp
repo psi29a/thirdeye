@@ -100,8 +100,10 @@ void THIRDEYE::Engine::go() {
 	 gfx.drawText(font,"Welcome to Thirdeye!", 8, 181);
 	 */
 
-	Uint32 clock = 0;
-	Uint32 currentSecond = 0;
+	uint32_t clock = 0;	//  wall clock in ms resolution
+	uint32_t currentSecond = 0;	// our wall clock with 1s resolution
+	uint32_t fps = 0;	// number of fps (iterations of main loop)
+	uint32_t sleep = 0; // in ms
 
 	// get our intro cinematic
 	RESOURCES::GFFI introVideo(mGameData.remove_leaf() /= "INTRO.GFF");
@@ -115,6 +117,7 @@ void THIRDEYE::Engine::go() {
 	while (!done)  // Enter main loop.
 	{
 		clock = SDL_GetTicks();
+		fps++;
 		if (clock / 1000 > currentSecond) {
 			currentSecond = clock / 1000;
 			//update = true;
@@ -185,9 +188,17 @@ void THIRDEYE::Engine::go() {
 		mixer.update();		// update our sounds
 
 		if (isSecond) {
-			std::cout << "Wall Clock: " << std::dec << clock / 1000 << "s\r"
+			std::cout << "Wall Clock: " << std::dec << currentSecond << " average " << fps << "fps" << "\r"
 					<< std::flush;
 			isSecond = false;
+			fps = 0;
+		}
+
+		uint32_t sleep = gfx.getSleep();
+		if ( sleep > 0 )
+			SDL_Delay(gfx.getSleep());
+		else {
+			SDL_Delay(fps/5);
 		}
 		//printf("Waiting 100...\n");
 		//update = false;
