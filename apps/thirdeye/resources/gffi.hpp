@@ -8,6 +8,8 @@
 #ifndef GFFI_HPP
 #define GFFI_HPP
 
+#include "../graphics/graphics.hpp"
+
 #include <map>
 #include <boost/filesystem.hpp>
 #include <boost/iostreams/device/file.hpp>
@@ -20,17 +22,6 @@ using boost::tuples::tie;
 namespace RESOURCES {
 
 #define GFFI_ID "GFFI"
-
-#define NOOP	 		0
-#define SET_PAL			1
-#define DISP_BMP		2
-#define DISP_BMA		3
-#define FADE_IN			4
-#define FADE_LEFT		5
-#define PAN_LEFT		6
-#define DRAW_CURTAIN	7
-#define MATERIALIZE 	8
-#define DISP_OVERLAY	9
 
 #define T_TAG		0
 #define	T_DATA		1
@@ -98,7 +89,7 @@ private:
 
 public:
 	GFFI(boost::filesystem::path gffiPath);
-	std::map<uint8_t, tuple<uint8_t, uint8_t, std::vector<uint8_t> > > getSequence();
+	sequence getSequence();
 	std::vector<uint8_t> getMusic();
 	virtual ~GFFI();
 };

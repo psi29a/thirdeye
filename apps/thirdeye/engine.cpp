@@ -12,14 +12,8 @@
 using boost::algorithm::to_lower;
 
 THIRDEYE::Engine::Engine(Files::ConfigurationManager& configurationManager) :
-		mNewGame(false),
-		mUseSound(true),
-		mDebug(false),
-		mGame(GAME_UNKN),
-		mCfgMgr(configurationManager),
-		mScale(1),
-		mRenderer(false)
-{
+		mNewGame(false), mUseSound(true), mDebug(false), mGame(GAME_UNKN), mCfgMgr(
+				configurationManager), mScale(1), mRenderer(false) {
 	std::cout << "Initializing Thirdeye... ";
 
 	std::srand(std::time(NULL));
@@ -32,10 +26,10 @@ THIRDEYE::Engine::~Engine() {
 }
 
 // Setup engine via parameters
-void THIRDEYE::Engine::setGame(std::string game){
+void THIRDEYE::Engine::setGame(std::string game) {
 	boost::algorithm::to_lower(game);
 
-	if (game == "eob3"){
+	if (game == "eob3") {
 		mGame = GAME_EOB3;
 		mGameData /= "EYE.RES";
 	} else if (game == "hack") {
@@ -46,19 +40,19 @@ void THIRDEYE::Engine::setGame(std::string game){
 
 }
 
-void THIRDEYE::Engine::setGameData(std::string gameData){
+void THIRDEYE::Engine::setGameData(std::string gameData) {
 	mGameData = boost::filesystem::path(gameData);
 }
-void THIRDEYE::Engine::setDebugMode(bool debug){
+void THIRDEYE::Engine::setDebugMode(bool debug) {
 	mDebug = debug;
 }
-void THIRDEYE::Engine::setSoundUsage(bool nosound){
+void THIRDEYE::Engine::setSoundUsage(bool nosound) {
 	mUseSound = !nosound;
 }
-void THIRDEYE::Engine::setScale(uint16_t scale){
+void THIRDEYE::Engine::setScale(uint16_t scale) {
 	mScale = scale;
 }
-void THIRDEYE::Engine::setRenderer(bool renderer){
+void THIRDEYE::Engine::setRenderer(bool renderer) {
 	mRenderer = renderer;
 }
 
@@ -93,27 +87,26 @@ void THIRDEYE::Engine::go() {
 	gfx.loadMouse(icons, 0);
 
 	/*
-	gfx.drawImage(bmp, 0, 0, false);
+	 gfx.drawImage(bmp, 0, 0, false);
 
-	gfx.loadPalette(basePalette, subPalette, text);
-	gfx.drawImage(marble, 18, 0, 0, true);
-	gfx.drawImage(marble, 0, 0, 0, true);
-	gfx.drawImage(marble, 1, 24, 8, true);
-	gfx.drawImage(marble, 2, 48, 20, true);
-	gfx.drawImage(marble, 3, 64, 28, true);
+	 gfx.loadPalette(basePalette, subPalette, text);
+	 gfx.drawImage(marble, 18, 0, 0, true);
+	 gfx.drawImage(marble, 0, 0, 0, true);
+	 gfx.drawImage(marble, 1, 24, 8, true);
+	 gfx.drawImage(marble, 2, 48, 20, true);
+	 gfx.drawImage(marble, 3, 64, 28, true);
 
-	gfx.drawImage(icons, 1, 25, 120, true);
-	gfx.drawText(font,"Welcome to Thirdeye!", 8, 181);
-	*/
+	 gfx.drawImage(icons, 1, 25, 120, true);
+	 gfx.drawText(font,"Welcome to Thirdeye!", 8, 181);
+	 */
 
-
-	Uint32 	clock = 0;
-	Uint32 	currentSecond = 0;
+	Uint32 clock = 0;
+	Uint32 currentSecond = 0;
 
 	// get our intro cinematic
 	RESOURCES::GFFI introVideo(mGameData.remove_leaf() /= "INTRO.GFF");
 	mixer.playMusic(introVideo.getMusic());
-	gfx.playVideo(introVideo);
+	gfx.playVideo(introVideo.getSequence());
 
 	// Start the main rendering loop
 	SDL_Event event;
@@ -122,8 +115,8 @@ void THIRDEYE::Engine::go() {
 	while (!done)  // Enter main loop.
 	{
 		clock = SDL_GetTicks();
-		if (clock/1000 > currentSecond){
-			currentSecond = clock/1000;
+		if (clock / 1000 > currentSecond) {
+			currentSecond = clock / 1000;
 			//update = true;
 			isSecond = true;
 		}
@@ -135,14 +128,15 @@ void THIRDEYE::Engine::go() {
 				done = true;
 				break;
 				// process the mouse data by passing it to ngl class
-				case SDL_MOUSEMOTION:
-					//ngl.mouseMoveEvent(event.motion);
-					//std::cout << "Mouse moved @ " <<  event.motion.x << " " << event.motion.y << std::endl;
-					break;
-				case SDL_MOUSEBUTTONDOWN: break;
-				case SDL_MOUSEBUTTONUP:
-					//std::cout << "Mouse clicked @ " << event.button.x << " " << event.button.y << std::endl;
-					break;
+			case SDL_MOUSEMOTION:
+				//ngl.mouseMoveEvent(event.motion);
+				//std::cout << "Mouse moved @ " <<  event.motion.x << " " << event.motion.y << std::endl;
+				break;
+			case SDL_MOUSEBUTTONDOWN:
+				break;
+			case SDL_MOUSEBUTTONUP:
+				//std::cout << "Mouse clicked @ " << event.button.x << " " << event.button.y << std::endl;
+				break;
 				//case SDL_MOUSEWHEEL : ngl.wheelEvent(event.wheel);
 				// if the window is re-sized pass it to the ngl class to change gl viewport
 				// note this is slow as the context is re-create by SDL each time
@@ -190,8 +184,9 @@ void THIRDEYE::Engine::go() {
 		gfx.update();		// update our screen
 		mixer.update();		// update our sounds
 
-		if (isSecond){
-			std::cout << "Wall Clock: " << std::dec << clock/1000  << "s\r" << std::flush;
+		if (isSecond) {
+			std::cout << "Wall Clock: " << std::dec << clock / 1000 << "s\r"
+					<< std::flush;
 			isSecond = false;
 		}
 		//printf("Waiting 100...\n");
