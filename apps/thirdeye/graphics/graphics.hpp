@@ -24,7 +24,7 @@ using boost::tuples::tuple;
 #define DISP_BMP		2
 #define DISP_BMA		3
 #define FADE_IN			4
-#define FADE_LEFT		5
+#define SCROLL_LEFT		5
 #define PAN_LEFT		6
 #define DRAW_CURTAIN	7
 #define MATERIALIZE 	8
@@ -55,6 +55,18 @@ private:
 	std::map<uint8_t, tuple<uint8_t, uint8_t, std::vector<uint8_t> > > mVideo;
 	int zoomSurfaceRGBA(SDL_Surface * src, SDL_Surface * dst);
 
+	void fadeIn();
+	void fadeOut();
+
+	void scrollLeftIn(std::vector<uint8_t> bmp);
+	void scrollLeftOut();
+
+	void playAnimation(std::vector<uint8_t> video);
+	void panDirection(uint8_t panDir, std::vector<uint8_t> bgRight,
+			std::vector<uint8_t> bgLeft, std::vector<uint8_t> bgFarLeft,
+			std::vector<uint8_t> fgRight, std::vector<uint8_t> fgLeft);
+	void drawCurtain(std::vector<uint8_t> bmp);
+
 public:
 	Graphics(uint16_t scale = 1, bool renderer = false);
 	virtual ~Graphics();
@@ -67,13 +79,6 @@ public:
 	void playVideo(sequence);
 	void stopVideo();
 	bool isVideoPlaying();
-
-	void fadeIn();
-	void playAnimation(std::vector<uint8_t> video);
-	void panDirection(uint8_t panDir, std::vector<uint8_t> bgRight,
-			std::vector<uint8_t> bgLeft, std::vector<uint8_t> bgFarLeft,
-			std::vector<uint8_t> fgRight, std::vector<uint8_t> fgLeft);
-	void drawCurtain(std::vector<uint8_t> bmp);
 
 	void loadPalette(std::vector<uint8_t> &basePal, bool isRes = true);
 	void loadPalette(std::vector<uint8_t> &basePal,
