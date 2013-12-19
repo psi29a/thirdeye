@@ -49,6 +49,7 @@ private:
 	uint32_t mClock;
 	uint32_t mRunningClock;
 	uint32_t mVideoWait;
+	uint32_t mSleep;
 	std::vector<uint8_t> mBuffer;
 	std::map<uint8_t, SDL_Surface*> mSurface;
 	std::map<uint8_t, tuple<uint8_t, uint8_t, std::vector<uint8_t> > > mVideo;
@@ -80,6 +81,7 @@ public:
 
 	void loadMouse(std::vector<uint8_t> &bitmap, uint16_t index);
 
+	uint32_t getSleep();
 	void update();
 };
 

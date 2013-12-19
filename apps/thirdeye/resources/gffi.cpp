@@ -204,7 +204,7 @@ sequence RESOURCES::GFFI::getSequence() {
 		sequences[i++] = boost::make_tuple(PAN_LEFT, 0, mFiles["BMP"][5].data[0]);
 		sequences[i++] = boost::make_tuple(PAN_LEFT, 0, mFiles["BMP"][16].data[0]);	// bonus panel
 		sequences[i++] = boost::make_tuple(PAN_LEFT, 2, mFiles["BMP"][6].data[0]);	// 2 forground panels
-		sequences[i++] = boost::make_tuple(PAN_LEFT, 10, mFiles["BMP"][7].data[0]);	// wait 10 seconds
+		sequences[i++] = boost::make_tuple(PAN_LEFT, 15, mFiles["BMP"][7].data[0]);	// wait 10 seconds
 		sequences[i++] = boost::make_tuple(DRAW_CURTAIN, 2, mFiles["BMP"][8].data[0]);
 		sequences[i++] = boost::make_tuple(DISP_BMA, 0, mFiles["BMA"][4].data[1]);
 		sequences[i++] = boost::make_tuple(DISP_BMA, 0, mFiles["BMA"][4].data[2]);
