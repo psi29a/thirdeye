@@ -266,6 +266,20 @@ void GRAPHICS::Graphics::panDirection(uint8_t panDir,
 	mCounter = mSurface[0]->w-320;
 }
 
+void GRAPHICS::Graphics::scrollLeftIn(std::vector<uint8_t> bmp) {
+	Bitmap bImage(bmp);
+	std::vector<uint8_t> bImageD = bImage[0];
+	SDL_Surface *sImage = SDL_CreateRGBSurfaceFrom((void*) &bImageD[0],
+			bImage.getWidth(0), bImage.getHeight(0), 8, bImage.getWidth(0), 0,
+			0, 0, 0);
+	mSurface[0] = SDL_CreateRGBSurface(0, 320, 200, 8, 0, 0, 0, 0);
+	SDL_BlitSurface(sImage, NULL, mSurface[0], NULL);
+	SDL_SetPaletteColors(mSurface[0]->format->palette, mPalette->colors, 0,
+			256);
+	SDL_SetColorKey(mSurface[0], SDL_TRUE,
+			SDL_MapRGB(mSurface[0]->format, 0, 0, 0));
+}
+
 void GRAPHICS::Graphics::update() {
 	bool updateScene = false;
 	mClock = SDL_GetTicks();
@@ -329,8 +343,8 @@ void GRAPHICS::Graphics::update() {
 			drawImage(scene.get<2>(), 0, 0, 0, false);
 			fadeIn();
 			break;
-		case FADE_LEFT: // TODO: real fade to left
-			drawImage(scene.get<2>(), 0, 0, 0, true);
+		case SCROLL_LEFT:
+			scrollLeftIn(scene.get<2>());
 			break;
 		case DRAW_CURTAIN:
 			drawCurtain(scene.get<2>());

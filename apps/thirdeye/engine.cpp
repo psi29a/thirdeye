@@ -103,7 +103,6 @@ void THIRDEYE::Engine::go() {
 	uint32_t clock = 0;	//  wall clock in ms resolution
 	uint32_t currentSecond = 0;	// our wall clock with 1s resolution
 	uint32_t fps = 0;	// number of fps (iterations of main loop)
-	uint32_t sleep = 0; // in ms
 
 	// get our intro cinematic
 	RESOURCES::GFFI introVideo(mGameData.remove_leaf() /= "INTRO.GFF");
