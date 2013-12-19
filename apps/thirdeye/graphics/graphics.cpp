@@ -183,7 +183,6 @@ void GRAPHICS::Graphics::panDirection(uint8_t panDir,
 	SDL_Surface *bgFarLeftSurface;
 	std::vector<uint8_t> bBGFarLeftD;
 	if (!bgFarLeft.empty()){
-		std::cout << "Are we empty, we should BE!" << std::endl;
 		bgPanels = 3;
 		Bitmap bBGFarLeft(bgFarLeft);
 		bBGFarLeftD = bBGFarLeft[0];
@@ -193,8 +192,6 @@ void GRAPHICS::Graphics::panDirection(uint8_t panDir,
 		SDL_SetPaletteColors(bgFarLeftSurface->format->palette, mPalette->colors, 0,
 				256);
 	}
-
-	std::cout << "bgPanels: " << (int) bgPanels << std::endl;
 
 	// create temporary surfaces
 	Bitmap bBGRight(bgRight);
@@ -376,7 +373,7 @@ void GRAPHICS::Graphics::update() {
 		SDL_Rect sRect = { mCounter, 0, mSurface[0]->w - 6, 115 };
 		SDL_Rect dRect = { 3, 3, 0, 0 }; // last 2 are ignored
 		SDL_BlitSurface(mSurface[0], &sRect, mScreen, &dRect);
-		sRect.x = mSurface[0]->w - ((mSurface[0]->w - mCounter) * 2);
+		sRect.x = mSurface[0]->w - 320 - ((mSurface[0]->w - 320 - mCounter) * 2);
 		SDL_BlitSurface(mSurface[1], &sRect, mScreen, &dRect);
 		if (mCounter == 0) {
 			mState = NOOP;
