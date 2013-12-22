@@ -19,24 +19,24 @@ GRAPHICS::Bitmap::~Bitmap() {
 }
 
 bool GRAPHICS::Bitmap::isMoreBitmap(){
-	return (bool) nextBitmapPos;
+	return ((bool) nextBitmapPos);
 }
 
 uint32_t GRAPHICS::Bitmap::getNextBitmapPos(){
-	return nextBitmapPos;
+	return (nextBitmapPos);
 }
 
 uint16_t GRAPHICS::Bitmap::getNumberOfBitmaps() {
-	return mNumSubBitmaps;
+	return (mNumSubBitmaps);
 }
 
 uint16_t GRAPHICS::Bitmap::getWidth(uint16_t index) {
-	return *reinterpret_cast<const uint16_t*>(&mBitmapData[mBitmapOffets[index]]);
+	return (*reinterpret_cast<const uint16_t*>(&mBitmapData[mBitmapOffets[index]]));
 }
 
 uint16_t GRAPHICS::Bitmap::getHeight(uint16_t index) {
-	return *reinterpret_cast<const uint16_t*>(&mBitmapData[mBitmapOffets[index]
-			+ 2]);
+	return (*reinterpret_cast<const uint16_t*>(&mBitmapData[mBitmapOffets[index]
+			+ 2]));
 }
 
 std::vector<uint8_t> GRAPHICS::Bitmap::operator[](uint16_t index) {
@@ -105,5 +105,5 @@ std::vector<uint8_t> GRAPHICS::Bitmap::operator[](uint16_t index) {
 	}
 
 
-	return bitmap;
+	return (bitmap);
 }

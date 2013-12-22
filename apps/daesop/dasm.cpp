@@ -27,7 +27,7 @@ BYTECODEPOINTER *readBytecodeDefinition(void) {
 	if (loDefinitionFile == NULL) {
 		printf("The attempt to open the bytecode definion file %s failed!\n",
 				loDefinitionFilePath);
-		return NULL;
+		return (NULL);
 	}
 
 	// allocate the field
@@ -38,7 +38,7 @@ BYTECODEPOINTER *readBytecodeDefinition(void) {
 				"Failure to allocate %d bytes for the bytecode definition table!",
 				loBytecodeTableSize);
 		fclose(loDefinitionFile);
-		return NULL;
+		return (NULL);
 	}
 	// set everything to NULL
 	for (unsigned int i = 0; i < MAX_BYTECODES; i++) {
@@ -67,10 +67,10 @@ BYTECODEPOINTER *readBytecodeDefinition(void) {
 			free(bytecodeTable); // well, this does not free everything, there can be some items already
 			fclose(loDefinitionFile);
 			bytecodeTable = NULL;
-			return NULL;
+			return (NULL);
 		}
 	}
-	return bytecodeTable;
+	return (bytecodeTable);
 }
 
 /*
@@ -102,7 +102,7 @@ int processBytecodeDefinitionLine(char *aLine) {
 	loTokens[0] = strtok(loLine, ",");
 	if (loTokens[0] == NULL) {
 		printf("The line cannot be parsed: %s\n", loLine);
-		return false;
+		return (false);
 	}
 	for (i = 1; i < MAX_TOKENS; i++) {
 		loTokens[i] = strtok(NULL, ",");
@@ -125,26 +125,26 @@ int processBytecodeDefinitionLine(char *aLine) {
 	if (*loEndPtr != '\0') {
 		printf("The conversion of the hexadecimal number %s failed!\n",
 				loTokens[0]);
-		return false;
+		return (false);
 	}
 	//printf("loBytecodeCode: %d\n", loBytecodeCode);
 	loNumberOfParameters = (int) strtol(loTokens[2], &loEndPtr, 10);
 	if (*loEndPtr != '\0') {
 		printf("The conversion of the decadic number %s failed!\n",
 				loTokens[2]);
-		return false;
+		return (false);
 	}
 	//printf("loNumberOfParameters: %d\n\n", loNumberOfParameters);
 	if (loNumberOfParameters
 			< 0|| loNumberOfParameters > PARAMETERS_HANDLED_BY_CODE) {
 		printf("The nonesense number of parameters: %d\n",
 				loNumberOfParameters);
-		return false;
+		return (false);
 	}
 	loBytecodeEntryPointer = (BYTECODEPOINTER) malloc(sizeof(struct BYTECODE));
 	if (loBytecodeEntryPointer == NULL) {
 		printf("Failure to allocate the memory for a bytecode entry!\n");
-		return false;
+		return (false);
 	}
 
 	loBytecodeEntryPointer->number = loBytecodeCode;
@@ -162,7 +162,7 @@ int processBytecodeDefinitionLine(char *aLine) {
 		printf(
 				"Failure to allocate the memory for a parameter string in a bytecode entry!\n");
 		free(loBytecodeEntryPointer);
-		return false;
+		return (false);
 	}
 	loBytecodeEntryPointer->paramString[0] = '\0';
 
@@ -194,7 +194,7 @@ int processBytecodeDefinitionLine(char *aLine) {
 			printf("Unknown parameter type: %s!\n", loType);
 			free(loBytecodeEntryPointer->paramString);
 			free(loBytecodeEntryPointer);
-			return false;
+			return (false);
 		}
 	}
 	// explanation
@@ -205,7 +205,7 @@ int processBytecodeDefinitionLine(char *aLine) {
 		printf("The bytecode explanation is missing!\n");
 		free(loBytecodeEntryPointer->paramString);
 		free(loBytecodeEntryPointer);
-		return false;
+		return (false);
 	}
 
 	//printf("\nCode: %d\n  Name: %s\n  ParamCount: %d\n  ParamString: %s\n  Explanation: %s\n",
@@ -217,12 +217,12 @@ int processBytecodeDefinitionLine(char *aLine) {
 				loTokens[0]);
 		free(loBytecodeEntryPointer->paramString);
 		free(loBytecodeEntryPointer);
-		return false;
+		return (false);
 	}
 
 	loEntryNumber = (int) (loBytecodeEntryPointer->number);
 	bytecodeTable[loEntryNumber] = loBytecodeEntryPointer;
-	return true;
+	return (true);
 }
 
 /*
@@ -433,7 +433,7 @@ int makeFirstDisassemblyPass(unsigned char *aResource, int aLength,
 			printf("Setting the MAP_ERROR for the code map address: %d\n",
 					loCurrentAddress);
 			setCodeMapAddress(loCurrentAddress, MAP_ERROR);
-			return false;
+			return (false);
 		}
 		// targets for jump instructions, CASE, LECA etc.
 		setTargetsForTheInstruction(aResource, aLength, loCurrentAddress);
@@ -458,7 +458,7 @@ int makeFirstDisassemblyPass(unsigned char *aResource, int aLength,
 		loCurrentAddress += loInstructionLength;
 
 	}
-	return true;
+	return (true);
 }
 
 /*
@@ -475,7 +475,7 @@ int getInstructionLength(unsigned char *aResource, int aResourceLength,
 		printf(
 				"getInstructionLength(): there is no instruction with the code %x on the address %d!\n",
 				loInstruction, aCurrentAddress);
-		return -1;
+		return (-1);
 	}
 	loParamCount = bytecodeTable[loInstruction]->paramCount;
 	if (loParamCount == PARAMETERS_HANDLED_BY_CODE) {
@@ -489,22 +489,22 @@ int getInstructionLength(unsigned char *aResource, int aResourceLength,
 					&loCaseOptions, &loParameterAddress);
 			if (loParamRes == false) {
 				// error
-				return -1;
+				return (-1);
 			}
 			// instruction code + loCaseOptions_length + (loCaseOptions * (value_length + label_length)) + default_label_length
 			loLength = loLength + 2 + (loCaseOptions * (4 + 2)) + 2;
 			if (aCurrentAddress + loLength > aResourceLength) {
 				printf(
 						"The CASE instruction parameters are outside of the code resource!\n");
-				return -1;
+				return (-1);
 			}
-			return loLength;
+			return (loLength);
 		} else {
 			// looks like nosense
 			printf(
 					"The parameter handling in code is not supported for the instruction %s on the address %d!\n",
 					bytecodeTable[loInstruction]->name, aCurrentAddress);
-			return -1;
+			return (-1);
 		}
 	}
 	// read parameters
@@ -520,15 +520,15 @@ int getInstructionLength(unsigned char *aResource, int aResourceLength,
 		} else {
 			printf("Unknown parameter type %c of the instruction %s!\n",
 					loParameterType, bytecodeTable[loInstruction]->name);
-			return -1;
+			return (-1);
 		}
 	}
 	if (aCurrentAddress + loLength > aResourceLength) {
 		printf(
 				"The instruction parameters are outside of the code resource!\n");
-		return -1;
+		return (-1);
 	}
-	return loLength;
+	return (loLength);
 }
 
 /*
@@ -665,13 +665,13 @@ int endsDisassembly(unsigned char *aResource, int aLength,
 		printf(
 				"endsDisassembly(): there is no instruction with the code %x on the address %d!\n",
 				loInstruction, aCurrentAddress);
-		return true;
+		return (true);
 	}
 	if (loInstruction == INSTRUCTION_BRA || loInstruction == INSTRUCTION_END
 			|| loInstruction == INSTRUCTION_RTS) {
-		return true;
+		return (true);
 	} else {
-		return false;
+		return (false);
 	}
 }
 
@@ -687,7 +687,7 @@ int getParameterAsNumber(unsigned char *aResource, int aLength,
 		if (loAddressBehind >= aLength) {
 			printf(
 					"The current address got out of the code resource when reading a parameter!\n");
-			return false;
+			return (false);
 		}
 		memcpy(&loValue, aResource + *aCurrentAddress, 1);
 		*aParameterValue = loValue;
@@ -698,7 +698,7 @@ int getParameterAsNumber(unsigned char *aResource, int aLength,
 		if (loAddressBehind >= aLength) {
 			printf(
 					"The current address got out of the code resource when reading a parameter!\n");
-			return false;
+			return (false);
 		}
 		memcpy(&loValue, aResource + *aCurrentAddress, 2);
 		*aParameterValue = loValue;
@@ -708,16 +708,16 @@ int getParameterAsNumber(unsigned char *aResource, int aLength,
 		if (loAddressBehind >= aLength) {
 			printf(
 					"The current address got out of the code resource when reading a parameter!\n");
-			return false;
+			return (false);
 		}
 		memcpy(&loValue, aResource + *aCurrentAddress, 4);
 		*aParameterValue = loValue;
 	} else {
 		printf("Unknown parameter type %c\n", aParameterType);
-		return false;
+		return (false);
 	}
 	(*aCurrentAddress) = loAddressBehind;
-	return true;
+	return (true);
 }
 
 /*
@@ -728,7 +728,7 @@ char *getRuntimeCodeFunctionName(char *aResult, long aFunctionNumber,
 	int i;
 	if (aFullImportResourceDictionary == NULL) {
 		printf("The import resource dictionary is NULL!\n!");
-		return NULL;
+		return (NULL);
 	}
 	for (i = 0; aFullImportResourceDictionary[i] != NULL; i++) {
 		if (aFullImportResourceDictionary[i]->importType
@@ -737,12 +737,12 @@ char *getRuntimeCodeFunctionName(char *aResult, long aFunctionNumber,
 					== aFullImportResourceDictionary[i]->runtimeFunctionNumber) {
 				strcpy(aResult,
 						aFullImportResourceDictionary[i]->firstOriginal);
-				return aResult;
+				return (aResult);
 			}
 		}
 	}
 	printf("Unknown runtime function number: %d!\n", (int) aFunctionNumber);
-	return NULL;
+	return (NULL);
 }
 
 /*
@@ -905,11 +905,11 @@ char *getMessageHandlerNameForAddress(int aEntryPointAddress,
 			if (aEntryPointAddress
 					== loCurrentExportEntry->messageHandlerStart) {
 				// entry points agree
-				return loCurrentExportEntry->messageHandlerName;
+				return (loCurrentExportEntry->messageHandlerName);
 			}
 		}
 	}
-	return (char *) "error_name_not_found";
+	return ((char *) "error_name_not_found");
 }
 
 /*
@@ -1026,7 +1026,7 @@ int writeOneInstruction(unsigned char *aResource, int aLength,
 				loCurrentInstruction, *loCurrentAddress);
 		printf("%s\n", loError);
 		fprintf(aOutputFile, "%s\n", loError);
-		return false;
+		return (false);
 	}
 
 	// move to the parameters
@@ -1053,7 +1053,7 @@ int writeOneInstruction(unsigned char *aResource, int aLength,
 					loInstructionStartAddress);
 			printf("%s\n", loError);
 			fprintf(aOutputFile, "%s\n", loError);
-			return false;
+			return (false);
 		}
 		fprintf(aOutputFile, ";CASE instruction start\n");
 
@@ -1065,7 +1065,7 @@ int writeOneInstruction(unsigned char *aResource, int aLength,
 			printf(
 					"Unable to read the number of options for the CASE instruction at the address %d\n",
 					loInstructionStartAddress);
-			return false;
+			return (false);
 		}
 		// write to the output file
 		writeCaseHeader(aResource, aLength, loInstructionStartAddress,
@@ -1080,7 +1080,7 @@ int writeOneInstruction(unsigned char *aResource, int aLength,
 				printf(
 						"Unable to read a case option value for the CASE instruction at the address %d!\n",
 						loInstructionStartAddress);
-				return false;
+				return (false);
 			}
 			loParamRes = getParameterAsNumber(aResource, aLength, 'w',
 					&loTarget, loCurrentAddress);
@@ -1088,7 +1088,7 @@ int writeOneInstruction(unsigned char *aResource, int aLength,
 				printf(
 						"Unable to read a case option target for the CASE instruction at the address %d!\n",
 						loInstructionStartAddress);
-				return false;
+				return (false);
 			}
 			// write to the the output files
 			writeCaseEntry(aResource, aLength, loCaseEntryStartAddress, loValue,
@@ -1101,7 +1101,7 @@ int writeOneInstruction(unsigned char *aResource, int aLength,
 			printf(
 					"Unable to read a default target for the CASE instruction at the address %d!\n",
 					loInstructionStartAddress);
-			return false;
+			return (false);
 		}
 		// write to the output file
 		writeCaseDefault(aResource, aLength, *loCurrentAddress - 2, loTarget,
@@ -1118,7 +1118,7 @@ int writeOneInstruction(unsigned char *aResource, int aLength,
 			if (getParameterAsNumber(aResource, aLength, loParameterType,
 					&loParameterValue, loCurrentAddress) == false) {
 				// error
-				return false;
+				return (false);
 			}
 			if (i > 0) {
 				strcat(loInstruction, ", ");
@@ -1186,7 +1186,7 @@ int writeOneInstruction(unsigned char *aResource, int aLength,
 					printf(
 							"The parameter \"import\" is not supported for the instruction %d\n",
 							loCurrentInstruction);
-					return false;
+					return (false);
 				}
 			} else if (loParameterType == 'm') {
 				// the parameter refers import resource
@@ -1304,7 +1304,7 @@ int writeOneInstruction(unsigned char *aResource, int aLength,
 								(long) loParameterValue,
 								(int) loCurrentInstruction,
 								(int) loInstructionStartAddress);
-						return false;
+						return (false);
 					}
 					strcat(loInstruction, loTmp);
 				}
@@ -1327,7 +1327,7 @@ int writeOneInstruction(unsigned char *aResource, int aLength,
 			fprintf(aOutputFile, ";\n");
 		}
 	}
-	return true;
+	return (true);
 }
 
 /*
@@ -1458,7 +1458,7 @@ int getParameterString(char *aString, unsigned char aParameterType,
 	} else {
 		printf("Unknown parameter type: %c\n", aParameterType);
 		sprintf(aString, "%ld", aParameterValue);
-		return false;
+		return (false);
 	}
 
 	if (aAddParameterComment == true) {
@@ -1504,7 +1504,7 @@ int getParameterString(char *aString, unsigned char aParameterType,
 		}
 
 	}
-	return true;
+	return (true);
 }
 
 /*
@@ -1754,7 +1754,7 @@ char getUppercaseVariableType(int aInstruction) {
 		break;
 
 	}
-	return loResult;
+	return (loResult);
 }
 
 /*
@@ -1772,7 +1772,7 @@ int getAddressBehindTheFunction(int aStartAddress, int aLength) {
 		}
 	}
 	// here the i points either to the next message handler/procedure or behind the end of the resource
-	return i;
+	return (i);
 }
 
 /*

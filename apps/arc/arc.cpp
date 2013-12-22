@@ -96,7 +96,7 @@ int main(int argc, BYTE *argv[]) {
 
 	if ((argc < 2) || (argv[1][1] == '?')) {
 		show_syntax();
-		return 1;
+		return (1);
 	}
 
 	atexit(summary);
@@ -197,5 +197,5 @@ int main(int argc, BYTE *argv[]) {
 	DICT_destroy(predef);
 
 	mem_shutdown();
-	return error_message_count() != 0;
+	return (error_message_count() != 0);
 }

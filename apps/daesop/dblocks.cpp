@@ -21,7 +21,7 @@ int readDirectoryBlocks(FILE *aResFile, DIRPOINTER * loDirectoryPointers) {
 		if (loDirCounter > MAX_DIRECTORIES) {
 			printf("Too much directory blocks, only %d of them were read!",
 					MAX_DIRECTORIES);
-			return true;
+			return (true);
 		}
 		printf("Reading the directory block %d from the position %ld\n",
 				loDirCounter, ftell(aResFile));
@@ -32,7 +32,7 @@ int readDirectoryBlocks(FILE *aResFile, DIRPOINTER * loDirectoryPointers) {
 			free(loDirectoryPointers[loDirCounter]);
 			loDirectoryPointers[loDirCounter] = NULL;
 			printf("Reading of the directory block failed!\n");
-			return false;
+			return (false);
 		}
 		// set the file position to the next block
 
@@ -41,11 +41,11 @@ int readDirectoryBlocks(FILE *aResFile, DIRPOINTER * loDirectoryPointers) {
 			printf(
 					"Failure to set the file position %d when reading a directory block!\n",
 					loDirPos);
-			return false;
+			return (false);
 		}
 	}
 	printf("The total number of directory blocks read: %d\n", loDirCounter + 1);
-	return true;
+	return (true);
 }
 
 /*
@@ -58,7 +58,7 @@ int getNumberOfDirectoryBlocks(DIRPOINTER *aDirectoryPointers) {
 			&& aDirectoryPointers[loNumberOfDirBlocks] != NULL) {
 		loNumberOfDirBlocks++;
 	}
-	return loNumberOfDirBlocks;
+	return (loNumberOfDirBlocks);
 }
 
 /*
@@ -74,7 +74,7 @@ FILE* openAESOPResourceAndSetToFirstDirectoryBlock(char *aResName,
 	loResFile = fopen(aResName, aMode);
 	if (loResFile == NULL) {
 		printf("The file could not be opened: %s!\n", aResName);
-		return NULL;
+		return (NULL);
 	}
 	printf("The resource file %s was opened in the mode \"%s\".\n", aResName,
 			aMode);
@@ -87,14 +87,14 @@ FILE* openAESOPResourceAndSetToFirstDirectoryBlock(char *aResName,
 	if (loHeaderSize != loReadSize) {
 		printf("The file header could not be read!\n");
 		fclose(loResFile);
-		return NULL;
+		return (NULL);
 	}
 
 	if (strcmp((char *) (aHeaderPointer->signature), AESOP_ID) != 0) {
 		printf("The resource file does not start with the signature %s!\n",
 				AESOP_ID);
 		fclose(loResFile);
-		return NULL;
+		return (NULL);
 	}
 
 	fseek(loResFile, 0, SEEK_END);
@@ -104,10 +104,10 @@ FILE* openAESOPResourceAndSetToFirstDirectoryBlock(char *aResName,
 				"The real length of %u bytes does not agree with the length %u bytes in the header!\n",
 				loLength, aHeaderPointer->file_size);
 		fclose(loResFile);
-		return NULL;
+		return (NULL);
 	}
 	// set the pointer on the first directory block
 	fseek(loResFile, aHeaderPointer->first_directory_block, SEEK_SET);
-	return loResFile;
+	return (loResFile);
 
 }

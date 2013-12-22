@@ -61,7 +61,7 @@ struct midi_event {
 	midi_event *next;
 
 	midi_event() :
-			len(0), buffer(NULL), next(NULL) {
+			len(0), buffer(NULL), next(NULL), time(0), status(0) {
 	}
 
 	~midi_event() {
@@ -99,9 +99,9 @@ public:
 
 	int number_of_tracks() {
 		if (info.type != 1)
-			return info.tracks;
+			return (info.tracks);
 		else
-			return 1;
+			return (1);
 	}
 	;
 
