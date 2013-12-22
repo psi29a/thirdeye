@@ -40,12 +40,12 @@ static UWORD DICT_hash(DICT_class *DICT, BYTE *string) {
 	UWORD c, h = 0, i = 0;
 
 	if (string == NULL)
-		return 0;
+		return (0);
 
 	while ((c = *(string + (i++))) != 0)
 		h += c;
 
-	return h % DICT->hash_size;
+	return (h % DICT->hash_size);
 }
 
 /*************************************************************/
@@ -70,7 +70,7 @@ DICT_class *DICT_construct(UWORD hash_size) {
 
 	DICT->touched = 0;
 
-	return DICT;
+	return (DICT);
 }
 
 /*************************************************************/
@@ -116,12 +116,12 @@ DICT_entry *DICT_lookup(DICT_class *DICT, BYTE *name) {
 
 	while (cur != NULL) {
 		if (!strcmp(name, cur->tag))
-			return cur;
+			return (cur);
 
 		cur = cur->next;
 	}
 
-	return NULL;
+	return (NULL);
 }
 
 /*************************************************************/
@@ -202,7 +202,7 @@ DICT_entry *DICT_enter(DICT_class *DICT, BYTE *name, UWORD attributes) {
 
 	DICT->touched = 1;
 
-	return cur;
+	return (cur);
 }
 
 /*************************************************************/
@@ -213,7 +213,7 @@ DICT_entry *DICT_enter(DICT_class *DICT, BYTE *name, UWORD attributes) {
 /*************************************************************/
 
 WORD DICT_touched(DICT_class *DICT) {
-	return DICT->touched;
+	return (DICT->touched);
 }
 
 /*************************************************************/
@@ -316,9 +316,9 @@ WORD DICT_compare(DICT_class *d1, DICT_class *d2) {
 	DI_destroy(DI2);
 
 	if (failed)
-		return 0;
+		return (0);
 	else
-		return result;
+		return (result);
 }
 
 /*************************************************************/
@@ -370,7 +370,7 @@ DICT_entry *DI_fetch(DI_class *DI) {
 
 	cur = DI->cur;
 	if (cur == NULL)
-		return NULL;
+		return (NULL);
 
 	DI->cur = DI->cur->next;
 
@@ -381,5 +381,5 @@ DICT_entry *DI_fetch(DI_class *DI) {
 		DI->cur = DI->base->root[DI->bucket];
 	}
 
-	return cur;
+	return (cur);
 }

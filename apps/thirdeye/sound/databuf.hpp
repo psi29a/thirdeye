@@ -155,12 +155,12 @@ public:
 		fseek(f, 0, SEEK_END);
 		long len = ftell(f);
 		fseek(f, pos, SEEK_SET);
-		return len;
+		return (len);
 	};
 	
 	virtual unsigned int getPos()
 	{
-		return ftell(f);
+		return (ftell(f));
 	};
 };
 
@@ -264,11 +264,11 @@ public:
 	
 	virtual void skip(int pos) { buf_ptr += pos; };
 	
-	virtual unsigned int getSize() { return size; };
+	virtual unsigned int getSize() { return (size); };
 	
 	virtual unsigned int getPos() { return (buf_ptr-buf); };
 	
-	unsigned char *getPtr() { return buf_ptr; };
+	unsigned char *getPtr() { return (buf_ptr); };
 };
 
 #endif

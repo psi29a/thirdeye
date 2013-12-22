@@ -28,7 +28,7 @@ namespace Files
             iter = result.first;
         }
 
-        return iter->second;
+        return (iter->second);
     }
 
     boost::filesystem::path Collections::getPath(const std::string& file) const
@@ -38,7 +38,7 @@ namespace Files
         {
             const boost::filesystem::path path = *iter / file;
             if (boost::filesystem::exists(path))
-                return path.string();
+                return (path.string());
         }
 
         throw std::runtime_error ("file " + file + " not found");
@@ -51,14 +51,14 @@ namespace Files
         {
             const boost::filesystem::path path = *iter / file;
             if (boost::filesystem::exists(path))
-                return true;
+                return (true);
         }
 
-        return false;
+        return (false);
     }
 
     const Files::PathContainer& Collections::getPaths() const
     {
-        return mDirectories;
+        return (mDirectories);
     }
 }

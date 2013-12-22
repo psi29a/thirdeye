@@ -14,7 +14,7 @@
 namespace Files
 {
 
-static const char* const thirdeyeCfgFile = "thirdeye.cfg";
+//static const char* const thirdeyeCfgFile = "thirdeye.cfg";
 
 const char* const gameToken = "?game?";
 const char* const localToken = "?local?";
@@ -128,27 +128,27 @@ void ConfigurationManager::loadConfig(const boost::filesystem::path& path,
 
 const boost::filesystem::path& ConfigurationManager::getGlobalPath() const
 {
-    return mFixedPath.getGlobalPath();
+    return (mFixedPath.getGlobalPath());
 }
 
 const boost::filesystem::path& ConfigurationManager::getUserPath() const
 {
-    return mFixedPath.getUserPath();
+    return (mFixedPath.getUserPath());
 }
 
 const boost::filesystem::path& ConfigurationManager::getLocalPath() const
 {
-    return mFixedPath.getLocalPath();
+    return (mFixedPath.getLocalPath());
 }
 
 const boost::filesystem::path& ConfigurationManager::getGlobalDataPath() const
 {
-    return mFixedPath.getGlobalDataPath();
+    return (mFixedPath.getGlobalDataPath());
 }
 
 const boost::filesystem::path& ConfigurationManager::getLogPath() const
 {
-    return mLogPath;
+    return (mLogPath);
 }
 
 } /* namespace Cfg */
