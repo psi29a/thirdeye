@@ -111,7 +111,7 @@ RF_class *RF_construct(BYTE *filename, WORD compacting) {
 	}
 	*prev = NULL;
 
-	return RF;
+	return (RF);
 }
 
 /***************************************************/
@@ -124,7 +124,7 @@ void RF_destroy(RF_class *RF, WORD compact_threshold) {
 	OD_link *link, *next;
 	WORD lost_percent;
 	ULONG lost_space, entry, nentries;
-	RF_class *new_class,*old;
+	RF_class *new_class, *old;
 	BYTE *RF_filename, *temp_fn;
 
 	if (RF->touched) {
@@ -157,7 +157,7 @@ void RF_destroy(RF_class *RF, WORD compact_threshold) {
 		rename(RF_filename, temp_fn = temp_filename(NULL));
 		old = RF_construct(temp_fn, 0);
 
-		new_class = RF_construct(RF_filename,1);
+		new_class = RF_construct(RF_filename, 1);
 
 		new_class->hdr.modify_time = old->hdr.modify_time;
 		new_class->hdr.create_time = old->hdr.create_time;
@@ -165,16 +165,17 @@ void RF_destroy(RF_class *RF, WORD compact_threshold) {
 
 		nentries = RF_entry_count(old);
 		for (entry = 0; entry < nentries; entry++) {
-		RF_new_entry(new_class,&old->file,RF_header(old,entry),RTYP_HOUSECLEAN);
-		RF_set_flags(new_class,entry,RF_flags(old,entry));
+			RF_new_entry(new_class, &old->file, RF_header(old, entry),
+					RTYP_HOUSECLEAN);
+			RF_set_flags(new_class, entry, RF_flags(old, entry));
+		}
+
+		RF_destroy(new_class, 0);
+		RF_destroy(old, 100);
+		remove_tempfile(temp_fn);
 	}
 
-	RF_destroy(new_class,0);
-	RF_destroy(old, 100);
-	remove_tempfile(temp_fn);
-}
-
-mem_free(RF_filename);
+	mem_free(RF_filename);
 }
 
 /***************************************************/
@@ -184,23 +185,23 @@ mem_free(RF_filename);
 /***************************************************/
 
 ULONG RF_entry_count(RF_class *RF) {
-ULONG cnt;
-WORD i;
-OD_link *link;
+	ULONG cnt;
+	WORD i;
+	OD_link *link;
 
-cnt = 0L;
-link = RF->root;
+	cnt = 0L;
+	link = RF->root;
 
-while (link->next != NULL) {
-	cnt += OD_SIZE;
-	link = link->next;
-}
+	while (link->next != NULL) {
+		cnt += OD_SIZE;
+		link = link->next;
+	}
 
-for (i = 0; i < OD_SIZE; i++)
-	if (!(link->blk.flags[i] & SA_UNUSED))
-		cnt++;
+	for (i = 0; i < OD_SIZE; i++)
+		if (!(link->blk.flags[i] & SA_UNUSED))
+			cnt++;
 
-return cnt;
+	return (cnt);
 }
 
 /***************************************************/
@@ -210,25 +211,25 @@ return cnt;
 /***************************************************/
 
 ULONG RF_next_entry(RF_class *RF) {
-ULONG entry;
-WORD i;
-OD_link *link;
+	ULONG entry;
+	WORD i;
+	OD_link *link;
 
-entry = 0L;
-link = RF->root;
+	entry = 0L;
+	link = RF->root;
 
-while (link != NULL) {
-	for (i = 0; i < OD_SIZE; i++) {
-		if (link->blk.flags[i] & (SA_UNUSED | SA_DELETED))
-			return entry;
+	while (link != NULL) {
+		for (i = 0; i < OD_SIZE; i++) {
+			if (link->blk.flags[i] & (SA_UNUSED | SA_DELETED))
+				return (entry);
 
-		entry++;
+			entry++;
+		}
+
+		link = link->next;
 	}
 
-	link = link->next;
-}
-
-return entry;
+	return (entry);
 }
 
 /***************************************************/
@@ -240,63 +241,63 @@ return entry;
 /***************************************************/
 
 ULONG RF_new_entry(RF_class *RF, void *source, RF_entry_hdr *RHDR, UWORD type) {
-ULONG entry;
-WORD i, j, found;
-OD_link *link, *newlink, *next;
+	ULONG entry;
+	WORD i, j, found;
+	OD_link *link, *newlink, *next;
 
-found = 0;
-entry = 0L;                   // set entry = index of next available entry
-next = RF->root;              //      link = pointer to block in chain
-do                            //         i = entry within block
-{
-	link = next;
+	found = 0;
+	entry = 0L;                   // set entry = index of next available entry
+	next = RF->root;              //      link = pointer to block in chain
+	do                            //         i = entry within block
+	{
+		link = next;
 
-	for (i = 0; i < OD_SIZE; i++) {
-		j = link->blk.flags[i];
+		for (i = 0; i < OD_SIZE; i++) {
+			j = link->blk.flags[i];
 
-		if (j & SA_UNUSED) {
-			found = 1;
-			break;
+			if (j & SA_UNUSED) {
+				found = 1;
+				break;
+			}
+
+			if ((j & SA_DELETED) && (type != RTYP_HOUSECLEAN))
+				return (RF_write_entry(RF, entry, source, RHDR, type));
+
+			entry++;
+		}
+		next = link->next;
+	} while ((next != NULL) && (!found));
+
+	if (!found)                   // at end of directory; must create new link
+	{
+		newlink = (OD_link*) mem_alloc(sizeof(OD_link));
+
+		link->next = newlink;
+		link->blk.next = RF->hdr.file_size;
+		link->touched = 1;
+
+		newlink->next = NULL;
+		newlink->blk.next = 0L;
+
+		for (i = 0; i < OD_SIZE; i++) {
+			newlink->blk.flags[i] = SA_UNUSED;
+			newlink->blk.index[i] = 0;
 		}
 
-		if ((j & SA_DELETED) && (type != RTYP_HOUSECLEAN))
-			return RF_write_entry(RF, entry, source, RHDR, type);
+		newlink->origin = lseek(RF->file, 0L, SEEK_END);
+		r_write(RF->file, &newlink->blk, sizeof(OD_block));
+		RF->hdr.file_size += sizeof(OD_block);
+		RF->touched = 1;
 
-		entry++;
+		link = newlink;
+		i = 0;
 	}
-	next = link->next;
-} while ((next != NULL) && (!found));
 
-if (!found)                   // at end of directory; must create new link
-{
-	newlink = (OD_link*) mem_alloc(sizeof(OD_link));
-
-	link->next = newlink;
-	link->blk.next = RF->hdr.file_size;
+	link->blk.index[i] = RF->hdr.file_size;
+	link->blk.flags[i] &= (~SA_UNUSED);
 	link->touched = 1;
 
-	newlink->next = NULL;
-	newlink->blk.next = 0L;
-
-	for (i = 0; i < OD_SIZE; i++) {
-		newlink->blk.flags[i] = SA_UNUSED;
-		newlink->blk.index[i] = 0;
-	}
-
-	newlink->origin = lseek(RF->file, 0L, SEEK_END);
-	r_write(RF->file, &newlink->blk, sizeof(OD_block));
-	RF->hdr.file_size += sizeof(OD_block);
-	RF->touched = 1;
-
-	link = newlink;
-	i = 0;
-}
-
-link->blk.index[i] = RF->hdr.file_size;
-link->blk.flags[i] &= (~SA_UNUSED);
-link->touched = 1;
-
-return RF_write_entry(RF, entry, source, RHDR, type);
+	return (RF_write_entry(RF, entry, source, RHDR, type));
 }
 
 /***************************************************/
@@ -307,61 +308,61 @@ return RF_write_entry(RF, entry, source, RHDR, type);
 /***************************************************/
 
 ULONG RF_write_entry(RF_class *RF, ULONG entry, void *source,
-	RF_entry_hdr *RHDR, UWORD type) {
-RF_entry_hdr cur, dummy;
-ULONG blknum;
-UWORD i;
-OD_link *link;
+		RF_entry_hdr *RHDR, UWORD type) {
+	RF_entry_hdr cur, dummy;
+	ULONG blknum;
+	UWORD i;
+	OD_link *link;
 
-blknum = (entry / (ULONG) OD_SIZE);      // blknum = directory block #
-i = (UWORD) (entry % (ULONG) OD_SIZE);   // i = entry # within block
+	blknum = (entry / (ULONG) OD_SIZE);      // blknum = directory block #
+	i = (UWORD) (entry % (ULONG) OD_SIZE);   // i = entry # within block
 
-link = RF->root;
-while (blknum--) {
-	link = link->next;
-	if (link == NULL)
-		return (ULONG) -1L;
-}
-if (link->blk.flags[i] & SA_UNUSED)
-	return (ULONG) -1L;
-
-RF->touched = 1;
-
-if (RHDR == NULL) {
-	dummy.data_size = 0L;
-	dummy.data_attrib = DA_TEMPORARY;
-	RHDR = &dummy;
-}
-
-if (type != RTYP_HOUSECLEAN) {
-	if (link->blk.flags[i] & SA_DELETED) {
-		link->blk.flags[i] &= (~SA_DELETED);
-		link->touched = 1;
+	link = RF->root;
+	while (blknum--) {
+		link = link->next;
+		if (link == NULL)
+			return ((ULONG) -1L);
 	}
-	RHDR->timestamp = RF->hdr.modify_time = current_time();
-}
+	if (link->blk.flags[i] & SA_UNUSED)
+		return ((ULONG) -1L);
 
-lseek(RF->file, link->blk.index[i], SEEK_SET);
+	RF->touched = 1;
 
-if (link->blk.index[i] == RF->hdr.file_size) {
-	RF->hdr.file_size += (sizeof(RF_entry_hdr) + RHDR->data_size);
-	return RES_store_resource(RF, entry, source, RHDR, type);
-}
+	if (RHDR == NULL) {
+		dummy.data_size = 0L;
+		dummy.data_attrib = DA_TEMPORARY;
+		RHDR = &dummy;
+	}
 
-r_read(RF->file, &cur, sizeof(RF_entry_hdr));
+	if (type != RTYP_HOUSECLEAN) {
+		if (link->blk.flags[i] & SA_DELETED) {
+			link->blk.flags[i] &= (~SA_DELETED);
+			link->touched = 1;
+		}
+		RHDR->timestamp = RF->hdr.modify_time = current_time();
+	}
 
-if (RHDR->data_size > cur.data_size) {
-	RF->hdr.lost_space += (cur.data_size + sizeof(RF_entry_hdr));
-	link->blk.index[i] = RF->hdr.file_size;
-	link->touched = 1;
-	lseek(RF->file, 0L, SEEK_END);
-	RF->hdr.file_size += (sizeof(RF_entry_hdr) + RHDR->data_size);
-} else {
-	RF->hdr.lost_space += (cur.data_size - RHDR->data_size);
 	lseek(RF->file, link->blk.index[i], SEEK_SET);
-}
 
-return RES_store_resource(RF, entry, source, RHDR, type);
+	if (link->blk.index[i] == RF->hdr.file_size) {
+		RF->hdr.file_size += (sizeof(RF_entry_hdr) + RHDR->data_size);
+		return (RES_store_resource(RF, entry, source, RHDR, type));
+	}
+
+	r_read(RF->file, &cur, sizeof(RF_entry_hdr));
+
+	if (RHDR->data_size > cur.data_size) {
+		RF->hdr.lost_space += (cur.data_size + sizeof(RF_entry_hdr));
+		link->blk.index[i] = RF->hdr.file_size;
+		link->touched = 1;
+		lseek(RF->file, 0L, SEEK_END);
+		RF->hdr.file_size += (sizeof(RF_entry_hdr) + RHDR->data_size);
+	} else {
+		RF->hdr.lost_space += (cur.data_size - RHDR->data_size);
+		lseek(RF->file, link->blk.index[i], SEEK_SET);
+	}
+
+	return (RES_store_resource(RF, entry, source, RHDR, type));
 }
 
 /***************************************************/
@@ -373,37 +374,37 @@ return RES_store_resource(RF, entry, source, RHDR, type);
 /***************************************************/
 
 void RF_delete_entry(RF_class *RF, ULONG entry) {
-RF_entry_hdr RHDR;
-ULONG blknum;
-UWORD i;
-OD_link *link;
+	RF_entry_hdr RHDR;
+	ULONG blknum;
+	UWORD i;
+	OD_link *link;
 
-blknum = (entry / (ULONG) OD_SIZE);      // blknum = directory block #
-i = (UWORD) (entry % (ULONG) OD_SIZE);   // i = entry # within block
+	blknum = (entry / (ULONG) OD_SIZE);      // blknum = directory block #
+	i = (UWORD) (entry % (ULONG) OD_SIZE);   // i = entry # within block
 
-link = RF->root;
-while (blknum--) {
-	link = link->next;
-	if (link == NULL)
+	link = RF->root;
+	while (blknum--) {
+		link = link->next;
+		if (link == NULL)
+			return;
+	}
+
+	if (link->blk.flags[i] & (SA_UNUSED | SA_DELETED))
 		return;
-}
 
-if (link->blk.flags[i] & (SA_UNUSED | SA_DELETED))
-	return;
+	lseek(RF->file, link->blk.index[i], SEEK_SET);
+	r_read(RF->file, &RHDR, sizeof(RF_entry_hdr));
 
-lseek(RF->file, link->blk.index[i], SEEK_SET);
-r_read(RF->file, &RHDR, sizeof(RF_entry_hdr));
+	link->blk.flags[i] |= SA_DELETED;
+	link->touched = 1;
 
-link->blk.flags[i] |= SA_DELETED;
-link->touched = 1;
+	RF->hdr.lost_space += RHDR.data_size;
+	RF->touched = 1;
 
-RF->hdr.lost_space += RHDR.data_size;
-RF->touched = 1;
+	RHDR.data_size = 0L;
 
-RHDR.data_size = 0L;
-
-lseek(RF->file, link->blk.index[i], SEEK_SET);
-r_write(RF->file, &RHDR, sizeof(RF_entry_hdr));
+	lseek(RF->file, link->blk.index[i], SEEK_SET);
+	r_write(RF->file, &RHDR, sizeof(RF_entry_hdr));
 }
 
 /***************************************************/
@@ -413,27 +414,27 @@ r_write(RF->file, &RHDR, sizeof(RF_entry_hdr));
 /***************************************************/
 
 RF_entry_hdr *RF_header(RF_class *RF, ULONG entry) {
-static RF_entry_hdr RHDR;
-ULONG blknum;
-UWORD i;
-OD_link *link;
+	static RF_entry_hdr RHDR;
+	ULONG blknum;
+	UWORD i;
+	OD_link *link;
 
-blknum = (entry / (ULONG) OD_SIZE);      // blknum = directory block #
-i = (UWORD) (entry % (ULONG) OD_SIZE);   // i = entry # within block
+	blknum = (entry / (ULONG) OD_SIZE);      // blknum = directory block #
+	i = (UWORD) (entry % (ULONG) OD_SIZE);   // i = entry # within block
 
-link = RF->root;
-while (blknum--) {
-	link = link->next;
-	if (link == NULL)
-		return NULL;
-}
-if (link->blk.flags[i] & SA_UNUSED)
-	return NULL;
+	link = RF->root;
+	while (blknum--) {
+		link = link->next;
+		if (link == NULL)
+			return (NULL);
+	}
+	if (link->blk.flags[i] & SA_UNUSED)
+		return (NULL);
 
-lseek(RF->file, link->blk.index[i], SEEK_SET);
-r_read(RF->file, &RHDR, sizeof(RF_entry_hdr));
+	lseek(RF->file, link->blk.index[i], SEEK_SET);
+	r_read(RF->file, &RHDR, sizeof(RF_entry_hdr));
 
-return &RHDR;
+	return (&RHDR);
 }
 
 /***************************************************/
@@ -443,21 +444,21 @@ return &RHDR;
 /***************************************************/
 
 UWORD RF_flags(RF_class *RF, ULONG entry) {
-ULONG blknum;
-UWORD i;
-OD_link *link;
+	ULONG blknum;
+	UWORD i;
+	OD_link *link;
 
-blknum = (entry / (ULONG) OD_SIZE);      // blknum = directory block #
-i = (UWORD) (entry % (ULONG) OD_SIZE);   // i = entry # within block
+	blknum = (entry / (ULONG) OD_SIZE);      // blknum = directory block #
+	i = (UWORD) (entry % (ULONG) OD_SIZE);   // i = entry # within block
 
-link = RF->root;
-while (blknum--) {
-	link = link->next;
-	if (link == NULL)
-		return SA_UNUSED;
-}
+	link = RF->root;
+	while (blknum--) {
+		link = link->next;
+		if (link == NULL)
+			return (SA_UNUSED);
+	}
 
-return (link->blk.flags[i]);
+	return (link->blk.flags[i]);
 }
 
 /***************************************************/
@@ -467,21 +468,21 @@ return (link->blk.flags[i]);
 /***************************************************/
 
 ULONG RF_index(RF_class *RF, ULONG entry) {
-ULONG blknum;
-UWORD i;
-OD_link *link;
+	ULONG blknum;
+	UWORD i;
+	OD_link *link;
 
-blknum = (entry / (ULONG) OD_SIZE);      // blknum = directory block #
-i = (UWORD) (entry % (ULONG) OD_SIZE);   // i = entry # within block
+	blknum = (entry / (ULONG) OD_SIZE);      // blknum = directory block #
+	i = (UWORD) (entry % (ULONG) OD_SIZE);   // i = entry # within block
 
-link = RF->root;
-while (blknum--) {
-	link = link->next;
-	if (link == NULL)
-		return 0L;
-}
+	link = RF->root;
+	while (blknum--) {
+		link = link->next;
+		if (link == NULL)
+			return (0L);
+	}
 
-return (link->blk.index[i]);
+	return (link->blk.index[i]);
 }
 
 /***************************************************/
@@ -491,23 +492,23 @@ return (link->blk.index[i]);
 /***************************************************/
 
 void RF_set_flags(RF_class *RF, ULONG entry, UWORD flags) {
-ULONG blknum;
-UWORD i;
-OD_link *link;
+	ULONG blknum;
+	UWORD i;
+	OD_link *link;
 
-blknum = (entry / (ULONG) OD_SIZE);      // blknum = directory block #
-i = (UWORD) (entry % (ULONG) OD_SIZE);   // i = entry # within block
+	blknum = (entry / (ULONG) OD_SIZE);      // blknum = directory block #
+	i = (UWORD) (entry % (ULONG) OD_SIZE);   // i = entry # within block
 
-link = RF->root;
-while (blknum--) {
-	link = link->next;
-	if (link == NULL)
+	link = RF->root;
+	while (blknum--) {
+		link = link->next;
+		if (link == NULL)
+			return;
+	}
+
+	if (link->blk.flags[i] & SA_UNUSED)
 		return;
-}
 
-if (link->blk.flags[i] & SA_UNUSED)
-	return;
-
-link->blk.flags[i] = flags;
-link->touched = 1;
+	link->blk.flags[i] = flags;
+	link->touched = 1;
 }

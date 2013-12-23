@@ -65,5 +65,5 @@ GRAPHICS::Font::~Font() {
 	}
 }
 SDL_Surface* GRAPHICS::Font::getCharacter(uint8_t ascii) {
-	return character[ascii];
+	return (character[ascii]);
 }

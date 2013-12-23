@@ -341,7 +341,7 @@ DI_class *DI_construct(DICT_class *DICT) {
 		if ((DI->cur = DICT->root[DI->bucket]) != NULL)
 			break;
 
-	return DI;
+	return (DI);
 }
 
 /***************************************************/

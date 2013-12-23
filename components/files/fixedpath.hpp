@@ -62,7 +62,7 @@ struct FixedPath
      */
     const boost::filesystem::path& getUserPath() const
     {
-        return mUserPath;
+        return (mUserPath);
     }
 
     /**
@@ -72,7 +72,7 @@ struct FixedPath
      */
     const boost::filesystem::path& getGlobalPath() const
     {
-        return mGlobalPath;
+        return (mGlobalPath);
     }
 
     /**
@@ -82,12 +82,12 @@ struct FixedPath
      */
     const boost::filesystem::path& getLocalPath() const
     {
-        return mLocalPath;
+        return (mLocalPath);
     }
 
     const boost::filesystem::path& getGlobalDataPath() const
     {
-        return mGlobalDataPath;
+        return (mGlobalDataPath);
     }
 
     private:

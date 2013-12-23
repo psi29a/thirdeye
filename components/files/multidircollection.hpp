@@ -22,7 +22,7 @@ namespace Files
         bool operator() (const std::string& left, const std::string& right) const
         {
             if (mStrict)
-                return left<right;
+                return (left<right);
 
             std::size_t min = std::min (left.length(), right.length());
             std::locale loc;
@@ -33,12 +33,12 @@ namespace Files
                 char r = std::tolower (right[i], loc);
 
                 if (l<r)
-                    return true;
+                    return (true);
                 if (l>r)
-                    return false;
+                    return (false);
             }
 
-            return left.length()<right.length();
+            return (left.length()<right.length());
         }
     };
 

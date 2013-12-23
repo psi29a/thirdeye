@@ -37,17 +37,17 @@ GRAPHICS::Palette::Palette(const std::vector<uint8_t> &pal, bool isRes) {
 }
 
 uint16_t GRAPHICS::Palette::getNumOfColours() const {
-	return mNumOfColours;
+	return (mNumOfColours);
 }
 
 uint16_t GRAPHICS::Palette::getColorArray() const {
-	return mColorArray;
+	return (mColorArray);
 }
 
 uint16_t GRAPHICS::Palette::getFadeIndexArray00() const {
-	return mFadeIndexArray00;
+	return (mFadeIndexArray00);
 }
 
 const SDL_Color& GRAPHICS::Palette::operator[](uint16_t index) {
-	return mPalette[index];
+	return (mPalette[index]);
 }

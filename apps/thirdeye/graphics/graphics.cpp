@@ -135,7 +135,7 @@ void GRAPHICS::Graphics::playVideo(sequence video) {
 }
 
 bool GRAPHICS::Graphics::isVideoPlaying() {
-	return mVideo.empty();
+	return (mVideo.empty());
 }
 
 void GRAPHICS::Graphics::stopVideo() {
@@ -461,7 +461,7 @@ void GRAPHICS::Graphics::update() {
 }
 
 uint32_t GRAPHICS::Graphics::getSleep() {
-	return mSleep;
+	return (mSleep);
 }
 
 void GRAPHICS::Graphics::drawText(std::vector<uint8_t> &fnt, std::string text,

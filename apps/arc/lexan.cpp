@@ -60,22 +60,22 @@ const BYTE hex_val[256] =              // values+1 of ASCII hex digits
 static BYTE esc_xlat(BYTE ch) {
 	switch (ch) {
 	case 'a':
-		return 7;
+		return (7);
 	case 'b':
-		return 8;
+		return (8);
 	case 't':
-		return 9;
+		return (9);
 	case 'n':
-		return 10;
+		return (10);
 	case 'v':
-		return 11;
+		return (11);
 	case 'f':
-		return 12;
+		return (12);
 	case 'r':
-		return 13;
+		return (13);
 	}
 
-	return ch;
+	return (ch);
 }
 
 /***************************************************/
@@ -95,7 +95,7 @@ static WORD LEX_readln(LEX_class *LEX) {
 	done = 0;
 	do {
 		if (!read_text_line(LEX->handle, MAX_IN_LEN, LEX->buf))
-			return -1;
+			return (-1);
 
 		if (LEX->buf[0] == '')
 			switch (LEX->buf[1]) {
@@ -111,7 +111,7 @@ static WORD LEX_readln(LEX_class *LEX) {
 	} while (!done);
 
 	if (!(LEX->flags & LEX_LININFO))
-		return 0;
+		return (0);
 
 	j = strlen(LEX->buf);
 
@@ -130,7 +130,7 @@ static WORD LEX_readln(LEX_class *LEX) {
 			break;
 
 	if (i == j)
-		return -1;
+		return (-1);
 
 	LEX->buf[i - 2] = 0;
 
@@ -139,7 +139,7 @@ static WORD LEX_readln(LEX_class *LEX) {
 
 	report(E_NEWLINE, NULL, NULL);
 
-	return i;
+	return (i);
 }
 
 /***************************************************/
@@ -166,7 +166,7 @@ static BYTE LEX_chrget(LEX_class *LEX) {
 			LEX->chrnxt = LEX->buf[LEX->chrpnt++];
 	}
 
-	return LEX->chr;
+	return (LEX->chr);
 }
 
 /***************************************************/
@@ -248,7 +248,7 @@ LEX_class *LEX_construct(UWORD flags, BYTE *filename, BYTE *keywords[],
 	LEX->cur = 0;
 	LEX_fetch(LEX);
 
-	return LEX;
+	return (LEX);
 }
 
 /***************************************************/
@@ -282,7 +282,7 @@ void LEX_destroy(LEX_class *LEX) {
 /***************************************************/
 
 WORD LEX_token(LEX_class *LEX, UWORD select) {
-	return LEX->state[LEX->cur ^ select].token;
+	return (LEX->state[LEX->cur ^ select].token);
 }
 
 /***************************************************/
@@ -292,7 +292,7 @@ WORD LEX_token(LEX_class *LEX, UWORD select) {
 /***************************************************/
 
 WORD LEX_type(LEX_class *LEX, UWORD select) {
-	return LEX->state[LEX->cur ^ select].type;
+	return (LEX->state[LEX->cur ^ select].type);
 }
 
 /***************************************************/
@@ -302,7 +302,7 @@ WORD LEX_type(LEX_class *LEX, UWORD select) {
 /***************************************************/
 
 ULONG LEX_value(LEX_class *LEX, UWORD select) {
-	return LEX->state[LEX->cur ^ select].value;
+	return (LEX->state[LEX->cur ^ select].value);
 }
 
 /***************************************************/
@@ -312,7 +312,7 @@ ULONG LEX_value(LEX_class *LEX, UWORD select) {
 /***************************************************/
 
 BYTE *LEX_lexeme(LEX_class *LEX, UWORD select) {
-	return LEX->state[LEX->cur ^ select].lexeme;
+	return (LEX->state[LEX->cur ^ select].lexeme);
 }
 
 /***************************************************/
@@ -322,7 +322,7 @@ BYTE *LEX_lexeme(LEX_class *LEX, UWORD select) {
 /***************************************************/
 
 BYTE *LEX_line(LEX_class *LEX, UWORD select) {
-	return LEX->state[LEX->cur ^ select].line;
+	return (LEX->state[LEX->cur ^ select].line);
 }
 
 /***************************************************/
@@ -600,7 +600,7 @@ WORD LEX_require(LEX_class *LEX, WORD type, WORD token, BYTE *expect) {
 
 	LEX_fetch(LEX);
 
-	return OK;
+	return (OK);
 }
 
 /*************************************************************/
@@ -615,10 +615,10 @@ WORD LEX_next_comma(LEX_class *LEX) {
 			&& (LEX_lexeme(LEX, LEX_NXT)[0] == ',')
 			&& (LEX_lexeme(LEX, LEX_NXT)[1] == 0)) {
 		LEX_fetch(LEX);
-		return 1;
+		return (1);
 	}
 
-	return 0;
+	return (0);
 }
 
 /*************************************************************/
@@ -635,8 +635,8 @@ WORD LEX_next_constant(LEX_class *LEX) {
 
 	if ((type == TTYP_STRLIT) || (type == TTYP_TXTLIT) || (type == TTYP_NUM)) {
 		LEX_fetch(LEX);
-		return 1;
+		return (1);
 	}
 
-	return 0;
+	return (0);
 }

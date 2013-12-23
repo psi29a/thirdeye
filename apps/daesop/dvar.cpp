@@ -26,7 +26,7 @@ char *getExternalVariableNameForVariableNumber(char *aResult,
 	if (aFullImportResourceDictionary == NULL) {
 		printf(
 				"getExternalVariableNameForVariableNumber(): the import resource dictionary is NULL!\n");
-		return NULL;
+		return (NULL);
 	}
 	for (i = 0;
 			i < MAX_IMPORT_TABLE_ITEMS
@@ -47,7 +47,7 @@ char *getExternalVariableNameForVariableNumber(char *aResult,
 					== aVariableNumber) {
 				// found the entry, return the name
 				strcpy(aResult, loCurrentImportEntry->firstOriginal);
-				return aResult;
+				return (aResult);
 			}
 			break;
 		default:
@@ -58,7 +58,7 @@ char *getExternalVariableNameForVariableNumber(char *aResult,
 	// not found
 	printf("The external variable with the index %ld was not found!\n",
 			aVariableNumber);
-	return NULL;
+	return (NULL);
 }
 
 /*
@@ -70,7 +70,7 @@ int changeImportEntryVariableToArray(long aVariableNumber,
 	if (aFullImportResourceDictionary == NULL) {
 		printf(
 				"changeImportEntryVariableToArray(): the import resource dictionary is NULL!\n");
-		return false;
+		return (false);
 	}
 	for (i = 0;
 			i < MAX_IMPORT_TABLE_ITEMS
@@ -94,7 +94,7 @@ int changeImportEntryVariableToArray(long aVariableNumber,
 				} else if (loCurrentImportEntryType == IMPORT_ENTRY_LONG) {
 					loCurrentImportEntry->importType = IMPORT_ENTRY_ARRAY_LONG;
 				}
-				return true;
+				return (true);
 			}
 			break;
 		case IMPORT_ENTRY_ARRAY_BYTE:
@@ -103,7 +103,7 @@ int changeImportEntryVariableToArray(long aVariableNumber,
 			if (loCurrentImportEntry->importedVariableNumber
 					== aVariableNumber) {
 				// it is an array already
-				return true;
+				return (true);
 			}
 			break;
 		default:
@@ -113,7 +113,7 @@ int changeImportEntryVariableToArray(long aVariableNumber,
 				printf(
 						"The extern variable with the index %ld cannot be changed to an array!\n",
 						aVariableNumber);
-				return false;
+				return (false);
 			}
 			break;
 		}
@@ -121,7 +121,7 @@ int changeImportEntryVariableToArray(long aVariableNumber,
 	// not found
 	printf("The external variable with the index %ld was not found!\n",
 			aVariableNumber);
-	return false;
+	return (false);
 }
 
 /*
@@ -133,7 +133,7 @@ int writeExternalReferencesInfo(
 	if (aFullImportResourceDictionary == NULL) {
 		printf(
 				"writeExternalReferencesInfo(): the import resource dictionary is NULL!\n");
-		return false;
+		return (false);
 	}
 	for (i = 0;
 			i < MAX_IMPORT_TABLE_ITEMS
@@ -181,7 +181,7 @@ int writeExternalReferencesInfo(
 			break;
 		}
 	}
-	return true;
+	return (true);
 }
 
 /*
@@ -200,7 +200,7 @@ int initializeStaticVariableList(
 	if (myStaticVariablesTable == NULL) {
 		printf("Failure to allocate %d bytes for the static variables table!\n",
 				loStaticVariablesTableSizeInBytes);
-		return false;
+		return (false);
 	}
 
 	// set NULL to everything
@@ -214,7 +214,7 @@ int initializeStaticVariableList(
 				"initializeStaticVariableList(): the export resource dictionary is NULL!\n");
 		free(myStaticVariablesTable);
 		myStaticVariablesTable = NULL;
-		return false;
+		return (false);
 	} else {
 		// exported variables are public static variables so add them there
 		int i;
@@ -229,7 +229,7 @@ int initializeStaticVariableList(
 			if (loStaticVariablesTableIndex >= MAX_STATIC_VARIABLES) {
 				printf("There can be max %d static/extern variables!\n",
 						MAX_STATIC_VARIABLES);
-				return false;
+				return (false);
 			}
 
 			loCurrentExportEntry = aFullExportResourceDictionary[i];
@@ -243,7 +243,7 @@ int initializeStaticVariableList(
 				if (loStatVarEntry == NULL) {
 					printf(
 							"Failure to allocate the memory for a static variable entry!\n");
-					return false;
+					return (false);
 				}
 				loStatVarEntry->isPublic = true;
 				loStatVarEntry->isArray = false;
@@ -264,7 +264,7 @@ int initializeStaticVariableList(
 				if (loStatVarEntry == NULL) {
 					printf(
 							"Failure to allocate the memory for a static variable entry!\n");
-					return false;
+					return (false);
 				}
 				loStatVarEntry->isPublic = true;
 				loStatVarEntry->isArray = true;
@@ -284,7 +284,7 @@ int initializeStaticVariableList(
 			}
 		}
 	}
-	return true;
+	return (true);
 }
 
 /*
@@ -299,7 +299,7 @@ int addPrivateStaticVariableIfNotExisting(int aVariableIndex, int aIsArray,
 	if (myStaticVariablesTable == NULL) {
 		printf(
 				"addPrivateStaticVariableIfNotExisting(): static variables table is NULL!\n");
-		return false;
+		return (false);
 	}
 
 	for (loStaticVariablesTableIndex = 0;
@@ -322,13 +322,13 @@ int addPrivateStaticVariableIfNotExisting(int aVariableIndex, int aIsArray,
 				loStatVarEntry->isArray = aIsArray;
 
 			}
-			return true;
+			return (true);
 		}
 	}
 	if (loStaticVariablesTableIndex >= MAX_STATIC_VARIABLES) {
 		printf("There can be max %d static/extern variables!\n",
 				MAX_STATIC_VARIABLES);
-		return false;
+		return (false);
 	}
 
 	// ok, it is not there so make a new one
@@ -344,7 +344,7 @@ int addPrivateStaticVariableIfNotExisting(int aVariableIndex, int aIsArray,
 			sizeof(struct STATIC_VARIABLE_ENTRY));
 	if (loNewStatVarEntry == NULL) {
 		printf("Failure to allocate the memory for a static variable entry!\n");
-		return false;
+		return (false);
 	}
 	loNewStatVarEntry->isPublic = false;
 	loNewStatVarEntry->isArray = aIsArray;
@@ -353,7 +353,7 @@ int addPrivateStaticVariableIfNotExisting(int aVariableIndex, int aIsArray,
 	loNewStatVarEntry->numberOfElements = -1;  // unknown or not used
 	// store the entry
 	myStaticVariablesTable[loStaticVariablesTableIndex] = loNewStatVarEntry;
-	return true;
+	return (true);
 }
 
 /*
@@ -365,7 +365,7 @@ char *getStaticVariableNameForIndex(char *aResult, int aVariableIndex) {
 	if (myStaticVariablesTable == NULL) {
 		printf(
 				"getStaticVariableNameForIndex(): static variables table is NULL!\n");
-		return NULL;
+		return (NULL);
 	}
 
 	for (loStaticVariablesTableIndex = 0;
@@ -377,11 +377,11 @@ char *getStaticVariableNameForIndex(char *aResult, int aVariableIndex) {
 		if (loStatVarEntry->variableIndex == aVariableIndex) {
 			// found, return
 			strcpy(aResult, loStatVarEntry->name);
-			return aResult;
+			return (aResult);
 		}
 	}
 	printf("The static variable %d was not found!\n", aVariableIndex);
-	return NULL;
+	return (NULL);
 }
 
 /*
@@ -392,7 +392,7 @@ int writeExportedVariablesInfo(FILE *aOutputFile) {
 	if (myStaticVariablesTable == NULL) {
 		printf(
 				"writeExportedVariablesInfo(): the static variables table is NULL!\n");
-		return false;
+		return (false);
 	}
 	for (i = 0; i < MAX_STATIC_VARIABLES && myStaticVariablesTable[i] != NULL;
 			i++) {
@@ -436,7 +436,7 @@ int writeExportedVariablesInfo(FILE *aOutputFile) {
 		}
 
 	}
-	return true;
+	return (true);
 }
 
 /*
@@ -453,14 +453,14 @@ int initializeConstantTableList(void) {
 	if (myConstantTables == NULL) {
 		printf("Failure to allocate %d bytes for the table constants table!\n",
 				loConstantTablesTableSizeInBytes);
-		return false;
+		return (false);
 	}
 
 	// set NULL to everything
 	for (i = 0; i < MAX_CONSTANT_TABLES + 1; i++) {
 		myConstantTables[i] = NULL;
 	}
-	return true;
+	return (true);
 }
 
 /*
@@ -472,7 +472,7 @@ char *getConstantTableName(char *aResult, int aTableIndex) {
 	if (myConstantTables == NULL) {
 		printf(
 				"getConstantTableName(): the table of constant tables is NULL!\n");
-		return NULL;
+		return (NULL);
 	}
 	for (loTableIndex = 0;
 			loTableIndex < MAX_CONSTANT_TABLES
@@ -482,12 +482,12 @@ char *getConstantTableName(char *aResult, int aTableIndex) {
 		if (loCurrentEntry->tableIndex == aTableIndex) {
 			// found
 			strcpy(aResult, loCurrentEntry->name);
-			return aResult;
+			return (aResult);
 		}
 	}
 	printf("The constant table name was not found for the table index %d!\n",
 			aTableIndex);
-	return NULL;
+	return (NULL);
 }
 
 /*
@@ -501,7 +501,7 @@ int addConstantTableEntryIfNotExisting(int aTableIndex, char aVariableType) {
 	if (myConstantTables == NULL) {
 		printf(
 				"addTableEntryIfNotExisting(): the table of constant tables is NULL!\n");
-		return false;
+		return (false);
 	}
 
 	for (loTableIndex = 0;
@@ -516,19 +516,19 @@ int addConstantTableEntryIfNotExisting(int aTableIndex, char aVariableType) {
 				// set the type
 				loCurrentEntry->elementType = aVariableType;
 			}
-			return true;
+			return (true);
 		}
 	}
 	if (loTableIndex >= MAX_CONSTANT_TABLES) {
 		printf("There can be max %d constant tables!\n", MAX_CONSTANT_TABLES);
-		return false;
+		return (false);
 	}
 	// create a new entry
 	loNewEntry = (TABLECONSTPOINTER) malloc(
 			sizeof(struct TABLE_CONSTANT_ENTRY));
 	if (loNewEntry == NULL) {
 		printf("Unable to allocate a contant table entry!\n");
-		return false;
+		return (false);
 	}
 	sprintf(loNewName, "%c:%s%d", aVariableType, CONSTANT_TABLE_PREFIX,
 			aTableIndex);
@@ -537,7 +537,7 @@ int addConstantTableEntryIfNotExisting(int aTableIndex, char aVariableType) {
 	loNewEntry->elementType = aVariableType;
 	loNewEntry->numberOfElements = -1; // unknown
 	myConstantTables[loTableIndex] = loNewEntry;
-	return true;
+	return (true);
 }
 
 /*
@@ -690,7 +690,7 @@ int initializeLocalVariableReferencesList(void) {
 		printf(
 				"Failure to allocate %d bytes for the table of local variable references!\n",
 				loLocalVariableReferencesTableSizeInBytes);
-		return false;
+		return (false);
 	}
 
 	// set NULL to everything
@@ -698,7 +698,7 @@ int initializeLocalVariableReferencesList(void) {
 		myLocalVariableReferences[i] = NULL;
 	}
 	myLocalVariableReferencesCounter = 0;
-	return true;
+	return (true);
 }
 
 /**
@@ -709,13 +709,13 @@ int addAutoVariableReference(int aAddress, int aInstruction, int aVariableIndex,
 	LOCALVARIABLEREFERENCEPOINTER loNewEntry;
 	if (aVariableIndex == 2) {
 		// THIS pointer, ignore
-		return true;
+		return (true);
 	}
 	if (myLocalVariableReferencesCounter >= MAX_LOCAL_VARIABLE_REFERENCES) {
 		printf(
 				"There can be only %d local variable references in a code resource!\n",
 				MAX_LOCAL_VARIABLE_REFERENCES);
-		return false;
+		return (false);
 	}
 
 	loNewEntry = (LOCALVARIABLEREFERENCEPOINTER) malloc(
@@ -723,7 +723,7 @@ int addAutoVariableReference(int aAddress, int aInstruction, int aVariableIndex,
 	if (loNewEntry == NULL) {
 		printf(
 				"Unable to allocate memory for a local variable reference entry!\n");
-		return false;
+		return (false);
 	}
 
 	loNewEntry->address = aAddress;
@@ -735,7 +735,7 @@ int addAutoVariableReference(int aAddress, int aInstruction, int aVariableIndex,
 					true : false;
 	loNewEntry->isArray = aIsArray;
 	myLocalVariableReferences[myLocalVariableReferencesCounter++] = loNewEntry;
-	return true;
+	return (true);
 }
 
 /*
@@ -751,11 +751,11 @@ int compareLocaleVariableReferences(void const *aFirstItem,
 	int loTemp;
 	loTemp = loFirstEntry->address - loSecondEntry->address;
 	if (loTemp > 0)
-		return 1;
+		return (1);
 	else if (loTemp < 0)
-		return -1;
+		return (-1);
 	else
-		return 0;
+		return (0);
 }
 
 /*
@@ -765,18 +765,18 @@ int sortLocalVariableReferencesList(void) {
 	if (myLocalVariableReferences == NULL) {
 		printf(
 				"sortLocalVariableReferencesList(...): myLocalVariableReferences is NULL!\n");
-		return false;
+		return (false);
 	}
 
 	if (myLocalVariableReferencesCounter == 0) {
 		// nothing to do
-		return true;
+		return (true);
 	}
 	printf("Sorting local variable references...\n");
 	qsort(myLocalVariableReferences, myLocalVariableReferencesCounter,
 			sizeof(LOCALVARIABLEREFERENCEPOINTER),
 			compareLocaleVariableReferences);
-	return true;
+	return (true);
 }
 
 /*
@@ -811,11 +811,11 @@ int compareLocaleVariables(void const *aFirstItem, void const *aSecondItem) {
 	int loTemp;
 	loTemp = loFirstEntry->index - loSecondEntry->index;
 	if (loTemp > 0)
-		return 1;
+		return (1);
 	else if (loTemp < 0)
-		return -1;
+		return (-1);
 	else
-		return 0;
+		return (0);
 }
 
 /*
@@ -833,23 +833,23 @@ int compareParameters(void const *aFirstItem, void const *aSecondItem) {
 		// first 0
 		if (loSecondValue == 0) {
 			// both 0 (should not happen)
-			return 0;
+			return (0);
 		} else {
 			// only first 0
-			return -1;
+			return (-1);
 		}
 	} else if (loSecondValue == 0) {
 		// second 0, first not 0
-		return 1;
+		return (1);
 	} else if (loFirstValue > loSecondValue) {
 		// first entry  is lower parameter
-		return -1;
+		return (-1);
 	} else if (loFirstValue < loSecondValue) {
 		// second entry is lower parameter
-		return 1;
+		return (1);
 	} else {
 		// both the same (should not happen)
-		return 0;
+		return (0);
 	}
 }
 
@@ -891,14 +891,14 @@ int getParametersOrLocalVariables(LOCALVARIABLEPOINTER aResultArray[],
 					printf(
 							"There can be only %d function parameters/local variables!\n",
 							MAX_FUNCTION_PARAMETERS_OR_LOCAL_VARIABLES);
-					return false;
+					return (false);
 				}
 				loNewItem = (LOCALVARIABLEPOINTER) malloc(
 						sizeof(struct LOCAL_VARIABLE));
 				if (loNewItem == NULL) {
 					printf(
 							"Unable to allocate the memory for a local variable/parameter item!\n");
-					return false;
+					return (false);
 				}
 				loNewItem->index = loVariableReferenceEntry->index;
 				getAutoVariableNameForIndex(loTmp,
@@ -923,7 +923,7 @@ int getParametersOrLocalVariables(LOCALVARIABLEPOINTER aResultArray[],
 					compareParameters);
 		}
 	}
-	return true;
+	return (true);
 }
 
 /*

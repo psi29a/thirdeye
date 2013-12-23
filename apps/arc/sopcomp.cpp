@@ -332,7 +332,7 @@ UWORD SOP_emit_opcode(SOP_class *SOP, WORD op) {
 
 	SOP->PC += sizeof(UBYTE);
 
-	return pc;
+	return (pc);
 }
 
 /*************************************************************/
@@ -354,7 +354,7 @@ UWORD SOP_emit_long(SOP_class *SOP, ULONG val) {
 
 	SOP->PC += sizeof(ULONG);
 
-	return pc;
+	return (pc);
 }
 
 /*************************************************************/
@@ -376,7 +376,7 @@ UWORD SOP_emit_word(SOP_class *SOP, ULONG val) {
 
 	SOP->PC += sizeof(UWORD);
 
-	return pc;
+	return (pc);
 }
 
 /*************************************************************/
@@ -398,7 +398,7 @@ UWORD SOP_emit_byte(SOP_class *SOP, ULONG val) {
 
 	SOP->PC += sizeof(UBYTE);
 
-	return pc;
+	return (pc);
 }
 
 /*************************************************************/
@@ -452,71 +452,71 @@ void SOP_emit_constant(SOP_class *SOP, ULONG val) {
 
 WORD SOP_next_symbol(SOP_class *SOP, WORD token) {
 	if (LEX_type(SOP->LEX, LEX_NXT) != TTYP_SYMBOL)
-		return 0;
+		return (0);
 
 	return (LEX_token(SOP->LEX, LEX_NXT) == token);
 }
 
 WORD SOP_next_keyword(SOP_class *SOP, WORD token) {
 	if (LEX_type(SOP->LEX, LEX_NXT) != TTYP_KEYWORD)
-		return 0;
+		return (0);
 
 	return (LEX_token(SOP->LEX, LEX_NXT) == token);
 }
 
 WORD SOP_next_literal_constant(SOP_class *SOP) {
 	if (LEX_type(SOP->LEX, LEX_NXT) == TTYP_STRLIT)
-		return 1;
+		return (1);
 
 	if (LEX_type(SOP->LEX, LEX_NXT) == TTYP_NUM)
-		return 1;
+		return (1);
 
 	return (SOP_next_symbol(SOP, SOP_MINUS) || SOP_next_symbol(SOP, SOP_PLUS));
 }
 
 WORD SOP_next_mul(SOP_class *SOP) {
 	if (LEX_type(SOP->LEX, LEX_NXT) != TTYP_SYMBOL)
-		return 0;
+		return (0);
 
 	switch (LEX_token(SOP->LEX, LEX_NXT)) {
 	case SOP_MUL:
 	case SOP_DIV:
 	case SOP_MOD:
-		return 1;
+		return (1);
 	}
 
-	return 0;
+	return (0);
 }
 
 WORD SOP_next_add(SOP_class *SOP) {
 	if (LEX_type(SOP->LEX, LEX_NXT) != TTYP_SYMBOL)
-		return 0;
+		return (0);
 
 	switch (LEX_token(SOP->LEX, LEX_NXT)) {
 	case SOP_PLUS:
 	case SOP_MINUS:
-		return 1;
+		return (1);
 	}
 
-	return 0;
+	return (0);
 }
 
 WORD SOP_next_shift(SOP_class *SOP) {
 	if (LEX_type(SOP->LEX, LEX_NXT) != TTYP_SYMBOL)
-		return 0;
+		return (0);
 
 	switch (LEX_token(SOP->LEX, LEX_NXT)) {
 	case SOP_SHL:
 	case SOP_SHR:
-		return 1;
+		return (1);
 	}
 
-	return 0;
+	return (0);
 }
 
 WORD SOP_next_assign(SOP_class *SOP) {
 	if (LEX_type(SOP->LEX, LEX_NXT) != TTYP_SYMBOL)
-		return 0;
+		return (0);
 
 	switch (LEX_token(SOP->LEX, LEX_NXT)) {
 	case SOP_SETEQ:
@@ -530,46 +530,46 @@ WORD SOP_next_assign(SOP_class *SOP) {
 	case SOP_OREQ:
 	case SOP_SHREQ:
 	case SOP_SHLEQ:
-		return 1;
+		return (1);
 	}
 
-	return 0;
+	return (0);
 }
 
 WORD SOP_next_eq(SOP_class *SOP) {
 	if (LEX_type(SOP->LEX, LEX_NXT) != TTYP_SYMBOL)
-		return 0;
+		return (0);
 
 	switch (LEX_token(SOP->LEX, LEX_NXT)) {
 	case SOP_E:
 	case SOP_NE:
-		return 1;
+		return (1);
 	}
 
-	return 0;
+	return (0);
 }
 
 WORD SOP_next_rel(SOP_class *SOP) {
 	if (LEX_type(SOP->LEX, LEX_NXT) != TTYP_SYMBOL)
-		return 0;
+		return (0);
 
 	switch (LEX_token(SOP->LEX, LEX_NXT)) {
 	case SOP_LT:
 	case SOP_GT:
 	case SOP_LE:
 	case SOP_GE:
-		return 1;
+		return (1);
 	}
 
-	return 0;
+	return (0);
 }
 
 WORD SOP_next_unary(SOP_class *SOP) {
 	if (SOP_next_keyword(SOP, SOP_NOT))
-		return 1;
+		return (1);
 
 	if (LEX_type(SOP->LEX, LEX_NXT) != TTYP_SYMBOL)
-		return 0;
+		return (0);
 
 	switch (LEX_token(SOP->LEX, LEX_NXT)) {
 	case SOP_MINUS:
@@ -579,15 +579,15 @@ WORD SOP_next_unary(SOP_class *SOP) {
 	case SOP_AT:
 	case SOP_INC:
 	case SOP_DEC:
-		return 1;
+		return (1);
 	}
 
-	return 0;
+	return (0);
 }
 
 WORD SOP_next_postfix(SOP_class *SOP) {
 	if (LEX_type(SOP->LEX, LEX_NXT) != TTYP_SYMBOL)
-		return 0;
+		return (0);
 
 	switch (LEX_token(SOP->LEX, LEX_NXT)) {
 	case SOP_L_PAREN:
@@ -595,10 +595,10 @@ WORD SOP_next_postfix(SOP_class *SOP) {
 	case SOP_INC:
 	case SOP_DEC:
 	case SOP_PERIOD:
-		return 1;
+		return (1);
 	}
 
-	return 0;
+	return (0);
 }
 
 WORD SOP_next_log_or(SOP_class *SOP) {
@@ -611,14 +611,14 @@ WORD SOP_next_log_and(SOP_class *SOP) {
 
 WORD SOP_next_definition(SOP_class *SOP) {
 	if (LEX_type(SOP->LEX, LEX_NXT) != TTYP_KEYWORD)
-		return 0;
+		return (0);
 
 	switch (LEX_token(SOP->LEX, LEX_NXT)) {
 	case SOP_CLASS:
-		return 1;
+		return (1);
 	}
 
-	return 0;
+	return (0);
 }
 
 /*************************************************************/
@@ -642,7 +642,7 @@ ULONG SOP_resource_name_entry(SOP_class *SOP) {
 					str_alloc(LEX_line(SOP->LEX, LEX_CUR));
 	}
 
-	return val;
+	return (val);
 }
 
 /*************************************************************/
@@ -709,7 +709,7 @@ WORD SOP_export_symbol(SOP_class *SOP, ULONG symbol, ULONG value, BYTE type,
 	if (type == 'M')
 		mem_free(sym);
 
-	return stat;
+	return (stat);
 }
 
 /*************************************************************/
@@ -762,7 +762,7 @@ UWORD SOP_import_symbol(SOP_class *SOP, BYTE *sym, BYTE *class_type,
 	mem_free(tag);
 	mem_free(index);
 
-	return (UWORD) ascnum((BYTE*) entry->def, 10);
+	return ((UWORD) ascnum((BYTE*) entry->def, 10));
 }
 
 /*************************************************************/
@@ -775,10 +775,10 @@ UWORD SOP_import_symbol(SOP_class *SOP, BYTE *sym, BYTE *class_type,
 WORD SOP_check_access(SOP_class *SOP) {
 	if (SOP->context == CON_D) {
 		SOP_basic_error(SOP, MSG_URC);
-		return 0;
+		return (0);
 	}
 
-	return 1;
+	return (1);
 }
 
 /*************************************************************/
@@ -791,10 +791,10 @@ WORD SOP_check_access(SOP_class *SOP) {
 WORD SOP_check_nest(SOP_class *SOP) {
 	if (SOP->context != CON_D) {
 		SOP_basic_error(SOP, MSG_CND);
-		return 0;
+		return (0);
 	}
 
-	return 1;
+	return (1);
 }
 
 /*************************************************************/
@@ -807,10 +807,10 @@ WORD SOP_check_nest(SOP_class *SOP) {
 WORD SOP_check_auto_nest(SOP_class *SOP) {
 	if (SOP->context == CON_D) {
 		SOP_basic_error(SOP, MSG_AVO);
-		return 0;
+		return (0);
 	}
 
-	return 1;
+	return (1);
 }
 
 /*************************************************************/
@@ -885,7 +885,7 @@ LONG SOP_fetch_literal_constant(SOP_class *SOP) {
 			}
 	}
 
-	return acc;
+	return (acc);
 }
 
 /*************************************************************/
@@ -1415,10 +1415,10 @@ void SOP_rvalue(SOP_class *SOP, PVAL *PV) {
 WORD SOP_check_lvalue(SOP_class *SOP, PVAL *PV) {
 	if (PV->fn == NULL) {
 		SOP_basic_error(SOP, MSG_LVR);
-		return 0;
+		return (0);
 	}
 
-	return 1;
+	return (1);
 }
 
 /*************************************************************/
@@ -2276,7 +2276,8 @@ UWORD SOP_var_declaration(SOP_class *SOP, UWORD vsize, DICT_class *scope,
 				CSS_add_num(CSS, offset);
 			} else {
 				if (visibility == V_PUBLIC)
-					SOP_export_symbol(SOP, (ULONG) atoi(name), (ULONG) offset, vtype, asize);
+					SOP_export_symbol(SOP, (ULONG) atoi(name), (ULONG) offset,
+							vtype, asize);
 
 				CSS_add_num(CSS, offset);
 				offset += (UWORD) tsize;
@@ -2358,7 +2359,7 @@ UWORD SOP_var_declaration(SOP_class *SOP, UWORD vsize, DICT_class *scope,
 		mem_free(class_type);
 	} while (LEX_next_comma(SOP->LEX));
 
-	return offset;
+	return (offset);
 }
 
 /*************************************************************/
@@ -2401,7 +2402,7 @@ UWORD *SOP_add_break(SOP_class *SOP, UWORD label) {
 	else
 		report(E_ERROR, LEX_line(SOP->LEX, LEX_CUR), MSG_TML);
 
-	return old;
+	return (old);
 }
 
 /*************************************************************/
@@ -2422,7 +2423,7 @@ UWORD *SOP_add_continue(SOP_class *SOP, UWORD label) {
 	else
 		report(E_ERROR, LEX_line(SOP->LEX, LEX_CUR), MSG_TML);
 
-	return old;
+	return (old);
 }
 
 /*************************************************************/
@@ -2438,7 +2439,7 @@ UWORD SOP_remove_break(SOP_class *SOP, UWORD *old, UWORD label) {
 		SOP->bsp = (UWORD*) add_ptr(SOP->bsp, -(ULONG) sizeof(UWORD));
 	}
 
-	return label;
+	return (label);
 }
 
 /*************************************************************/
@@ -3281,7 +3282,7 @@ ULONG SOP_write_dict(SOP_class *SOP, BYTE *suffix, DICT_class *DICT) {
 
 	mem_free(name);
 
-	return ord;
+	return (ord);
 }
 
 /*************************************************************/
@@ -3309,7 +3310,7 @@ WORD SOP_new_source_attrib(SOP_class *SOP) {
 		DICT_enter(SOP->RS->dict[RDES], SOP->fn, D_DEFHEAP)->def = str(
 				SOP->attrib);
 
-	return new_source;
+	return (new_source);
 }
 
 /*************************************************************/
@@ -3353,10 +3354,10 @@ SOP_class *SOP_construct(RS_class *RS, ULONG def_attribs) {
 
 	if (bad) {
 		mem_free(SOP);
-		return NULL;
+		return (NULL);
 	}
 
-	return SOP;
+	return (SOP);
 }
 
 /*************************************************************/
@@ -3399,17 +3400,17 @@ WORD SOP_test(SOP_class *SOP) {
 	cur = DICT_lookup(SOP->RS->dict[RDEP], SOP->fn);
 
 	if ((cur == NULL) || (cur->def == NULL))
-		return 1;
+		return (1);
 
 	ftime = TS_latest_file_time(SOP->RS->TS, (BYTE*) cur->def);
 
 	if (!ftime)
-		return 1;
+		return (1);
 
 	if (SOP->RS->RES_time < ftime)
-		return 1;
+		return (1);
 
-	return new_source;
+	return (new_source);
 }
 
 /*************************************************************/

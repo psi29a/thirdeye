@@ -172,7 +172,7 @@ RESOURCES::GFFI::~GFFI() {
 }
 
 std::vector<uint8_t> RESOURCES::GFFI::getMusic(){
-	return mFiles["LSE"][1].data[0];
+	return (mFiles["LSE"][1].data[0]);
 }
 
 sequence RESOURCES::GFFI::getSequence() {
@@ -237,5 +237,5 @@ sequence RESOURCES::GFFI::getSequence() {
 		;
 	}
 
-	return sequences;
+	return (sequences);
 }

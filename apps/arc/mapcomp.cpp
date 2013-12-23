@@ -114,7 +114,7 @@ MAP_class *MAP_construct(IDR_class *IDR) {
 			MAP_error(IDR->RS, MSG_TMR, NULL);
 			mem_free(MAP);
 			mem_free(spec);
-			return NULL;
+			return (NULL);
 		}
 
 		MAP->parms[i++] = atoi(str);
@@ -125,10 +125,10 @@ MAP_class *MAP_construct(IDR_class *IDR) {
 	if (i < arysize(MAP->parms)) {
 		MAP_error(IDR->RS, MSG_MRS, NULL);
 		mem_free(MAP);
-		return NULL;
+		return (NULL);
 	}
 
-	return MAP;
+	return (MAP);
 }
 
 /*************************************************************/

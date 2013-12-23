@@ -11,15 +11,15 @@ namespace Files
 
 bool isFile(const char *name)
 {
-    return boost::filesystem::exists(boost::filesystem::path(name));
+    return (boost::filesystem::exists(boost::filesystem::path(name)));
 }
 
     // Returns true if the last part of the superset matches the subset
     bool endingMatches(const std::string& superset, const std::string& subset)
     {
         if (subset.length() > superset.length())
-            return false;
-        return superset.substr(superset.length() - subset.length()) == subset;
+            return (false);
+        return (superset.substr(superset.length() - subset.length()) == subset);
     }
 
     // Makes a list of files from a directory
@@ -56,7 +56,7 @@ bool isFile(const char *name)
     {
         boost::filesystem::path result("");
         if (list.empty())
-            return result;
+            return (result);
 
         std::string toFindStr;
         if (ignoreExtensions)
@@ -108,13 +108,13 @@ bool isFile(const char *name)
                 break;
             }
         }
-        return result;
+        return (result);
     }
 
     // Overloaded form of the locator that takes a string and returns a string
     std::string FileListLocator (const Files::PathContainer& list,const std::string& toFind, bool strict, bool ignoreExtensions)
     {
-        return FileListLocator(list, boost::filesystem::path(toFind), strict, ignoreExtensions).string();
+        return (FileListLocator(list, boost::filesystem::path(toFind), strict, ignoreExtensions).string());
     }
 
 }
