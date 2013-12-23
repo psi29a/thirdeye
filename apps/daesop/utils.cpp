@@ -11,11 +11,11 @@
 char *makeString(const char *aString) {
 	char *loResult = NULL;
 	if (aString == NULL) {
-		return loResult;
+		return (loResult);
 	}
 	loResult = (char *) malloc(strlen(aString) + 1);
 	strcpy(loResult, aString);
-	return loResult;
+	return (loResult);
 }
 
 /*
@@ -30,7 +30,7 @@ char *unpackDate(unsigned int aDate, char *aDateString) {
 			1980 + ((aDate >> 25) & 0x003f), (aDate >> 11) & 0x001f,
 			(aDate >> 5) & 0x001f, (aDate & 0x001f) << 1);
 
-	return aDateString;
+	return (aDateString);
 }
 
 /*
@@ -43,7 +43,7 @@ int strcmpCS(const char *s1, const char *s2) {
 					&& (toupper((unsigned char) *s1)
 							== toupper((unsigned char) *s2)); ++s1, ++s2)
 		;
-	return *s1 - *s2;
+	return (*s1 - *s2);
 }
 
 /*
@@ -63,9 +63,9 @@ char getCharacterForDump(char aChar) {
 	int loCharNumber = (unsigned char) aChar;
 	if (loCharNumber < 32) {
 		// instead of unprintable characters
-		return '.';
+		return ('.');
 	} else {
-		return aChar;
+		return (aChar);
 	}
 }
 
@@ -81,13 +81,13 @@ int stringEndsWith(char *aFullString, const char *aEndString) {
 	if (aFullString == NULL || aEndString == NULL) {
 		// at least one is null
 		printf("stringEndsWith(): at least one parameter is NULL!\n");
-		return loResult;
+		return (loResult);
 	}
 	loFullStringLength = strlen(aFullString);
 	loEndStringLength = strlen(aEndString);
 	if (loFullStringLength < loEndStringLength) {
 		// the second string is longer
-		return loResult;
+		return (loResult);
 	}
 	loFullStringEndPointer = aFullString
 			+ (loFullStringLength - loEndStringLength);
@@ -95,7 +95,7 @@ int stringEndsWith(char *aFullString, const char *aEndString) {
 		// ok, the ending agrees
 		loResult = true;
 	}
-	return loResult;
+	return (loResult);
 }
 
 /*
@@ -111,7 +111,7 @@ int copyFile(FILE *aSourceFile, char *aNewFileName) {
 	loNewFile = fopen(aNewFileName, "wb");
 	if (loNewFile == NULL) {
 		printf("The file could not be opened: %s!\n", aNewFileName);
-		return false;
+		return (false);
 	}
 
 	// copy the aResFile file into aNewFile
@@ -120,7 +120,7 @@ int copyFile(FILE *aSourceFile, char *aNewFileName) {
 		if (fwrite(loBuffer, 1, loReadSize, loNewFile) != loReadSize) {
 			printf("Unable to write to the file: %s\n", aNewFileName);
 			fclose(loNewFile);
-			return false;
+			return (false);
 		}
 	}
 
@@ -128,5 +128,5 @@ int copyFile(FILE *aSourceFile, char *aNewFileName) {
 	fclose(loNewFile);
 	printf("Finished copying of the original into the file: %s\n",
 			aNewFileName);
-	return true;
+	return (true);
 }

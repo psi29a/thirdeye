@@ -74,7 +74,7 @@ static BYTE *TF_line_info(TF_info *TF) {
 	sprintf(&info[strlen(info)], "%d", TF->line);
 	strcat(info, ": ");
 
-	return info;
+	return (info);
 }
 
 /***************************************************/
@@ -93,7 +93,7 @@ static IF_class *IF_construct(void) {
 	IF->depth = -1;
 	IF->condition = 1;
 
-	return IF;
+	return (IF);
 }
 
 /***************************************************/
@@ -104,11 +104,11 @@ static IF_class *IF_construct(void) {
 
 static WORD IF_push(IF_class *IF) {
 	if (IF->depth == (IF_STK_SIZE - 1))
-		return 0;
+		return (0);
 
 	IF->stack[++IF->depth] = IF->condition;
 
-	return 1;
+	return (1);
 }
 
 /***************************************************/
@@ -119,14 +119,14 @@ static WORD IF_push(IF_class *IF) {
 
 static WORD IF_else(IF_class *IF) {
 	if (IF->depth == -1)
-		return 0;
+		return (0);
 
 	if (!IF->stack[IF->depth])
 		IF->condition = 0;
 	else
 		IF->condition = !IF->condition;
 
-	return 1;
+	return (1);
 }
 
 /***************************************************/
@@ -137,11 +137,11 @@ static WORD IF_else(IF_class *IF) {
 
 static WORD IF_pop(IF_class *IF) {
 	if (IF->depth == -1)
-		return 0;
+		return (0);
 
 	IF->condition = (IF->stack[IF->depth--]);
 
-	return 1;
+	return (1);
 }
 
 /***************************************************/
@@ -177,18 +177,18 @@ static WORD PP_fetch_line(PP_class *PP) {
 	if (!read_text_line(PP->cur.handle, MAX_IN_LEN, PP->inbuf)) {
 		switch (clear_system_error()) {
 		case EOF_REACHED:
-			return 1;
+			return (1);
 		case LINE_TOO_LONG:
 			report(E_ERROR, TF_line_info(&PP->cur), MSG_LTOOL);
-			return 2;
+			return (2);
 		default:
 			report(E_ERROR, TF_line_info(&PP->cur), MSG_CRF, PP->cur.name);
 			close_text_file(PP->cur.handle);
-			return 3;
+			return (3);
 		}
 	}
 
-	return 0;
+	return (0);
 }
 
 /***************************************************/
@@ -231,7 +231,7 @@ PP_class *PP_construct(BYTE *in_fn, BYTE *out_fn, DICT_class *init_macs,
 
 	DICT_copy(init_macs, PP->MAC);
 
-	return PP;
+	return (PP);
 }
 
 /***************************************************/

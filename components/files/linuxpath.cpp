@@ -38,24 +38,24 @@ boost::filesystem::path LinuxPath::getUserPath() const
         userPath = boost::filesystem::path(theDir);
     }
 
-    return userPath / ".config" / mName;
+    return (userPath / ".config" / mName);
 }
 
 boost::filesystem::path LinuxPath::getGlobalPath() const
 {
     boost::filesystem::path globalPath("/etc/");
-    return globalPath / mName;
+    return (globalPath / mName);
 }
 
 boost::filesystem::path LinuxPath::getLocalPath() const
 {
-    return boost::filesystem::path("./");
+    return (boost::filesystem::path("./"));
 }
 
 boost::filesystem::path LinuxPath::getGlobalDataPath() const
 {
     boost::filesystem::path globalDataPath("/usr/share/games/");
-    return globalDataPath / mName;
+    return (globalDataPath / mName);
 }
 
 } /* namespace Files */

@@ -20,12 +20,12 @@ namespace Files
         bool operator() (const std::string& left, const std::string& right) const
         {
             if (mStrict)
-                return left==right;
+                return (left==right);
 
             std::size_t len = left.length();
 
             if (len!=right.length())
-                return false;
+                return (false);
 
             for (std::size_t i=0; i<len; ++i)
             {
@@ -33,10 +33,10 @@ namespace Files
                 char r = std::tolower (right[i]);
 
                 if (l!=r)
-                    return false;
+                    return (false);
             }
 
-            return true;
+            return (true);
         }
     };
 
@@ -92,21 +92,21 @@ namespace Files
         if (iter==mFiles.end())
             throw std::runtime_error ("file " + file + " not found");
 
-        return iter->second;
+        return (iter->second);
     }
 
     bool MultiDirCollection::doesExist (const std::string& file) const
     {
-        return mFiles.find (file)!=mFiles.end();
+        return (mFiles.find (file)!=mFiles.end());
     }
 
     MultiDirCollection::TIter MultiDirCollection::begin() const
     {
-        return mFiles.begin();
+        return (mFiles.begin());
     }
 
     MultiDirCollection::TIter MultiDirCollection::end() const
     {
-        return mFiles.end();
+        return (mFiles.end());
     }
 }

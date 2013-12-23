@@ -82,7 +82,7 @@ UWORD remap_RGB(rgb *old, pal *new_pal)
 		}
 	}
 
-	return best;
+	return (best);
 }
 
 /*************************************************************/
@@ -124,7 +124,7 @@ PAL_class *PAL_construct(IDR_class *IDR) {
 			PAL_error(IDR->RS, MSG_TMR, NULL);
 			mem_free(PAL);
 			mem_free(spec);
-			return NULL;
+			return (NULL);
 		}
 
 		PAL->parms[i++] = atoi(str);
@@ -135,10 +135,10 @@ PAL_class *PAL_construct(IDR_class *IDR) {
 	if (i < arysize(PAL->parms)) {
 		PAL_error(IDR->RS, MSG_MRS, NULL);
 		mem_free(PAL);
-		return NULL;
+		return (NULL);
 	}
 
-	return PAL;
+	return (PAL);
 }
 
 /*************************************************************/

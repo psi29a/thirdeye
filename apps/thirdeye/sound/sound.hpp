@@ -29,7 +29,7 @@ struct Sources
 : sourceId(sourceId)
 , bufferId(bufferId)
 , pos(pos)
-, buffer(buffer)
+, buffer(0)
 
 {}
 ALuint sourceId;	// id of source

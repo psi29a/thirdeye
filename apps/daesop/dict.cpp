@@ -39,7 +39,7 @@ int getResourceNumberFromNumberString(char *aResource) {
 		printf("Invalid resource number: %s!\n", aResource);
 		return (-1);
 	}
-	return loExtractedResourceNumber;
+	return (loExtractedResourceNumber);
 }
 
 /*
@@ -65,7 +65,7 @@ int getResourceNumberFromNameString(char *aResource,
 						loResourceNumberString);
 				return (-1);
 			}
-			return loResourceNumber;
+			return (loResourceNumber);
 		}
 	}
 	return (-1);
@@ -134,7 +134,8 @@ DICTENTRYPOINTER *readTheDictionary(int aResource, int aMaxDictionaryEntries,
 	// now read the dictionary entries
 	if (fseek(aResFile, loDictionaryStart, SEEK_SET) != 0) {
 		printf(
-				"Failure to set the file position %ld when reading the dictionary resource %d!\n", loDictionaryStart, aResource);
+				"Failure to set the file position %ld when reading the dictionary resource %d!\n",
+				loDictionaryStart, aResource);
 		free(loDictionaryArray);
 		return (NULL);
 	}
@@ -191,7 +192,7 @@ DICTENTRYPOINTER *readTheDictionary(int aResource, int aMaxDictionaryEntries,
 		}
 	}
 	//exit(1);
-	return loDictionaryArray;
+	return (loDictionaryArray);
 }
 
 /*
@@ -294,11 +295,11 @@ int compareAccordingToSecondNumber(void const *aFirstItem,
 
 	loTemp = aFirstNumber - aSecondNumber;
 	if (loTemp > 0)
-		return 1;
+		return (1);
 	else if (loTemp < 0)
 		return (-1);
 	else
-		return 0;
+		return (0);
 }
 
 /*
@@ -309,7 +310,7 @@ int compareAccordingToSecondString(void const *aFirstItem,
 	DICTENTRYPOINTER loFirstEntry = *(DICTENTRYPOINTER *) aFirstItem;
 	DICTENTRYPOINTER loSecondEntry = *(DICTENTRYPOINTER *) aSecondItem;
 
-	return strcmp(loFirstEntry->second, loSecondEntry->second);
+	return (strcmp(loFirstEntry->second, loSecondEntry->second));
 }
 
 /*
@@ -320,7 +321,7 @@ int compareAccordingToFirstString(void const *aFirstItem,
 	DICTENTRYPOINTER loFirstEntry = *(DICTENTRYPOINTER *) aFirstItem;
 	DICTENTRYPOINTER loSecondEntry = *(DICTENTRYPOINTER *) aSecondItem;
 
-	return strcmp(loFirstEntry->first, loSecondEntry->first);
+	return (strcmp(loFirstEntry->first, loSecondEntry->first));
 }
 
 /*
@@ -472,7 +473,7 @@ char *getResourceName(char *aResult, int aResourceNumber) {
 		if (loNumber == aResourceNumber) {
 			// result
 			strcpy(aResult, myResourceNamesDictionary[i]->first);
-			return aResult;
+			return (aResult);
 		}
 	}
 	printf("The resource name was not found for the resource number %d!\n",
@@ -491,7 +492,7 @@ DICTENTRYPOINTER *getResourceNameArray(FILE *aResFile,
 
 	if (myResourceNamesDictionary != NULL) {
 		// it was already read before
-		return myResourceNamesDictionary;
+		return (myResourceNamesDictionary);
 	}
 
 	// read it
@@ -523,7 +524,7 @@ DICTENTRYPOINTER *getResourceNameArray(FILE *aResFile,
 	sortDictionaryAccordingToSecondNumber(loResult);
 	printf("The reading of the resource name array finished.\n");
 	myResourceNamesDictionary = loResult;
-	return loResult;
+	return (loResult);
 }
 
 /*
@@ -538,7 +539,7 @@ DICTENTRYPOINTER *getRawImportArray(int aImportResourceNumber, FILE *aResFile,
 	loResult = readTheDictionary(aImportResourceNumber, MAX_IMPORT_TABLE_ITEMS,
 			aResFile, aDirectoryPointers, aImportResourceSize);
 	printf("The reading of the import array finished.\n");
-	return loResult;
+	return (loResult);
 }
 
 /*
@@ -674,7 +675,7 @@ IMPORTENTRYPOINTER *getFullImportArray(DICTENTRYPOINTER *aRawImportArray,
 		}
 	}
 	printf("Conversion of the raw import array finished.\n");
-	return loResult;
+	return (loResult);
 }
 
 /*
@@ -689,7 +690,7 @@ DICTENTRYPOINTER *getRawExportArray(int aExportResourceNumber, FILE *aResFile,
 	loResult = readTheDictionary(aExportResourceNumber, MAX_EXPORT_TABLE_ITEMS,
 			aResFile, aDirectoryPointers, aExportResourceSize);
 	printf("The reading of the export array finished.\n");
-	return loResult;
+	return (loResult);
 }
 
 /*
@@ -881,7 +882,7 @@ EXPORTENTRYPOINTER *getFullExportArray(DICTENTRYPOINTER *aRawExportArray,
 	}
 
 	printf("Conversion of the raw export array finished.\n");
-	return loResult;
+	return (loResult);
 }
 
 /*
@@ -1136,7 +1137,7 @@ DICTENTRYPOINTER *getSpecialArray(int aResourceNumber, FILE *aResFile,
 	loResult = readTheDictionary(aResourceNumber,
 			MAX_NUMBER_OF_DICTIONARY_ITEMS, aResFile, aDirectoryPointers, NULL);
 	printf("The reading of the special array finished.\n");
-	return loResult;
+	return (loResult);
 }
 
 /*
@@ -1194,7 +1195,7 @@ char* getMessageName(char *aResult, char *aExportTableString, FILE *aResFile,
 		}
 		if (loTestedMsgNumber == loNumber) {
 			strcpy(aResult, myMessageNamesDictionary[i]->first);
-			return aResult;
+			return (aResult);
 		}
 	}
 	printf("The message name was not found for the export table string: %s!\n",
@@ -1209,7 +1210,7 @@ DICTENTRYPOINTER *readMessageNamesDictionary(FILE *aResFile,
 		DIRPOINTER *aDirectoryPointers) {
 	// read the array with the message names (resource 4)
 	myMessageNamesDictionary = getSpecialArray(4, aResFile, aDirectoryPointers);
-	return myMessageNamesDictionary;
+	return (myMessageNamesDictionary);
 }
 
 /*
@@ -1335,7 +1336,7 @@ RESINFOPOINTER *getResourcesInformationTable(FILE *aResFile,
 
 		loResult[i] = loInfoEntry;
 	}
-	return loResult;
+	return (loResult);
 }
 
 /*
@@ -1362,7 +1363,7 @@ char* getSecondEntryForTheFirstEntry(DICTENTRYPOINTER *aResourceTable,
 				printf(
 						"getSecondEntryForTheFirstEntry(): the result buffer is too small for all the resource information of the resource %s!\n",
 						aResourceName);
-				return makeString(loResultBuffer);
+				return (makeString(loResultBuffer));
 			}
 			// add it to the result buffer
 			strcat(loResultBuffer, loSecond);
@@ -1389,7 +1390,7 @@ int getResourceType(FILE *aResFile, DIRPOINTER *aDirectoryPointers,
 	int i;
 
 	if (aResourceNumber < NUMBER_OF_SPECIAL_TABLES) {
-		return RESOURCE_TYPE_SPECIAL;
+		return (RESOURCE_TYPE_SPECIAL);
 	}
 
 	// info string 1
@@ -1463,20 +1464,20 @@ int getResourceType(FILE *aResFile, DIRPOINTER *aDirectoryPointers,
 		if (loResEntryHeader == NULL) {
 			printf("Unable to read the header for the resource number: %d!\n",
 					aResourceNumber);
-			return RESOURCE_TYPE_UNKNOWN;
+			return (RESOURCE_TYPE_UNKNOWN);
 		}
 		loDataSize = loResEntryHeader->data_size;
 		if (loDataSize < 2 && loDataSize > MAX_LENGTH_OF_TESTED_STRING_RESOURCE) {
 			// too short or too long to be string, silently ignore
 			free(loResEntryHeader);
-			return RESOURCE_TYPE_UNKNOWN;
+			return (RESOURCE_TYPE_UNKNOWN);
 		}
 		loBuffer = readResourceBinary(aResourceNumber, aResFile,
 				aDirectoryPointers, &loDummy);
 		if (loBuffer == NULL) {
 			printf("The reading of the resource %d failed!\n", aResourceNumber);
 			free(loResEntryHeader);
-			return RESOURCE_TYPE_UNKNOWN;
+			return (RESOURCE_TYPE_UNKNOWN);
 		}
 		if (loBuffer[0] == 'S' && loBuffer[1] == ':') {
 			// it is a string
@@ -1490,12 +1491,12 @@ int getResourceType(FILE *aResFile, DIRPOINTER *aDirectoryPointers,
 			}
 			free(loResEntryHeader);
 			free(loBuffer);
-			return RESOURCE_TYPE_STRING;
+			return (RESOURCE_TYPE_STRING);
 		}
 		free(loResEntryHeader);
 		free(loBuffer);
 	}
-	return RESOURCE_TYPE_UNKNOWN;
+	return (RESOURCE_TYPE_UNKNOWN);
 }
 
 /*

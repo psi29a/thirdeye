@@ -98,7 +98,7 @@ std::string RESOURCES::Resource::getDate(uint32_t uiDate) {
 			<< std::setw(2) << ((uiDate >> 5) & 0x001f) << ":"
 			<< std::setfill('0') << std::setw(2) << ((uiDate & 0x001f) << 1);
 
-	return out.str();
+	return (out.str());
 }
 
 void RESOURCES::Resource::showFileHeader(GlobalHeader fileHeader) {
@@ -117,7 +117,7 @@ uint16_t RESOURCES::Resource::getDirBlocks(file_source resourceFile,
 	uint32_t currentBlock = firstBlock;
 
 	if (mDirBlocks.size() > 0)	// if already initialized, return how big it is
-		return mDirBlocks.size();
+		return (mDirBlocks.size());
 
 	// loop through all our blocks
 	do {
@@ -131,14 +131,14 @@ uint16_t RESOURCES::Resource::getDirBlocks(file_source resourceFile,
 	} while ( currentBlock != 0 );
 		//std::cout << "blocks: " << mDirBlocks.size() << std::endl;
 
-	return mDirBlocks.size();
+	return (mDirBlocks.size());
 }
 
 uint16_t RESOURCES::Resource::getEntries(file_source resourceFile) {
 	uint16_t entries = 0;
 
 	if (mEntryHeaders.size() > 0)// if already initialized, return how big it is
-		return mEntryHeaders.size();
+		return (mEntryHeaders.size());
 
 	std::map<uint16_t, DirectoryBlock>::iterator block;
 	for (block = mDirBlocks.begin(); block != mDirBlocks.end(); block++) {
@@ -154,7 +154,7 @@ uint16_t RESOURCES::Resource::getEntries(file_source resourceFile) {
 			entries++;
 		}
 	}
-	return mEntryHeaders.size();
+	return (mEntryHeaders.size());
 }
 
 uint16_t RESOURCES::Resource::getAssets(file_source resourceFile) {
@@ -169,7 +169,7 @@ uint16_t RESOURCES::Resource::getAssets(file_source resourceFile) {
 	std::vector<uint8_t> blank(sizeof(uint8_t));
 
 	if (mAssets.size() > 0)	// if already initialized, return how big it is
-		return mAssets.size();
+		return (mAssets.size());
 
 	blank[0] = ' ';
 	// add info about the first 5 special tables
@@ -233,7 +233,7 @@ uint16_t RESOURCES::Resource::getAssets(file_source resourceFile) {
 				mEntryHeaders[id].data_attributes, mEntryHeaders[id].data_size,
 				start, offset, table1, table2, data);
 	}
-	return mAssets.size();
+	return (mAssets.size());
 }
 
 uint16_t RESOURCES::Resource::getTable(file_source resourceFile, uint16_t table,
@@ -282,7 +282,7 @@ uint16_t RESOURCES::Resource::getTable(file_source resourceFile, uint16_t table,
 					}
 				}
 			}
-	return counter / 2;
+	return (counter / 2);
 }
 
 std::string RESOURCES::Resource::searchDictionary(
@@ -290,34 +290,34 @@ std::string RESOURCES::Resource::searchDictionary(
 	std::map<std::string, Dictionary>::iterator found;
 	found = haystack.find(needle);
 	if (found != haystack.end())
-		return found->second.second;
+		return (found->second.second);
 	else
-		return "";
+		return ("");
 }
 
 std::vector<uint8_t> &RESOURCES::Resource::getAsset(std::string name) {
-	return getAsset(
-			boost::lexical_cast<uint16_t>(searchDictionary(mTable0, name)));
+	return (getAsset(
+			boost::lexical_cast<uint16_t>(searchDictionary(mTable0, name))));
 }
 
 std::vector<uint8_t> &RESOURCES::Resource::getAsset(uint16_t number) {
-	return mAssets[number].data;
+	return (mAssets[number].data);
 }
 
 std::string RESOURCES::Resource::getTableEntry(std::string name,
 		uint8_t table) {
-	return getTableEntry(
+	return (getTableEntry(
 			boost::lexical_cast<uint16_t>(searchDictionary(mTable0, name)),
-			table);
+			table));
 }
 
 std::string RESOURCES::Resource::getTableEntry(uint16_t number, uint8_t table) {
 	if (table == 1)
-		return mAssets[number].table1;
+		return (mAssets[number].table1);
 	else if (table == 2)
-		return mAssets[number].table2;
+		return (mAssets[number].table2);
 	else
-		throw std::runtime_error("Wrong table!");
+		throw(std::runtime_error("Wrong table!"));
 }
 
 void RESOURCES::Resource::showResources() {

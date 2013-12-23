@@ -106,7 +106,7 @@ bool parseOptions(int argc, char** argv, THIRDEYE::Engine& engine,
 	}
 
 	if (!run)
-		return false;
+		return (false);
 
 	// startup-settings
 	engine.setGameData(variables["game-data"].as<std::string>());
@@ -117,7 +117,7 @@ bool parseOptions(int argc, char** argv, THIRDEYE::Engine& engine,
 	engine.setSoundUsage(variables["nosound"].as<bool>());
 	engine.setScale(variables["scale"].as<uint16_t>());
 
-	return true;
+	return (true);
 }
 
 int main(int argc, char**argv) {
@@ -132,10 +132,10 @@ int main(int argc, char**argv) {
 		}
 	} catch (std::exception &e) {
 		std::cout << "\nERROR: " << e.what() << std::endl;
-		return 1;
+		return (1);
 	}
 
-	return 0;
+	return (0);
 }
 
 // Platform specific for Windows when there is no console built into the executable.

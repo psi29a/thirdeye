@@ -60,14 +60,29 @@ BYTE *output_fn;
 //
 
 BYTE is_namechar[256] =       // letters, digits, underscore
-		{ 	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 0-31
-			0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, // 32-63
-		    0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 1, // 64-95
-			0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, // 96-127
-			0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 128-159
-			0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 160-191
-			0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 192-223
-			0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0  // 224-255
+		{ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+				0, 0, 0, 0, 0, 0, 0, 0,
+				0, // 0-31
+				0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1,
+				1, 1, 1, 1, 1, 0, 0, 0, 0, 0,
+				0, // 32-63
+				0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+				1, 1, 1, 1, 1, 1, 0, 0, 0, 0,
+				1, // 64-95
+				0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+				1, 1, 1, 1, 1, 1, 0, 0, 0, 0,
+				0, // 96-127
+				0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+				0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+				0, // 128-159
+				0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+				0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+				0, // 160-191
+				0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+				0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+				0, // 192-223
+				0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+				0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0  // 224-255
 		};
 
 BYTE is_digit[256] =          // digits only
@@ -127,7 +142,7 @@ BYTE is_whitespace[256] =     // cr,lf,htab,vtab,ff,spc
 // 
 
 void *farmalloc(ULONG size) {
-	return malloc(size);
+	return (malloc(size));
 }
 
 void farfree(void *block) {
@@ -150,7 +165,7 @@ void mem_shutdown(void) {
 }
 
 ULONG mem_avail(void) {
-	return 0;   //farcoreleft();
+	return (0);   //farcoreleft();
 }
 
 void *mem_alloc(ULONG bytes) {
@@ -165,7 +180,7 @@ void *mem_alloc(ULONG bytes) {
 
 	checksum ^= (ULONG) *ptr;
 
-	return ptr;
+	return (ptr);
 }
 
 BYTE *str_alloc(BYTE *str) {
@@ -179,14 +194,13 @@ BYTE *str_alloc(BYTE *str) {
 		*ptr = 0;
 	}
 
-	return ptr;
+	return (ptr);
 }
 
-void mem_free(void *ptr)
-{
-   //checksum ^= (ULONG*) ptr;
+void mem_free(void *ptr) {
+	//checksum ^= (ULONG*) ptr;
 
-   farfree(ptr);
+	farfree(ptr);
 }
 //
 //  DOS services
@@ -196,14 +210,14 @@ void set_system_error(WORD errno) {
 }
 
 WORD get_system_error(void) {
-	return system_err;
+	return (system_err);
 }
 
 WORD clear_system_error(void) {
 	WORD i;
 	i = system_err;
 	system_err = 0;
-	return i;
+	return (i);
 }
 
 /***************************************************/
@@ -236,7 +250,7 @@ LONG file_size(BYTE *filename) {
 	handle = fopen(filename, O_RDONLY);
 	if (handle == NULL) {
 		system_err = FILE_NOT_FOUND;
-		return -1L;
+		return (-1L);
 	}
 
 	//len = filelength(handle);
@@ -247,7 +261,7 @@ LONG file_size(BYTE *filename) {
 		system_err = CANT_READ_FILE;
 
 	fclose(handle);
-	return len;
+	return (len);
 }
 
 /*************************************************************/
@@ -260,7 +274,7 @@ ULONG *read_file(BYTE *filename, void *dest) {
 	len = file_size(filename);
 	if (len == -1L) {
 		system_err = FILE_NOT_FOUND;
-		return NULL;
+		return (NULL);
 	}
 
 	buf = mem = (dest == NULL) ? (ULONG*) mem_alloc(len) : (ULONG*) dest;
@@ -269,7 +283,7 @@ ULONG *read_file(BYTE *filename, void *dest) {
 	if (handle == NULL) {
 		mem_free(mem);
 		system_err = FILE_NOT_FOUND;
-		return NULL;
+		return (NULL);
 	}
 
 	while (len >= 4096L) {
@@ -277,7 +291,7 @@ ULONG *read_file(BYTE *filename, void *dest) {
 		if (i != 4096) {
 			mem_free(mem);
 			system_err = CANT_READ_FILE;
-			return NULL;
+			return (NULL);
 		}
 		len -= 4096L;
 		buf = (ULONG*) add_ptr(buf, 4096L);
@@ -287,11 +301,11 @@ ULONG *read_file(BYTE *filename, void *dest) {
 	if (i != (UWORD) len) {
 		mem_free(mem);
 		system_err = CANT_READ_FILE;
-		return NULL;
+		return (NULL);
 	}
 
 	fclose(handle);
-	return mem;
+	return (mem);
 }
 
 /*************************************************************/
@@ -302,18 +316,18 @@ WORD write_file(BYTE *filename, void *buf, ULONG len) {
 	handle = fopen(filename, "w+b");
 	if (handle == NULL) {
 		system_err = CANT_WRITE_FILE;
-		return 0;
+		return (0);
 	}
 
 	while (len >= 4096L) {
 		i = fwrite(buf, 1, 4096, handle);
 		if (i == -1) {
 			system_err = CANT_WRITE_FILE;
-			return 0;
+			return (0);
 		}
 		if (i != 4096) {
 			system_err = DISK_FULL;
-			return 0;
+			return (0);
 		}
 		len -= 4096L;
 		buf = add_ptr(buf, 4096L);
@@ -322,16 +336,16 @@ WORD write_file(BYTE *filename, void *buf, ULONG len) {
 	i = fwrite(buf, 1, (UWORD) len, handle);
 	if (i == -1) {
 		system_err = CANT_WRITE_FILE;
-		return 0;
+		return (0);
 	}
 	if (i != (UWORD) len) {
 		system_err = DISK_FULL;
-		return 0;
+		return (0);
 	}
 
 	fclose(handle);
 
-	return 1;
+	return (1);
 }
 
 /*************************************************************/
@@ -342,18 +356,18 @@ WORD append_file(BYTE *filename, void *buf, ULONG len) {
 	handle = fopen(filename, "a+b");
 	if (handle == NULL) {
 		system_err = FILE_NOT_FOUND;
-		return 0;
+		return (0);
 	}
 
 	while (len >= 4096L) {
 		i = fwrite(buf, 1, 4096, handle);
 		if (i == -1) {
 			system_err = CANT_WRITE_FILE;
-			return 0;
+			return (0);
 		}
 		if (i != 4096) {
 			system_err = DISK_FULL;
-			return 0;
+			return (0);
 		}
 		len -= 4096L;
 		buf = add_ptr(buf, 4096L);
@@ -362,16 +376,16 @@ WORD append_file(BYTE *filename, void *buf, ULONG len) {
 	i = fwrite(buf, 1, (UWORD) len, handle);
 	if (i == -1) {
 		system_err = CANT_WRITE_FILE;
-		return 0;
+		return (0);
 	}
 	if (i != (UWORD) len) {
 		system_err = DISK_FULL;
-		return 0;
+		return (0);
 	}
 
 	fclose(handle);
 
-	return 1;
+	return (1);
 }
 
 /*************************************************************/
@@ -381,10 +395,10 @@ FILE *read_text_file(BYTE *filename) {
 	in = fopen(filename, "rt");
 	if (in == NULL) {
 		system_err = FILE_NOT_FOUND;
-		return NULL;
+		return (NULL);
 	}
 
-	return in;
+	return (in);
 }
 
 /*************************************************************/
@@ -397,20 +411,20 @@ WORD read_text_line(FILE *in, UWORD maxlen, BYTE *string) {
 			system_err = CANT_READ_FILE;
 		} else
 			system_err = EOF_REACHED;
-		return 0;
+		return (0);
 	}
 
 	len = strlen(str_buf);
 	if ((len == (sizeof(str_buf) - 1)) || (len >= maxlen)) {
 		system_err = LINE_TOO_LONG;
-		return 0;
+		return (0);
 	}
 
 	len = MIN(maxlen,len);
 	strncpy(string, str_buf, len);
 	string[len] = 0;
 
-	return len;
+	return (len);
 }
 
 /*************************************************************/
@@ -420,29 +434,29 @@ FILE *write_text_file(BYTE *filename) {
 	out = fopen(filename, "w+t");
 	if (out == NULL) {
 		system_err = CANT_WRITE_FILE;
-		return NULL;
+		return (NULL);
 	}
 
-	return out;
+	return (out);
 }
 
 /*************************************************************/
 WORD write_text_line(FILE *out, BYTE *string) {
 	if (!strlen(string))
-		return 1;
+		return (1);
 
 	if (fputs(string, out) == EOF) {
 		system_err = CANT_WRITE_FILE;
-		return 0;
+		return (0);
 	}
 
 	if (ferror(out)) {
 		clearerr(out);
 		system_err = CANT_WRITE_FILE;
-		return 0;
+		return (0);
 	}
 
-	return 1;
+	return (1);
 }
 
 /*************************************************************/
@@ -464,7 +478,7 @@ WORD verify_file(BYTE *filename) {
 
 	 return !out.x.cflag;       // return AX=0 if C=1
 	 */
-	return 0;
+	return (0);
 }
 
 /*************************************************************/
@@ -489,7 +503,7 @@ void *IFF_property(BYTE *name, UBYTE *file, LONG flen) {
 		flen -= len;
 	} while (flen > 12);
 
-	return NULL;
+	return (NULL);
 }
 
 /*************************************************************/
@@ -521,7 +535,7 @@ BYTE *temp_filename(BYTE *path) {
 		n = (n + 1) % 1000;
 	} while (verify_file(fn));
 
-	return fn;
+	return (fn);
 }
 
 /*************************************************************/
@@ -575,7 +589,7 @@ BYTE *ASCII_time(ULONG timestamp) {
 	sprintf(text, "%.02du-%s-%.04lu %.02du:%.02du:%.02du", day,
 			months[(UWORD) mon], yr, hr, min, sec);
 
-	return text;
+	return (text);
 }
 
 ULONG current_time(void) {
@@ -601,7 +615,7 @@ ULONG current_time(void) {
 
 	 return (ULONG) dtime + ((ULONG) ddate << 16);
 	 */
-	return 0;
+	return (0);
 }
 
 ULONG file_time(BYTE *filename) {
@@ -624,7 +638,7 @@ ULONG file_time(BYTE *filename) {
 
 	 return (ULONG) out.x.ecx + ((ULONG) out.x.edx << 16);
 	 */
-	return 0;
+	return (0);
 }
 
 WORD set_file_time(BYTE *filename, ULONG timestamp) {
@@ -637,7 +651,7 @@ WORD set_file_time(BYTE *filename, ULONG timestamp) {
 	 if (handle==NULL)
 	 {
 	 system_err = FILE_NOT_FOUND;
-	 return 0;
+	 return (0);
 	 }
 
 	 in.x.eax = 0x5701;
@@ -650,7 +664,7 @@ WORD set_file_time(BYTE *filename, ULONG timestamp) {
 
 	 return !out.x.cflag;
 	 */
-	return 0;
+	return (0);
 }
 
 /*************************************************************/
@@ -663,12 +677,12 @@ WORD log2(ULONG value) {
 
 	for (pwr = 1, n = 0; n < 32; n++) {
 		if (value == pwr)
-			return n;
+			return (n);
 
 		pwr <<= 1;
 	}
 
-	return -1;
+	return (-1);
 }
 
 /*************************************************************/
@@ -683,10 +697,10 @@ ULONG ascnum(BYTE *string, UWORD base) {
 				break;
 			}
 		if (j == base)
-			return total;
+			return (total);
 	}
 
-	return total;
+	return (total);
 }
 
 /*************************************************************/
@@ -697,7 +711,7 @@ BYTE *str(ULONG value) {
 	sprintf(temp, "%d", value);
 	//snprintf(target_string, size_of_target_string_in_bytes, "%d", source_int);
 
-	return str_alloc(temp);
+	return (str_alloc(temp));
 }
 
 /*************************************************************/
@@ -707,7 +721,7 @@ void set_verbosity(WORD v) {
 
 /*************************************************************/
 WORD verbose(void) {
-	return verbosity;
+	return (verbosity);
 }
 
 /*************************************************************/
@@ -767,7 +781,7 @@ void report(UWORD errtype, BYTE *prefix, BYTE *msg, ...) {
 
 /*************************************************************/
 ULONG error_message_count(void) {
-	return msgcnt[E_ERROR] + msgcnt[E_FATAL] + msgcnt[E_FAULT];
+	return (msgcnt[E_ERROR] + msgcnt[E_FATAL] + msgcnt[E_FAULT]);
 }
 
 /*************************************************************/
@@ -780,7 +794,7 @@ static BYTE *summarize(ULONG num) {
 		sprintf(buf, "%d", num);
 	//ultoa(num,buf,10);
 
-	return buf;
+	return (buf);
 }
 
 /*************************************************************/
@@ -795,13 +809,13 @@ void summary(void) {
 
 /*************************************************************/
 void * norm(void *farptr) {
-	return farptr;
+	return (farptr);
 }
 
 void * add_ptr(void *farptr, LONG offset) {
-	return (void *) (((ULONG*) farptr) + offset);
+	return ((void *) (((ULONG*) farptr) + offset));
 }
 
 LONG ptr_dif(void *sub2, void *sub1) {
-	return (LONG) ((ULONG*) sub2 - (ULONG*) sub1);
+	return ((LONG) ((ULONG*) sub2 - (ULONG*) sub1));
 }

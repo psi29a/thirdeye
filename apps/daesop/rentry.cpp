@@ -18,7 +18,7 @@ long getResourceEntryIndex(int aNumber, DIRPOINTER * aDirectoryPointers) {
 		printf(
 				"There is not enough directory blocks for the resource number %d!\n",
 				aNumber);
-		return -1;
+		return (-1);
 	}
 	loDirItemAttr =
 			aDirectoryPointers[loDirBlockNumber]->data_attributes[loNumberInDirBlock];
@@ -27,9 +27,9 @@ long getResourceEntryIndex(int aNumber, DIRPOINTER * aDirectoryPointers) {
 
 	if (loDirItemAttr == 1 || loDirItemIndex == 0) {
 		printf("The resource number %d is empty!\n", aNumber);
-		return -1;
+		return (-1);
 	}
-	return loDirItemIndex;
+	return (loDirItemIndex);
 }
 
 /*
@@ -45,14 +45,14 @@ struct RESEntryHeader *getResourceEntryHeader(int aNumber, FILE *aResFile,
 	loResourceEntryIndex = getResourceEntryIndex(aNumber, aDirectoryPointers);
 	if (loResourceEntryIndex == -1) {
 		// error
-		return NULL;
+		return (NULL);
 	}
 	if (fseek(aResFile, loResourceEntryIndex, SEEK_SET) != 0) {
 		// error
 		printf(
 				"Failure to set the file position %ld when getting a resource entry header!\n",
 				loResourceEntryIndex);
-		return NULL;
+		return (NULL);
 	}
 
 	loEntryHeaderSize = sizeof(struct RESEntryHeader);
@@ -61,17 +61,17 @@ struct RESEntryHeader *getResourceEntryHeader(int aNumber, FILE *aResFile,
 	if (loEntryHeaderSize != loReadSize) {
 		free(loEntryHeader);
 		printf("The resource entry header could not be read!\n");
-		return NULL;
+		return (NULL);
 	}
-	return loEntryHeader;
+	return (loEntryHeader);
 }
 
 /*
  Gets maximum number of resource entries (including empty ones)
  */
 int getMaxNumberOfResourceEntries(DIRPOINTER *aDirectoryPointers) {
-	return getNumberOfDirectoryBlocks(aDirectoryPointers)
-			* DIRECTORY_BLOCK_ITEMS;
+	return (getNumberOfDirectoryBlocks(aDirectoryPointers)
+			* DIRECTORY_BLOCK_ITEMS);
 }
 
 /*
@@ -93,7 +93,7 @@ unsigned char *readResourceBinary(int aResourceNumber, FILE *aResFile,
 			aDirectoryPointers);
 	if (loResourceEntryIndex == -1 || loResEntryHeader == NULL) {
 		printf("Unable to access the resource: %d\n", aResourceNumber);
-		return NULL;
+		return (NULL);
 	}
 	loResourceEntryIndex += sizeof(struct RESEntryHeader); // behind the header
 	loDataSize = loResEntryHeader->data_size;
@@ -111,7 +111,7 @@ unsigned char *readResourceBinary(int aResourceNumber, FILE *aResFile,
 				loDataSize, aResourceNumber);
 		printf("%s\n", loError);
 		free(loResEntryHeader);
-		return NULL;
+		return (NULL);
 	}
 	if (fseek(aResFile, loResourceEntryIndex, SEEK_SET) != 0) {
 		printf(
@@ -119,17 +119,17 @@ unsigned char *readResourceBinary(int aResourceNumber, FILE *aResFile,
 				loResourceEntryIndex);
 		free(loBuffer);
 		free(loResEntryHeader);
-		return NULL;
+		return (NULL);
 	}
 	loReadSize = fread(loBuffer, 1, loDataSize, aResFile);
 	if (loReadSize != loDataSize) {
 		printf("The resource could not be read!\n");
 		free(loBuffer);
 		free(loResEntryHeader);
-		return NULL;
+		return (NULL);
 	}
 	free(loResEntryHeader);
 	*aResourceLength = loDataSize;
-	return loBuffer;
+	return (loBuffer);
 }
 
