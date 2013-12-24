@@ -187,8 +187,9 @@ void THIRDEYE::Engine::go() {
 		mixer.update();		// update our sounds
 
 		if (isSecond) {
-			std::cout << "Wall Clock: " << std::dec << currentSecond << " average " << fps << "fps" << "\r"
-					<< std::flush;
+			std::cout << "Wall Clock: " << std::dec << currentSecond << " average " << fps << "fps"
+					//<< " sleeping for: " << (int) gfx.getSleep() << "ms "
+					<< "\r" << std::flush;
 			isSecond = false;
 			fps = 0;
 		}
@@ -199,9 +200,6 @@ void THIRDEYE::Engine::go() {
 		else {
 			SDL_Delay(fps/5);
 		}
-		//printf("Waiting 100...\n");
-		//update = false;
-		//SDL_Delay(100);      // Pause briefly before moving on to the next cycle.
 	}
 
 	// Save user settings
