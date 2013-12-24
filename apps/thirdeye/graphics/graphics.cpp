@@ -183,15 +183,15 @@ void GRAPHICS::Graphics::panDirection(uint8_t panDir,
 	// bonus texture?
 	SDL_Surface *bgFarLeftSurface;
 	std::vector<uint8_t> bBGFarLeftD;
-	if (!bgFarLeft.empty()){
+	if (!bgFarLeft.empty()) {
 		bgPanels = 3;
 		Bitmap bBGFarLeft(bgFarLeft);
 		bBGFarLeftD = bBGFarLeft[0];
 		bgFarLeftSurface = SDL_CreateRGBSurfaceFrom((void*) &bBGFarLeftD[0],
-				bBGFarLeft.getWidth(0), bBGFarLeft.getHeight(0), 8, bBGFarLeft.getWidth(0),
-				0, 0, 0, 0);
-		SDL_SetPaletteColors(bgFarLeftSurface->format->palette, mPalette->colors, 0,
-				256);
+				bBGFarLeft.getWidth(0), bBGFarLeft.getHeight(0), 8,
+				bBGFarLeft.getWidth(0), 0, 0, 0, 0);
+		SDL_SetPaletteColors(bgFarLeftSurface->format->palette,
+				mPalette->colors, 0, 256);
 	}
 
 	// create temporary surfaces
@@ -263,7 +263,7 @@ void GRAPHICS::Graphics::panDirection(uint8_t panDir,
 			SDL_MapRGB(mSurface[1]->format, 0, 0, 0));
 
 	mState = PAN_LEFT;
-	mCounter = mSurface[0]->w-320;
+	mCounter = mSurface[0]->w - 320;
 }
 
 void GRAPHICS::Graphics::scrollLeftIn(std::vector<uint8_t> bmp) {
@@ -278,6 +278,9 @@ void GRAPHICS::Graphics::scrollLeftIn(std::vector<uint8_t> bmp) {
 			256);
 	SDL_SetColorKey(mSurface[0], SDL_TRUE,
 			SDL_MapRGB(mSurface[0]->format, 0, 0, 0));
+
+	mCounter = mSurface[0]->w;
+	mState = SCROLL_LEFT;
 }
 
 void GRAPHICS::Graphics::update() {
@@ -296,7 +299,7 @@ void GRAPHICS::Graphics::update() {
 	// what are we playing now?
 	if (mState == NOOP and !mVideo.empty() and mVideoWait == 0) {
 		uint8_t index = mVideo.begin()->first;
-		//std::cout << "Playing mVideo: " << std::dec << (int) index << std::endl;
+		std::cout << "Playing mVideo: " << std::dec << (int) index << std::endl;
 		tuple<uint8_t, uint8_t, std::vector<uint8_t> > scene =
 				mVideo.begin()->second;
 		mVideoWait = scene.get<1>();
@@ -357,6 +360,20 @@ void GRAPHICS::Graphics::update() {
 			throw;
 		}
 		mVideo.erase(index);
+	}
+
+	// scroll to the left
+	if (mState == SCROLL_LEFT) {
+		uint8_t speed = 5;
+		SDL_Rect sRect = { mCounter, 0, speed, 115 };
+		SDL_Rect dRect = { mCounter, 0, speed, 115 };
+		SDL_BlitSurface(mSurface[0], &sRect, mScreen, &dRect);
+
+		if (mCounter == 0) {
+			mState = NOOP;
+			SDL_FreeSurface(mSurface[0]);
+		} else
+			mCounter -= speed;
 	}
 
 	// are we curtain-ing to another image?
