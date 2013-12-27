@@ -60,6 +60,8 @@ private:
 
 	void scrollLeft(std::vector<uint8_t> bmp);
 
+	void materializeImage(std::vector<uint8_t> bmp);
+
 	void playAnimation(std::vector<uint8_t> video);
 	void panDirection(uint8_t panDir, std::vector<uint8_t> bgRight,
 			std::vector<uint8_t> bgLeft, std::vector<uint8_t> bgFarLeft,
