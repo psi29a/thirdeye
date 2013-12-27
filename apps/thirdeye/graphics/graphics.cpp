@@ -283,6 +283,28 @@ void GRAPHICS::Graphics::scrollLeft(std::vector<uint8_t> bmp) {
 	mState = SCROLL_LEFT;
 }
 
+void GRAPHICS::Graphics::materializeImage(std::vector<uint8_t> bmp) {
+	Bitmap bImage(bmp);
+	std::vector<uint8_t> bImageD = bImage[0];
+	SDL_Surface *sImage = SDL_CreateRGBSurfaceFrom((void*) &bImageD[0],
+			bImage.getWidth(0), bImage.getHeight(0), 8, bImage.getWidth(0), 0,
+			0, 0, 0);
+	mSurface[0] = SDL_CreateRGBSurface(0, 320, 200, 8, 0, 0, 0, 0);
+	SDL_BlitSurface(sImage, NULL, mSurface[0], NULL);
+	SDL_SetPaletteColors(mSurface[0]->format->palette, mPalette->colors, 0,
+			256);
+	SDL_SetColorKey(mSurface[0], SDL_TRUE,
+			SDL_MapRGB(mSurface[0]->format, 0, 0, 0));
+
+	mSurface[1] = SDL_CreateRGBSurface(0, 320 , 200, 8, 0, 0, 0, 0);
+	SDL_SetPaletteColors(mSurface[1]->format->palette, mPalette->colors, 0,
+			256);
+	SDL_SetColorKey(mSurface[1], SDL_TRUE,
+			SDL_MapRGB(mSurface[1]->format, 0, 0, 0));
+
+
+	mState = MATERIALIZE;
+}
 
 void GRAPHICS::Graphics::update() {
 	bool updateScene = false;
@@ -354,13 +376,23 @@ void GRAPHICS::Graphics::update() {
 			drawCurtain(scene.get<2>());
 			break;
 		case MATERIALIZE: // TODO: real materialize
-			drawImage(scene.get<2>(), 0, 0, 0, true);
+			materializeImage(scene.get<2>());
 			break;
 		default:
 			std::cerr << "Case not yet implemented." << std::endl;
 			throw;
 		}
 		mVideo.erase(index);
+	}
+
+	// materialize image on to screen
+	if (mState == MATERIALIZE) {
+
+		if (mCounter == 0) {
+			mState = NOOP;
+			SDL_FreeSurface(mSurface[0]);
+			SDL_FreeSurface(mSurface[1]);
+		}
 	}
 
 	// scroll to the left
