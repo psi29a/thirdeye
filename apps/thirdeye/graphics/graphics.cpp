@@ -266,7 +266,7 @@ void GRAPHICS::Graphics::panDirection(uint8_t panDir,
 	mCounter = mSurface[0]->w - 320;
 }
 
-void GRAPHICS::Graphics::scrollLeftIn(std::vector<uint8_t> bmp) {
+void GRAPHICS::Graphics::scrollLeft(std::vector<uint8_t> bmp) {
 	Bitmap bImage(bmp);
 	std::vector<uint8_t> bImageD = bImage[0];
 	SDL_Surface *sImage = SDL_CreateRGBSurfaceFrom((void*) &bImageD[0],
@@ -282,6 +282,7 @@ void GRAPHICS::Graphics::scrollLeftIn(std::vector<uint8_t> bmp) {
 	mCounter = mSurface[0]->w;
 	mState = SCROLL_LEFT;
 }
+
 
 void GRAPHICS::Graphics::update() {
 	bool updateScene = false;
@@ -347,7 +348,7 @@ void GRAPHICS::Graphics::update() {
 			fadeIn();
 			break;
 		case SCROLL_LEFT:
-			scrollLeftIn(scene.get<2>());
+			scrollLeft(scene.get<2>());
 			break;
 		case DRAW_CURTAIN:
 			drawCurtain(scene.get<2>());

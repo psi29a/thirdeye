@@ -58,8 +58,7 @@ private:
 	void fadeIn();
 	void fadeOut();
 
-	void scrollLeftIn(std::vector<uint8_t> bmp);
-	void scrollLeftOut();
+	void scrollLeft(std::vector<uint8_t> bmp);
 
 	void playAnimation(std::vector<uint8_t> video);
 	void panDirection(uint8_t panDir, std::vector<uint8_t> bgRight,
