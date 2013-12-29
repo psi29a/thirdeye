@@ -6,6 +6,8 @@
 #include <boost/tokenizer.hpp>
 #include <boost/foreach.hpp>
 #include <boost/lexical_cast.hpp>
+#include <boost/random/uniform_int.hpp>
+
 
 #define SOFTWARE	0
 #define HARDWARE	1
@@ -296,13 +298,10 @@ void GRAPHICS::Graphics::materializeImage(std::vector<uint8_t> bmp) {
 	SDL_SetColorKey(mSurface[0], SDL_TRUE,
 			SDL_MapRGB(mSurface[0]->format, 0, 0, 0));
 
-	mSurface[1] = SDL_CreateRGBSurface(0, 320 , 200, 8, 0, 0, 0, 0);
-	SDL_SetPaletteColors(mSurface[1]->format->palette, mPalette->colors, 0,
-			256);
-	SDL_SetColorKey(mSurface[1], SDL_TRUE,
-			SDL_MapRGB(mSurface[1]->format, 0, 0, 0));
-
-
+	uint16_t size = mSurface[0]->w * mSurface[0]->h;
+	mBuffer.resize(size);
+	mBuffer.assign(size, 0x00);
+	mCounter = 100;
 	mState = MATERIALIZE;
 }
 
@@ -388,19 +387,36 @@ void GRAPHICS::Graphics::update() {
 	// materialize image on to screen
 	if (mState == MATERIALIZE) {
 
+		uint16_t size = mSurface[0]->w * mSurface[0]->h;
+		boost::random::uniform_int_distribution<> random(1,size);
+		std::cout << "Materializing... " << std::endl;
+
+		for (uint16_t i = 0; i < size / 100; i++){
+			uint16_t randomNumber = 0;
+			do {
+				randomNumber = random(rng);
+			} while ( mBuffer[randomNumber] == 0xFF );
+			mBuffer[randomNumber] = 0xFF;
+			SDL_Rect rect = { (randomNumber%mSurface[0]->w), (randomNumber/mSurface[0]->w), 1, 1 };
+			std::cout << "  In for loop... " << (int) i
+					<< " with random number: " << randomNumber
+					<< " @ (" << rect.x << "," << rect.y << ") "
+					<< std::endl;
+			SDL_BlitSurface(mSurface[0], &rect, mScreen, &rect);
+		}
+
 		if (mCounter == 0) {
 			mState = NOOP;
 			SDL_FreeSurface(mSurface[0]);
-			SDL_FreeSurface(mSurface[1]);
-		}
+		} else
+			mCounter--;
 	}
 
 	// scroll to the left
 	if (mState == SCROLL_LEFT) {
 		uint8_t speed = 5;
-		SDL_Rect sRect = { mCounter, 0, speed, 115 };
-		SDL_Rect dRect = { mCounter, 0, speed, 115 };
-		SDL_BlitSurface(mSurface[0], &sRect, mScreen, &dRect);
+		SDL_Rect rect = { mCounter, 0, speed, 115 };
+		SDL_BlitSurface(mSurface[0], &rect, mScreen, &rect);
 
 		if (mCounter == 0) {
 			mState = NOOP;
