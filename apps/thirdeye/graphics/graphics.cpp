@@ -300,8 +300,9 @@ void GRAPHICS::Graphics::materializeImage(std::vector<uint8_t> bmp) {
 
 	uint16_t size = mSurface[0]->w * mSurface[0]->h;
 	mBuffer.resize(size);
+	mBuffer.clear();
 	mBuffer.assign(size, 0x00);
-	mCounter = 100;
+	mCounter = 500;
 	mState = MATERIALIZE;
 }
 
@@ -389,21 +390,17 @@ void GRAPHICS::Graphics::update() {
 
 		uint16_t size = mSurface[0]->w * mSurface[0]->h;
 		boost::random::uniform_int_distribution<> random(1,size);
-		std::cout << "Materializing... " << std::endl;
 
-		for (uint16_t i = 0; i < size / 100; i++){
+		for (uint16_t i = 0; i < size/10 ; i++){
 			uint16_t randomNumber = 0;
-			do {
-				randomNumber = random(rng);
-			} while ( mBuffer[randomNumber] == 0xFF );
-			mBuffer[randomNumber] = 0xFF;
+
+			std::vector<uint8_t>::iterator it;
+			randomNumber = random(rng);
+
 			SDL_Rect rect = { (randomNumber%mSurface[0]->w), (randomNumber/mSurface[0]->w), 1, 1 };
-			std::cout << "  In for loop... " << (int) i
-					<< " with random number: " << randomNumber
-					<< " @ (" << rect.x << "," << rect.y << ") "
-					<< std::endl;
 			SDL_BlitSurface(mSurface[0], &rect, mScreen, &rect);
 		}
+
 
 		if (mCounter == 0) {
 			mState = NOOP;

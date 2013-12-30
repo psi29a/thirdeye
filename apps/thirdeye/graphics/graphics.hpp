@@ -54,7 +54,8 @@ private:
 	std::vector<uint8_t> mBuffer;
 	std::map<uint8_t, SDL_Surface*> mSurface;
 	std::map<uint8_t, tuple<uint8_t, uint8_t, std::vector<uint8_t> > > mVideo;
-	boost::random::mt11213b rng;
+	boost::random::mt19937 rng;
+	std::map<uint16_t, uint16_t> mBitmap;
 
 	int zoomSurfaceRGBA(SDL_Surface * src, SDL_Surface * dst);
 

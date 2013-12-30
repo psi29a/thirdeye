@@ -184,7 +184,7 @@ sequence RESOURCES::GFFI::getSequence() {
 
 	if (filename == "INTRO.GFF") { // Intro sequence
 		sequences[i++] = boost::make_tuple(SET_PAL, 0, mFiles["PAL"][1].data[0]);
-/*		sequences[i++] = boost::make_tuple(FADE_IN, 12, mFiles["BMP"][1].data[0]);
+		sequences[i++] = boost::make_tuple(FADE_IN, 12, mFiles["BMP"][1].data[0]);
 		sequences[i++] = boost::make_tuple(SCROLL_LEFT, 8, mFiles["BMP"][2].data[0]);
 		sequences[i++] = boost::make_tuple(SCROLL_LEFT, 2, mFiles["BMP"][1].data[0]);
 		sequences[i++] = boost::make_tuple(SCROLL_LEFT, 8, mFiles["BMP"][3].data[0]);
@@ -204,7 +204,7 @@ sequence RESOURCES::GFFI::getSequence() {
 		sequences[i++] = boost::make_tuple(PAN_LEFT, 0, mFiles["BMP"][5].data[0]);
 		sequences[i++] = boost::make_tuple(PAN_LEFT, 0, mFiles["BMP"][16].data[0]);	// bonus panel
 		sequences[i++] = boost::make_tuple(PAN_LEFT, 2, mFiles["BMP"][6].data[0]);	// 2 forground panels
-		sequences[i++] = boost::make_tuple(PAN_LEFT, 15, mFiles["BMP"][7].data[0]);	// wait 10 seconds
+		sequences[i++] = boost::make_tuple(PAN_LEFT, 12, mFiles["BMP"][7].data[0]);	// wait 10 seconds
 		sequences[i++] = boost::make_tuple(DRAW_CURTAIN, 2, mFiles["BMP"][8].data[0]);
 		sequences[i++] = boost::make_tuple(DISP_BMA, 0, mFiles["BMA"][4].data[1]);
 		sequences[i++] = boost::make_tuple(DISP_BMA, 0, mFiles["BMA"][4].data[2]);
@@ -213,12 +213,12 @@ sequence RESOURCES::GFFI::getSequence() {
 		sequences[i++] = boost::make_tuple(DISP_BMA, 0, mFiles["BMA"][5].data[3]);
 		sequences[i++] = boost::make_tuple(DISP_BMA, 0, mFiles["BMA"][5].data[4]);
 		sequences[i++] = boost::make_tuple(DISP_BMA, 2, mFiles["BMA"][5].data[5]);
-*/		sequences[i++] = boost::make_tuple(DISP_BMP, 0, mFiles["BMP"][9].data[0]);
-		sequences[i++] = boost::make_tuple(DISP_OVERLAY, 5, mFiles["BMP"][19].data[0]);
-		sequences[i++] = boost::make_tuple(MATERIALIZE, 5, mFiles["BMP"][10].data[0]);
-		sequences[i++] = boost::make_tuple(MATERIALIZE, 5, mFiles["BMP"][11].data[0]);
-		sequences[i++] = boost::make_tuple(DISP_OVERLAY, 5, mFiles["BMP"][20].data[0]);
-		sequences[i++] = boost::make_tuple(MATERIALIZE, 5, mFiles["BMP"][12].data[0]);
+		sequences[i++] = boost::make_tuple(DISP_BMP, 0, mFiles["BMP"][9].data[0]);
+		sequences[i++] = boost::make_tuple(DISP_OVERLAY, 4, mFiles["BMP"][19].data[0]);
+		sequences[i++] = boost::make_tuple(MATERIALIZE, 4, mFiles["BMP"][10].data[0]);
+		sequences[i++] = boost::make_tuple(MATERIALIZE, 4, mFiles["BMP"][11].data[0]);
+		sequences[i++] = boost::make_tuple(DISP_OVERLAY, 4, mFiles["BMP"][20].data[0]);
+		sequences[i++] = boost::make_tuple(MATERIALIZE, 4, mFiles["BMP"][12].data[0]);
 		sequences[i++] = boost::make_tuple(DISP_BMA, 0, mFiles["BMA"][6].data[1]);
 		sequences[i++] = boost::make_tuple(DISP_BMA, 0, mFiles["BMA"][6].data[2]);
 		sequences[i++] = boost::make_tuple(DISP_OVERLAY, 1, mFiles["BMP"][13].data[0]);
