@@ -7,7 +7,7 @@
 #include <boost/foreach.hpp>
 #include <boost/lexical_cast.hpp>
 #include <boost/random/uniform_int.hpp>
-
+#include <boost/random/mersenne_twister.hpp>
 
 #define SOFTWARE	0
 #define HARDWARE	1
@@ -389,6 +389,7 @@ void GRAPHICS::Graphics::update() {
 	if (mState == MATERIALIZE) {
 
 		uint16_t size = mSurface[0]->w * mSurface[0]->h;
+		boost::random::mt19937 rng;
 		boost::random::uniform_int_distribution<> random(1,size);
 
 		for (uint16_t i = 0; i < size/10 ; i++){
