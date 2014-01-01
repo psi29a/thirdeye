@@ -390,7 +390,7 @@ void GRAPHICS::Graphics::update() {
 
 		uint16_t size = mSurface[0]->w * mSurface[0]->h;
 		boost::mt19937 rng;
-		boost::random::uniform_int_distribution<> random(1,size);
+		boost::uniform_int<> random(1,size);
 
 		for (uint16_t i = 0; i < size/10 ; i++){
 			uint16_t randomNumber = 0;
