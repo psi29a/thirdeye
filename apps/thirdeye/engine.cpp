@@ -77,18 +77,21 @@ void THIRDEYE::Engine::go() {
 	//std::vector<uint8_t> &font3 = resource.getAsset("Ornate font");
 
 	//std::vector<uint8_t> &bmp = resource.getAsset("Backdrop");
+	std::vector<uint8_t> &bmp = resource.getAsset("Menu shapes");
 	std::vector<uint8_t> &icons = resource.getAsset("Icons");
 	//std::vector<uint8_t> &marble = resource.getAsset("Marble walls");
-	std::vector<uint8_t> &basePalette = resource.getAsset("Fixed palette");
+	//std::vector<uint8_t> &basePalette = resource.getAsset("Fixed palette");
+	std::vector<uint8_t> &basePalette = resource.getAsset("Title palette");
 	//std::vector<uint8_t> &subPalette = resource.getAsset("Marble palette");
 	std::string text = resource.getTableEntry("Marble palette", 1);
 
 	gfx.loadPalette(basePalette);
 	gfx.loadMouse(icons, 0);
 
-	/*
-	 gfx.drawImage(bmp, 0, 0, false);
+	gfx.drawImage(bmp, 0, 0, 0, true);
 
+
+	 /*
 	 gfx.loadPalette(basePalette, subPalette, text);
 	 gfx.drawImage(marble, 18, 0, 0, true);
 	 gfx.drawImage(marble, 0, 0, 0, true);
@@ -104,10 +107,11 @@ void THIRDEYE::Engine::go() {
 	uint32_t currentSecond = 0;	// our wall clock with 1s resolution
 	uint32_t fps = 0;	// number of fps (iterations of main loop)
 
-	// get our intro cinematic
+	// get our intro cinematic, set state and play
 	RESOURCES::GFFI introVideo(mGameData.remove_leaf() /= "INTRO.GFF");
 	mixer.playMusic(introVideo.getMusic());
 	gfx.playVideo(introVideo.getSequence());
+	uint8_t state = STATE_INTRO;
 
 	// Start the main rendering loop
 	SDL_Event event;
@@ -115,6 +119,7 @@ void THIRDEYE::Engine::go() {
 	bool isSecond = false;
 	while (!done)  // Enter main loop.
 	{
+		// get our clock
 		clock = SDL_GetTicks();
 		fps++;
 		if (clock / 1000 > currentSecond) {
@@ -123,6 +128,14 @@ void THIRDEYE::Engine::go() {
 			isSecond = true;
 		}
 
+		// what state are we in
+		switch (state) {
+			case STATE_INTRO: // change state to menu when finished playing intro
+				if ( !gfx.isVideoPlaying() )
+					state = STATE_MENU;
+		}
+
+		// poll our inputs
 		while (SDL_PollEvent(&event)) {
 			switch (event.type) {
 			// this is the window x being clicked.
@@ -154,7 +167,11 @@ void THIRDEYE::Engine::go() {
 				switch (event.key.keysym.sym) {
 				// if it's the escape key quit
 				case SDLK_ESCAPE:
-					done = true;
+					if ( state == STATE_INTRO ){
+						gfx.stopVideo();
+						mixer.stopMusic();
+					} else
+						done = true;
 					break;
 				case SDLK_w:
 					mixer.playSound(snd);
@@ -182,6 +199,7 @@ void THIRDEYE::Engine::go() {
 				break;
 			} // end of event switch
 		} // end pool loop
+
 
 		gfx.update();		// update our screen
 		mixer.update();		// update our sounds

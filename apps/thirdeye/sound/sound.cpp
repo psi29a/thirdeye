@@ -2,9 +2,10 @@
 
 /* Define this to the location of the wildmidi config file */
 #define WILDMIDI_CFG "/etc/wildmidi/wildmidi.cfg"
-#define MUSIC_RATE 32072
-#define SOUND_RATE 8000
+#define MUSIC_RATE 	32072
+#define SOUND_RATE 	8000
 #define MAX_SOURCES 16
+#define MUSIC_ID	0
 
 #include <iostream>
 
@@ -43,19 +44,22 @@ void MIXER::Mixer::update() {
 	}
 }
 
+// is there music loaded? If so, we stop and unload.
+void MIXER::Mixer::stopMusic() {
+	alSourceStop(mSources[MUSIC_ID].sourceId);				// stop music
+	alSourcei(mSources[MUSIC_ID].sourceId, AL_BUFFER, 0); // unload buffer from source
+	alDeleteBuffers(1, &mSources[MUSIC_ID].bufferId);	// delete buffer itself
+	mSources[MUSIC_ID].buffer.clear();			// purge data
+	mSources[MUSIC_ID].bufferId = 0;
+	//std::cout << "Error: " << alGetError() << std::endl;
+}
+
 void MIXER::Mixer::playMusic(std::vector<uint8_t> xmidi) {
 	std::string config_file = WILDMIDI_CFG;
 	uint32_t mixer_options = 0;
 	uint8_t music_volume = 100;
-	uint8_t musicId = 0;
 
-	// is there music loaded? If so, we stop and unload.
-	alSourceStop(mSources[musicId].sourceId);				// stop music
-	alSourcei(mSources[musicId].sourceId, AL_BUFFER, 0); // unload buffer from source
-	alDeleteBuffers(1, &mSources[musicId].bufferId);	// delete buffer itself
-	mSources[musicId].buffer.clear();			// purge data
-	mSources[musicId].bufferId = 0;
-	//std::cout << "Error: " << alGetError() << std::endl;
+	stopMusic(); // stop any currently playing music
 
 	DataSource *xmids = new BufferDataSource(reinterpret_cast<char*>(&xmidi[0]),
 			xmidi.size());
@@ -83,27 +87,27 @@ void MIXER::Mixer::playMusic(std::vector<uint8_t> xmidi) {
 	void *midi_ptr = WildMidi_OpenBuffer(&midi[0], midi.size());
 	struct _WM_Info * wm_info = WildMidi_GetInfo(midi_ptr);
 
-	mSources[musicId].buffer.resize(wm_info->approx_total_samples * 4);
+	mSources[MUSIC_ID].buffer.resize(wm_info->approx_total_samples * 4);
 
 	WildMidi_GetOutput(midi_ptr,
-			reinterpret_cast<char*>(&mSources[musicId].buffer[0]),
-			mSources[musicId].buffer.size());
+			reinterpret_cast<char*>(&mSources[MUSIC_ID].buffer[0]),
+			mSources[MUSIC_ID].buffer.size());
 	WildMidi_Close(midi_ptr);
 	WildMidi_Shutdown();
 	//std::cout << "done converting xmi to midi" << std::endl;
 
 	// play our new music
-	alGenBuffers(1, &mSources[musicId].bufferId);
-	alBufferData(mSources[musicId].bufferId, AL_FORMAT_STEREO16,
-			&mSources[musicId].buffer[0], mSources[musicId].buffer.size(),
+	alGenBuffers(1, &mSources[MUSIC_ID].bufferId);
+	alBufferData(mSources[MUSIC_ID].bufferId, AL_FORMAT_STEREO16,
+			&mSources[MUSIC_ID].buffer[0], mSources[MUSIC_ID].buffer.size(),
 			MUSIC_RATE);
-	alSourcei(mSources[musicId].sourceId, AL_BUFFER,
-			mSources[musicId].bufferId);
-	alSourcePlay(mSources[musicId].sourceId);
+	alSourcei(mSources[MUSIC_ID].sourceId, AL_BUFFER,
+			mSources[MUSIC_ID].bufferId);
+	alSourcePlay(mSources[MUSIC_ID].sourceId);
 
 	/*
-	 std::cout << mSources[musicId].sourceId << " " << mSources[musicId].bufferId << " "
-	 << mSources[musicId].buffer.size() << " "
+	 std::cout << mSources[MUSIC_ID].sourceId << " " << mSources[MUSIC_ID].bufferId << " "
+	 << mSources[MUSIC_ID].buffer.size() << " "
 	 << alGetError()
 	 << std::endl;
 	 */

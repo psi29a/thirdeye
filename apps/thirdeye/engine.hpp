@@ -18,9 +18,18 @@
 
 #include <alsa/asoundlib.h>
 
+// Types of games
 #define GAME_UNKN	0
 #define GAME_EOB3	1
 #define GAME_HACK	2
+
+// Game states
+#define STATE_INTRO		0
+#define STATE_MENU		1
+#define	STATE_CONTINUE	2
+#define STATE_NEW_PARTY	3
+#define STATE_SUMMON	4
+#define STATE_ABANDON	5
 
 namespace THIRDEYE {
 // Main engine class, that brings together all the components of Thirdeye

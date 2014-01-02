@@ -137,7 +137,7 @@ void GRAPHICS::Graphics::playVideo(sequence video) {
 }
 
 bool GRAPHICS::Graphics::isVideoPlaying() {
-	return (mVideo.empty());
+	return ( !mVideo.empty() );
 }
 
 void GRAPHICS::Graphics::stopVideo() {
