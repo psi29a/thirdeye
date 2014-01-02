@@ -59,6 +59,7 @@ public:
 	virtual ~Mixer();
 	void update();
 	void playMusic(std::vector<uint8_t> xmidi);
+	void stopMusic();
 	void playSound(std::vector<uint8_t> snd);
 	void list_audio_devices(const ALCchar *devices);
 };
