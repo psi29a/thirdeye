@@ -348,7 +348,7 @@ void GRAPHICS::Graphics::update() {
 	// what are we playing now?
 	if (mState == NOOP and !mVideo.empty() and mVideoWait == 0) {
 		uint8_t index = mVideo.begin()->first;
-		std::cout << "Playing mVideo: " << std::dec << (int) index << std::endl;
+		//std::cout << "Playing mVideo: " << std::dec << (int) index << std::endl;
 		tuple<uint8_t, uint8_t, std::vector<uint8_t> > scene =
 				mVideo.begin()->second;
 		mVideoWait = scene.get<1>();
