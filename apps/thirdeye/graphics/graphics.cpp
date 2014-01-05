@@ -537,13 +537,10 @@ void GRAPHICS::Graphics::update() {
 		float percentage = (float) mCounter / 100;
 		uint16_t width = mSurface[0]->w * percentage;
 		uint16_t height = mSurface[0]->h * percentage;
-
 		uint8_t x = mScreen->w / 2 - percentage * mScreen->w / 2;
 		uint8_t y = mScreen->h / 2 - percentage * mScreen->h / 2;
 		SDL_Rect rect = { x, y, width, height };
 
-		std::cout << std::dec << "zoom counter: " << mCounter << " "
-				<< (int) width << " " << (int) height << std::endl;
 		SDL_Surface *scaledImage = SDL_CreateRGBSurface(0, width, height, 32, 0,
 				0, 0, 0);
 		zoomSurfaceRGBA(mSurface[0], scaledImage);
