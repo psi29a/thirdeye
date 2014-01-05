@@ -132,16 +132,43 @@ void GRAPHICS::Graphics::drawImage(std::vector<uint8_t> &bmp, uint16_t index,
 	SDL_FreeSurface(surface);
 }
 
+void GRAPHICS::Graphics::zoomIntoImage(std::vector<uint8_t> &bmp) {
+	mState = ZOOM_INTO;
+	mCounter = 20;
+	mBuffer = bmp;
+
+	mSurface[0] = SDL_CreateRGBSurface(0, 320, 200, 32, 0, 0, 0, 0);
+	SDL_BlitSurface(mSurface[0], NULL, mScreen, NULL);
+
+	Bitmap image(bmp);
+	std::vector<uint8_t> imageData = image[0];
+	SDL_Surface *surface = SDL_CreateRGBSurfaceFrom((void*) &imageData[0],
+			image.getWidth(0), image.getHeight(0), 8, image.getWidth(0), 0, 0,
+			0, 0);
+	SDL_SetPaletteColors(surface->format->palette, mPalette->colors, 0,
+			256);
+
+	SDL_BlitSurface(surface, NULL, mSurface[0], NULL);
+	SDL_FreeSurface(surface);
+}
+
 void GRAPHICS::Graphics::playVideo(sequence video) {
 	mVideo = video;
 }
 
 bool GRAPHICS::Graphics::isVideoPlaying() {
-	return ( !mVideo.empty() );
+	return (!mVideo.empty());
 }
 
 void GRAPHICS::Graphics::stopVideo() {
 	mVideo.clear();
+	mBuffer.clear();
+	mBitmap.clear();
+	mState = NOOP;
+	mFrames = 0;
+	mCounter = 0;
+	mAlpha = 0;
+	SDL_SetSurfaceAlphaMod(mScreen, SDL_ALPHA_OPAQUE);
 }
 
 void GRAPHICS::Graphics::playAnimation(std::vector<uint8_t> animationData) {
@@ -390,18 +417,18 @@ void GRAPHICS::Graphics::update() {
 
 		uint16_t size = mSurface[0]->w * mSurface[0]->h;
 		boost::mt19937 rng;
-		boost::uniform_int<> random(1,size);
+		boost::uniform_int<> random(1, size);
 
-		for (uint16_t i = 0; i < size/10 ; i++){
+		for (uint16_t i = 0; i < size / 10; i++) {
 			uint16_t randomNumber = 0;
 
 			std::vector<uint8_t>::iterator it;
 			randomNumber = random(rng);
 
-			SDL_Rect rect = { (randomNumber%mSurface[0]->w), (randomNumber/mSurface[0]->w), 1, 1 };
+			SDL_Rect rect = { (randomNumber % mSurface[0]->w), (randomNumber
+					/ mSurface[0]->w), 1, 1 };
 			SDL_BlitSurface(mSurface[0], &rect, mScreen, &rect);
 		}
-
 
 		if (mCounter == 0) {
 			mState = NOOP;
@@ -491,7 +518,6 @@ void GRAPHICS::Graphics::update() {
 		SDL_SetSurfaceAlphaMod(mScreen, mAlpha);
 		//printf("Applying alpha: %d  \n", mAlpha);
 		mAlpha += 10;
-
 		mSleep = 100;
 	}
 
@@ -506,6 +532,27 @@ void GRAPHICS::Graphics::update() {
 	 mAlpha -= 10;
 	 }
 	 */
+
+	// zoom into a image
+	if (mState == ZOOM_INTO){
+		uint16_t width = 320/mCounter;
+		uint16_t height = 200/mCounter;
+		std::cout << std::dec
+				<< "zoom counter: " << mCounter
+				<< " " << (int) width
+				<< " " << (int) height
+				<< std::endl;
+		SDL_Surface *scaledImage = SDL_CreateRGBSurface(0, width, height, 32, 0, 0, 0, 0);
+		zoomSurfaceRGBA(mSurface[0], scaledImage);
+		SDL_BlitSurface(scaledImage, NULL, mScreen, NULL);
+		SDL_FreeSurface(scaledImage);
+		if (mCounter == 1) {
+			mState = NOOP;
+			SDL_FreeSurface(mSurface[0]);
+		} else
+			mCounter--;
+		mSleep = 1000;
+	}
 
 	// generate texture from our screen surface
 	SDL_Texture *texture = SDL_CreateTextureFromSurface(mRenderer, mScreen);
