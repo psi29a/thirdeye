@@ -134,7 +134,7 @@ void GRAPHICS::Graphics::drawImage(std::vector<uint8_t> &bmp, uint16_t index,
 
 void GRAPHICS::Graphics::zoomIntoImage(std::vector<uint8_t> &bmp) {
 	mState = ZOOM_INTO;
-	mCounter = 20;
+	mCounter = 0;
 	mBuffer = bmp;
 
 	mSurface[0] = SDL_CreateRGBSurface(0, 320, 200, 32, 0, 0, 0, 0);
@@ -145,8 +145,7 @@ void GRAPHICS::Graphics::zoomIntoImage(std::vector<uint8_t> &bmp) {
 	SDL_Surface *surface = SDL_CreateRGBSurfaceFrom((void*) &imageData[0],
 			image.getWidth(0), image.getHeight(0), 8, image.getWidth(0), 0, 0,
 			0, 0);
-	SDL_SetPaletteColors(surface->format->palette, mPalette->colors, 0,
-			256);
+	SDL_SetPaletteColors(surface->format->palette, mPalette->colors, 0, 256);
 
 	SDL_BlitSurface(surface, NULL, mSurface[0], NULL);
 	SDL_FreeSurface(surface);
@@ -402,7 +401,7 @@ void GRAPHICS::Graphics::update() {
 		case DRAW_CURTAIN:
 			drawCurtain(scene.get<2>());
 			break;
-		case MATERIALIZE: // TODO: real materialize
+		case MATERIALIZE:
 			materializeImage(scene.get<2>());
 			break;
 		default:
@@ -534,24 +533,28 @@ void GRAPHICS::Graphics::update() {
 	 */
 
 	// zoom into a image
-	if (mState == ZOOM_INTO){
-		uint16_t width = 320/mCounter;
-		uint16_t height = 200/mCounter;
-		std::cout << std::dec
-				<< "zoom counter: " << mCounter
-				<< " " << (int) width
-				<< " " << (int) height
-				<< std::endl;
-		SDL_Surface *scaledImage = SDL_CreateRGBSurface(0, width, height, 32, 0, 0, 0, 0);
+	if (mState == ZOOM_INTO) {
+		float percentage = (float) mCounter / 100;
+		uint16_t width = mSurface[0]->w * percentage;
+		uint16_t height = mSurface[0]->h * percentage;
+
+		uint8_t x = mScreen->w / 2 - percentage * mScreen->w / 2;
+		uint8_t y = mScreen->h / 2 - percentage * mScreen->h / 2;
+		SDL_Rect rect = { x, y, width, height };
+
+		std::cout << std::dec << "zoom counter: " << mCounter << " "
+				<< (int) width << " " << (int) height << std::endl;
+		SDL_Surface *scaledImage = SDL_CreateRGBSurface(0, width, height, 32, 0,
+				0, 0, 0);
 		zoomSurfaceRGBA(mSurface[0], scaledImage);
-		SDL_BlitSurface(scaledImage, NULL, mScreen, NULL);
+		SDL_BlitSurface(scaledImage, NULL, mScreen, &rect);
 		SDL_FreeSurface(scaledImage);
-		if (mCounter == 1) {
+		if (mCounter == 100) {
 			mState = NOOP;
 			SDL_FreeSurface(mSurface[0]);
 		} else
-			mCounter--;
-		mSleep = 1000;
+			mCounter++;
+		mSleep = 10;
 	}
 
 	// generate texture from our screen surface
