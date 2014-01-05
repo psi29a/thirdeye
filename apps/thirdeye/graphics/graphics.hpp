@@ -29,6 +29,7 @@ using boost::tuples::tuple;
 #define DRAW_CURTAIN	7
 #define MATERIALIZE 	8
 #define DISP_OVERLAY	9
+#define ZOOM_INTO		10
 
 typedef std::map<uint8_t, tuple<uint8_t, uint8_t, std::vector<uint8_t> > > sequence;
 
@@ -82,6 +83,8 @@ public:
 	void playVideo(sequence);
 	void stopVideo();
 	bool isVideoPlaying();
+
+	void zoomIntoImage(std::vector<uint8_t> &bmp);
 
 	void loadPalette(std::vector<uint8_t> &basePal, bool isRes = true);
 	void loadPalette(std::vector<uint8_t> &basePal,

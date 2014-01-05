@@ -77,7 +77,7 @@ void THIRDEYE::Engine::go() {
 	//std::vector<uint8_t> &font3 = resource.getAsset("Ornate font");
 
 	//std::vector<uint8_t> &bmp = resource.getAsset("Backdrop");
-	std::vector<uint8_t> &bmp = resource.getAsset("Menu shapes");
+	//std::vector<uint8_t> &bmp = resource.getAsset("Menu shapes");
 	std::vector<uint8_t> &icons = resource.getAsset("Icons");
 	//std::vector<uint8_t> &marble = resource.getAsset("Marble walls");
 	//std::vector<uint8_t> &basePalette = resource.getAsset("Fixed palette");
@@ -88,7 +88,7 @@ void THIRDEYE::Engine::go() {
 	gfx.loadPalette(basePalette);
 	gfx.loadMouse(icons, 0);
 
-	gfx.drawImage(bmp, 0, 0, 0, true);
+	//gfx.drawImage(bmp, 0, 0, 0, true);
 
 
 	 /*
@@ -131,8 +131,14 @@ void THIRDEYE::Engine::go() {
 		// what state are we in
 		switch (state) {
 			case STATE_INTRO: // change state to menu when finished playing intro
-				if ( !gfx.isVideoPlaying() )
+				if ( !gfx.isVideoPlaying() ){
 					state = STATE_MENU;
+					std::vector<uint8_t> &menuBMP = resource.getAsset("Menu shapes");
+					std::vector<uint8_t> &menuPAL = resource.getAsset("Title palette");
+					gfx.loadPalette(menuPAL);
+					gfx.zoomIntoImage(menuBMP);
+				}
+
 		}
 
 		// poll our inputs
