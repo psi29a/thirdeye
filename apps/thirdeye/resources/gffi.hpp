@@ -1,5 +1,5 @@
 /*
- * resource.hpp
+ * gffi.hpp
  *
  *  Created on: Sept 3, 2013
  *      Author: bcurtis
@@ -9,6 +9,17 @@
 #define GFFI_HPP
 
 #include "../graphics/graphics.hpp"
+
+// because the compiler wants to pad and we have different compiler extensions
+#if defined(__GNUC__)
+    #define PACK( __Declaration__ ) __Declaration__ __attribute__((__packed__))
+#elif defined(_MSC_VER )
+    #define PACK( __Declaration__ ) __pragma( pack(push, 1) ) __Declaration__ __pragma( pack(pop) )
+#else
+    #error "Unknown platform!"
+#endif
+
+
 
 #include <map>
 #include <boost/filesystem.hpp>
@@ -37,13 +48,13 @@ struct GFFIHeader {
 	uint32_t unknown4;
 };
 
-struct GFFIDirectoryHeader {
+PACK(struct GFFIDirectoryHeader {
 	uint32_t unknown1;			// 8
-	uint32_t directory_size; 	// minus 2 bytes trailer tag
-	uint16_t number_of_tags;
-	// .. tagged blocks
-	// uint16_t trailer;		// 0 trailer: directory_size + 2
-}__attribute__((packed));	// because the compiler wants to pad
+		uint32_t directory_size; 	// minus 2 bytes trailer tag
+		uint16_t number_of_tags;
+		// .. tagged blocks
+		// uint16_t trailer;		// 0 trailer: directory_size + 2
+	});
 
 struct GFFIBlockHeader {
 	char tag[4];					// tag
@@ -58,19 +69,19 @@ struct GFFIBlock {
 	uint32_t unique;				// unique identifier
 	uint32_t offset;				// location of first element
 	uint32_t size;					// size of first element
-}__attribute__((packed));
+};
 
 struct GFFIBlock2 {
 	char tag[4];					// tag
 	uint32_t unknown1;				// number in the block or 0x80000000
 	uint32_t unknown2;				// number in the block
-	uint32_t unique_table;			// number of the resource table for this block
+	uint32_t unique_table;		// number of the resource table for this block
 	uint32_t unknown3;				// number in the block
 	//uint32_t unqiue_number;			// unique res number of 1st item
 	//uint32_t num_of_resources;	// number of res indexed by a row for the
-									// first item
+	// first item
 	// uint32_t ...
-}__attribute__((packed));
+};
 
 struct File {
 	uint32_t offset;
@@ -85,7 +96,7 @@ private:
 	uint32_t mGFFIFileSize;
 	GFFIHeader mGFFIHeader;
 	GFFIDirectoryHeader mGFFIDirectoryHeader;
-	std::map< std::string, std::map< uint32_t, File > > mFiles;
+	std::map<std::string, std::map<uint32_t, File> > mFiles;
 
 public:
 	GFFI(boost::filesystem::path gffiPath);
