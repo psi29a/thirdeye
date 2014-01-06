@@ -16,10 +16,8 @@
 #elif defined(_MSC_VER )
     #define PACK( __Declaration__ ) __pragma( pack(push, 1) ) __Declaration__ __pragma( pack(pop) )
 #else
-    #error "Unknown platform!"
+    #error "Unknown compiler! Please file a bug report and tell us about your compiler!"
 #endif
-
-
 
 #include <map>
 #include <boost/filesystem.hpp>

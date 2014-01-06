@@ -39,7 +39,7 @@ RESOURCES::Resource::Resource(boost::filesystem::path resourcePath) {
 	std::cout << " " << resourceFileSize << " bytes " << std::endl;
 
 	// open our resource
-	fResource.open(mResFile.c_str());
+	fResource.open(mResFile.string());
 	if (fResource.is_open() == false)
 		throw std::runtime_error("Could not open file " + mResFile.string());
 
