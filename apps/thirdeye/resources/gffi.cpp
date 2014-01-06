@@ -34,7 +34,7 @@ RESOURCES::GFFI::GFFI(boost::filesystem::path gffiPath) {
 	std::cout << " " << mGFFIFileSize << " bytes " << std::endl;
 
 	// open our resource
-	fResource.open(mGFFIFile.c_str());
+	fResource.open(mGFFIFile.string());
 	if (fResource.is_open() == false)
 		throw std::runtime_error("Could not open file " + mGFFIFile.string());
 
