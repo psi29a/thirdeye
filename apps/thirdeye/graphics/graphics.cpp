@@ -342,11 +342,11 @@ void GRAPHICS::Graphics::update() {
 		updateScene = true;
 	}
 
-	if (mVideoWait > 0 and updateScene)
+	if (mVideoWait > 0 && updateScene)
 		mVideoWait--;
 
 	// what are we playing now?
-	if (mState == NOOP and !mVideo.empty() and mVideoWait == 0) {
+	if (mState == NOOP && !mVideo.empty() && mVideoWait == 0) {
 		uint8_t index = mVideo.begin()->first;
 		//std::cout << "Playing mVideo: " << std::dec << (int) index << std::endl;
 		tuple<uint8_t, uint8_t, std::vector<uint8_t> > scene =

@@ -14,9 +14,7 @@
 #include <iostream>
 
 #include <boost/filesystem.hpp>
-#include <SDL2/SDL.h>
-
-#include <alsa/asoundlib.h>
+#include <SDL.h>
 
 // Types of games
 #define GAME_UNKN	0
