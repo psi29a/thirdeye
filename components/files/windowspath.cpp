@@ -66,8 +66,6 @@ boost::filesystem::path WindowsPath::getGlobalDataPath() const
     return getGlobalPath();
 }
 
-}
-
 } /* namespace Files */
 
 #endif /* defined(_WIN32) || defined(__WINDOWS__) */

@@ -6,6 +6,7 @@
  */
 #include "res.hpp"
 
+#include <iostream>
 #include <sstream>
 #include <iomanip>
 

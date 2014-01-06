@@ -8,7 +8,7 @@
 #include <map>
 #include <stdio.h>
 #include <iostream>
-#include <SDL2/SDL.h>
+#include "SDL.h"
 
 namespace GRAPHICS {
 

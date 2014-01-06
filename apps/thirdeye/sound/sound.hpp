@@ -8,8 +8,8 @@
 #include <stdint.h>
 #include <iostream>
 
-#include <AL/al.h>
-#include <AL/alc.h>
+#include "al.h"
+#include "alc.h"
 
 namespace MIXER {
 

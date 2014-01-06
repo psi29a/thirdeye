@@ -6,8 +6,6 @@
 
 #include <components/files/configurationmanager.hpp>
 
-#include <SDL2/SDL.h>
-
 #include <boost/algorithm/string.hpp>
 using boost::algorithm::to_lower;
 
