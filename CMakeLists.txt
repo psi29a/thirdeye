@@ -35,14 +35,6 @@ cmake_minimum_required(VERSION 2.6)
 # Source directory: libs
 set(LIBDIR ${CMAKE_SOURCE_DIR}/libs)
 
-# Set our standards
-set(CMAKE_CXX_FLAGS "-std=c++03 -Wall -Wextra -Wno-unused-parameter -Wno-reorder -pedantic -Wno-long-long ${CMAKE_CXX_FLAGS}")
-
-# Set our debugging standards
-if(DEBUG)
-    set(CMAKE_CXX_FLAGS "-ggdb3 -O0 ${CMAKE_CXX_FLAGS}")
-endif(DEBUG)
-
 # Platform specific variables
 ## Location of game data files
 if(DPKG_PROGRAM)
@@ -132,15 +124,20 @@ if (NOT WIN32 AND NOT APPLE)
 endif()
 
 # Compiler settings
-if (CMAKE_COMPILER_IS_GNUCC)
-    add_definitions (-Wall -Wextra -Wno-unused-parameter -Wno-reorder -std=c++98 -pedantic -Wno-long-long)
+if (CMAKE_COMPILER_IS_GNUCCXX)
+    add_definitions (-Wall -Wextra -Wno-unused-parameter -Wno-reorder -std=c++03 -pedantic -Wno-long-long)
+
+    # Set our debugging standards
+    if(DEBUG)
+        add_definitions (-ggdb3 -O0)
+    endif(DEBUG)
 
     execute_process(COMMAND ${CMAKE_C_COMPILER} -dumpversion
                 OUTPUT_VARIABLE GCC_VERSION)
     if ("${GCC_VERSION}" VERSION_GREATER 4.6 OR "${GCC_VERSION}" VERSION_EQUAL 4.6)
         add_definitions (-Wno-unused-but-set-parameter)
     endif("${GCC_VERSION}" VERSION_GREATER 4.6 OR "${GCC_VERSION}" VERSION_EQUAL 4.6)
-endif (CMAKE_COMPILER_IS_GNUCC)
+endif (CMAKE_COMPILER_IS_GNUCCXX)
 
 if(DPKG_PROGRAM)
     SET(CMAKE_INSTALL_PREFIX "/usr")
@@ -201,7 +198,7 @@ if(WIN32)
     INSTALL(DIRECTORY "${Thirdeye_BINARY_DIR}/resources" DESTINATION ".")
 
     SET(CPACK_GENERATOR "NSIS")
-    SET(CPACK_PACKAGE_NAME "THIRDEYE")
+    SET(CPACK_PACKAGE_NAME "Thirdeye")
     SET(CPACK_PACKAGE_VENDOR "Mindwerks.net")
     SET(CPACK_PACKAGE_VERSION ${THIRDEYE_VERSION})
     SET(CPACK_PACKAGE_VERSION_MAJOR ${THIRDEYE_VERSION_MAJOR})
@@ -216,7 +213,7 @@ if(WIN32)
     SET(CPACK_RESOURCE_FILE_README "${Thirdeye_SOURCE_DIR}/README.md")
     SET(CPACK_PACKAGE_DESCRIPTION_FILE "${Thirdeye_SOURCE_DIR}/README.md")
     SET(CPACK_NSIS_EXECUTABLES_DIRECTORY ".")
-    SET(CPACK_NSIS_DISPLAY_NAME "THIRDEYE ${THIRDEYE_VERSION}")
+    SET(CPACK_NSIS_DISPLAY_NAME "Thirdeye ${THIRDEYE_VERSION}")
     SET(CPACK_NSIS_HELP_LINK "http:\\\\\\\\www.mindwerks.net")
     SET(CPACK_NSIS_URL_INFO_ABOUT "http:\\\\\\\\www.mindwerks.net")
     SET(CPACK_NSIS_INSTALLED_ICON_NAME "thirdeyelauncher.exe")
@@ -264,19 +261,19 @@ endif()
 if (WIN32)
   if (MSVC)
     if (USE_DEBUG_CONSOLE)
-      set_target_properties(THIRDEYE PROPERTIES LINK_FLAGS_DEBUG "/SUBSYSTEM:CONSOLE")
-      set_target_properties(THIRDEYE PROPERTIES LINK_FLAGS_RELWITHDEBINFO "/SUBSYSTEM:CONSOLE")
-      set_target_properties(THIRDEYE PROPERTIES COMPILE_DEFINITIONS_DEBUG "_CONSOLE")
+      set_target_properties(thirdeye PROPERTIES LINK_FLAGS_DEBUG "/SUBSYSTEM:CONSOLE")
+      set_target_properties(thirdeye PROPERTIES LINK_FLAGS_RELWITHDEBINFO "/SUBSYSTEM:CONSOLE")
+      set_target_properties(thirdeye PROPERTIES COMPILE_DEFINITIONS_DEBUG "_CONSOLE")
     else()
       # Turn off debug console, debug output will be written to visual studio output instead
-      set_target_properties(THIRDEYE PROPERTIES LINK_FLAGS_DEBUG "/SUBSYSTEM:WINDOWS")
-      set_target_properties(THIRDEYE PROPERTIES LINK_FLAGS_RELWITHDEBINFO "/SUBSYSTEM:WINDOWS")
+      set_target_properties(thirdeye PROPERTIES LINK_FLAGS_DEBUG "/SUBSYSTEM:WINDOWS")
+      set_target_properties(thirdeye PROPERTIES LINK_FLAGS_RELWITHDEBINFO "/SUBSYSTEM:WINDOWS")
     endif()
 
     # Release builds use the debug console
-    set_target_properties(THIRDEYE PROPERTIES LINK_FLAGS_RELEASE "/SUBSYSTEM:CONSOLE")
-    set_target_properties(THIRDEYE PROPERTIES COMPILE_DEFINITIONS_RELEASE "_CONSOLE")
-    set_target_properties(THIRDEYE PROPERTIES LINK_FLAGS_MINSIZEREL "/SUBSYSTEM:CONSOLE")
+    set_target_properties(thirdeye PROPERTIES LINK_FLAGS_RELEASE "/SUBSYSTEM:CONSOLE")
+    set_target_properties(thirdeye PROPERTIES COMPILE_DEFINITIONS_RELEASE "_CONSOLE")
+    set_target_properties(thirdeye PROPERTIES LINK_FLAGS_MINSIZEREL "/SUBSYSTEM:CONSOLE")
 
     # Play a bit with the warning levels
 
@@ -329,28 +326,28 @@ if (WIN32)
     if (UNIT_TESTS)
         set_target_properties(runtests PROPERTIES COMPILE_FLAGS ${WARNINGS})
     endif(UNIT_TESTS)
-    set_target_properties(THIRDEYE PROPERTIES COMPILE_FLAGS ${WARNINGS})
+    set_target_properties(thirdeye PROPERTIES COMPILE_FLAGS ${WARNINGS})
   endif(MSVC)
 
   # Same for MinGW
   if (MINGW)
     if (USE_DEBUG_CONSOLE)
-      set_target_properties(THIRDEYE PROPERTIES LINK_FLAGS_DEBUG "-Wl,-subsystem,console")
-      set_target_properties(THIRDEYE PROPERTIES LINK_FLAGS_RELWITHDEBINFO "-Wl,-subsystem,console")
-      set_target_properties(THIRDEYE PROPERTIES COMPILE_DEFINITIONS_DEBUG "_CONSOLE")
+      set_target_properties(thirdeye PROPERTIES LINK_FLAGS_DEBUG "-Wl,-subsystem,console")
+      set_target_properties(thirdeye PROPERTIES LINK_FLAGS_RELWITHDEBINFO "-Wl,-subsystem,console")
+      set_target_properties(thirdeye PROPERTIES COMPILE_DEFINITIONS_DEBUG "_CONSOLE")
     else(USE_DEBUG_CONSOLE)
-      set_target_properties(THIRDEYE PROPERTIES LINK_FLAGS_DEBUG "-Wl,-subsystem,windows")
-      set_target_properties(THIRDEYE PROPERTIES LINK_FLAGS_RELWITHDEBINFO "-Wl,-subsystem,windows")
+      set_target_properties(thirdeye PROPERTIES LINK_FLAGS_DEBUG "-Wl,-subsystem,windows")
+      set_target_properties(thirdeye PROPERTIES LINK_FLAGS_RELWITHDEBINFO "-Wl,-subsystem,windows")
     endif(USE_DEBUG_CONSOLE)
 
-    set_target_properties(THIRDEYE PROPERTIES LINK_FLAGS_RELEASE "-Wl,-subsystem,console")
-    set_target_properties(THIRDEYE PROPERTIES LINK_FLAGS_MINSIZEREL "-Wl,-subsystem,console")
-    set_target_properties(THIRDEYE PROPERTIES COMPILE_DEFINITIONS_RELEASE "_CONSOLE")
+    set_target_properties(thirdeye PROPERTIES LINK_FLAGS_RELEASE "-Wl,-subsystem,console")
+    set_target_properties(thirdeye PROPERTIES LINK_FLAGS_MINSIZEREL "-Wl,-subsystem,console")
+    set_target_properties(thirdeye PROPERTIES COMPILE_DEFINITIONS_RELEASE "_CONSOLE")
   endif(MINGW)
 
   # TODO: At some point release builds should not use the console but rather write to a log file
-  #set_target_properties(THIRDEYE PROPERTIES LINK_FLAGS_RELEASE "/SUBSYSTEM:WINDOWS")
-  #set_target_properties(THIRDEYE PROPERTIES LINK_FLAGS_MINSIZEREL "/SUBSYSTEM:WINDOWS")
+  #set_target_properties(thirdeye PROPERTIES LINK_FLAGS_RELEASE "/SUBSYSTEM:WINDOWS")
+  #set_target_properties(thirdeye PROPERTIES LINK_FLAGS_MINSIZEREL "/SUBSYSTEM:WINDOWS")
 endif()
 
 # Apple bundling
