@@ -76,11 +76,14 @@ find_package(Boost REQUIRED COMPONENTS ${BOOST_COMPONENTS})
 
 include_directories("."
     ${PLATFORM_INCLUDE_DIR}
+    ${SDL2_INCLUDE_DIR}
+    ${Boost_INCLUDE_DIR}
     ${UUID_INCLUDE_DIR}
+    ${OPENAL_INCLUDE_DIR}
     ${LIBDIR}
 )
 
-link_directories(${Boost_LIBRARY_DIRS})
+link_directories(${Boost_LIBRARY_DIRS} ${Boost_LIBRARY_DIRS} )
 
 if (UNIT_TESTS)
     # Locate GTest
