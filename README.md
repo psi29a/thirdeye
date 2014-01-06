@@ -11,27 +11,24 @@ Website: http://www.mindwerks.net
 INSTALLATION
 
 Windows:
-Run the installer.
+TODO
 
 Linux:
 Run either in place with generic tar balls or install distribution specific packages.
 
 OSX:
-Open DMG file, copy Thirdeye folder anywhere, for example in /Applications
-
-BUILD FROM SOURCE
 TODO
 
 CHANGELOG
 
 0.86.0:
-
-* Picking up where Mirek Luza of daesop (0.85.0) left off in 2007
-* Code is now under GPLv3 license
-* Ported daesop to Linux and also made it multi-platform
-* Cleaned up daesop code
-* Cleaned up arguments
-* Now have three binaries: thirdeye, thirdeyelauncher and daesop.
+* First official release of Thirdeye.
+* Thirdeye can play back the intro sequence, with music and display the title menu.
+* Found deleted scene in intro and added it back in.
+* Picked up where Mirek Luza left off with daesop (0.85.0) in 2007.
+* Picked up arc from John Miles circa 1993.
+* Cleaned both daesop and arc to compile against GNU GCC and ported them to Linux.
+* All code is now under GPLv3 license
 
 
 0.85.0:
