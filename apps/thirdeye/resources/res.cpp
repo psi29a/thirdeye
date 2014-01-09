@@ -7,27 +7,16 @@
 #include "res.hpp"
 
 #include <iostream>
-#include <sstream>
+#include <fstream>
 #include <iomanip>
 
 #include <boost/filesystem.hpp>
-
-#include <boost/iostreams/device/file.hpp>
-#include <boost/iostreams/positioning.hpp>
-
-using boost::iostreams::file_source;
-using boost::iostreams::seek;
-
 #include <boost/lexical_cast.hpp>
 
 RESOURCES::Resource::Resource(boost::filesystem::path resourcePath) {
 	mResFile = resourcePath;
 
 	std::cout << "Initializing Resources:" << std::endl;
-
-	// get our file
-	file_source fResource(mResFile.string(), BOOST_IOS::binary);
-
 	// does resource exist
 	if (boost::filesystem::exists(mResFile) == false)
 		throw std::runtime_error(mResFile.string() + " does not exist!");
@@ -39,12 +28,20 @@ RESOURCES::Resource::Resource(boost::filesystem::path resourcePath) {
 	std::cout << " " << resourceFileSize << " bytes " << std::endl;
 
 	// open our resource
-	fResource.open(mResFile.string());
+	std::ifstream fResource;
+	fResource.open(mResFile.c_str(), std::ios_base::in | std::ios_base::binary);
+	/*
+	 std::cout << std::boolalpha;
+	 std::cout << "good/bad/ugly: " << fResource.good() << " " << fResource.bad() << " " << fResource.fail() << " " << fResource.is_open() << std::endl;
+	 std::cout << "error reading file "
+	 << " error: " << strerror( errno ) << std::endl;
+	 fResource.exceptions( std::ios::failbit );
+	 */
+
 	if (fResource.is_open() == false)
 		throw std::runtime_error("Could not open file " + mResFile.string());
 
-	// reset to begin of file, read from file
-	seek(fResource, 0, BOOST_IOS::beg);
+	// read in our initial header
 	fResource.read(reinterpret_cast<char*>(&fileHeader), sizeof(GlobalHeader));
 
 	// is resource a valid RES
@@ -112,7 +109,7 @@ void RESOURCES::Resource::showFileHeader(GlobalHeader fileHeader) {
 			<< std::endl;
 }
 
-uint16_t RESOURCES::Resource::getDirBlocks(file_source resourceFile,
+uint16_t RESOURCES::Resource::getDirBlocks(std::ifstream &resourceFile,
 		uint32_t firstBlock) {
 	uint16_t blocks = 0;
 	uint32_t currentBlock = firstBlock;
@@ -123,19 +120,20 @@ uint16_t RESOURCES::Resource::getDirBlocks(file_source resourceFile,
 	// loop through all our blocks
 	do {
 		//std::cout << "block: " << (int) blocks << " @ " << currentBlock << std::endl;
-		seek(resourceFile, currentBlock, BOOST_IOS::beg);
+		resourceFile.seekg(currentBlock, std::ios::beg);
 		DirectoryBlock block;
-		resourceFile.read(reinterpret_cast<char*>(&block), sizeof(DirectoryBlock));
+		resourceFile.read(reinterpret_cast<char*>(&block),
+				sizeof(DirectoryBlock));
 		currentBlock = block.next_directory_block;
 		mDirBlocks[blocks] = block;
 		blocks++;
-	} while ( currentBlock != 0 );
-		//std::cout << "blocks: " << mDirBlocks.size() << std::endl;
+	} while (currentBlock != 0);
+	//std::cout << "blocks: " << mDirBlocks.size() << std::endl;
 
 	return (mDirBlocks.size());
 }
 
-uint16_t RESOURCES::Resource::getEntries(file_source resourceFile) {
+uint16_t RESOURCES::Resource::getEntries(std::ifstream &resourceFile) {
 	uint16_t entries = 0;
 
 	if (mEntryHeaders.size() > 0)// if already initialized, return how big it is
@@ -147,7 +145,8 @@ uint16_t RESOURCES::Resource::getEntries(file_source resourceFile) {
 			if (block->second.entry_header_index[i] == 0) // ignore non-existing entries
 				break;
 
-			seek(resourceFile, block->second.entry_header_index[i], BOOST_IOS::beg);
+			resourceFile.seekg(block->second.entry_header_index[i],
+					std::ios::beg);
 			EntryHeader entry;
 			resourceFile.read(reinterpret_cast<char*>(&entry),
 					sizeof(EntryHeader));
@@ -158,7 +157,7 @@ uint16_t RESOURCES::Resource::getEntries(file_source resourceFile) {
 	return (mEntryHeaders.size());
 }
 
-uint16_t RESOURCES::Resource::getAssets(file_source resourceFile) {
+uint16_t RESOURCES::Resource::getAssets(std::ifstream &resourceFile) {
 	DirectoryBlock block = mDirBlocks.begin()->second;
 	uint16_t id = 0;
 	std::string table1 = "";
@@ -224,7 +223,7 @@ uint16_t RESOURCES::Resource::getAssets(file_source resourceFile) {
 				+ sizeof(EntryHeader);
 
 		std::vector<uint8_t> data(mEntryHeaders[id].data_size);
-		seek(resourceFile, offset, BOOST_IOS::beg);
+		resourceFile.seekg(offset, std::ios::beg);
 		resourceFile.read(reinterpret_cast<char*>(&data[0]),
 				mEntryHeaders[id].data_size);
 
@@ -237,8 +236,8 @@ uint16_t RESOURCES::Resource::getAssets(file_source resourceFile) {
 	return (mAssets.size());
 }
 
-uint16_t RESOURCES::Resource::getTable(file_source resourceFile, uint16_t table,
-		std::map<std::string, Dictionary> &dictionary) {
+uint16_t RESOURCES::Resource::getTable(std::ifstream &resourceFile,
+		uint16_t table, std::map<std::string, Dictionary> &dictionary) {
 	DirectoryBlock dirBlock = mDirBlocks.begin()->second;
 	uint32_t dictOffset;
 	uint16_t dictStringListsNumber;
@@ -249,40 +248,39 @@ uint16_t RESOURCES::Resource::getTable(file_source resourceFile, uint16_t table,
 	uint16_t counter = 1;
 
 	dictOffset = dirBlock.entry_header_index[table] + sizeof(EntryHeader);
-	seek(resourceFile, dictOffset, BOOST_IOS::beg);
+	resourceFile.seekg(dictOffset, std::ios::beg);
 	resourceFile.read(reinterpret_cast<char*>(&dictStringListsNumber),
 			sizeof(uint16_t));
 
 	for (uint16_t i = 0; i < dictStringListsNumber; i++) {
-		seek(resourceFile, dictOffset + sizeof(uint16_t) + i * sizeof(uint32_t),
-				BOOST_IOS::beg);
-				resourceFile.read(reinterpret_cast<char*>(&stringListIndex), sizeof(uint32_t));
+		resourceFile.seekg(dictOffset + sizeof(uint16_t) + i * sizeof(uint32_t),
+				std::ios::beg);
+		resourceFile.read(reinterpret_cast<char*>(&stringListIndex),
+				sizeof(uint32_t));
 
-				if (stringListIndex == 0) // end of list index
-				continue;
+		if (stringListIndex == 0) // end of list index
+			continue;
 
-				seek(resourceFile, stringListIndex + dictOffset, BOOST_IOS::beg);
-				for (;;counter++) {
-					resourceFile.read(reinterpret_cast<char*>(&stringLength), sizeof(uint16_t));
+		resourceFile.seekg(stringListIndex + dictOffset, std::ios::beg);
+		for (;; counter++) {
+			resourceFile.read(reinterpret_cast<char*>(&stringLength),
+					sizeof(uint16_t));
 
-					if (stringLength == 0) // end of string list
-					break;
+			if (stringLength == 0) // end of string list
+				break;
 
-					resourceFile.read(reinterpret_cast<char*>(&string), stringLength);
-					string[stringLength] = '\0';// terminate our string
+			resourceFile.read(reinterpret_cast<char*>(&string), stringLength);
+			string[stringLength] = '\0'; // terminate our string
 
-					if (counter % 2 == 0) {
+			if (counter % 2 == 0) {
 
-						dictionary[boost::lexical_cast<std::string>( prevString )] =
-						Dictionary(
-								prevString,
-								string
-						);
-					} else {
-						std::strcpy(prevString, string);
-					}
-				}
+				dictionary[boost::lexical_cast<std::string>(prevString)] =
+						Dictionary(prevString, string);
+			} else {
+				std::strcpy(prevString, string);
 			}
+		}
+	}
 	return (counter / 2);
 }
 
