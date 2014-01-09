@@ -8,6 +8,7 @@
 #define MUSIC_ID	0
 
 #include <iostream>
+#include <vector>
 
 extern "C" {
 #include <wildmidi_lib.h>
@@ -138,19 +139,16 @@ void MIXER::Mixer::playSound(std::vector<uint8_t> snd) {
 }
 
 MIXER::Mixer::Mixer() {
-	defaultDeviceName = "OpenAL Soft";
+	std::vector<std::string> devices = enumerate();
+	defaultDeviceName = devices[0].c_str();
 	mt32 = true;
 
 	// setup our audio devices and contexts
-	list_audio_devices(alcGetString(NULL, ALC_DEVICE_SPECIFIER));
 	device = alcOpenDevice(defaultDeviceName);
 	if (!device) {
 		std::cerr << "OpenAL: Unable to open default device." << std::endl;
 		return;
 	}
-
-	std::cout << "  Using: " << alcGetString(device, ALC_DEVICE_SPECIFIER)
-			<< std::endl;
 
 	context = alcCreateContext(device, NULL);
 	if (!alcMakeContextCurrent(context)) {
@@ -182,17 +180,26 @@ MIXER::Mixer::~Mixer() {
 	alcCloseDevice(device);
 }
 
-void MIXER::Mixer::list_audio_devices(const ALCchar *devices) {
-	const ALCchar *device = devices, *next = devices + 1;
-	size_t len = 0;
+//
+// An OpenAL output device
+//
+std::vector<std::string> MIXER::Mixer::enumerate()
+{
+    std::vector<std::string> devlist;
+    const ALCchar *devnames;
 
 	std::cout << "Initializing Sound:" << std::endl
 			<< "  Available audio devices:" << std::endl;
 
-	while (device && *device != '\0' && next && *next != '\0') {
-		std::cout << "    * " << device << std::endl;
-		len = strlen(device);
-		device += (len + 1);
-		next += (len + 2);
-	}
+    if(alcIsExtensionPresent(NULL, "ALC_ENUMERATE_ALL_EXT"))
+        devnames = alcGetString(NULL, ALC_ALL_DEVICES_SPECIFIER);
+    else
+        devnames = alcGetString(NULL, ALC_DEVICE_SPECIFIER);
+    while(devnames && *devnames)
+    {
+    	std::cout << "    * " << devnames << std::endl;
+        devlist.push_back(devnames);
+        devnames += strlen(devnames)+1;
+    }
+    return devlist;
 }
