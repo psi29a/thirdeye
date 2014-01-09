@@ -12,19 +12,17 @@
 
 // because the compiler wants to pad and we have different compiler extensions
 #if defined(__GNUC__)
-    #define PACK( __Declaration__ ) __Declaration__ __attribute__((__packed__))
+#define PACK( __Declaration__ ) __Declaration__ __attribute__((__packed__))
 #elif defined(_MSC_VER )
-    #define PACK( __Declaration__ ) __pragma( pack(push, 1) ) __Declaration__ __pragma( pack(pop) )
+#define PACK( __Declaration__ ) __pragma( pack(push, 1) ) __Declaration__ __pragma( pack(pop) )
 #else
-    #error "Unknown compiler! Please file a bug report and tell us about your compiler!"
+#error "Unknown compiler! Please file a bug report and tell us about your compiler!"
 #endif
 
 #include <map>
 #include <boost/filesystem.hpp>
-#include <boost/iostreams/device/file.hpp>
 #include "boost/tuple/tuple.hpp"
 
-using boost::iostreams::file_source;
 using boost::tuples::tuple;
 using boost::tuples::tie;
 
@@ -48,11 +46,11 @@ struct GFFIHeader {
 
 PACK(struct GFFIDirectoryHeader {
 	uint32_t unknown1;			// 8
-		uint32_t directory_size; 	// minus 2 bytes trailer tag
-		uint16_t number_of_tags;
-		// .. tagged blocks
-		// uint16_t trailer;		// 0 trailer: directory_size + 2
-	});
+	uint32_t directory_size; 	// minus 2 bytes trailer tag
+	uint16_t number_of_tags;
+	// .. tagged blocks
+	// uint16_t gffi_trailer;		// 0 trailer: directory_size + 2
+});
 
 struct GFFIBlockHeader {
 	char tag[4];					// tag
