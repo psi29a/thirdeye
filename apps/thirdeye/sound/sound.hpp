@@ -54,6 +54,7 @@ private:
 	ALCcontext *context;
 	bool mt32;
 	std::map<ALuint, Sources> mSources;
+	std::vector<std::string> enumerate();
 public:
 	Mixer();
 	virtual ~Mixer();
@@ -61,7 +62,6 @@ public:
 	void playMusic(std::vector<uint8_t> xmidi);
 	void stopMusic();
 	void playSound(std::vector<uint8_t> snd);
-	void list_audio_devices(const ALCchar *devices);
 };
 
 }
