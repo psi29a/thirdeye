@@ -8,8 +8,15 @@
 #include <stdint.h>
 #include <iostream>
 
-#include "al.h"
-#include "alc.h"
+#if !defined(__APPLE__) || defined(HAVE_AL_AL_H)
+#  include <AL/al.h>
+#  include <AL/alc.h>
+#  include <AL/alext.h>
+#else
+#  include <OpenAL/al.h>
+#  include <OpenAL/alc.h>
+#  include <OpenAL/alext.h>
+#endif
 
 namespace MIXER {
 
