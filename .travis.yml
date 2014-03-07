@@ -1,7 +1,6 @@
 language: cpp
 compiler:
  - gcc
- - clang
 env:
   global:
    - secure: "nMxx9D1wgUlHrNBuLU+/N/AxQfLjpxoeCeLSW6TCjbESq9/4PdOlVzW+EWhhUiU2UPx6gaT8VAzqer1IOHsriAThZ6G5q5X6+Fx4AfSAdo77c4CsQBDhmRR6PcWi7oKsqUZgkSzCHg59pb3CVwVcCj+FTFVFBeeU4maHy1iXTX4="
@@ -11,8 +10,8 @@ addons:
       name: "psi29a/thirdeye"
       description: "AESOP Replacment Engine"
     notification_email: psi29a@gmail.com
-    build_command_prepend: cmake -DUNIT_TESTS=1 -DDEBUG=1
-    build_command: make -j2
+    build_command_prepend: "cmake -DUNIT_TESTS=1 -DDEBUG=1"
+    build_command: "make -j2"
     branch_pattern: coverity_scan
 branches:
   only:
@@ -20,27 +19,13 @@ branches:
     - coverity_scan
 before_install:
  - pwd
- - git submodule update --init --recursive
  - echo "yes" | sudo add-apt-repository "deb http://archive.ubuntu.com/ubuntu `lsb_release -sc` main universe restricted multiverse"
  - echo "yes" | sudo apt-add-repository ppa:openmw/openmw
  - sudo apt-get update -qq
- - sudo apt-get install -qq libboost-all-dev libgtest-dev google-mock uuid-dev 
+ - sudo apt-get install -qq libboost-all-dev uuid-dev 
  - sudo apt-get install -qq libsdl2-dev libwildmidi-dev libasound2-dev libopenal-dev
- - sudo mkdir /usr/src/gtest/build
- - cd /usr/src/gtest/build
- - sudo cmake .. -DBUILD_SHARED_LIBS=1
- - sudo make -j4
- - sudo ln -s /usr/src/gtest/build/libgtest.so /usr/lib/libgtest.so
- - sudo ln -s /usr/src/gtest/build/libgtest_main.so /usr/lib/libgtest_main.so
-before_script:
- - cd -
- - mkdir build
- - cd build
- - cmake .. -DUNIT_TESTS=1 -DDEBUG=1
 script:
- - make -j4
-after_script:
- - ./runtests
+ - make -j2
 notifications:
   recipients:
     - psi29a+travis.ci@gmail.com
