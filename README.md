@@ -6,7 +6,7 @@ install the original games for Thirdeye to work.
 
 Version: 0.86.0  
 License: GPL (see GPL3.txt for more information)  
-Website: http://www.mindwerks.net  
+Website:  http://www.mindwerks.net/projects/thirdeye/  
 
 INSTALLATION
 
