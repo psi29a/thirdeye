@@ -17,6 +17,7 @@ addons:
 branches:
   only:
     - master
+    - coverity_scan
 before_install:
  - pwd
  - git submodule update --init --recursive
