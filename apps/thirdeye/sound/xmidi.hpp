@@ -109,7 +109,6 @@ public:
 	int retrieve(unsigned int track, DataSource *dest);
 
 	// External Event list functions
-	int retrieve(unsigned int track, midi_event **dest, int &ppqn);
 	static void DeleteEventList(midi_event *mlist);
 
 	// Not yet implemented
