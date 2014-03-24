@@ -57,18 +57,12 @@ void MIXER::Mixer::playMusic(std::vector<uint8_t> xmidi) {
 	XMIDI *xmi = new XMIDI(xmids,
 			mt32 ? XMIDI_CONVERT_MT32_TO_GS : XMIDI_CONVERT_NOCONVERSION);
 
-	std::vector<uint8_t> midi(sizeof(uint8_t) * 1024 * 16); // buffer needs to be big enough
+	uint32_t midi_size = xmi->retrieve(0, NULL);
+	std::vector<uint8_t> midi(midi_size); // buffer needs to be big enough
 	DataSource *xout = new BufferDataSource(reinterpret_cast<char*>(&midi[0]),
 			midi.size());
 
 	xmi->retrieve(0, xout);
-
-	//std::cout << "midi: " << midi.size() << " " << &midi[0] << " "
-	//		<< xout->getPos() << std::endl;
-
-	midi.resize(xout->getPos());
-
-	//std::cout << "midi: " << midi.size() << " " << &midi[0] << std::endl;
 
 	if (WildMidi_Init(config_file.c_str(), MUSIC_RATE, mixer_options) == -1) {
 		std::cerr << "Could not initialise WildMIDI." << std::endl;
