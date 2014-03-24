@@ -375,25 +375,6 @@ int XMIDI::retrieve(unsigned int track, DataSource *dest) {
 	return (len + 14);
 }
 
-int XMIDI::retrieve(unsigned int track, midi_event **dest, int &ppqn) {
-	if (!events) {
-		std::cerr << "No midi data in loaded." << std::endl;
-		return (0);
-	}
-
-	if ((info.type == 1 && track != 0) || (track >= info.tracks)) {
-		std::cerr << "Can't retrieve MIDI data, track out of range"
-				<< std::endl;
-		return (0);
-	}
-	DuplicateAndMerge(track);
-	MovePatchVolAndPan();
-
-	*dest = list;
-	ppqn = timing[track];
-
-	return (1);
-}
 
 void XMIDI::DeleteEventList(midi_event *mlist) {
 	midi_event *event;
