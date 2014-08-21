@@ -1,8 +1,31 @@
 project(Thirdeye)
 
+# We probably support older versions than this.
+cmake_minimum_required(VERSION 2.6)
+
 # Macros
 set(CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/cmake/)
 include (ThirdeyeMacros)
+
+# Set a default build type if none was specified
+IF(NOT DEFINED CMAKE_BUILD_TYPE OR CMAKE_BUILD_TYPE STREQUAL "")
+  MESSAGE(STATUS "Setting build type to 'Debug' as none was specified.")
+  SET(CMAKE_BUILD_TYPE Debug CACHE STRING "Choose the type of build." FORCE)
+  # Set the possible values of build type for cmake-gui
+  SET_PROPERTY(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS "Debug" "Release" "MinSizeRel" "RelWithDebInfo")
+ENDIF()
+SET(CMAKE_CONFIGURATION_TYPES "${CMAKE_BUILD_TYPE}")
+MESSAGE(STATUS "Build Type: ${CMAKE_BUILD_TYPE}")
+
+# Platform specific defines
+IF(UNIX)
+    # allow 'large' files in 32 bit builds
+    ADD_DEFINITIONS(
+        -D_LARGEFILE_SOURCE
+        -D_FILE_OFFSET_BITS=64
+        -D_LARGE_FILES
+        )
+ENDIF()
 
 # Version
 set (THIRDEYE_VERSION_MAJOR 0)
@@ -29,9 +52,6 @@ option(BUILD_DAESOP "Build Daesop" ON)
 option(BUILD_LAUNCHER "Build Thirdeye Launcher" OFF)
 option(BUILD_ARC "Build ARC" OFF)
 
-# We probably support older versions than this.
-cmake_minimum_required(VERSION 2.6)
-
 # Source directory: libs
 set(LIBDIR ${CMAKE_SOURCE_DIR}/libs)
 
@@ -50,6 +70,13 @@ endif(DPKG_PROGRAM)
 if (WIN32)
     option(USE_DEBUG_CONSOLE "whether debug goes to console or to Visual Studio output" ON)
 endif()
+
+IF(WIN32)
+    ADD_DEFINITIONS(
+        -DWIN32_LEAN_AND_MEAN
+        -D_CRT_SECURE_NO_WARNINGS
+        )
+ENDIF()
 
 if (WIN32)
     set(PLATFORM_INCLUDE_DIR "platform")
@@ -128,7 +155,7 @@ endif()
 
 # Compiler settings
 if (CMAKE_COMPILER_IS_GNUCCXX)
-    add_definitions (-Wall -Wextra -Wno-unused-parameter -Wno-reorder -std=c++03 -pedantic -Wno-long-long)
+    add_definitions (-Wall -Wextra -Wno-unused-parameter -Wno-reorder -std=c++11 -pedantic -Wno-long-long)
 
     # Set our debugging standards
     if(DEBUG)
