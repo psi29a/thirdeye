@@ -19,6 +19,9 @@
 #include "boost/tuple/tuple.hpp"
 using boost::tuples::tuple;
 
+#include <boost/random/mersenne_twister.hpp>
+typedef boost::mt19937 RNGType;
+
 #define NOOP	 		0
 #define SET_PAL			1
 #define DISP_BMP		2
@@ -55,6 +58,7 @@ private:
 	std::map<uint8_t, SDL_Surface*> mSurface;
 	std::map<uint8_t, tuple<uint8_t, uint8_t, std::vector<uint8_t> > > mVideo;
 	std::map<uint16_t, uint16_t> mBitmap;
+	RNGType rng;
 
 	int zoomSurfaceRGBA(SDL_Surface * src, SDL_Surface * dst);
 

@@ -8,6 +8,7 @@
 #include <boost/lexical_cast.hpp>
 #include <boost/random/uniform_int.hpp>
 #include <boost/random/mersenne_twister.hpp>
+#include <boost/random/variate_generator.hpp>
 
 #define SOFTWARE	0
 #define HARDWARE	1
@@ -328,7 +329,7 @@ void GRAPHICS::Graphics::materializeImage(std::vector<uint8_t> bmp) {
 	mBuffer.resize(size);
 	mBuffer.clear();
 	mBuffer.assign(size, 0x00);
-	mCounter = 500;
+	mCounter = 100;
 	mState = MATERIALIZE;
 }
 
@@ -413,19 +414,18 @@ void GRAPHICS::Graphics::update() {
 
 	// materialize image on to screen
 	if (mState == MATERIALIZE) {
-
 		uint16_t size = mSurface[0]->w * mSurface[0]->h;
-		boost::mt19937 rng;
-		boost::uniform_int<> random(1, size);
+		typedef boost::mt19937 RNGType;
+		RNGType rng(std::clock());
+		boost::uniform_int<> rngRange( 1, size );
+		boost::variate_generator< RNGType, boost::uniform_int<> > random(rng, rngRange);
 
 		for (uint16_t i = 0; i < size / 10; i++) {
-			uint16_t randomNumber = 0;
-
-			std::vector<uint8_t>::iterator it;
-			randomNumber = random(rng);
+			uint16_t randomNumber = random();
 
 			SDL_Rect rect = { (randomNumber % mSurface[0]->w), (randomNumber
-					/ mSurface[0]->w), 1, 1 };
+							/ mSurface[0]->w), 1, 1 };
+
 			SDL_BlitSurface(mSurface[0], &rect, mScreen, &rect);
 		}
 
