@@ -181,7 +181,7 @@ sequence RESOURCES::GFFI::getSequence() {
 	if (filename == "INTRO.GFF") { // Intro sequence
 		sequences[i++] = boost::make_tuple(SET_PAL, 0,
 				mFiles["PAL"][1].data[0]);
-/*		sequences[i++] = boost::make_tuple(FADE_IN, 12,
+        sequences[i++] = boost::make_tuple(FADE_IN, 12,
 				mFiles["BMP"][1].data[0]);
 		sequences[i++] = boost::make_tuple(SCROLL_LEFT, 8,
 				mFiles["BMP"][2].data[0]);
@@ -239,7 +239,7 @@ sequence RESOURCES::GFFI::getSequence() {
 				mFiles["BMA"][5].data[4]);
 		sequences[i++] = boost::make_tuple(DISP_BMA, 2,
 				mFiles["BMA"][5].data[5]);
-*/		sequences[i++] = boost::make_tuple(DISP_BMP, 0,
+        sequences[i++] = boost::make_tuple(DISP_BMP, 0,
 				mFiles["BMP"][9].data[0]);
 		sequences[i++] = boost::make_tuple(DISP_OVERLAY, 4,
 				mFiles["BMP"][19].data[0]);
