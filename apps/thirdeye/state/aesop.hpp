@@ -8,6 +8,10 @@
 #include <stdint.h>
 #include <vector>
 
+#include <boost/filesystem.hpp>
+
+#include "../resources/res.hpp"
+
 #ifndef AESOP_HPP
 #define AESOP_HPP
 
@@ -119,11 +123,16 @@ PACK(struct SOPScriptHeader
   uint32_t parent; // the number of parent object (ffffffff if none)
 });
 
+PACK(struct SOPImExHeader
+{
+  uint16_t hashsize;  // probably number of string lists (??)
+  uint32_t start_of_the_list; // starting position of string list
+});
 
 class Aesop {
+    RESOURCES::Resource *res;
+    boost::filesystem::path resPath;
     std::vector<uint8_t> sop_data;
-    SOPScriptHeader sopHeader;
-    uint16_t local_var_size;
     uint32_t position;
 
 private:
@@ -132,7 +141,7 @@ private:
     uint32_t &getLong();
 
 public:
-    Aesop(std::vector<uint8_t> &data);
+    Aesop(RESOURCES::Resource *resource);
     virtual ~Aesop();
     void show();
 };
