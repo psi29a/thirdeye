@@ -38,22 +38,22 @@ void AESOP::Aesop::show() {
     while (position < sop_data.size()){
         uint8_t &OP = getByte();
         std::string S_OP = "";
-        uint32_t VALUE;
-        uint32_t END_VALUE;
-        std::string S_VALUE = "";
+        uint32_t value;
+        uint32_t end_value;
+        std::string SValue = "";
 
         switch (OP) {
         case OP_BRT:
             S_OP = "BRT";
-            VALUE = getWord();
+            value = getWord();
             break;
         case OP_BRF:
             S_OP = "BRF";
-            VALUE = getWord();
+            value = getWord();
             break;
         case OP_BRA:
             S_OP = "BRA";
-            VALUE = getWord();
+            value = getWord();
             break;
         case OP_PUSH:
             // TODO: no value, what do we do?
@@ -61,77 +61,75 @@ void AESOP::Aesop::show() {
             break;
         case OP_SHTC:
             S_OP = "SHTC";
-            VALUE = getByte();
+            value = getByte();
             break;
         case OP_INTC:
             S_OP = "INTC";
-            VALUE = getWord();
+            value = getWord();
             break;
         case OP_LNGC:
             S_OP = "LNGC";
-            VALUE = getLong();
+            value = getLong();
             break;
         case OP_RCRS:
             S_OP = "RCRS";
-            VALUE = getWord();
+            value = getWord();
             break;
         case OP_CALL:
             S_OP = "CALL";
-            VALUE = getByte();
+            value = getByte();
             break;
         case OP_SEND:
             S_OP = "SEND";
-            VALUE = getByte();  // TODO: has two values?
-            VALUE = getWord();
+            value = getByte();  // TODO: has two values?
+            value = getWord();
             break;
         case OP_LAB:
             S_OP = "LAB";
-            VALUE = getWord();
+            value = getWord();
             break;
         case OP_LAW:
             S_OP = "LAW";
-            VALUE = getWord();
+            value = getWord();
             break;
         case OP_LAD:
             S_OP = "LAD";
-            VALUE = getWord();
+            value = getWord();
             break;
         case OP_SAW:
             S_OP = "SAW";
-            VALUE = getWord();
+            value = getWord();
             break;
         case OP_SAD:
             S_OP = "SAD";
-            VALUE = getWord();
+            value = getWord();
             break;
         case OP_LXD:
             S_OP = "LXD";
-            VALUE = getWord();
+            value = getWord();
             break;
         case OP_SXB:
             S_OP = "SXB";
-            VALUE = getWord();
+            value = getWord();
             break;
         case OP_LXDA:
             S_OP = "LXDA";
-            VALUE = getWord();
+            value = getWord();
             break;
         case OP_LECA:
             S_OP = "LECA";
-            VALUE = getWord();
+            value = getWord();
             getByte();
-            END_VALUE = getWord();
-            for(uint32_t i=0; i<END_VALUE-VALUE; ++i)
-                S_VALUE += sop_data[VALUE+i];
-            position += END_VALUE-VALUE;
-
+            end_value = getWord();
+            SValue = std::string(reinterpret_cast<const char*>(sop_data.data()) + value, end_value - value);
+            position += end_value-value;
             break;
         case OP_END:
             S_OP = "END";
             break;
         default:
             S_OP = "UNKN";
-            VALUE = 0xFF;
+            value = 0xFF;
             break;
         }
         std::cout << std::setfill(' ') << std::setw(4) <<
@@ -139,7 +137,7 @@ void AESOP::Aesop::show() {
                      std::hex << std::setw(4) <<
                      S_OP << " (" << std::setfill('0') << std::setw(2) <<
                      (uint16_t) OP << "):  " << std::dec <<
-                     VALUE << " (" << S_VALUE << ") " <<
+                     value << " (" << SValue << ") " <<
                      std::endl;
         //break;
     }
