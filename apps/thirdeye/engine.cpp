@@ -60,7 +60,7 @@ void THIRDEYE::Engine::setRenderer(bool renderer) {
 void THIRDEYE::Engine::go() {
     MIXER::Mixer mixer;		// setup our sound mixer
     GRAPHICS::Graphics gfx(mScale); // setup our graphics
-    RESOURCES::Resource resource(mGameData);	// get our game resources ready
+    RESOURCES::Resource resource(mGameData); // get our game resources ready
 
     /*
      Settings::Manager settings;
@@ -120,8 +120,7 @@ void THIRDEYE::Engine::go() {
 
     /* TODO: remove when done with SOP */
     done = true;
-    std::vector<uint8_t> &sop = resource.getAsset("start");
-    AESOP::Aesop state_engine(sop);
+    AESOP::Aesop state_engine(reinterpret_cast<RESOURCES::Resource*>(&resource));
     state_engine.show();
 
     /*
