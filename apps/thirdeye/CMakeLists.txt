@@ -26,6 +26,10 @@ add_thirdeye_dir (graphics
     graphics font palette bitmap
     )
 
+add_thirdeye_dir (state
+    aesop
+    )
+
 # Main executable
 add_executable(thirdeye
     ${THIRDEYE_LIBS} ${THIRDEYE_LIBS_HEADER}

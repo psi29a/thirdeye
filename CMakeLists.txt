@@ -3,6 +3,21 @@ project(Thirdeye)
 # We probably support older versions than this.
 cmake_minimum_required(VERSION 2.6)
 
+# Check for C++14, if not, downgrade to C++11/C++0x or complain.
+include(CheckCXXCompilerFlag)
+CHECK_CXX_COMPILER_FLAG("-std=c++14" COMPILER_SUPPORTS_CXX14)
+CHECK_CXX_COMPILER_FLAG("-std=c++11" COMPILER_SUPPORTS_CXX11)
+CHECK_CXX_COMPILER_FLAG("-std=c++0x" COMPILER_SUPPORTS_CXX0X)
+if(COMPILER_SUPPORTS_CXX14)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++14")
+elseif(COMPILER_SUPPORTS_CXX11)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
+elseif(COMPILER_SUPPORTS_CXX0X)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++0x")
+else()
+        message(STATUS "The compiler ${CMAKE_CXX_COMPILER} has no C++11 support. Please use a different C++ compiler.")
+endif()
+
 # Macros
 set(CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/cmake/)
 include (ThirdeyeMacros)
@@ -143,9 +158,9 @@ set_directory_properties(PROPERTIES COMPILE_DEFINITIONS_DEBUG DEBUG=1)
 
 # Specify build paths
 if (APPLE)
-	set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${APP_BUNDLE_DIR}/Contents/MacOS")
+    set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${APP_BUNDLE_DIR}/Contents/MacOS")
 else (APPLE)
-	set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${Thirdeye_BINARY_DIR}")
+    set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${Thirdeye_BINARY_DIR}")
 endif (APPLE)
 
 if (NOT WIN32 AND NOT APPLE)
@@ -324,10 +339,10 @@ if (WIN32)
         4986 # Undocumented warning that occurs in the crtdbg.h file
         4996 # Function was declared deprecated
 
-		# cause by ogre extensivly
-		4193 # #pragma warning(pop) : no matching '#pragma warning(push)'
-		4251 # class 'XXXX' needs to have dll-interface to be used by clients of class 'YYYY'
-		4275 # non dll-interface struct 'XXXX' used as base for dll-interface class 'YYYY'
+        # cause by ogre extensivly
+        4193 # #pragma warning(pop) : no matching '#pragma warning(push)'
+        4251 # class 'XXXX' needs to have dll-interface to be used by clients of class 'YYYY'
+        4275 # non dll-interface struct 'XXXX' used as base for dll-interface class 'YYYY'
 
         # thirdeye specific warnings
         4099 # Type mismatch, declared class or struct is defined with other type
@@ -339,7 +354,7 @@ if (WIN32)
         4309 # Variable overflow, trying to store 128 in a signed char for example
         4355 # Using 'this' in member initialization list
         4701 # Potentially uninitialized local variable used
-		4800 # Boolean optimization warning, e.g. myBool = (myInt != 0) instead of myBool = myInt
+        4800 # Boolean optimization warning, e.g. myBool = (myInt != 0) instead of myBool = myInt
         )
 
     foreach(d ${WARNINGS_DISABLE})
@@ -348,8 +363,8 @@ if (WIN32)
 
     set_target_properties(components PROPERTIES COMPILE_FLAGS ${WARNINGS})
     if (BUILD_LAUNCHER)
-		set_target_properties(thirdeyelauncher PROPERTIES COMPILE_FLAGS ${WARNINGS})
-	endif (BUILD_LAUNCHER)
+        set_target_properties(thirdeyelauncher PROPERTIES COMPILE_FLAGS ${WARNINGS})
+    endif (BUILD_LAUNCHER)
     if (BUILD_DAESOP)
         set_target_properties(daesop PROPERTIES COMPILE_FLAGS ${WARNINGS})
     endif (BUILD_DAESOP)
@@ -476,13 +491,13 @@ if (NOT WIN32 AND NOT DPKG_PROGRAM AND NOT APPLE)
     ENDIF(BUILD_LAUNCHER)
     IF(BUILD_DAESOP)
         INSTALL(PROGRAMS "${Thirdeye_BINARY_DIR}/daesop" DESTINATION "${BINDIR}" )
-    ENDIF(BUILD_DAESOP)  
+    ENDIF(BUILD_DAESOP)
     if(UNIT_TESTS)
         INSTALL(PROGRAMS "${Thirdeye_BINARY_DIR}/runtests" DESTINATION "${BINDIR}" )
-    ENDIF(UNIT_TESTS)  
+    ENDIF(UNIT_TESTS)
     IF(BUILD_ARC)
         INSTALL(PROGRAMS "${Thirdeye_BINARY_DIR}/arc" DESTINATION "${BINDIR}" )
-    ENDIF(BUILD_ARC) 
+    ENDIF(BUILD_ARC)
 
     # Install icon and .desktop
     INSTALL(FILES "${Thirdeye_SOURCE_DIR}/apps/launcher/resources/images/thirdeye.png" DESTINATION "${ICONDIR}")
