@@ -36,108 +36,108 @@ void AESOP::Aesop::show() {
                  position << " " << sizeof(uint16_t) << std::endl;
 
     while (position < sop_data.size()){
-        uint8_t &OP = getByte();
-        std::string S_OP = "";
+        uint8_t &op = getByte();
+        std::string s_op = "";
         uint32_t value;
         uint32_t end_value;
-        std::string SValue = "";
+        std::string s_value = "";
 
-        switch (OP) {
+        switch (op) {
         case OP_BRT:
-            S_OP = "BRT";
+            s_op = "BRT";
             value = getWord();
             break;
         case OP_BRF:
-            S_OP = "BRF";
+            s_op = "BRF";
             value = getWord();
             break;
         case OP_BRA:
-            S_OP = "BRA";
+            s_op = "BRA";
             value = getWord();
             break;
         case OP_PUSH:
             // TODO: no value, what do we do?
-            S_OP = "PUSH";
+            s_op = "PUSH";
             break;
         case OP_SHTC:
-            S_OP = "SHTC";
+            s_op = "SHTC";
             value = getByte();
             break;
         case OP_INTC:
-            S_OP = "INTC";
+            s_op = "INTC";
             value = getWord();
             break;
         case OP_LNGC:
-            S_OP = "LNGC";
+            s_op = "LNGC";
             value = getLong();
             break;
         case OP_RCRS:
-            S_OP = "RCRS";
+            s_op = "RCRS";
             value = getWord();
             break;
         case OP_CALL:
-            S_OP = "CALL";
+            s_op = "CALL";
             value = getByte();
             break;
         case OP_SEND:
-            S_OP = "SEND";
+            s_op = "SEND";
             value = getByte();  // TODO: has two values?
             value = getWord();
             break;
         case OP_LAB:
-            S_OP = "LAB";
+            s_op = "LAB";
             value = getWord();
             break;
         case OP_LAW:
-            S_OP = "LAW";
+            s_op = "LAW";
             value = getWord();
             break;
         case OP_LAD:
-            S_OP = "LAD";
+            s_op = "LAD";
             value = getWord();
             break;
         case OP_SAW:
-            S_OP = "SAW";
+            s_op = "SAW";
             value = getWord();
             break;
         case OP_SAD:
-            S_OP = "SAD";
+            s_op = "SAD";
             value = getWord();
             break;
         case OP_LXD:
-            S_OP = "LXD";
+            s_op = "LXD";
             value = getWord();
             break;
         case OP_SXB:
-            S_OP = "SXB";
+            s_op = "SXB";
             value = getWord();
             break;
         case OP_LXDA:
-            S_OP = "LXDA";
+            s_op = "LXDA";
             value = getWord();
             break;
         case OP_LECA:
-            S_OP = "LECA";
+            s_op = "LECA";
             value = getWord();
             getByte();
             end_value = getWord();
-            SValue = std::string(reinterpret_cast<const char*>(sop_data.data()) + value, end_value - value);
+            s_value = std::string(reinterpret_cast<const char*>(sop_data.data()) + value, end_value - value);
             position += end_value-value;
             break;
         case OP_END:
-            S_OP = "END";
+            s_op = "END";
             break;
         default:
-            S_OP = "UNKN";
+            s_op = "UNKN";
             value = 0xFF;
             break;
         }
         std::cout << std::setfill(' ') << std::setw(4) <<
                      position << "/" << sop_data.size() << " " <<
                      std::hex << std::setw(4) <<
-                     S_OP << " (" << std::setfill('0') << std::setw(2) <<
-                     (uint16_t) OP << "):  " << std::dec <<
-                     value << " (" << SValue << ") " <<
+                     s_op << " (" << std::setfill('0') << std::setw(2) <<
+                     (uint16_t) op << "):  " << std::dec <<
+                     value << " (" << s_value << ") " <<
                      std::endl;
         //break;
     }
