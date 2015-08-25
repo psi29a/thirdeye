@@ -11,6 +11,9 @@
 #include <boost/algorithm/string.hpp>
 #include "aesop.hpp"
 
+#include <thread>         // std::this_thread::sleep_for
+#include <chrono>         // std::chrono::seconds
+
 AESOP::Aesop::Aesop(RESOURCES::Resource &resource):res(resource) {
 
 }
@@ -20,13 +23,11 @@ AESOP::Aesop::~Aesop() {
 }
 
 void AESOP::Aesop::show() {
-    std::vector<uint8_t> &sop = res.getAsset("start");
+    const std::vector<uint8_t> &sop = res.getAsset("start");
     sop_data = sop;
 
     SOPScriptHeader sopHeader = reinterpret_cast<SOPScriptHeader&>(sop_data[0]);
     position = sizeof(SOPScriptHeader);
-    uint16_t local_var_size = reinterpret_cast<uint16_t&>(sop_data[position]);
-    position += sizeof(uint16_t);
 
     std::cout << "SOP HEADER " <<
                  sopHeader.static_size << " " <<
@@ -34,43 +35,40 @@ void AESOP::Aesop::show() {
                  sopHeader.export_resource << " " <<
                  std::setw(2) << std::setfill('0') << std::hex <<
                  sopHeader.parent << " " <<
-                 local_var_size << " " <<
                  std::dec <<
-                 position << std::endl << std::flush;
+                 position << std::endl;
 
 
-    std::vector<uint8_t> &sop_import = res.getAsset(sopHeader.import_resource);
-    SOPImExHeader sopImportHeader = reinterpret_cast<SOPImExHeader&>(sop_import[0]);
+    const std::vector<uint8_t> &sop_import = res.getAsset(sopHeader.import_resource);
+    SOPImExHeader sopImportHeader = reinterpret_cast<const SOPImExHeader&>(sop_import[0]);
     uint16_t imPosition = sizeof(SOPImExHeader);
     while (imPosition < sop_import.size()){
-        uint32_t end_marker = reinterpret_cast<uint32_t&>(sop_import[imPosition]);
+        const uint32_t end_marker = reinterpret_cast<const uint32_t&>(sop_import[imPosition]);
         if (end_marker == 0)
             break;
-        uint16_t string_size = reinterpret_cast<uint16_t&>(sop_import[imPosition]);
+        uint16_t string_size = reinterpret_cast<const uint16_t&>(sop_import[imPosition]);
         imPosition += 2;
         std::cout << "First IMPORT string size: " << string_size;
         std::string string(reinterpret_cast<const char*>(sop_import.data()) + imPosition, string_size);
         imPosition += string_size;
         std::cout << " value: " << string;
 
-        string_size = reinterpret_cast<uint16_t&>(sop_import[imPosition]);
+        string_size = reinterpret_cast<const uint16_t&>(sop_import[imPosition]);
         imPosition += 2;
         std::cout << " Second IMPORT string size: " << string_size;
         string = std::string(reinterpret_cast<const char*>(sop_import.data()) + imPosition, string_size);
         imPosition += string_size;
-        std::cout << " value: " << string;
-
-        std::cout << std::endl;
+        std::cout << " value: " << string << std::endl;
     }
 
-    std::vector<uint8_t> &sop_export = res.getAsset(sopHeader.export_resource);
-    SOPImExHeader sopExportHeader = reinterpret_cast<SOPImExHeader&>(sop_export[0]);
+    const std::vector<uint8_t> &sop_export = res.getAsset(sopHeader.export_resource);
+    SOPImExHeader sopExportHeader = reinterpret_cast<const SOPImExHeader&>(sop_export[0]);
     uint16_t exPosition = sizeof(SOPImExHeader);
     while (exPosition < sop_export.size()){
-        uint32_t end_marker = reinterpret_cast<uint32_t&>(sop_export[exPosition]);
+        uint32_t end_marker = reinterpret_cast<const uint32_t&>(sop_export[exPosition]);
         if (end_marker == 0)
             break;
-        uint16_t string_size = reinterpret_cast<uint16_t&>(sop_export[exPosition]);
+        uint16_t string_size = reinterpret_cast<const uint16_t&>(sop_export[exPosition]);
         exPosition += 2;
         std::cout << "First EXPORT string size: " << string_size;
         std::string string(reinterpret_cast<const char*>(sop_export.data()) + exPosition, string_size);
@@ -79,21 +77,38 @@ void AESOP::Aesop::show() {
 
         std::vector<std::string> fields;
         boost::split(fields, string, boost::is_any_of(":"));
+        fields[1].pop_back();   // trim the last 0 byte.
+
+        std::string message_name = "";
+        if (fields[1] != "OBJECT"){ // ignore the header object
+            uint16_t object_number = boost::lexical_cast<uint16_t>(fields[1]);
+            std::cout << " int: " << object_number;
+            message_name = res.getTableEntry(object_number, 4);
+            std::cout << " message: " << message_name;
+        }
 
         std::cout << "(" << fields[0]+'\0' << " : " << fields[1]+'\0' << ") ";
 
-        string_size = reinterpret_cast<uint16_t&>(sop_export[exPosition]);
+        string_size = reinterpret_cast<const uint16_t&>(sop_export[exPosition]);
         exPosition += 2;
         std::cout << " Second EXPORT string size: " << string_size;
         string = std::string(reinterpret_cast<const char*>(sop_export.data()) + exPosition, string_size);
         exPosition += string_size;
-        std::cout << " value: " << string;
-
-        std::cout << std::endl;
-        std::cout << std::flush;
+        string.pop_back();  // trim off null terminator
+        std::cout << " value: " << string << " " << string.length() << " for " << message_name << std::endl;
+        if (fields[1] != "OBJECT"){ // ignore the header object
+            mExport[boost::lexical_cast<uint16_t>(string)] = message_name;
+        }
     }
 
+    uint16_t local_var_size;
     while (position < sop_data.size()){
+        if (mExport.count(position) == 1){
+            local_var_size = reinterpret_cast<uint16_t&>(sop_data[position]);
+            std::cout << " local_var_size: " << local_var_size << " for '" << mExport[position] << "'"<< std::endl;
+            position += sizeof(uint16_t);
+        }
+
         uint16_t start_position = position;
         uint8_t &op = getByte();
         std::string s_op = "";
@@ -204,17 +219,20 @@ void AESOP::Aesop::show() {
         case OP_END:
             s_op = "END";
             std::cout << "GOT TO END";  // TODO: this isn't right, use *.EXPRT
+            /*
             if (position+2 < sop_data.size()){ // just end of message handler
                 local_var_size = reinterpret_cast<uint16_t&>(sop_data[position]);
                 position += sizeof(uint16_t);
                 std::cout << "THIS HANDLER: " << local_var_size;
             } // else, really end of whole things.
+            */
             break;
         default:
             s_op = "UNKN";
             value = 0xFF;
             break;
         }
+
         std::cout << std::setfill(' ') << std::setw(4) <<
                      start_position << "/" << sop_data.size() << " " <<
                      std::hex << std::setw(4) <<
@@ -224,6 +242,7 @@ void AESOP::Aesop::show() {
                      std::endl;
         //break;
     }
+
     return;
 }
 

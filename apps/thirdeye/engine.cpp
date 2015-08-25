@@ -69,8 +69,8 @@ void THIRDEYE::Engine::go() {
      settingspath = loadSettings (settings);
      */
 
-    std::vector<uint8_t> &snd = resource.getAsset("BIRD4");
-    std::vector<uint8_t> &xmidi = resource.getAsset("CUE1");
+    const std::vector<uint8_t> &snd = resource.getAsset("BIRD4");
+    const std::vector<uint8_t> &xmidi = resource.getAsset("CUE1");
 
     //std::vector<uint8_t> &font = resource.getAsset("8x8 font");
     //std::vector<uint8_t> &font2 = resource.getAsset("6x8 font");
@@ -78,12 +78,12 @@ void THIRDEYE::Engine::go() {
 
     //std::vector<uint8_t> &bmp = resource.getAsset("Backdrop");
     //std::vector<uint8_t> &bmp = resource.getAsset("Menu shapes");
-    std::vector<uint8_t> &icons = resource.getAsset("Icons");
+    const std::vector<uint8_t> &icons = resource.getAsset("Icons");
     //std::vector<uint8_t> &marble = resource.getAsset("Marble walls");
     //std::vector<uint8_t> &basePalette = resource.getAsset("Fixed palette");
-    std::vector<uint8_t> &basePalette = resource.getAsset("Title palette");
+    const std::vector<uint8_t> &basePalette = resource.getAsset("Title palette");
     //std::vector<uint8_t> &subPalette = resource.getAsset("Marble palette");
-    std::string text = resource.getTableEntry("Marble palette", 1);
+    const std::string text = resource.getTableEntry("Marble palette", 1);
 
     gfx.loadPalette(basePalette);
     gfx.loadMouse(icons, 0);
@@ -146,8 +146,8 @@ void THIRDEYE::Engine::go() {
             case STATE_INTRO: // change state to menu when finished playing intro
                 if ( !gfx.isVideoPlaying() ){
                     state = STATE_MENU;
-                    std::vector<uint8_t> &menuBMP = resource.getAsset("Menu shapes");
-                    std::vector<uint8_t> &menuPAL = resource.getAsset("Title palette");
+                    const std::vector<uint8_t> &menuBMP = resource.getAsset("Menu shapes");
+                    const std::vector<uint8_t> &menuPAL = resource.getAsset("Title palette");
                     gfx.loadPalette(menuPAL);
                     gfx.zoomIntoImage(menuBMP);
                 }
