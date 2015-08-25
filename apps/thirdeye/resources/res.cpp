@@ -18,8 +18,7 @@ RESOURCES::Resource::~Resource() {
     //cleanup
 }
 
-RESOURCES::Resource::Resource(boost::filesystem::path resourcePath) {
-    mResFile = resourcePath;
+RESOURCES::Resource::Resource(boost::filesystem::path &resourcePath):mResFile(resourcePath) {
 
     std::cout << "Initializing Resources:" << std::endl;
 
@@ -154,6 +153,8 @@ uint16_t RESOURCES::Resource::getAssets(std::ifstream &resourceFile) {
     uint16_t id = 0;
     std::string table1 = "";
     std::string table2 = "";
+    std::string table3 = "";
+    std::string table4 = "";
     uint16_t currentDirBlock = 0;
     uint16_t currentEntry = 0;
     uint32_t start = 0;
@@ -170,46 +171,47 @@ uint16_t RESOURCES::Resource::getAssets(std::ifstream &resourceFile) {
             block.entry_header_index[1] - block.entry_header_index[0]
                     - sizeof(EntryHeader), block.entry_header_index[0],
             block.entry_header_index[0] + sizeof(EntryHeader), table1, table2,
-            blank);
+            table3, table4, blank);
 
     mAssets[1] = Assets(1, (char*) "Special table 1 ", fileHeader.create_time,
             block.data_attributes[1],
             block.entry_header_index[2] - block.entry_header_index[1]
                     - sizeof(EntryHeader), block.entry_header_index[1],
             block.entry_header_index[1] + sizeof(EntryHeader), table1, table2,
-            blank);
+            table3, table4, blank);
 
     mAssets[2] = Assets(2, (char*) "Special table 2 ", fileHeader.create_time,
             block.data_attributes[2],
             block.entry_header_index[3] - block.entry_header_index[2]
                     - sizeof(EntryHeader), block.entry_header_index[2],
             block.entry_header_index[2] + sizeof(EntryHeader), table1, table2,
-            blank);
+            table3, table4, blank);
 
     mAssets[3] = Assets(3, (char*) "Special table 3: Low level functions ",
             fileHeader.create_time, block.data_attributes[3],
             block.entry_header_index[4] - block.entry_header_index[3]
                     - sizeof(EntryHeader), block.entry_header_index[3],
             block.entry_header_index[3] + sizeof(EntryHeader), table1, table2,
-            blank);
+            table3, table4, blank);
 
     mAssets[4] = Assets(4, (char*) "Special table 4: Message names ",
             fileHeader.create_time, block.data_attributes[4],
             block.entry_header_index[5] - block.entry_header_index[4]
                     - sizeof(EntryHeader), block.entry_header_index[4],
             block.entry_header_index[4] + sizeof(EntryHeader), table1, table2,
-            blank);
+            table3, table4, blank);
 
-    std::map<std::string, Dictionary>::iterator dictionary;
-    for (dictionary = mTable0.begin(); dictionary != mTable0.end();
-            dictionary++) {
-        id = boost::lexical_cast<uint16_t>(dictionary->second.second);
+    // track all game assets
+    std::map<std::string, Dictionary>::iterator table0_dictionary;
+    for (table0_dictionary = mTable0.begin(); table0_dictionary != mTable0.end();
+            table0_dictionary++) {
+        id = boost::lexical_cast<uint16_t>(table0_dictionary->second.second);
         currentDirBlock = boost::lexical_cast<uint16_t>(
                 id) / DIRECTORY_BLOCK_ITEMS;
         currentEntry =
                 boost::lexical_cast<uint16_t>(id) % DIRECTORY_BLOCK_ITEMS;
-        table1 = searchDictionary(mTable1, dictionary->second.first);
-        table2 = searchDictionary(mTable2, dictionary->second.first);
+        table1 = searchDictionary(mTable1, table0_dictionary->second.first);
+        table2 = searchDictionary(mTable2, table0_dictionary->second.first);
         start = mDirBlocks[currentDirBlock].entry_header_index[currentEntry];
         offset = mDirBlocks[currentDirBlock].entry_header_index[currentEntry]
                 + sizeof(EntryHeader);
@@ -220,11 +222,32 @@ uint16_t RESOURCES::Resource::getAssets(std::ifstream &resourceFile) {
                 mEntryHeaders[id].data_size);
 
         mAssets[id] = Assets(
-                boost::lexical_cast<uint16_t>(dictionary->second.second),
-                dictionary->second.first, mEntryHeaders[id].storage_time,
+                boost::lexical_cast<uint16_t>(table0_dictionary->second.second),
+                table0_dictionary->second.first, mEntryHeaders[id].storage_time,
                 mEntryHeaders[id].data_attributes, mEntryHeaders[id].data_size,
-                start, offset, table1, table2, data);
+                start, offset, table1, table2, table3, table4, data);
     }
+
+    // track all lowlevel functions
+    std::map<std::string, Dictionary>::iterator table3_dictionary;
+    for (table3_dictionary = mTable3.begin(); table3_dictionary != mTable3.end();
+            table3_dictionary++) {
+        if (table3_dictionary->second.second.length() == 0)
+            continue; // ignore pass_message and send_message
+
+        id = boost::lexical_cast<uint16_t>(table3_dictionary->second.second);
+        mAssets[id].table3 = table3_dictionary->second.first;
+    }
+
+    // track all AESOP object method / message names
+    std::map<std::string, Dictionary>::iterator table4_dictionary;
+    for (table4_dictionary = mTable4.begin(); table4_dictionary != mTable4.end();
+            table4_dictionary++) {
+        id = boost::lexical_cast<uint16_t>(table4_dictionary->second.second);
+        mAssets[id].table4 = table4_dictionary->second.first;
+    }
+
+
     return (mAssets.size());
 }
 
@@ -286,12 +309,12 @@ std::string RESOURCES::Resource::searchDictionary(
         return ("");
 }
 
-std::vector<uint8_t> &RESOURCES::Resource::getAsset(std::string name) {
+const std::vector<uint8_t> &RESOURCES::Resource::getAsset(std::string name) {
     return (getAsset(
             boost::lexical_cast<uint16_t>(searchDictionary(mTable0, name))));
 }
 
-std::vector<uint8_t> &RESOURCES::Resource::getAsset(uint16_t number) {
+const std::vector<uint8_t> &RESOURCES::Resource::getAsset(uint16_t number) {
     return (mAssets[number].data);
 }
 
@@ -307,18 +330,23 @@ std::string RESOURCES::Resource::getTableEntry(uint16_t number, uint8_t table) {
         return (mAssets[number].table1);
     else if (table == 2)
         return (mAssets[number].table2);
+    else if (table == 3)
+        return (mAssets[number].table3);
+    else if (table == 4)
+        return (mAssets[number].table4);
     else
         throw(std::runtime_error("Wrong table!"));
 }
 
 void RESOURCES::Resource::showResources() {
-    std::cout << "NUMBER	START	OFFSET	SIZE	DATE			ATTRIB	NAME" << std::endl;
+    std::cout << "NUMBER	START	OFFSET	SIZE	DATE			ATTRIB	TABLE1  TABLE2  TABLE3  TABLE4" << std::endl;
     for (uint16_t i = 0; i < mEntryHeaders.size(); i++) {
         std::cout << mAssets[i].id << "	" << mAssets[i].start << "	"
                 << mAssets[i].offset << "	" << mAssets[i].size << "	"
                 << getDate(mAssets[i].date) << "	" << mAssets[i].attributes
                 << "	" << mAssets[i].name << "	" << mAssets[i].table1 << "	"
-                << mAssets[i].table2
+                << mAssets[i].table2 << "	" << mAssets[i].table3 << "	"
+                << "	" << mAssets[i].table4
                 //<< "	" << mAssets[i].data.size()
                 << std::endl;
     }

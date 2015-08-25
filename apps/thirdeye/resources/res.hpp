@@ -47,10 +47,12 @@ struct EntryHeader {
 
 struct Assets {
     Assets(uint16_t fst, std::string snd, uint32_t thr, uint32_t frt,
-            uint32_t fth, uint32_t sxt, uint32_t svt, std::string ect,
-            std::string nth, std::vector<uint8_t> ten) :
-            id(fst), name(snd), date(thr), attributes(frt), size(fth), start(
-                    sxt), offset(svt), table1(ect), table2(nth), data(ten)
+           uint32_t fth, uint32_t sxt, uint32_t svt, std::string ect,
+           std::string nth, std::string ten, std::string elv,
+           std::vector<uint8_t> twl) :
+            id(fst), name(snd), date(thr), attributes(frt), size(fth),
+            start(sxt), offset(svt), table1(ect), table2(nth), table3(ten),
+            table4(elv), data(twl)
 
     {
     }
@@ -62,7 +64,9 @@ struct Assets {
     uint32_t start;		// where entry begins in file
     uint32_t offset;	// where data of entry begins in file
     std::string table1;	// object name from table1
-    std::string table2;	// object name from table1
+    std::string table2;	// object name from table2
+    std::string table3;	// object name from table3
+    std::string table4;	// object name from table4
     std::vector<uint8_t> data;	// object data
 
     Assets() {
@@ -75,6 +79,8 @@ struct Assets {
         offset = 0;
         table1 = "";
         table2 = "";
+        table3 = "";
+        table4 = "";
     }
 };
 
@@ -92,10 +98,12 @@ struct Dictionary {
 };
 
 class Resource {
-    boost::filesystem::path mResFile;
+    boost::filesystem::path &mResFile;
     std::map<uint16_t, DirectoryBlock> mDirBlocks;
     std::map<uint16_t, EntryHeader> mEntryHeaders;
     std::map<uint16_t, Assets> mAssets;
+    std::map<uint16_t, Assets> mSystemCalls;
+    std::map<uint16_t, Assets> mMessageNames;
     std::map<std::string, Dictionary> mTable0;
     std::map<std::string, Dictionary> mTable1;
     std::map<std::string, Dictionary> mTable2;
@@ -115,11 +123,11 @@ private:
             std::string needle);
 
 public:
-    Resource(boost::filesystem::path resourcePath);
+    Resource(boost::filesystem::path &resourcePath);
     virtual ~Resource();
 
-    std::vector<uint8_t> &getAsset(std::string name);
-    std::vector<uint8_t> &getAsset(uint16_t number);
+    const std::vector<uint8_t> &getAsset(std::string name);
+    const std::vector<uint8_t> &getAsset(uint16_t number);
     std::string getTableEntry(std::string name, uint8_t table);
     std::string getTableEntry(uint16_t number, uint8_t table);
 

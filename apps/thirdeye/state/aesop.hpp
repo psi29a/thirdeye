@@ -7,6 +7,7 @@
 
 #include <stdint.h>
 #include <vector>
+#include <map>
 
 #include <boost/filesystem.hpp>
 
@@ -134,6 +135,8 @@ class Aesop {
     boost::filesystem::path resPath;
     std::vector<uint8_t> sop_data;
     uint32_t position;
+    std::map<uint16_t, std::string> mExport;
+    std::map<uint16_t, std::string> mImport;
 
 private:
     uint8_t &getByte();
