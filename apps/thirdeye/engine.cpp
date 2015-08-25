@@ -120,7 +120,7 @@ void THIRDEYE::Engine::go() {
 
     /* TODO: remove when done with SOP */
     done = true;
-    AESOP::Aesop state_engine(reinterpret_cast<RESOURCES::Resource*>(&resource));
+    AESOP::Aesop state_engine(resource);
     state_engine.show();
 
     /*

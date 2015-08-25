@@ -130,7 +130,7 @@ PACK(struct SOPImExHeader
 });
 
 class Aesop {
-    RESOURCES::Resource *res;
+    RESOURCES::Resource &res;
     boost::filesystem::path resPath;
     std::vector<uint8_t> sop_data;
     uint32_t position;
@@ -141,7 +141,7 @@ private:
     uint32_t &getLong();
 
 public:
-    Aesop(RESOURCES::Resource *resource);
+    Aesop(RESOURCES::Resource &resource);
     virtual ~Aesop();
     void show();
 };
