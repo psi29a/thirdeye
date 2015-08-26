@@ -27,7 +27,7 @@ add_thirdeye_dir (graphics
     )
 
 add_thirdeye_dir (state
-    aesop
+    aesop function
     )
 
 # Main executable

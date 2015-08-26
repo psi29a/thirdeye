@@ -48,17 +48,25 @@ void AESOP::Aesop::show() {
             break;
         uint16_t string_size = reinterpret_cast<const uint16_t&>(sop_import[imPosition]);
         imPosition += 2;
-        std::cout << "First IMPORT string size: " << string_size;
-        std::string string(reinterpret_cast<const char*>(sop_import.data()) + imPosition, string_size);
+        //std::cout << "First IMPORT string size: " << string_size;
+        std::string function(reinterpret_cast<const char*>(sop_import.data()) + imPosition, string_size);
         imPosition += string_size;
-        std::cout << " value: " << string;
+
+        std::vector<std::string> fields;
+        boost::split(fields, function, boost::is_any_of(":"));
+        fields[1].pop_back();   // trim the last 0 byte.
+        function = fields[1];
+
+        //std::cout << " value: " << function;
 
         string_size = reinterpret_cast<const uint16_t&>(sop_import[imPosition]);
         imPosition += 2;
-        std::cout << " Second IMPORT string size: " << string_size;
-        string = std::string(reinterpret_cast<const char*>(sop_import.data()) + imPosition, string_size);
+        //std::cout << " Second IMPORT string size: " << string_size;
+        std::string number(reinterpret_cast<const char*>(sop_import.data()) + imPosition, string_size);
         imPosition += string_size;
-        std::cout << " value: " << string << std::endl;
+        //std::cout << " value: " << number << std::endl;
+        number.pop_back(); // trim off null terminator
+        mImport[boost::lexical_cast<uint16_t>(number)] = function;
     }
 
     const std::vector<uint8_t> &sop_export = res.getAsset(sopHeader.export_resource);
@@ -70,10 +78,10 @@ void AESOP::Aesop::show() {
             break;
         uint16_t string_size = reinterpret_cast<const uint16_t&>(sop_export[exPosition]);
         exPosition += 2;
-        std::cout << "First EXPORT string size: " << string_size;
+        //std::cout << "First EXPORT string size: " << string_size;
         std::string string(reinterpret_cast<const char*>(sop_export.data()) + exPosition, string_size);
         exPosition += string_size;
-        std::cout << " value: " << string;
+        //std::cout << " value: " << string;
 
         std::vector<std::string> fields;
         boost::split(fields, string, boost::is_any_of(":"));
@@ -82,40 +90,48 @@ void AESOP::Aesop::show() {
         std::string message_name = "";
         if (fields[1] != "OBJECT"){ // ignore the header object
             uint16_t object_number = boost::lexical_cast<uint16_t>(fields[1]);
-            std::cout << " int: " << object_number;
+            //std::cout << " int: " << object_number;
             message_name = res.getTableEntry(object_number, 4);
-            std::cout << " message: " << message_name;
+            //std::cout << " message: " << message_name;
         }
 
-        std::cout << "(" << fields[0]+'\0' << " : " << fields[1]+'\0' << ") ";
+        //std::cout << "(" << fields[0]+'\0' << " : " << fields[1]+'\0' << ") ";
 
         string_size = reinterpret_cast<const uint16_t&>(sop_export[exPosition]);
         exPosition += 2;
-        std::cout << " Second EXPORT string size: " << string_size;
+        //std::cout << " Second EXPORT string size: " << string_size;
         string = std::string(reinterpret_cast<const char*>(sop_export.data()) + exPosition, string_size);
         exPosition += string_size;
         string.pop_back();  // trim off null terminator
-        std::cout << " value: " << string << " " << string.length() << " for " << message_name << std::endl;
+        //std::cout << " value: " << string << " " << string.length() << " for " << message_name << std::endl;
         if (fields[1] != "OBJECT"){ // ignore the header object
             mExport[boost::lexical_cast<uint16_t>(string)] = message_name;
         }
     }
 
     uint16_t local_var_size;
+    std::stringbuf op_output;
+    std::ostream op_output_stream(&op_output);
     while (position < sop_data.size()){
-        if (mExport.count(position) == 1){
-            local_var_size = reinterpret_cast<uint16_t&>(sop_data[position]);
-            std::cout << " local_var_size: " << local_var_size << " for '" << mExport[position] << "'"<< std::endl;
-            position += sizeof(uint16_t);
-        }
-
+        op_output.str("");
         uint16_t start_position = position;
-        uint8_t &op = getByte();
         std::string s_op = "";
         uint32_t value = 0;
         uint32_t end_value = 0;
         std::string s_value = "";
 
+        if (mExport.count(position) == 1){
+            local_var_size = reinterpret_cast<uint16_t&>(sop_data[position]);
+            std::cout << std::endl
+                      << "AESOP Method: '" << mExport[position] << "'"
+                      << std::endl << ' ' << std::setfill(' ') << std::setw(4)
+                      << start_position << "/" << sop_data.size()
+                      << " local_var_size: " << local_var_size
+                      << std::endl;
+            position += sizeof(uint16_t);
+        }
+
+        uint8_t &op = getByte();
         switch (op) {
         case OP_BRT:
             s_op = "BRT";
@@ -135,10 +151,14 @@ void AESOP::Aesop::show() {
             for (uint16_t i = 0; i < value; i++){
                 uint32_t case_value = getLong();
                 uint16_t jump_address = getWord();
+                op_output_stream << std::endl << "          CASE #"
+                                 << i << ": "
+                                 << case_value << " -> " << jump_address;
             }
-            //value = getWord();
             {
                 uint16_t default_jump_address = getWord();
+                op_output_stream << std::endl << "          DEFAULT: -> "
+                                 << default_jump_address;
             }
             break;
         case OP_PUSH:
@@ -166,6 +186,7 @@ void AESOP::Aesop::show() {
         case OP_RCRS:
             s_op = "RCRS";
             value = getWord();
+            op_output_stream << mImport[boost::lexical_cast<uint16_t>(value)];
             break;
         case OP_CALL:
             s_op = "CALL";
@@ -173,8 +194,10 @@ void AESOP::Aesop::show() {
             break;
         case OP_SEND:
             s_op = "SEND";
-            value = getByte();  // TODO: has two values?
+            value = getByte();
+            op_output_stream << " " << value;
             value = getWord();
+            op_output_stream << " -> '" << res.getTableEntry(value, 4) << "'";
             break;
         case OP_LAB:
             s_op = "LAB";
@@ -218,14 +241,6 @@ void AESOP::Aesop::show() {
             break;
         case OP_END:
             s_op = "END";
-            std::cout << "GOT TO END";  // TODO: this isn't right, use *.EXPRT
-            /*
-            if (position+2 < sop_data.size()){ // just end of message handler
-                local_var_size = reinterpret_cast<uint16_t&>(sop_data[position]);
-                position += sizeof(uint16_t);
-                std::cout << "THIS HANDLER: " << local_var_size;
-            } // else, really end of whole things.
-            */
             break;
         default:
             s_op = "UNKN";
@@ -233,12 +248,13 @@ void AESOP::Aesop::show() {
             break;
         }
 
-        std::cout << std::setfill(' ') << std::setw(4) <<
+        std::cout << ' ' <<
+                     std::setfill(' ') << std::setw(4) <<
                      start_position << "/" << sop_data.size() << " " <<
                      std::hex << std::setw(4) <<
-                     s_op << " (" << std::setfill('0') << std::setw(2) <<
+                     s_op << " (0x" << std::setfill('0') << std::setw(2) <<
                      (uint16_t) op << "):  " << std::dec <<
-                     (uint16_t) value << " (" << s_value << ") " <<
+                     (uint16_t) value << " (" << s_value << ") " << op_output.str() <<
                      std::endl;
         //break;
     }
