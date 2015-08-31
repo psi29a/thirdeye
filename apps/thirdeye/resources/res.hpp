@@ -128,6 +128,7 @@ public:
 
     const std::vector<uint8_t> &getAsset(std::string name);
     const std::vector<uint8_t> &getAsset(uint16_t number);
+    uint16_t getIndex(std::string name);
     std::string getTableEntry(std::string name, uint8_t table);
     std::string getTableEntry(uint16_t number, uint8_t table);
 

@@ -14,8 +14,11 @@
 #include <thread>         // std::this_thread::sleep_for
 #include <chrono>         // std::chrono::seconds
 
-AESOP::Aesop::Aesop(RESOURCES::Resource &resource):res(resource) {
-
+AESOP::Aesop::Aesop(RESOURCES::Resource &resource):mRes(resource) {
+    // load and initialize 'start' sop
+    uint16_t start_index = mRes.getIndex("start");
+    SOP &start = &SOP(mRes, start_index);
+    mSOP[start_index] = start;
 }
 
 AESOP::Aesop::~Aesop() {
@@ -23,7 +26,8 @@ AESOP::Aesop::~Aesop() {
 }
 
 void AESOP::Aesop::show() {
-    const std::vector<uint8_t> &sop = res.getAsset("start");
+
+    const std::vector<uint8_t> &sop = mRes.getAsset("start");
     sop_data = sop;
 
     SOPScriptHeader sopHeader = reinterpret_cast<SOPScriptHeader&>(sop_data[0]);
@@ -39,7 +43,7 @@ void AESOP::Aesop::show() {
                  position << std::endl;
 
 
-    const std::vector<uint8_t> &sop_import = res.getAsset(sopHeader.import_resource);
+    const std::vector<uint8_t> &sop_import = mRes.getAsset(sopHeader.import_resource);
     SOPImExHeader sopImportHeader = reinterpret_cast<const SOPImExHeader&>(sop_import[0]);
     uint16_t imPosition = sizeof(SOPImExHeader);
     while (imPosition < sop_import.size()){
@@ -69,7 +73,7 @@ void AESOP::Aesop::show() {
         mImport[boost::lexical_cast<uint16_t>(number)] = function;
     }
 
-    const std::vector<uint8_t> &sop_export = res.getAsset(sopHeader.export_resource);
+    const std::vector<uint8_t> &sop_export = mRes.getAsset(sopHeader.export_resource);
     SOPImExHeader sopExportHeader = reinterpret_cast<const SOPImExHeader&>(sop_export[0]);
     uint16_t exPosition = sizeof(SOPImExHeader);
     while (exPosition < sop_export.size()){
@@ -91,7 +95,7 @@ void AESOP::Aesop::show() {
         if (fields[1] != "OBJECT"){ // ignore the header object
             uint16_t object_number = boost::lexical_cast<uint16_t>(fields[1]);
             //std::cout << " int: " << object_number;
-            message_name = res.getTableEntry(object_number, 4);
+            message_name = mRes.getTableEntry(object_number, 4);
             //std::cout << " message: " << message_name;
         }
 
@@ -197,7 +201,7 @@ void AESOP::Aesop::show() {
             value = getByte();
             op_output_stream << " " << value;
             value = getWord();
-            op_output_stream << " -> '" << res.getTableEntry(value, 4) << "'";
+            op_output_stream << " -> '" << mRes.getTableEntry(value, 4) << "'";
             break;
         case OP_LAB:
             s_op = "LAB";
@@ -275,4 +279,15 @@ uint16_t &AESOP::Aesop::getWord(){
 uint32_t &AESOP::Aesop::getLong(){
     position += 4;
     return reinterpret_cast<uint32_t&>(sop_data[position-4]);
+}
+
+
+
+AESOP::SOP::SOP(RESOURCES::Resource &resource, uint16_t index):
+mRes(resource), mIndex(index){
+    mPC = 0;
+}
+
+AESOP::SOP::~SOP() {
+    //cleanup
 }

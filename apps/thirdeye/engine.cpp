@@ -121,7 +121,7 @@ void THIRDEYE::Engine::go() {
     /* TODO: remove when done with SOP */
     done = true;
     AESOP::Aesop state_engine(resource);
-    state_engine.show();
+    //state_engine.show();
 
     /*
     std::string Path = "./start.EXPT";

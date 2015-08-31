@@ -130,13 +130,36 @@ PACK(struct SOPImExHeader
   uint32_t start_of_the_list; // starting position of string list
 });
 
+class SOP {
+    uint32_t mPC; // position counter
+    RESOURCES::Resource &mRes;  // resource reference
+    uint16_t mIndex;    // index offset to sop data
+
+    /*
+    std::vector<uint8_t> &mSOPData;
+    std::vector<uint8_t> &mSOPImportHeader;
+    std::map<uint16_t, std::vector<uint8_t>> mSOPImportData;
+    std::vector<uint8_t> &mSOPExportHeader;
+    std::map<uint16_t, std::vector<uint8_t>> mSOPExportData;
+    */
+
+public:
+    SOP(RESOURCES::Resource &resource, uint16_t index);
+    virtual ~SOP();
+    uint8_t &getByte();
+    uint16_t &getWord();
+    uint32_t &getLong();
+};
+
 class Aesop {
-    RESOURCES::Resource &res;
+    RESOURCES::Resource &mRes;
     boost::filesystem::path resPath;
     std::vector<uint8_t> sop_data;
     uint32_t position;
     std::map<uint16_t, std::string> mExport;
     std::map<uint16_t, std::string> mImport;
+
+    std::map<uint16_t, SOP&> mSOP;
 
 private:
     uint8_t &getByte();
@@ -148,6 +171,8 @@ public:
     virtual ~Aesop();
     void show();
 };
+
+
 }
 
 #endif /* AESOP_HPP */
