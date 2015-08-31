@@ -309,6 +309,10 @@ std::string RESOURCES::Resource::searchDictionary(
         return ("");
 }
 
+uint16_t RESOURCES::Resource::getIndex(std::string name) {
+    return boost::lexical_cast<uint16_t>(searchDictionary(mTable0, name));
+}
+
 const std::vector<uint8_t> &RESOURCES::Resource::getAsset(std::string name) {
     return (getAsset(
             boost::lexical_cast<uint16_t>(searchDictionary(mTable0, name))));
