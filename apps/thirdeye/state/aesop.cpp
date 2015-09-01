@@ -338,34 +338,30 @@ mRes(resource), mIndex(index){
             break;
         uint16_t string_size = reinterpret_cast<const uint16_t&>(mSOPExport[EP]);
         EP += 2;
-        std::string string(reinterpret_cast<const char*>(mSOPExport.data()) + EP, string_size);
+        std::string first_string(reinterpret_cast<const char*>(mSOPExport.data()) + EP, string_size);
         EP += string_size;
-        std::cout << string;
+        std::cout << first_string;
 
-        // split on :, not currently needed
-        //std::vector<std::string> fields;
-        //boost::split(fields, string, boost::is_any_of(":"));
-        //fields[1].pop_back();   // trim the last 0 byte.
-
-        //std::string message_name = "";
-        //if (fields[1] != "OBJECT"){ // ignore the header object
-        //    uint16_t object_number = boost::lexical_cast<uint16_t>(fields[1]);
-            //std::cout << " int: " << object_number;
-        //    message_name = mRes.getTableEntry(object_number, 4);
-            //std::cout << " message: " << message_name;
-        //}
-
-        //std::cout << "(" << fields[0]+'\0' << " : " << fields[1]+'\0' << ") ";
+        // split on :
+        std::vector<std::string> fields;
+        boost::split(fields, first_string, boost::is_any_of(":"));
+        fields[1].pop_back();   // trim the last 0 byte.
 
         string_size = reinterpret_cast<const uint16_t&>(mSOPExport[EP]);
         EP += 2;
-        string = std::string(reinterpret_cast<const char*>(mSOPExport.data()) + EP, string_size);
+        std::string second_string(reinterpret_cast<const char*>(mSOPExport.data()) + EP, string_size);
         EP += string_size;
-        string.pop_back();  // trim off null terminator
-        std::cout << ", " << string << std::endl; //<< " for " << message_name << std::endl;
-        //if (fields[1] != "OBJECT"){ // ignore the header object
-        //    mExport[boost::lexical_cast<uint16_t>(string)] = message_name;
-        //}
+        second_string.pop_back();  // trim off null terminator
+        std::cout << ", " << second_string << std::endl; //<< " for " << message_name << std::endl;
+
+        if (first_string[0] == IMEX_METHOD){
+            uint16_t index = boost::lexical_cast<uint16_t>(fields[1]);
+            mSOPImportData[index].first = first_string;
+            mSOPImportData[index].second = second_string;
+            mSOPImportData[index].position = boost::lexical_cast<uint16_t>(second_string);
+            mSOPImportData[index].type = IMEX_METHOD;
+            mSOPImportData[index].table_entry = mRes.getTableEntry(index, 4);
+        }
     }
 
 }
