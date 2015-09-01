@@ -8,6 +8,7 @@
 #include <stdint.h>
 #include <vector>
 #include <map>
+#include <memory>
 
 #include <boost/filesystem.hpp>
 
@@ -135,8 +136,9 @@ class SOP {
     RESOURCES::Resource &mRes;  // resource reference
     uint16_t mIndex;    // index offset to sop data
 
+
+    std::vector<uint8_t> mSOP;
     /*
-    std::vector<uint8_t> &mSOPData;
     std::vector<uint8_t> &mSOPImportHeader;
     std::map<uint16_t, std::vector<uint8_t>> mSOPImportData;
     std::vector<uint8_t> &mSOPExportHeader;
@@ -159,7 +161,7 @@ class Aesop {
     std::map<uint16_t, std::string> mExport;
     std::map<uint16_t, std::string> mImport;
 
-    std::map<uint16_t, SOP&> mSOP;
+    std::map<uint16_t, std::unique_ptr<SOP>> mSOP;
 
 private:
     uint8_t &getByte();

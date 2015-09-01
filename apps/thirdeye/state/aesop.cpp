@@ -17,8 +17,13 @@
 AESOP::Aesop::Aesop(RESOURCES::Resource &resource):mRes(resource) {
     // load and initialize 'start' sop
     uint16_t start_index = mRes.getIndex("start");
-    SOP &start = &SOP(mRes, start_index);
-    mSOP[start_index] = start;
+    //SOP &start = &SOP(mRes, start_index);
+    //std::unique_ptr<SOP> start(mRes, start_index);
+    //auto start = std::make_shared<SOP>(mRes, start_index);
+    //mSOP[start_index] = std::unique_ptr<SOP>(mRes, start_index);
+    mSOP[start_index] = std::make_unique<SOP>(mRes, start_index);
+
+    //std::cout << "DEBUG: " << mSOP[start_index]->mPC << std::endl;
 }
 
 AESOP::Aesop::~Aesop() {
@@ -286,6 +291,7 @@ uint32_t &AESOP::Aesop::getLong(){
 AESOP::SOP::SOP(RESOURCES::Resource &resource, uint16_t index):
 mRes(resource), mIndex(index){
     mPC = 0;
+    const std::vector<uint8_t> &mSOP = mRes.getAsset(mIndex);
 }
 
 AESOP::SOP::~SOP() {
