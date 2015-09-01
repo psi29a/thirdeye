@@ -136,14 +136,16 @@ class SOP {
     RESOURCES::Resource &mRes;  // resource reference
     uint16_t mIndex;    // index offset to sop data
 
-
     std::vector<uint8_t> mSOP;
-    /*
-    std::vector<uint8_t> &mSOPImportHeader;
-    std::map<uint16_t, std::vector<uint8_t>> mSOPImportData;
-    std::vector<uint8_t> &mSOPExportHeader;
-    std::map<uint16_t, std::vector<uint8_t>> mSOPExportData;
-    */
+    SOPScriptHeader mSOPHeader;
+    std::vector<uint8_t> mSOPImport;
+    SOPImExHeader mSOPImportHeader;
+    //std::map<uint16_t, std::vector<uint8_t>> mSOPImportData;
+
+    std::vector<uint8_t> mSOPExport;
+    SOPImExHeader mSOPExportHeader;
+    //std::map<uint16_t, std::vector<uint8_t>> mSOPExportData;
+
 
 public:
     SOP(RESOURCES::Resource &resource, uint16_t index);
@@ -151,6 +153,8 @@ public:
     uint8_t &getByte();
     uint16_t &getWord();
     uint32_t &getLong();
+    uint32_t getPC();
+    SOPScriptHeader &getSOPHeader();
 };
 
 class Aesop {

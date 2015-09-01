@@ -16,14 +16,11 @@
 
 AESOP::Aesop::Aesop(RESOURCES::Resource &resource):mRes(resource) {
     // load and initialize 'start' sop
-    uint16_t start_index = mRes.getIndex("start");
-    //SOP &start = &SOP(mRes, start_index);
-    //std::unique_ptr<SOP> start(mRes, start_index);
-    //auto start = std::make_shared<SOP>(mRes, start_index);
-    //mSOP[start_index] = std::unique_ptr<SOP>(mRes, start_index);
+    uint16_t start_index = mRes.getIndex("kernel");
     mSOP[start_index] = std::make_unique<SOP>(mRes, start_index);
 
-    //std::cout << "DEBUG: " << mSOP[start_index]->mPC << std::endl;
+    std::cout << "DEBUG: " << mSOP[start_index]->getPC() << std::endl;
+    std::cout << "DEBUG: " << mSOP[start_index]->getSOPHeader().import_resource << std::endl;
 }
 
 AESOP::Aesop::~Aesop() {
@@ -38,19 +35,11 @@ void AESOP::Aesop::show() {
     SOPScriptHeader sopHeader = reinterpret_cast<SOPScriptHeader&>(sop_data[0]);
     position = sizeof(SOPScriptHeader);
 
-    std::cout << "SOP HEADER " <<
-                 sopHeader.static_size << " " <<
-                 sopHeader.import_resource << " " <<
-                 sopHeader.export_resource << " " <<
-                 std::setw(2) << std::setfill('0') << std::hex <<
-                 sopHeader.parent << " " <<
-                 std::dec <<
-                 position << std::endl;
-
 
     const std::vector<uint8_t> &sop_import = mRes.getAsset(sopHeader.import_resource);
     SOPImExHeader sopImportHeader = reinterpret_cast<const SOPImExHeader&>(sop_import[0]);
     uint16_t imPosition = sizeof(SOPImExHeader);
+
     while (imPosition < sop_import.size()){
         const uint32_t end_marker = reinterpret_cast<const uint32_t&>(sop_import[imPosition]);
         if (end_marker == 0)
@@ -290,10 +279,105 @@ uint32_t &AESOP::Aesop::getLong(){
 
 AESOP::SOP::SOP(RESOURCES::Resource &resource, uint16_t index):
 mRes(resource), mIndex(index){
-    mPC = 0;
-    const std::vector<uint8_t> &mSOP = mRes.getAsset(mIndex);
+    mPC = 0;    // set our position counter
+    mSOP = mRes.getAsset(mIndex);
+    mSOPHeader = reinterpret_cast<SOPScriptHeader&>(mSOP[0]);
+    mPC += sizeof(SOPScriptHeader);
+
+    std::cout << "SOP HEADER " <<
+                 mSOPHeader.static_size << " " <<
+                 mSOPHeader.import_resource << " " <<
+                 mSOPHeader.export_resource << " " <<
+                 std::setw(2) << std::setfill('0') << std::hex <<
+                 mSOPHeader.parent << " " <<
+                 std::dec <<
+                 mPC << std::endl;
+
+    mSOPImport = mRes.getAsset(mSOPHeader.import_resource);
+    mSOPImportHeader = reinterpret_cast<SOPImExHeader&>(mSOPImport[0]);
+    uint16_t IP = sizeof(SOPImExHeader);
+
+    mSOPExport = mRes.getAsset(mSOPHeader.export_resource);
+    mSOPExportHeader = reinterpret_cast<SOPImExHeader&>(mSOPExport[0]);
+    uint16_t EP = sizeof(SOPImExHeader);
+
+    std::cout << "IMPORT:" << std::endl;
+    //std::map<uint16_t, std::string> mImport;
+    // parse import resource
+    while (IP < mSOPImport.size()){
+        if (reinterpret_cast<const uint32_t&>(mSOPImport[IP]) == 0)
+            break;  // stop processing when end is reached
+
+        uint16_t string_size = reinterpret_cast<const uint16_t&>(mSOPImport[IP]);
+        IP += 2;
+        std::string function(reinterpret_cast<const char*>(mSOPImport.data()) + IP, string_size);
+        IP += string_size;
+
+        // split on :, not currently needed
+        //std::vector<std::string> fields;
+        //boost::split(fields, function, boost::is_any_of(":"));
+        //fields[1].pop_back();   // trim the last 0 byte.
+        //function = fields[1];
+
+        std::cout << function;
+
+        string_size = reinterpret_cast<const uint16_t&>(mSOPImport[IP]);
+        IP += 2;
+        std::string number(reinterpret_cast<const char*>(mSOPImport.data()) + IP, string_size);
+        IP += string_size;
+        std::cout << ", " << number << std::endl;
+        number.pop_back(); // trim off null terminator
+        //mImport[boost::lexical_cast<uint16_t>(number)] = function;
+    }
+
+    std::cout << std::endl;
+    std::cout << "EXPORT:" << std::endl;
+    while (EP < mSOPExport.size()){
+        uint32_t end_marker = reinterpret_cast<const uint32_t&>(mSOPExport[EP]);
+        if (end_marker == 0)
+            break;
+        uint16_t string_size = reinterpret_cast<const uint16_t&>(mSOPExport[EP]);
+        EP += 2;
+        std::string string(reinterpret_cast<const char*>(mSOPExport.data()) + EP, string_size);
+        EP += string_size;
+        std::cout << string;
+
+        // split on :, not currently needed
+        //std::vector<std::string> fields;
+        //boost::split(fields, string, boost::is_any_of(":"));
+        //fields[1].pop_back();   // trim the last 0 byte.
+
+        //std::string message_name = "";
+        //if (fields[1] != "OBJECT"){ // ignore the header object
+        //    uint16_t object_number = boost::lexical_cast<uint16_t>(fields[1]);
+            //std::cout << " int: " << object_number;
+        //    message_name = mRes.getTableEntry(object_number, 4);
+            //std::cout << " message: " << message_name;
+        //}
+
+        //std::cout << "(" << fields[0]+'\0' << " : " << fields[1]+'\0' << ") ";
+
+        string_size = reinterpret_cast<const uint16_t&>(mSOPExport[EP]);
+        EP += 2;
+        string = std::string(reinterpret_cast<const char*>(mSOPExport.data()) + EP, string_size);
+        EP += string_size;
+        string.pop_back();  // trim off null terminator
+        std::cout << ", " << string << std::endl; //<< " for " << message_name << std::endl;
+        //if (fields[1] != "OBJECT"){ // ignore the header object
+        //    mExport[boost::lexical_cast<uint16_t>(string)] = message_name;
+        //}
+    }
+
 }
 
 AESOP::SOP::~SOP() {
     //cleanup
+}
+
+uint32_t AESOP::SOP::getPC() {
+    return mPC;
+}
+
+AESOP::SOPScriptHeader &AESOP::SOP::getSOPHeader(){
+    return mSOPHeader;
 }
