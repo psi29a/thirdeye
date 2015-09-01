@@ -19,6 +19,7 @@
 
 namespace AESOP {
 
+/* SOP OPERANDS */
 #define OP_BRT  0x00    /* 00   BRT   word            BRanch if True   */
 #define OP_BRF  0x01    /* 01   BRF   word            BRanch if False  */
 #define OP_BRA  0x02    /* 02   BRA   word            BRanch Always    */
@@ -108,6 +109,14 @@ namespace AESOP {
 #define OP_END  0x56    /* 56   END   -               END of handler (end of handler, used also as return)  */
 #define OP_BRK  0x57    /* 57   BRK   -               BReaKpoint for debugging  */
 
+/* IMPORT/EXPORT PREFIXES */
+#define IMEX_METHOD     'M'
+#define IMEX_N          'N'
+#define IMEX_BYTE       'B'
+#define IMEX_WORD       'W'
+#define IMEX_LONG       'L'
+#define IMEX_CFUNCTION  'C'
+
 #if defined(__GNUC__)
 #define PACK( __Declaration__ ) __Declaration__ __attribute__((__packed__))
 #elif defined(_MSC_VER )
@@ -131,16 +140,29 @@ PACK(struct SOPImExHeader
   uint32_t start_of_the_list; // starting position of string list
 });
 
-class SOP {
+struct Export
+{
+    std::string first;
+    std::string second;
+    char type;
+    int16_t position;
+    int8_t elements;
+    std::string table_entry;
+};
+
+class SOP
+{
     uint32_t mPC; // position counter
     RESOURCES::Resource &mRes;  // resource reference
     uint16_t mIndex;    // index offset to sop data
+    std::string mName;  // name of SOP
 
     std::vector<uint8_t> mSOP;
+
     SOPScriptHeader mSOPHeader;
     std::vector<uint8_t> mSOPImport;
     SOPImExHeader mSOPImportHeader;
-    //std::map<uint16_t, std::vector<uint8_t>> mSOPImportData;
+    std::map<uint16_t, Export> mSOPImportData;
 
     std::vector<uint8_t> mSOPExport;
     SOPImExHeader mSOPExportHeader;
@@ -157,7 +179,8 @@ public:
     SOPScriptHeader &getSOPHeader();
 };
 
-class Aesop {
+class Aesop
+{
     RESOURCES::Resource &mRes;
     boost::filesystem::path resPath;
     std::vector<uint8_t> sop_data;
