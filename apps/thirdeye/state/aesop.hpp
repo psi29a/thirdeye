@@ -146,7 +146,7 @@ struct Export
     std::string second;
     char type;
     int16_t position;
-    int8_t elements;
+    uint8_t elements;
     std::string table_entry;
 };
 
