@@ -361,6 +361,15 @@ mRes(resource), mIndex(index){
             mSOPImportData[index].position = boost::lexical_cast<uint16_t>(second_string);
             mSOPImportData[index].type = IMEX_METHOD;
             mSOPImportData[index].table_entry = mRes.getTableEntry(index, 4);
+            mSOPImportData[index].elements = 0;
+        } else if (first_string[0] == IMEX_BYTE){
+            uint16_t index = boost::lexical_cast<uint16_t>(second_string);
+            mSOPImportData[index].first = first_string;
+            mSOPImportData[index].second = second_string;
+            mSOPImportData[index].position = -1;
+            mSOPImportData[index].type = IMEX_BYTE;
+            mSOPImportData[index].table_entry = mRes.getTableEntry(index, 4);
+            mSOPImportData[index].elements = 0;
         }
     }
 
