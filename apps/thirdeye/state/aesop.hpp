@@ -140,7 +140,7 @@ PACK(struct SOPImExHeader
   uint32_t start_of_the_list; // starting position of string list
 });
 
-struct Export
+struct ImExEntry
 {
     std::string first;
     std::string second;
@@ -148,6 +148,8 @@ struct Export
     int16_t position;
     int8_t elements;
     std::string table_entry;
+    int16_t sop_index;
+    int16_t import_from;
 };
 
 class SOP
@@ -162,12 +164,14 @@ class SOP
     SOPScriptHeader mSOPHeader;
     std::vector<uint8_t> mSOPImport;
     SOPImExHeader mSOPImportHeader;
-    std::map<uint16_t, Export> mSOPImportData;
+    std::map<uint16_t, ImExEntry> mSOPImportData;
 
     std::vector<uint8_t> mSOPExport;
     SOPImExHeader mSOPExportHeader;
-    //std::map<uint16_t, std::vector<uint8_t>> mSOPExportData;
+    std::map<uint16_t, ImExEntry> mSOPExportData;
 
+private:
+    void getImExData(const std::vector<uint8_t> &ImEx, bool import);
 
 public:
     SOP(RESOURCES::Resource &resource, uint16_t index);

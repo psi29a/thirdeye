@@ -330,7 +330,9 @@ std::string RESOURCES::Resource::getTableEntry(std::string name,
 }
 
 std::string RESOURCES::Resource::getTableEntry(uint16_t number, uint8_t table) {
-    if (table == 1)
+    if (table == 0)
+        return (mAssets[number].name);
+    else if (table == 1)
         return (mAssets[number].table1);
     else if (table == 2)
         return (mAssets[number].table2);
