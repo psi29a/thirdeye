@@ -16,7 +16,7 @@
 
 AESOP::Aesop::Aesop(RESOURCES::Resource &resource):mRes(resource) {
     // load and initialize 'start' sop
-    uint16_t start_index = mRes.getIndex("kernel");
+    uint16_t start_index = mRes.getIndex("start");
     mSOP[start_index] = std::make_unique<SOP>(mRes, start_index);
 
     std::cout << "DEBUG: " << mSOP[start_index]->getPC() << std::endl;
@@ -297,108 +297,11 @@ mRes(resource), mIndex(index){
     mSOPImportHeader = reinterpret_cast<SOPImExHeader&>(mSOPImport[0]);
     uint16_t IP = sizeof(SOPImExHeader);
 
-    mSOPExport = mRes.getAsset(mSOPHeader.export_resource);
-    mSOPExportHeader = reinterpret_cast<SOPImExHeader&>(mSOPExport[0]);
-    uint16_t EP = sizeof(SOPImExHeader);
+    std::cout << std::endl << "IMPORT:" << std::endl;
+    getImExData(mRes.getAsset(mSOPHeader.import_resource), true);
 
-    std::cout << "IMPORT:" << std::endl;
-    //std::map<uint16_t, std::string> mImport;
-    // parse import resource
-    while (IP < mSOPImport.size()){
-        if (reinterpret_cast<const uint32_t&>(mSOPImport[IP]) == 0)
-            break;  // stop processing when end is reached
-
-        uint16_t string_size = reinterpret_cast<const uint16_t&>(mSOPImport[IP]);
-        IP += 2;
-        std::string function(reinterpret_cast<const char*>(mSOPImport.data()) + IP, string_size);
-        IP += string_size;
-
-        // split on :, not currently needed
-        //std::vector<std::string> fields;
-        //boost::split(fields, function, boost::is_any_of(":"));
-        //fields[1].pop_back();   // trim the last 0 byte.
-        //function = fields[1];
-
-        std::cout << function;
-
-        string_size = reinterpret_cast<const uint16_t&>(mSOPImport[IP]);
-        IP += 2;
-        std::string number(reinterpret_cast<const char*>(mSOPImport.data()) + IP, string_size);
-        IP += string_size;
-        std::cout << ", " << number << std::endl;
-        number.pop_back(); // trim off null terminator
-        //mImport[boost::lexical_cast<uint16_t>(number)] = function;
-    }
-
-    std::cout << std::endl;
-    std::cout << "EXPORT:" << std::endl;
-    while (EP < mSOPExport.size()){
-        uint32_t end_marker = reinterpret_cast<const uint32_t&>(mSOPExport[EP]);
-        if (end_marker == 0)
-            break;
-
-        // parse first string
-        uint16_t string_size = reinterpret_cast<const uint16_t&>(mSOPExport[EP]);
-        EP += 2;
-        std::string first_string(reinterpret_cast<const char*>(mSOPExport.data()) + EP, string_size);
-        EP += string_size;
-        std::cout << first_string;
-        // split on : in first_string
-        std::vector<std::string> first_fields;
-        boost::split(first_fields, first_string, boost::is_any_of(":"));
-        first_fields[first_fields.size()-1].pop_back();   // trim the last 0 byte.
-
-        // parse second string
-        string_size = reinterpret_cast<const uint16_t&>(mSOPExport[EP]);
-        EP += 2;
-        std::string second_string(reinterpret_cast<const char*>(mSOPExport.data()) + EP, string_size);
-        EP += string_size;
-        second_string.pop_back();  // trim off null terminator
-        std::cout << ", " << second_string << std::endl; //<< " for " << message_name << std::endl;
-        // split on , in second_string
-        std::vector<std::string> second_fields;
-        boost::split(second_fields, second_string, boost::is_any_of(","));
-        int8_t number_of_elements = -1;
-        if (second_fields.size() == 2)
-            number_of_elements = boost::lexical_cast<int8_t>(second_fields[second_fields.size()-1]);
-
-        uint16_t index;
-        // massage data by index
-        if (first_string[0] == IMEX_METHOD){
-            index = boost::lexical_cast<uint16_t>(first_fields[1]);
-            mSOPImportData[index].first = first_string;
-            mSOPImportData[index].second = second_string;
-            mSOPImportData[index].position = boost::lexical_cast<uint16_t>(second_string);
-            mSOPImportData[index].type = IMEX_METHOD;
-            mSOPImportData[index].table_entry = mRes.getTableEntry(index, 4);
-            mSOPImportData[index].elements = number_of_elements;
-        } else if (first_string[0] == IMEX_BYTE){
-            index = boost::lexical_cast<uint16_t>(second_string);
-            mSOPImportData[index].first = first_string;
-            mSOPImportData[index].second = second_string;
-            mSOPImportData[index].position = -1;
-            mSOPImportData[index].type = IMEX_BYTE;
-            mSOPImportData[index].table_entry = mRes.getTableEntry(index, 4);
-            mSOPImportData[index].elements = number_of_elements;
-        } else if (first_string[0] == IMEX_LONG){
-            index = boost::lexical_cast<uint16_t>(second_string);
-            mSOPImportData[index].first = first_string;
-            mSOPImportData[index].second = second_string;
-            mSOPImportData[index].position = -1;
-            mSOPImportData[index].type = IMEX_LONG;
-            mSOPImportData[index].table_entry = mRes.getTableEntry(index, 4);
-            mSOPImportData[index].elements = number_of_elements;
-        } else if (first_string[0] == IMEX_WORD){
-            index = boost::lexical_cast<uint16_t>(second_fields[0]);
-            mSOPImportData[index].first = first_string;
-            mSOPImportData[index].second = second_string;
-            mSOPImportData[index].position = -1;
-            mSOPImportData[index].type = IMEX_WORD;
-            mSOPImportData[index].table_entry = mRes.getTableEntry(index, 4);
-            mSOPImportData[index].elements = number_of_elements;
-        }
-        std::cout << " DEBUG: " << mSOPImportData[index].table_entry << std::endl;
-    }
+    std::cout << std::endl << "EXPORT:" << std::endl;
+    getImExData(mRes.getAsset(mSOPHeader.export_resource), false);
 
 }
 
@@ -412,4 +315,121 @@ uint32_t AESOP::SOP::getPC() {
 
 AESOP::SOPScriptHeader &AESOP::SOP::getSOPHeader(){
     return mSOPHeader;
+}
+
+void AESOP::SOP::getImExData(const std::vector<uint8_t> &ImEx, bool import){
+    mSOPExportHeader = reinterpret_cast<const SOPImExHeader&>(ImEx[0]);
+    uint16_t EP = sizeof(SOPImExHeader);
+    while (EP < ImEx.size()){
+        uint32_t end_marker = reinterpret_cast<const uint32_t&>(ImEx[EP]);
+        if (end_marker == 0)
+            break;
+
+        // parse first string
+        uint16_t string_size = reinterpret_cast<const uint16_t&>(ImEx[EP]);
+        EP += 2;
+        std::string first_string(reinterpret_cast<const char*>(ImEx.data()) + EP, string_size);
+        EP += string_size;
+        first_string.pop_back();  // trim off null terminator
+        std::cout << first_string;
+        // split on : in first_string
+        std::vector<std::string> first_fields;
+        boost::split(first_fields, first_string, boost::is_any_of(":"));
+
+        // parse second string
+        string_size = reinterpret_cast<const uint16_t&>(ImEx[EP]);
+        EP += 2;
+        std::string second_string(reinterpret_cast<const char*>(ImEx.data()) + EP, string_size);
+        EP += string_size;
+        second_string.pop_back();  // trim off null terminator
+        std::cout << ", " << second_string;
+        // split on , in second_string
+        std::vector<std::string> second_fields;
+        boost::split(second_fields, second_string, boost::is_any_of(","));
+        int8_t number_of_elements = -1;
+        if (!import && second_fields.size() == 2)
+            number_of_elements = boost::lexical_cast<int8_t>(second_fields[second_fields.size()-1]);
+
+        int16_t sop_index = -1;
+        if (import && second_fields.size() == 2)
+            sop_index = boost::lexical_cast<int16_t>(second_fields[second_fields.size()-1]);
+
+        int16_t import_from = -1;
+        if (import && second_fields.size() == 2)
+            import_from = boost::lexical_cast<uint16_t>(second_fields[second_fields.size()-1]);
+
+        std::map<uint16_t, ImExEntry> &data = mSOPImportData;
+        if (!import)
+            data = mSOPExportData;
+
+        uint16_t index;
+        // massage data by index
+        if (first_string[0] == IMEX_METHOD){
+            index = boost::lexical_cast<uint16_t>(first_fields[1]);
+            if (data.count(index)) std::throw_with_nested(std::runtime_error("Duplicate index: `"+first_string+"`, "+second_string));
+            data[index].first = first_string;
+            data[index].second = second_string;
+            data[index].position = boost::lexical_cast<uint16_t>(second_string);
+            data[index].type = IMEX_METHOD;
+            data[index].table_entry = mRes.getTableEntry(index, 4);
+            data[index].elements = number_of_elements;
+            data[index].sop_index = sop_index;
+            data[index].import_from = import_from;
+        } else if (first_string[0] == IMEX_BYTE){
+            index = boost::lexical_cast<uint16_t>(second_fields[0]);
+            if (data.count(index)) std::throw_with_nested(std::runtime_error("Duplicate index: `"+first_string+"`, "+second_string));
+            data[index].first = first_string;
+            data[index].second = second_string;
+            data[index].position = -1;
+            data[index].type = IMEX_BYTE;
+            data[index].table_entry = first_fields[first_fields.size()-1];
+            data[index].elements = number_of_elements;
+            data[index].sop_index = sop_index;
+            data[index].import_from = import_from;
+        } else if (first_string[0] == IMEX_LONG){
+            index = boost::lexical_cast<uint16_t>(second_fields[0]);
+            if (data.count(index)) std::throw_with_nested(std::runtime_error("Duplicate index: `"+first_string+"`, "+second_string));
+            data[index].first = first_string;
+            data[index].second = second_string;
+            data[index].position = -1;
+            data[index].type = IMEX_LONG;
+            data[index].table_entry = first_fields[first_fields.size()-1];
+            data[index].elements = number_of_elements;
+            data[index].sop_index = sop_index;
+            data[index].import_from = boost::lexical_cast<uint16_t>(second_fields[second_fields.size()-1]);
+        } else if (first_string[0] == IMEX_WORD){
+            index = boost::lexical_cast<uint16_t>(second_fields[0]);
+            if (data.count(index)) std::throw_with_nested(std::runtime_error("Duplicate index: `"+first_string+"`, "+second_string));
+            data[index].first = first_string;
+            data[index].second = second_string;
+            data[index].position = -1;
+            data[index].type = IMEX_WORD;
+            data[index].table_entry = first_fields[first_fields.size()-1];
+            data[index].elements = number_of_elements;
+            data[index].sop_index = sop_index;
+            data[index].import_from = import_from;
+        } else if (first_string[0] == IMEX_CFUNCTION){
+            index = boost::lexical_cast<uint16_t>(second_fields[0]);
+            if (data.count(index)) std::throw_with_nested(std::runtime_error("Duplicate index: `"+first_string+"`, "+second_string));
+            data[index].first = first_string;
+            data[index].second = second_string;
+            data[index].position = -1;
+            data[index].type = IMEX_CFUNCTION;
+            data[index].table_entry = first_fields[first_fields.size()-1];
+            data[index].elements = -1;
+            data[index].sop_index = -1;
+            data[index].import_from = import_from;
+        } else if (first_string[0] == IMEX_N) {
+            // ignore this, it is just a header
+            std::cout << std::endl;
+            continue;
+        } else {
+            std::throw_with_nested(std::runtime_error("Uknown prefix `"+first_string+"`."));
+        }
+
+        std::cout << "; " << data[index].table_entry << " from "
+                  << data[index].import_from << ":"
+                  << mRes.getTableEntry(data[index].import_from, 0) << std::endl;
+
+    }
 }
