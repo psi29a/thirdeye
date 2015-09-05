@@ -159,7 +159,7 @@ class SOP
     uint16_t mIndex;    // index offset to sop data
     std::string mName;  // name of SOP
 
-    std::vector<uint8_t> mSOP;
+    std::vector<uint8_t> mData;
 
     SOPScriptHeader mSOPHeader;
     std::vector<uint8_t> mSOPImport;
@@ -180,6 +180,7 @@ public:
     uint16_t &getWord();
     uint32_t &getLong();
     uint32_t getPC();
+    void setPC(uint32_t);
     SOPScriptHeader &getSOPHeader();
 };
 
@@ -187,17 +188,7 @@ class Aesop
 {
     RESOURCES::Resource &mRes;
     boost::filesystem::path resPath;
-    std::vector<uint8_t> sop_data;
-    uint32_t position;
-    std::map<uint16_t, std::string> mExport;
-    std::map<uint16_t, std::string> mImport;
-
     std::map<uint16_t, std::unique_ptr<SOP>> mSOP;
-
-private:
-    uint8_t &getByte();
-    uint16_t &getWord();
-    uint32_t &getLong();
 
 public:
     Aesop(RESOURCES::Resource &resource);
