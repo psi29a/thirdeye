@@ -12,12 +12,13 @@
 
 #include <boost/filesystem.hpp>
 
+#include "sop.hpp"
 #include "../resources/res.hpp"
 
 #ifndef AESOP_HPP
 #define AESOP_HPP
 
-namespace AESOP {
+namespace STATE {
 
 /* SOP OPERANDS */
 #define OP_BRT  0x00    /* 00   BRT   word            BRanch if True   */
@@ -109,13 +110,6 @@ namespace AESOP {
 #define OP_END  0x56    /* 56   END   -               END of handler (end of handler, used also as return)  */
 #define OP_BRK  0x57    /* 57   BRK   -               BReaKpoint for debugging  */
 
-/* IMPORT/EXPORT PREFIXES */
-#define IMEX_METHOD     'M'
-#define IMEX_N          'N'
-#define IMEX_BYTE       'B'
-#define IMEX_WORD       'W'
-#define IMEX_LONG       'L'
-#define IMEX_CFUNCTION  'C'
 
 #if defined(__GNUC__)
 #define PACK( __Declaration__ ) __Declaration__ __attribute__((__packed__))
@@ -125,64 +119,6 @@ namespace AESOP {
 #error "Unknown platform!"
 #endif
 
-
-PACK(struct SOPScriptHeader
-{
-  uint16_t static_size;  // probably size of class variables/constants (??)
-  uint32_t import_resource; // the number of the corresponding import resource
-  uint32_t export_resource; // the number of the corresponding export resource
-  uint32_t parent; // the number of parent object (ffffffff if none)
-});
-
-PACK(struct SOPImExHeader
-{
-  uint16_t hashsize;  // probably number of string lists (??)
-  uint32_t start_of_the_list; // starting position of string list
-});
-
-struct ImExEntry
-{
-    std::string first;
-    std::string second;
-    char type;
-    int16_t position;
-    int8_t elements;
-    std::string table_entry;
-    int16_t sop_index;
-    int16_t import_from;
-};
-
-class SOP
-{
-    uint32_t mPC; // position counter
-    RESOURCES::Resource &mRes;  // resource reference
-    uint16_t mIndex;    // index offset to sop data
-    std::string mName;  // name of SOP
-
-    std::vector<uint8_t> mData;
-
-    SOPScriptHeader mSOPHeader;
-    std::vector<uint8_t> mSOPImport;
-    SOPImExHeader mSOPImportHeader;
-    std::map<uint16_t, ImExEntry> mSOPImportData;
-
-    std::vector<uint8_t> mSOPExport;
-    SOPImExHeader mSOPExportHeader;
-    std::map<uint16_t, ImExEntry> mSOPExportData;
-
-private:
-    void getImExData(const std::vector<uint8_t> &ImEx, bool import);
-
-public:
-    SOP(RESOURCES::Resource &resource, uint16_t index);
-    virtual ~SOP();
-    uint8_t &getByte();
-    uint16_t &getWord();
-    uint32_t &getLong();
-    uint32_t getPC();
-    void setPC(uint32_t);
-    SOPScriptHeader &getSOPHeader();
-};
 
 class Aesop
 {
