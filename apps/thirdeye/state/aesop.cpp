@@ -23,17 +23,19 @@ Aesop::Aesop(RESOURCES::Resource &resource):mRes(resource) {
 
     std::cout << "DEBUG: " << mSOP[start_index]->getPC() << std::endl;
     std::cout << "DEBUG: " << mSOP[start_index]->getSOPHeader().import_resource << std::endl;
+
+    mSOP[start_index]->setPC(47); // TODO: use SOP index 0 as starting point.
 }
 
 Aesop::~Aesop() {
     //cleanup
 }
 
-void Aesop::show() {
-    uint16_t start_index = mRes.getIndex("start");
+void Aesop::run() {
     std::stringbuf op_output;
     std::ostream op_output_stream(&op_output);
-    mSOP[start_index]->setPC(47); // TODO: use SOP index 0 as starting point.
+
+    uint16_t start_index = mRes.getIndex("start");
     uint16_t local_var_size = reinterpret_cast<uint16_t&>(mSOP[start_index]->getWord()); // get THIS
     bool is_more = true;
     while (is_more){
