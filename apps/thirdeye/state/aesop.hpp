@@ -9,6 +9,7 @@
 #include <vector>
 #include <map>
 #include <memory>
+#include <stack>
 
 #include <boost/filesystem.hpp>
 
@@ -125,11 +126,12 @@ class Aesop
     RESOURCES::Resource &mRes;
     boost::filesystem::path resPath;
     std::map<uint16_t, std::unique_ptr<SOP>> mSOP;
+    std::stack<int64_t> mStack;
 
 public:
     Aesop(RESOURCES::Resource &resource);
     virtual ~Aesop();
-    void show();
+    void run();
 };
 
 
