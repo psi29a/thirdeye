@@ -127,6 +127,11 @@ class Aesop
     boost::filesystem::path resPath;
     std::map<uint16_t, std::unique_ptr<SOP>> mSOP;
     std::stack<int64_t> mStack;
+    std::map<int16_t, int64_t> mStaticVariable;
+
+private:
+    void setStaticVariable(uint16_t index, int64_t value);
+    int64_t getStaticVariable(uint16_t index);
 
 public:
     Aesop(RESOURCES::Resource &resource);

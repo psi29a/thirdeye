@@ -25,6 +25,7 @@ Aesop::Aesop(RESOURCES::Resource &resource):mRes(resource) {
     std::cout << "DEBUG: " << mSOP[start_index]->getSOPHeader().import_resource << std::endl;
 
     mSOP[start_index]->setPC(47); // TODO: use SOP index 0 as starting point.
+    uint16_t local_var_size = reinterpret_cast<uint16_t&>(mSOP[start_index]->getWord()); // get THIS
 }
 
 Aesop::~Aesop() {
@@ -36,7 +37,6 @@ void Aesop::run() {
     std::ostream op_output_stream(&op_output);
 
     uint16_t start_index = mRes.getIndex("start");
-    uint16_t local_var_size = reinterpret_cast<uint16_t&>(mSOP[start_index]->getWord()); // get THIS
     bool is_more = true;
     while (is_more){
         op_output.str("");
@@ -175,6 +175,17 @@ void Aesop::run() {
     }
 
     return;
+}
+
+void Aesop::setStaticVariable(uint16_t index, int64_t value){
+    mStaticVariable[index] = value;
+}
+
+int64_t Aesop::getStaticVariable(uint16_t index){
+    if (mStaticVariable.count(index) == 0)
+        std::throw_with_nested(std::runtime_error("Local variable not set: "+index));
+
+    return mStaticVariable[index];
 }
 
 }
