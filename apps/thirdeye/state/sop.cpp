@@ -186,5 +186,19 @@ uint32_t &SOP::getLong(){
     return reinterpret_cast<uint32_t&>(mData[mPC-4]);
 }
 
+void SOP::setLocalVariableSize(uint16_t message_index, uint8_t size){
+    mLocalVariable[message_index].size = size;
+}
+
+void SOP::setLocalVariable(uint16_t message_index, uint16_t variable_index, int64_t value){
+    mLocalVariable[message_index].value[variable_index] = value;
+}
+
+int64_t SOP::getLocalVariable(uint16_t message_index, uint16_t variable_index){
+    if (mLocalVariable[message_index].value.count(variable_index) == 0)
+        std::throw_with_nested(std::runtime_error("Local variable for `"+boost::lexical_cast<std::string>(variable_index)+"` not set for message: "+boost::lexical_cast<std::string>(message_index)));
+
+    return mLocalVariable[message_index].value[variable_index];
+}
 
 }

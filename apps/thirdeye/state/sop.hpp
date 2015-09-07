@@ -51,6 +51,13 @@ struct ImExEntry
     int16_t import_from;
 };
 
+struct LocalVariables
+{
+    uint8_t size;
+    std::map<uint16_t, int64_t> value;
+    std::map<uint16_t, char> type;
+};
+
 class SOP
 {
     uint32_t mPC; // position counter
@@ -69,6 +76,8 @@ class SOP
     SOPImExHeader mSOPExportHeader;
     std::map<uint16_t, ImExEntry> mSOPExportData;
 
+    std::map<int16_t, LocalVariables> mLocalVariable;
+
 private:
     void getImExData(const std::vector<uint8_t> &ImEx, bool import);
 
@@ -81,6 +90,11 @@ public:
     uint32_t getPC();
     void setPC(uint32_t);
     SOPScriptHeader &getSOPHeader();
+
+    void setLocalVariableSize(uint16_t message_index, uint8_t size);
+    void setLocalVariableType(uint16_t message_index, uint16_t variable_index, char type);
+    void setLocalVariable(uint16_t message_index, uint16_t variable_index, int64_t value);
+    int64_t getLocalVariable(uint16_t message_index, uint16_t variable_index);
 };
 
 }
