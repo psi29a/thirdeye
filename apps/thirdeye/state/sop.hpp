@@ -76,8 +76,6 @@ class SOP
     SOPImExHeader mSOPExportHeader;
     std::map<uint16_t, ImExEntry> mSOPExportData;
 
-    std::map<int16_t, LocalVariables> mLocalVariable;
-
 private:
     void getImExData(const std::vector<uint8_t> &ImEx, bool import);
 
@@ -90,11 +88,10 @@ public:
     uint32_t getPC();
     void setPC(uint32_t);
     SOPScriptHeader &getSOPHeader();
-
-    void setLocalVariableSize(uint16_t message_index, uint8_t size);
-    void setLocalVariableType(uint16_t message_index, uint16_t variable_index, char type);
-    void setLocalVariable(uint16_t message_index, uint16_t variable_index, int64_t value);
-    int64_t getLocalVariable(uint16_t message_index, uint16_t variable_index);
+    std::string getSOPMessageName(uint16_t index);
+    int16_t getSOPMessagePosition(uint16_t index);
+    std::string getSOPImportName(uint16_t index);
+    std::string getStringFromLECA(uint32_t start, uint32_t end);
 };
 
 }

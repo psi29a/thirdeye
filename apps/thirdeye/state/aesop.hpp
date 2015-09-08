@@ -21,6 +21,8 @@
 
 namespace STATE {
 
+#define INDEX_CREATE    0   /* this is the index of the 'create' function in the 'start' SOP
+
 /* SOP OPERANDS */
 #define OP_BRT  0x00    /* 00   BRT   word            BRanch if True   */
 #define OP_BRF  0x01    /* 01   BRF   word            BRanch if False  */
@@ -125,13 +127,11 @@ class Aesop
 {
     RESOURCES::Resource &mRes;
     boost::filesystem::path resPath;
-    std::map<uint16_t, std::unique_ptr<SOP>> mSOP;
-    std::stack<int64_t> mStack;
-    std::map<int16_t, int64_t> mStaticVariable;
-
-private:
-    void setStaticVariable(uint16_t index, int64_t value);
-    int64_t getStaticVariable(uint16_t index);
+    std::map<uint16_t, std::shared_ptr<SOP>> mSOP;
+    uint16_t mCurrentSOP;
+    std::stack<int32_t> mStack;
+    std::vector<uint8_t> mStaticVariable;
+    std::vector<uint8_t> mLocalVariable;
 
 public:
     Aesop(RESOURCES::Resource &resource);
