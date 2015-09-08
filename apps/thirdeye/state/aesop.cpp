@@ -18,14 +18,13 @@ namespace STATE {
 
 Aesop::Aesop(RESOURCES::Resource &resource):mRes(resource) {
     // load and initialize 'start' sop
-    uint16_t start_index = mRes.getIndex("start");
-    mSOP[start_index] = std::make_unique<SOP>(mRes, start_index);
+    mCurrentSOP = mRes.getIndex("start");
+    mSOP[mCurrentSOP] = std::make_shared<SOP>(mRes, mCurrentSOP);
 
-    std::cout << "DEBUG: " << mSOP[start_index]->getPC() << std::endl;
-    std::cout << "DEBUG: " << mSOP[start_index]->getSOPHeader().import_resource << std::endl;
-
-    mSOP[start_index]->setPC(47); // TODO: use SOP index 0 as starting point.
-    uint16_t local_var_size = reinterpret_cast<uint16_t&>(mSOP[start_index]->getWord()); // get THIS
+    // set position counter to where the 'create' message is
+    mSOP[mCurrentSOP]->setPC(mSOP[mCurrentSOP]->getSOPMessagePosition(INDEX_CREATE));
+    mStaticVariable.reserve(512);   // total static variable capacity in uint8_t units
+    mLocalVariable.reserve(512);    // total local variable capacity in uint8_t units
 }
 
 Aesop::~Aesop() {
@@ -36,49 +35,65 @@ void Aesop::run() {
     std::stringbuf op_output;
     std::ostream op_output_stream(&op_output);
 
-    uint16_t start_index = mRes.getIndex("start");
+    std::shared_ptr<STATE::SOP> sop = mSOP[mCurrentSOP];  // for convience
+
+    std::cout << "Entering '" << sop->getSOPMessageName(INDEX_CREATE) << "'"<< std::endl;
+    // Find the total size of all local variables, including THIS
+    uint16_t local_var_size = reinterpret_cast<uint16_t&>(mSOP[mCurrentSOP]->getWord()); // get THIS
+    mLocalVariable.resize(local_var_size);
+    *reinterpret_cast<uint16_t*>(reinterpret_cast<void*>(mLocalVariable.data())) = local_var_size;
+
+    // the big loop
+    std::map<uint8_t, int32_t> parameter;
     bool is_more = true;
     while (is_more){
         op_output.str("");
         std::string s_op = "";
         std::string s_value = "";
+
         uint32_t value = 0;
         uint32_t end_value = 0;
-        uint32_t pc = mSOP[start_index]->getPC();
+        uint32_t pc = sop->getPC();
 
-        uint8_t &op = mSOP[start_index]->getByte();
+        uint8_t &op = sop->getByte();
         switch (op) {
         case OP_BRT:
             s_op = "BRT";
-            value = mSOP[start_index]->getWord();
+            value = sop->getWord();
+            //sop->setPC(value);
             break;
         case OP_BRF:
             s_op = "BRF";
-            value = mSOP[start_index]->getWord();
+            value = sop->getWord();
+            //sop->setPC(value);
             break;
         case OP_BRA:
             s_op = "BRA";
-            value = mSOP[start_index]->getWord();
+            value = sop->getWord();
+            sop->setPC(value);
             break;
         case OP_CASE:
             s_op = "CASE";
-            value = mSOP[start_index]->getWord();  //number of entries in this CASE
+            value = sop->getWord();  //number of entries in this CASE
             for (uint16_t i = 0; i < value; i++){
-                uint32_t case_value = mSOP[start_index]->getLong();
-                uint16_t jump_address = mSOP[start_index]->getWord();
+                uint32_t case_value = sop->getLong();
+                uint16_t jump_address = sop->getWord();
                 op_output_stream << std::endl << "          CASE #"
                                  << i << ": "
                                  << case_value << " -> " << jump_address;
+                // TODO: check if case_value is true, then jump
             }
             {
-                uint16_t default_jump_address = mSOP[start_index]->getWord();
+                uint16_t default_jump_address = sop->getWord();
                 op_output_stream << std::endl << "          DEFAULT: -> "
                                  << default_jump_address;
+                // when all else fails, we default to this jump address
+                sop->setPC(default_jump_address);
             }
             break;
         case OP_PUSH:
-            // TODO: no value, what do we do?
             s_op = "PUSH";
+            mStack.push(0);
             break;
         case OP_NEG:
             s_op = "NEG";
@@ -88,71 +103,95 @@ void Aesop::run() {
             break;
         case OP_SHTC:
             s_op = "SHTC";
-            value = mSOP[start_index]->getByte();
+            value = sop->getByte();
+            mStack.push(value);
             break;
         case OP_INTC:
             s_op = "INTC";
-            value = mSOP[start_index]->getWord();
+            value = sop->getWord();
+            mStack.push(value);
             break;
         case OP_LNGC:
             s_op = "LNGC";
-            value = mSOP[start_index]->getLong();
+            value = sop->getLong();
+            mStack.push(value);
             break;
         case OP_RCRS:
             s_op = "RCRS";
-            value = mSOP[start_index]->getWord();
-            //op_output_stream << mSOP[start_index]->mSOPImportData[boost::lexical_cast<uint16_t>(value)].table_entry;
+            value = sop->getWord();
+            op_output_stream << sop->getSOPImportName(boost::lexical_cast<uint16_t>(value));
+            mStack.push(value);
             break;
         case OP_CALL:
             s_op = "CALL";
-            value = mSOP[start_index]->getByte();
+            value = sop->getByte(); // number of parameters
+            for (uint8_t i = value; i > 0; i--){
+                parameter[i] = mStack.top();
+                mStack.pop();
+                std::cout << "DEBUG - Number of parameters: " << parameter[i] << " at index: " << (int16_t) i << std::endl;
+
+                // check for parameter delimiter
+                if (mStack.top() != 0)
+                    std::throw_with_nested(std::runtime_error("Delimiter not found! Got this: " + mStack.top()));
+                else
+                    mStack.pop();
+            }
+
+            // call up function and send parameters
+            std::cout << "DEBUG - Calling: " << sop->getSOPImportName(boost::lexical_cast<uint16_t>(mStack.top())) << std::endl;
+            mStack.pop();
+
+            // clear parameter for next use
+            parameter.clear();
+
             break;
         case OP_SEND:
             s_op = "SEND";
-            value = mSOP[start_index]->getByte();
+            value = sop->getByte();
             op_output_stream << " " << value;
-            value = mSOP[start_index]->getWord();
+            value = sop->getWord();
             op_output_stream << " -> '" << mRes.getTableEntry(value, 4) << "'"; // TODO: get this through SOP
             break;
         case OP_LAB:
             s_op = "LAB";
-            value = mSOP[start_index]->getWord();
+            value = sop->getWord();
             break;
         case OP_LAW:
             s_op = "LAW";
-            value = mSOP[start_index]->getWord();
+            value = sop->getWord();
             break;
         case OP_LAD:
             s_op = "LAD";
-            value = mSOP[start_index]->getWord();
+            value = sop->getWord();
             break;
         case OP_SAW:
             s_op = "SAW";
-            value = mSOP[start_index]->getWord();
+            value = sop->getWord();
             break;
         case OP_SAD:
             s_op = "SAD";
-            value = mSOP[start_index]->getWord();
+            value = sop->getWord();
             break;
         case OP_LXD:
             s_op = "LXD";
-            value = mSOP[start_index]->getWord();
+            value = sop->getWord();
             break;
         case OP_SXB:
             s_op = "SXB";
-            value = mSOP[start_index]->getWord();
+            value = sop->getWord();
             break;
         case OP_LXDA:
             s_op = "LXDA";
-            value = mSOP[start_index]->getWord();
+            value = sop->getWord();
             break;
         case OP_LECA:
             s_op = "LECA";
-            value = mSOP[start_index]->getWord();
-            mSOP[start_index]->getByte();
-            end_value = mSOP[start_index]->getWord();
-            //s_value = std::string(reinterpret_cast<const char*>(sop_data.data()) + value, end_value - value);
-            mSOP[start_index]->setPC(mSOP[start_index]->getPC() + end_value-value);
+            value = sop->getWord();
+            sop->getByte();
+            end_value = sop->getWord();
+            s_value = sop->getStringFromLECA(value, end_value);
+            mStack.push(-1); // Dummy value, until we figure out what do with strings.
+            sop->setPC(sop->getPC() + end_value-value);
             break;
         case OP_END:
             s_op = "END";
@@ -169,23 +208,12 @@ void Aesop::run() {
                      pc << " " <<
                      std::hex << std::setw(4) <<
                      s_op << " (0x" << std::setfill('0') << std::setw(2) <<
-                     (uint16_t) op << "):  " << std::dec <<
-                     (uint16_t) value << " (" << s_value << ") " << op_output.str() <<
+                     (uint32_t) op << "):  " << std::dec <<
+                     (uint32_t) value << " (" << s_value << ") " << op_output.str() <<
                      std::endl;
     }
 
     return;
-}
-
-void Aesop::setStaticVariable(uint16_t index, int64_t value){
-    mStaticVariable[index] = value;
-}
-
-int64_t Aesop::getStaticVariable(uint16_t index){
-    if (mStaticVariable.count(index) == 0)
-        std::throw_with_nested(std::runtime_error("Local variable not set: "+index));
-
-    return mStaticVariable[index];
 }
 
 }

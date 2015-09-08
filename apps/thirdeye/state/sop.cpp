@@ -87,67 +87,60 @@ void SOP::getImExData(const std::vector<uint8_t> &ImEx, bool import){
         if (import && second_fields.size() == 2)
             import_from = boost::lexical_cast<uint16_t>(second_fields[second_fields.size()-1]);
 
-        std::map<uint16_t, ImExEntry> &data = mSOPImportData;
-        if (!import)
-            data = mSOPExportData;
 
+        ImExEntry data;
         uint16_t index;
         // massage data by index
         if (first_string[0] == IMEX_METHOD){
             index = boost::lexical_cast<uint16_t>(first_fields[1]);
-            if (data.count(index)) std::throw_with_nested(std::runtime_error("Duplicate index: `"+first_string+"`, "+second_string));
-            data[index].first = first_string;
-            data[index].second = second_string;
-            data[index].position = boost::lexical_cast<uint16_t>(second_string);
-            data[index].type = IMEX_METHOD;
-            data[index].table_entry = mRes.getTableEntry(index, 4);
-            data[index].elements = number_of_elements;
-            data[index].sop_index = sop_index;
-            data[index].import_from = import_from;
+            data.first = first_string;
+            data.second = second_string;
+            data.position = boost::lexical_cast<uint16_t>(second_string);
+            data.type = IMEX_METHOD;
+            data.table_entry = mRes.getTableEntry(index, 4);
+            data.elements = number_of_elements;
+            data.sop_index = sop_index;
+            data.import_from = import_from;
         } else if (first_string[0] == IMEX_BYTE){
             index = boost::lexical_cast<uint16_t>(second_fields[0]);
-            if (data.count(index)) std::throw_with_nested(std::runtime_error("Duplicate index: `"+first_string+"`, "+second_string));
-            data[index].first = first_string;
-            data[index].second = second_string;
-            data[index].position = -1;
-            data[index].type = IMEX_BYTE;
-            data[index].table_entry = first_fields[first_fields.size()-1];
-            data[index].elements = number_of_elements;
-            data[index].sop_index = sop_index;
-            data[index].import_from = import_from;
+            data.first = first_string;
+            data.second = second_string;
+            data.position = -1;
+            data.type = IMEX_BYTE;
+            data.table_entry = first_fields[first_fields.size()-1];
+            data.elements = number_of_elements;
+            data.sop_index = sop_index;
+            data.import_from = import_from;
         } else if (first_string[0] == IMEX_LONG){
             index = boost::lexical_cast<uint16_t>(second_fields[0]);
-            if (data.count(index)) std::throw_with_nested(std::runtime_error("Duplicate index: `"+first_string+"`, "+second_string));
-            data[index].first = first_string;
-            data[index].second = second_string;
-            data[index].position = -1;
-            data[index].type = IMEX_LONG;
-            data[index].table_entry = first_fields[first_fields.size()-1];
-            data[index].elements = number_of_elements;
-            data[index].sop_index = sop_index;
-            data[index].import_from = boost::lexical_cast<uint16_t>(second_fields[second_fields.size()-1]);
+            data.first = first_string;
+            data.second = second_string;
+            data.position = -1;
+            data.type = IMEX_LONG;
+            data.table_entry = first_fields[first_fields.size()-1];
+            data.elements = number_of_elements;
+            data.sop_index = sop_index;
+            data.import_from = boost::lexical_cast<uint16_t>(second_fields[second_fields.size()-1]);
         } else if (first_string[0] == IMEX_WORD){
             index = boost::lexical_cast<uint16_t>(second_fields[0]);
-            if (data.count(index)) std::throw_with_nested(std::runtime_error("Duplicate index: `"+first_string+"`, "+second_string));
-            data[index].first = first_string;
-            data[index].second = second_string;
-            data[index].position = -1;
-            data[index].type = IMEX_WORD;
-            data[index].table_entry = first_fields[first_fields.size()-1];
-            data[index].elements = number_of_elements;
-            data[index].sop_index = sop_index;
-            data[index].import_from = import_from;
+            data.first = first_string;
+            data.second = second_string;
+            data.position = -1;
+            data.type = IMEX_WORD;
+            data.table_entry = first_fields[first_fields.size()-1];
+            data.elements = number_of_elements;
+            data.sop_index = sop_index;
+            data.import_from = import_from;
         } else if (first_string[0] == IMEX_CFUNCTION){
             index = boost::lexical_cast<uint16_t>(second_fields[0]);
-            if (data.count(index)) std::throw_with_nested(std::runtime_error("Duplicate index: `"+first_string+"`, "+second_string));
-            data[index].first = first_string;
-            data[index].second = second_string;
-            data[index].position = -1;
-            data[index].type = IMEX_CFUNCTION;
-            data[index].table_entry = first_fields[first_fields.size()-1];
-            data[index].elements = -1;
-            data[index].sop_index = -1;
-            data[index].import_from = import_from;
+            data.first = first_string;
+            data.second = second_string;
+            data.position = -1;
+            data.type = IMEX_CFUNCTION;
+            data.table_entry = first_fields[first_fields.size()-1];
+            data.elements = -1;
+            data.sop_index = -1;
+            data.import_from = import_from;
         } else if (first_string[0] == IMEX_N) {
             // ignore this, it is just a header
             std::cout << std::endl;
@@ -156,9 +149,18 @@ void SOP::getImExData(const std::vector<uint8_t> &ImEx, bool import){
             std::throw_with_nested(std::runtime_error("Uknown prefix `"+first_string+"`."));
         }
 
-        std::cout << "; " << data[index].table_entry << " from "
-                  << data[index].import_from << ":"
-                  << mRes.getTableEntry(data[index].import_from, 0) << std::endl;
+        if (import){
+            if (mSOPImportData.count(index)) std::throw_with_nested(std::runtime_error("Duplicate index: `"+first_string+"`, "+second_string));
+            mSOPImportData[index] = data;
+        } else {
+            if (mSOPExportData.count(index)) std::throw_with_nested(std::runtime_error("Duplicate index: `"+first_string+"`, "+second_string));
+            mSOPExportData[index] = data;
+        }
+
+        std::cout << "; " << data.table_entry << " from "
+                  << data.import_from << ":"
+                  << mRes.getTableEntry(data.import_from, 0)
+                  << std::endl;
 
     }
 }
@@ -186,19 +188,20 @@ uint32_t &SOP::getLong(){
     return reinterpret_cast<uint32_t&>(mData[mPC-4]);
 }
 
-void SOP::setLocalVariableSize(uint16_t message_index, uint8_t size){
-    mLocalVariable[message_index].size = size;
+std::string SOP::getSOPMessageName(uint16_t index){
+    return mSOPExportData[index].table_entry;
 }
 
-void SOP::setLocalVariable(uint16_t message_index, uint16_t variable_index, int64_t value){
-    mLocalVariable[message_index].value[variable_index] = value;
+int16_t SOP::getSOPMessagePosition(uint16_t index){
+    return mSOPExportData[index].position;
 }
 
-int64_t SOP::getLocalVariable(uint16_t message_index, uint16_t variable_index){
-    if (mLocalVariable[message_index].value.count(variable_index) == 0)
-        std::throw_with_nested(std::runtime_error("Local variable for `"+boost::lexical_cast<std::string>(variable_index)+"` not set for message: "+boost::lexical_cast<std::string>(message_index)));
+std::string SOP::getSOPImportName(uint16_t index){
+    return mSOPImportData[index].table_entry;
+}
 
-    return mLocalVariable[message_index].value[variable_index];
+std::string SOP::getStringFromLECA(uint32_t start, uint32_t end){
+    return std::string(reinterpret_cast<const char*>(mData.data()) + start, end - start);
 }
 
 }
