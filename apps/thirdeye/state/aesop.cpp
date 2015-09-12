@@ -93,7 +93,11 @@ void Aesop::run() {
             break;
         case OP_PUSH:
             s_op = "PUSH";
-            mStack.push(0);
+            {
+                std::vector<uint8_t> temp(sizeof(uint8_t));
+                *temp.data() = 0;
+                mStack.push(temp);
+            }
             break;
         case OP_NEG:
             s_op = "NEG";
@@ -103,42 +107,61 @@ void Aesop::run() {
             break;
         case OP_SHTC:
             s_op = "SHTC";
-            value = sop->getByte();
-            mStack.push(value);
+            {
+                std::vector<uint8_t> temp(sizeof(uint8_t));
+                *reinterpret_cast<uint8_t*>(reinterpret_cast<void*>(temp.data())) = sop->getByte();
+                mStack.push(temp);
+            }
             break;
         case OP_INTC:
             s_op = "INTC";
-            value = sop->getWord();
-            mStack.push(value);
+            {
+                std::vector<uint8_t> temp(sizeof(uint16_t));
+                *reinterpret_cast<uint16_t*>(reinterpret_cast<void*>(temp.data())) = sop->getWord();
+                mStack.push(temp);
+            }
             break;
         case OP_LNGC:
             s_op = "LNGC";
-            value = sop->getLong();
-            mStack.push(value);
+            {
+                std::vector<uint8_t> temp(sizeof(uint32_t));
+                *reinterpret_cast<uint32_t*>(reinterpret_cast<void*>(temp.data())) = sop->getLong();
+                mStack.push(temp);
+            }
             break;
         case OP_RCRS:
             s_op = "RCRS";
-            value = sop->getWord();
-            op_output_stream << sop->getSOPImportName(boost::lexical_cast<uint16_t>(value));
-            mStack.push(value);
+            {
+                std::vector<uint8_t> temp(sizeof(uint16_t));
+                *reinterpret_cast<uint16_t*>(reinterpret_cast<void*>(temp.data())) = sop->getWord();
+                mStack.push(temp);
+            }
+            op_output_stream << sop->getSOPImportName(*reinterpret_cast<uint16_t*>(reinterpret_cast<void*>(mStack.top().data())));
             break;
         case OP_CALL:
             s_op = "CALL";
             value = sop->getByte(); // number of parameters
             for (uint8_t i = value; i > 0; i--){
-                parameter[i] = mStack.top();
+
+                if (mStack.top().size() == 1)
+                    parameter[i] = *reinterpret_cast<int8_t*>(reinterpret_cast<void*>(mStack.top().data()));
+                else if (mStack.top().size() == 2)
+                    parameter[i] = *reinterpret_cast<int16_t*>(reinterpret_cast<void*>(mStack.top().data()));
+                else if (mStack.top().size() == 4)
+                    parameter[i] = *reinterpret_cast<int32_t*>(reinterpret_cast<void*>(mStack.top().data()));
+
                 mStack.pop();
-                std::cout << "DEBUG - Number of parameters: " << parameter[i] << " at index: " << (int16_t) i << std::endl;
+                std::cout << "DEBUG - Parameter: " << parameter[i] << " at index: " << (int16_t) i << std::endl;
 
                 // check for parameter delimiter
-                if (mStack.top() != 0)
-                    std::throw_with_nested(std::runtime_error("Delimiter not found! Got this: " + mStack.top()));
+                if (*mStack.top().data() != 0)
+                    std::throw_with_nested(std::runtime_error("Delimiter not found! Got this: " + boost::lexical_cast<char>(mStack.top().data())));
                 else
                     mStack.pop();
             }
 
             // call up function and send parameters
-            std::cout << "DEBUG - Calling: " << sop->getSOPImportName(boost::lexical_cast<uint16_t>(mStack.top())) << std::endl;
+            std::cout << "DEBUG - Calling: " << sop->getSOPImportName(*reinterpret_cast<uint16_t*>(reinterpret_cast<void*>(mStack.top().data()))) << std::endl;
             mStack.pop();
 
             // clear parameter for next use
@@ -190,7 +213,11 @@ void Aesop::run() {
             sop->getByte();
             end_value = sop->getWord();
             s_value = sop->getStringFromLECA(value, end_value);
-            mStack.push(-1); // Dummy value, until we figure out what do with strings.
+            {
+                std::vector<uint8_t> test(1);
+                test[0] = -1;
+                mStack.push(test); // Dummy value, until we figure out what do with strings.
+            }
             sop->setPC(sop->getPC() + end_value-value);
             break;
         case OP_END:
