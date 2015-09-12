@@ -129,7 +129,7 @@ class Aesop
     boost::filesystem::path resPath;
     std::map<uint16_t, std::shared_ptr<SOP>> mSOP;
     uint16_t mCurrentSOP;
-    std::stack<int32_t> mStack;
+    std::stack<std::vector<uint8_t>> mStack;
     std::vector<uint8_t> mStaticVariable;
     std::vector<uint8_t> mLocalVariable;
 
