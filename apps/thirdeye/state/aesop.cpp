@@ -69,35 +69,15 @@ void Aesop::run() {
             break;
         case OP_BRA:
             s_op = "BRA";
-            value = sop->getWord();
-            sop->setPC(value);
+            do_BRA();
             break;
         case OP_CASE:
             s_op = "CASE";
-            value = sop->getWord();  //number of entries in this CASE
-            for (uint16_t i = 0; i < value; i++){
-                uint32_t case_value = sop->getLong();
-                uint16_t jump_address = sop->getWord();
-                op_output_stream << std::endl << "          CASE #"
-                                 << i << ": "
-                                 << case_value << " -> " << jump_address;
-                // TODO: check if case_value is true, then jump
-            }
-            {
-                uint16_t default_jump_address = sop->getWord();
-                op_output_stream << std::endl << "          DEFAULT: -> "
-                                 << default_jump_address;
-                // when all else fails, we default to this jump address
-                sop->setPC(default_jump_address);
-            }
+            do_CASE();
             break;
         case OP_PUSH:
             s_op = "PUSH";
-            {
-                std::vector<uint8_t> temp(sizeof(uint8_t));
-                *temp.data() = 0;
-                mStack.push(temp);
-            }
+            do_PUSH();
             break;
         case OP_NEG:
             s_op = "NEG";
@@ -131,42 +111,11 @@ void Aesop::run() {
             break;
         case OP_RCRS:
             s_op = "RCRS";
-            {
-                std::vector<uint8_t> temp(sizeof(uint16_t));
-                *reinterpret_cast<uint16_t*>(reinterpret_cast<void*>(temp.data())) = sop->getWord();
-                mStack.push(temp);
-            }
-            op_output_stream << sop->getSOPImportName(*reinterpret_cast<uint16_t*>(reinterpret_cast<void*>(mStack.top().data())));
+            do_RCRS();
             break;
         case OP_CALL:
             s_op = "CALL";
-            value = sop->getByte(); // number of parameters
-            for (uint8_t i = value; i > 0; i--){
-
-                if (mStack.top().size() == 1)
-                    parameter[i] = *reinterpret_cast<int8_t*>(reinterpret_cast<void*>(mStack.top().data()));
-                else if (mStack.top().size() == 2)
-                    parameter[i] = *reinterpret_cast<int16_t*>(reinterpret_cast<void*>(mStack.top().data()));
-                else if (mStack.top().size() == 4)
-                    parameter[i] = *reinterpret_cast<int32_t*>(reinterpret_cast<void*>(mStack.top().data()));
-
-                mStack.pop();
-                std::cout << "DEBUG - Parameter: " << parameter[i] << " at index: " << (int16_t) i << std::endl;
-
-                // check for parameter delimiter
-                if (*mStack.top().data() != 0)
-                    std::throw_with_nested(std::runtime_error("Delimiter not found! Got this: " + boost::lexical_cast<char>(mStack.top().data())));
-                else
-                    mStack.pop();
-            }
-
-            // call up function and send parameters
-            std::cout << "DEBUG - Calling: " << sop->getSOPImportName(*reinterpret_cast<uint16_t*>(reinterpret_cast<void*>(mStack.top().data()))) << std::endl;
-            mStack.pop();
-
-            // clear parameter for next use
-            parameter.clear();
-
+            do_CALL();
             break;
         case OP_SEND:
             s_op = "SEND";
@@ -214,9 +163,7 @@ void Aesop::run() {
             end_value = sop->getWord();
             s_value = sop->getStringFromLECA(value, end_value);
             {
-                std::vector<uint8_t> test(1);
-                test[0] = -1;
-                mStack.push(test); // Dummy value, until we figure out what do with strings.
+                mStack.push(std::vector<uint8_t>(s_value.c_str(), s_value.c_str() + s_value.length() + 1));
             }
             sop->setPC(sop->getPC() + end_value-value);
             break;
@@ -241,6 +188,74 @@ void Aesop::run() {
     }
 
     return;
+}
+
+void Aesop::do_BRA(){
+    // unconditional branch
+    mSOP[mCurrentSOP]->setPC(mSOP[mCurrentSOP]->getWord());
+}
+
+void Aesop::do_CASE(){
+    // case statement
+    uint16_t value = mSOP[mCurrentSOP]->getWord();  //number of entries in this CASE
+    for (uint16_t i = 0; i < value; i++){
+        uint32_t case_value = mSOP[mCurrentSOP]->getLong();
+        uint16_t jump_address = mSOP[mCurrentSOP]->getWord();
+        std::cout << "          CASE #"
+                  << i << ": " << case_value << " -> "
+                  << jump_address << std::endl;
+        // TODO: check if case_value is true, then jump
+    }
+    uint16_t default_jump_address = mSOP[mCurrentSOP]->getWord();
+    std::cout << "          DEFAULT: -> "
+              << default_jump_address << std::endl;
+    // when all else fails, we default to this jump address
+    mSOP[mCurrentSOP]->setPC(default_jump_address);
+}
+
+void Aesop::do_PUSH(){
+    std::vector<uint8_t> temp(sizeof(uint8_t));
+    *temp.data() = 0;
+    mStack.push(temp);
+}
+
+void Aesop::do_RCRS(){
+    std::vector<uint8_t> temp(sizeof(uint16_t));
+    *reinterpret_cast<uint16_t*>(reinterpret_cast<void*>(temp.data())) = mSOP[mCurrentSOP]->getWord();
+    mStack.push(temp);
+    std::cout << "RCRS: "
+              << mSOP[mCurrentSOP]->getSOPImportName(*reinterpret_cast<uint16_t*>(reinterpret_cast<void*>(mStack.top().data())))
+              << std::endl;
+}
+
+void Aesop::do_CALL(){
+    std::map<uint8_t, int32_t> parameter;
+    uint8_t value = mSOP[mCurrentSOP]->getByte(); // number of parameters
+    for (uint8_t i = value; i > 0; i--){
+
+        if (mStack.top().size() == 1)
+            parameter[i] = *reinterpret_cast<int8_t*>(reinterpret_cast<void*>(mStack.top().data()));
+        else if (mStack.top().size() == 2)
+            parameter[i] = *reinterpret_cast<int16_t*>(reinterpret_cast<void*>(mStack.top().data()));
+        else if (mStack.top().size() == 4)
+            parameter[i] = *reinterpret_cast<int32_t*>(reinterpret_cast<void*>(mStack.top().data()));
+        else if (mStack.top().size() > 4) // maybe a string?
+            std::cout << "DEBUG - Parameter: " << std::string(mStack.top().begin(), mStack.top().end()) << " at index: " << (int16_t) i << std::endl;
+
+
+        mStack.pop();
+        std::cout << "DEBUG - Parameter: " << parameter[i] << " at index: " << (int16_t) i << std::endl;
+
+        // check for parameter delimiter
+        if (*mStack.top().data() != 0)
+            std::throw_with_nested(std::runtime_error("Delimiter not found! Got this: " + boost::lexical_cast<char>(mStack.top().data())));
+        else
+            mStack.pop();
+    }
+
+    // call up function and send parameters
+    std::cout << "DEBUG - Calling: " << mSOP[mCurrentSOP]->getSOPImportName(*reinterpret_cast<uint16_t*>(reinterpret_cast<void*>(mStack.top().data()))) << std::endl;
+    mStack.pop();
 }
 
 }

@@ -133,6 +133,15 @@ class Aesop
     std::vector<uint8_t> mStaticVariable;
     std::vector<uint8_t> mLocalVariable;
 
+private:
+    void do_BRA();
+    void do_BRT();
+    void do_BRF();
+    void do_CASE();
+    void do_CALL();
+    void do_PUSH();
+    void do_RCRS();
+
 public:
     Aesop(RESOURCES::Resource &resource);
     virtual ~Aesop();
