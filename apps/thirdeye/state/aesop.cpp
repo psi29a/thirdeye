@@ -158,14 +158,7 @@ void Aesop::run() {
             break;
         case OP_LECA:
             s_op = "LECA";
-            value = sop->getWord();
-            sop->getByte();
-            end_value = sop->getWord();
-            s_value = sop->getStringFromLECA(value, end_value);
-            {
-                mStack.push(std::vector<uint8_t>(s_value.c_str(), s_value.c_str() + s_value.length() + 1));
-            }
-            sop->setPC(sop->getPC() + end_value-value);
+            do_LECA();
             break;
         case OP_END:
             s_op = "END";
@@ -240,11 +233,11 @@ void Aesop::do_CALL(){
         else if (mStack.top().size() == 4)
             parameter[i] = *reinterpret_cast<int32_t*>(reinterpret_cast<void*>(mStack.top().data()));
         else if (mStack.top().size() > 4) // maybe a string?
-            std::cout << "DEBUG - Parameter: " << std::string(mStack.top().begin(), mStack.top().end()) << " at index: " << (int16_t) i << std::endl;
+            std::cout << "CALL - Parameter: " << std::string(mStack.top().begin(), mStack.top().end()) << " at index: " << (int16_t) i << std::endl;
 
 
         mStack.pop();
-        std::cout << "DEBUG - Parameter: " << parameter[i] << " at index: " << (int16_t) i << std::endl;
+        std::cout << "CALL - Parameter: " << parameter[i] << " at index: " << (int16_t) i << std::endl;
 
         // check for parameter delimiter
         if (*mStack.top().data() != 0)
@@ -254,8 +247,19 @@ void Aesop::do_CALL(){
     }
 
     // call up function and send parameters
-    std::cout << "DEBUG - Calling: " << mSOP[mCurrentSOP]->getSOPImportName(*reinterpret_cast<uint16_t*>(reinterpret_cast<void*>(mStack.top().data()))) << std::endl;
+    std::cout << "CALL - Calling: " << mSOP[mCurrentSOP]->getSOPImportName(*reinterpret_cast<uint16_t*>(reinterpret_cast<void*>(mStack.top().data()))) << std::endl;
     mStack.pop();
+}
+
+void Aesop::do_LECA(){
+    // retrieve strings embedded in SOP bytecode
+    uint16_t value = mSOP[mCurrentSOP]->getWord();
+    mSOP[mCurrentSOP]->getByte();
+    uint16_t end_value = mSOP[mCurrentSOP]->getWord();
+    std::string s_value = mSOP[mCurrentSOP]->getStringFromLECA(value, end_value);
+    mStack.push(std::vector<uint8_t>(s_value.c_str(), s_value.c_str() + s_value.length() + 1));
+    mSOP[mCurrentSOP]->setPC(mSOP[mCurrentSOP]->getPC() + end_value - value);
+    std::cout << "LECA: " << std::string(mStack.top().begin(), mStack.top().end()) << std::endl;
 }
 
 }

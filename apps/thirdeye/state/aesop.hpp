@@ -139,6 +139,7 @@ private:
     void do_BRF();
     void do_CASE();
     void do_CALL();
+    void do_LECA();
     void do_PUSH();
     void do_RCRS();
 
