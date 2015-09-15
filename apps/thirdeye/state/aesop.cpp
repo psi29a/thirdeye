@@ -87,27 +87,14 @@ void Aesop::run() {
             break;
         case OP_SHTC:
             s_op = "SHTC";
-            {
-                std::vector<uint8_t> temp(sizeof(uint8_t));
-                *reinterpret_cast<uint8_t*>(reinterpret_cast<void*>(temp.data())) = sop->getByte();
-                mStack.push(temp);
-            }
             break;
         case OP_INTC:
             s_op = "INTC";
-            {
-                std::vector<uint8_t> temp(sizeof(uint16_t));
-                *reinterpret_cast<uint16_t*>(reinterpret_cast<void*>(temp.data())) = sop->getWord();
-                mStack.push(temp);
-            }
+            do_INTC();
             break;
         case OP_LNGC:
             s_op = "LNGC";
-            {
-                std::vector<uint8_t> temp(sizeof(uint32_t));
-                *reinterpret_cast<uint32_t*>(reinterpret_cast<void*>(temp.data())) = sop->getLong();
-                mStack.push(temp);
-            }
+            do_LNGC();
             break;
         case OP_RCRS:
             s_op = "RCRS";
@@ -119,10 +106,7 @@ void Aesop::run() {
             break;
         case OP_SEND:
             s_op = "SEND";
-            value = sop->getByte();
-            op_output_stream << " " << value;
-            value = sop->getWord();
-            op_output_stream << " -> '" << mRes.getTableEntry(value, 4) << "'"; // TODO: get this through SOP
+            do_SEND();
             break;
         case OP_LAB:
             s_op = "LAB";
@@ -251,6 +235,12 @@ void Aesop::do_CALL(){
     mStack.pop();
 }
 
+void Aesop::do_INTC(){
+    std::vector<uint8_t> temp(sizeof(uint16_t));
+    *reinterpret_cast<uint16_t*>(reinterpret_cast<void*>(temp.data())) = mSOP[mCurrentSOP]->getWord();
+    mStack.push(temp);
+}
+
 void Aesop::do_LECA(){
     // retrieve strings embedded in SOP bytecode
     uint16_t value = mSOP[mCurrentSOP]->getWord();
@@ -260,6 +250,25 @@ void Aesop::do_LECA(){
     mStack.push(std::vector<uint8_t>(s_value.c_str(), s_value.c_str() + s_value.length() + 1));
     mSOP[mCurrentSOP]->setPC(mSOP[mCurrentSOP]->getPC() + end_value - value);
     std::cout << "LECA: " << std::string(mStack.top().begin(), mStack.top().end()) << std::endl;
+}
+
+void Aesop::do_LNGC(){
+    std::vector<uint8_t> temp(sizeof(uint32_t));
+    *reinterpret_cast<uint32_t*>(reinterpret_cast<void*>(temp.data())) = mSOP[mCurrentSOP]->getLong();
+    mStack.push(temp);
+}
+
+void Aesop::do_SHTC(){
+    std::vector<uint8_t> temp(sizeof(uint8_t));
+    *reinterpret_cast<uint8_t*>(reinterpret_cast<void*>(temp.data())) = mSOP[mCurrentSOP]->getByte();
+    mStack.push(temp);
+}
+
+void Aesop::do_SEND(){
+    uint16_t value = mSOP[mCurrentSOP]->getByte();
+    std::cout << "SEND: " << value;
+    value = mSOP[mCurrentSOP]->getWord();
+    std::cout << " -> '" << mRes.getTableEntry(value, 4) << "'"; // TODO: get this through SOP
 }
 
 }

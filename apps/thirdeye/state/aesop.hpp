@@ -139,9 +139,13 @@ private:
     void do_BRF();
     void do_CASE();
     void do_CALL();
+    void do_INTC();
     void do_LECA();
+    void do_LNGC();
     void do_PUSH();
     void do_RCRS();
+    void do_SEND();
+    void do_SHTC();
 
 public:
     Aesop(RESOURCES::Resource &resource);
