@@ -135,8 +135,8 @@ class Aesop
 
 private:
     void do_BRA();
-    void do_BRT();
     void do_BRF();
+    void do_BRT();
     void do_CASE();
     void do_CALL();
     void do_INTC();
