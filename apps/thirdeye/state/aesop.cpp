@@ -59,13 +59,11 @@ void Aesop::run() {
         switch (op) {
         case OP_BRT:
             s_op = "BRT";
-            value = sop->getWord();
-            //sop->setPC(value);
+            do_BRT();
             break;
         case OP_BRF:
             s_op = "BRF";
-            value = sop->getWord();
-            //sop->setPC(value);
+            do_BRF();
             break;
         case OP_BRA:
             s_op = "BRA";
@@ -87,6 +85,7 @@ void Aesop::run() {
             break;
         case OP_SHTC:
             s_op = "SHTC";
+            do_SHTC();
             break;
         case OP_INTC:
             s_op = "INTC";
@@ -168,8 +167,20 @@ void Aesop::run() {
 }
 
 void Aesop::do_BRA(){
-    // unconditional branch
+    // branch unconditionaly
     mSOP[mCurrentSOP]->setPC(mSOP[mCurrentSOP]->getWord());
+}
+
+void Aesop::do_BRF(){
+    // branch when false
+    uint16_t location = mSOP[mCurrentSOP]->getWord();
+    //sop->setPC(location);
+}
+
+void Aesop::do_BRT(){
+    // branch when true
+    uint16_t location = mSOP[mCurrentSOP]->getWord();
+    //sop->setPC(location);
 }
 
 void Aesop::do_CASE(){
@@ -268,7 +279,8 @@ void Aesop::do_SEND(){
     uint16_t value = mSOP[mCurrentSOP]->getByte();
     std::cout << "SEND: " << value;
     value = mSOP[mCurrentSOP]->getWord();
-    std::cout << " -> '" << mRes.getTableEntry(value, 4) << "'"; // TODO: get this through SOP
+    std::cout << " -> '" << mRes.getTableEntry(value, 4) // TODO: get this through SOP
+              << "'" << std::endl;
 }
 
 }
