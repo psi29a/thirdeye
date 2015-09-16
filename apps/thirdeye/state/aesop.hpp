@@ -15,6 +15,7 @@
 
 #include "sop.hpp"
 #include "../resources/res.hpp"
+#include "function.hpp"
 
 #ifndef AESOP_HPP
 #define AESOP_HPP
@@ -123,7 +124,7 @@ namespace STATE {
 #endif
 
 
-class Aesop
+class Aesop : private Functions
 {
     RESOURCES::Resource &mRes;
     boost::filesystem::path resPath;
@@ -140,12 +141,24 @@ private:
     void do_CASE();
     void do_CALL();
     void do_INTC();
+    void do_LAB();
+    void do_LAD();
+    void do_LAW();
     void do_LECA();
     void do_LNGC();
+    void do_LXB();
+    void do_LXD();
+    void do_LXDA();
     void do_PUSH();
     void do_RCRS();
+    void do_SAB();
+    void do_SAD();
+    void do_SAW();
     void do_SEND();
     void do_SHTC();
+    void do_SXB();
+
+    void call_function(std::map<uint8_t, std::vector<uint8_t>> &parameters);
 
 public:
     Aesop(RESOURCES::Resource &resource);
