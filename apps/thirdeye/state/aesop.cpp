@@ -187,20 +187,27 @@ void Aesop::do_BRT(){
 
 void Aesop::do_CASE(){
     // case statement
-    uint16_t value = mSOP[mCurrentSOP]->getWord();  //number of entries in this CASE
-    for (uint16_t i = 0; i < value; i++){
+    uint16_t case_entries = mSOP[mCurrentSOP]->getWord();  //number of entries in this CASE
+    uint32_t switch_value = *mStack.top().data();
+    mStack.pop();
+    int32_t jump_address = -1;
+    std::cout << "CASE: entries - " << case_entries << ", switch: " << switch_value << std::endl;
+    for (uint16_t i = 0; i < case_entries; i++){
         uint32_t case_value = mSOP[mCurrentSOP]->getLong();
-        uint16_t jump_address = mSOP[mCurrentSOP]->getWord();
+        uint16_t case_address = mSOP[mCurrentSOP]->getWord();
         std::cout << "          CASE #"
                   << i << ": " << case_value << " -> "
-                  << jump_address << std::endl;
-        // TODO: check if case_value is true, then jump
+                  << case_address << std::endl;
+        if (switch_value == case_value)
+            jump_address = case_address;
     }
     uint16_t default_jump_address = mSOP[mCurrentSOP]->getWord();
     std::cout << "          DEFAULT: -> "
               << default_jump_address << std::endl;
-    // when all else fails, we default to this jump address
-    mSOP[mCurrentSOP]->setPC(default_jump_address);
+    if (jump_address == -1)
+        jump_address = default_jump_address;
+    std::cout << "CASE: jump_address - " << jump_address << std::endl;
+    mSOP[mCurrentSOP]->setPC(jump_address);
 }
 
 void Aesop::do_PUSH(){
@@ -311,9 +318,9 @@ void Aesop::do_SAW(){
 }
 
 void Aesop::do_SHTC(){
-    std::vector<uint8_t> temp(sizeof(uint8_t));
-    *reinterpret_cast<uint8_t*>(reinterpret_cast<void*>(temp.data())) = mSOP[mCurrentSOP]->getByte();
-    mStack.push(temp);
+    std::vector<uint8_t> value(sizeof(uint8_t));
+    *reinterpret_cast<uint8_t*>(reinterpret_cast<void*>(value.data())) = mSOP[mCurrentSOP]->getByte();
+    mStack.push(value);
 }
 
 void Aesop::do_SEND(){
