@@ -44,7 +44,6 @@ void Aesop::run() {
     *reinterpret_cast<uint16_t*>(reinterpret_cast<void*>(mLocalVariable.data())) = local_var_size;
 
     // the big loop
-    std::map<uint8_t, int32_t> parameter;
     bool is_more = true;
     while (is_more){
         op_output.str("");
@@ -52,7 +51,6 @@ void Aesop::run() {
         std::string s_value = "";
 
         uint32_t value = 0;
-        uint32_t end_value = 0;
         uint32_t pc = sop->getPC();
 
         uint8_t &op = sop->getByte();
@@ -109,35 +107,39 @@ void Aesop::run() {
             break;
         case OP_LAB:
             s_op = "LAB";
-            value = sop->getWord();
+            do_LAB();
             break;
         case OP_LAW:
             s_op = "LAW";
-            value = sop->getWord();
+            do_LAW();
             break;
         case OP_LAD:
             s_op = "LAD";
-            value = sop->getWord();
+            do_LAD();
+            break;
+        case OP_SAB:
+            s_op = "SAB";
+            do_SAB();
             break;
         case OP_SAW:
             s_op = "SAW";
-            value = sop->getWord();
+            do_SAW();
             break;
         case OP_SAD:
             s_op = "SAD";
-            value = sop->getWord();
+            do_SAD();
             break;
         case OP_LXD:
             s_op = "LXD";
-            value = sop->getWord();
+            do_LXD();
             break;
         case OP_SXB:
             s_op = "SXB";
-            value = sop->getWord();
+            do_SXB();
             break;
         case OP_LXDA:
             s_op = "LXDA";
-            value = sop->getWord();
+            do_LXDA();
             break;
         case OP_LECA:
             s_op = "LECA";
@@ -159,7 +161,7 @@ void Aesop::run() {
                      std::hex << std::setw(4) <<
                      s_op << " (0x" << std::setfill('0') << std::setw(2) <<
                      (uint32_t) op << "):  " << std::dec <<
-                     (uint32_t) value << " (" << s_value << ") " << op_output.str() <<
+                     //(uint32_t) value << " (" << s_value << ") " << op_output.str() <<
                      std::endl;
     }
 
@@ -202,54 +204,54 @@ void Aesop::do_CASE(){
 }
 
 void Aesop::do_PUSH(){
+    // push 0 on to stack, used a delimiter for CALL and SEND
     std::vector<uint8_t> temp(sizeof(uint8_t));
     *temp.data() = 0;
     mStack.push(temp);
 }
 
-void Aesop::do_RCRS(){
-    std::vector<uint8_t> temp(sizeof(uint16_t));
-    *reinterpret_cast<uint16_t*>(reinterpret_cast<void*>(temp.data())) = mSOP[mCurrentSOP]->getWord();
-    mStack.push(temp);
-    std::cout << "RCRS: "
-              << mSOP[mCurrentSOP]->getSOPImportName(*reinterpret_cast<uint16_t*>(reinterpret_cast<void*>(mStack.top().data())))
-              << std::endl;
-}
-
 void Aesop::do_CALL(){
-    std::map<uint8_t, int32_t> parameter;
-    uint8_t value = mSOP[mCurrentSOP]->getByte(); // number of parameters
-    for (uint8_t i = value; i > 0; i--){
-
-        if (mStack.top().size() == 1)
-            parameter[i] = *reinterpret_cast<int8_t*>(reinterpret_cast<void*>(mStack.top().data()));
-        else if (mStack.top().size() == 2)
-            parameter[i] = *reinterpret_cast<int16_t*>(reinterpret_cast<void*>(mStack.top().data()));
-        else if (mStack.top().size() == 4)
-            parameter[i] = *reinterpret_cast<int32_t*>(reinterpret_cast<void*>(mStack.top().data()));
-        else if (mStack.top().size() > 4) // maybe a string?
-            std::cout << "CALL - Parameter: " << std::string(mStack.top().begin(), mStack.top().end()) << " at index: " << (int16_t) i << std::endl;
-
-
+    // call function with parameter validation
+    uint8_t num_of_parameters = mSOP[mCurrentSOP]->getByte(); // number of parameters
+    std::map<uint8_t, std::vector<uint8_t>> parameter;
+    for (uint8_t i = num_of_parameters; i > 0; i--){
+        parameter[i] = std::vector<uint8_t>(mStack.top().size());
+        std::copy(mStack.top().begin(), mStack.top().end(), parameter[i].begin());
         mStack.pop();
-        std::cout << "CALL - Parameter: " << parameter[i] << " at index: " << (int16_t) i << std::endl;
 
         // check for parameter delimiter
         if (*mStack.top().data() != 0)
-            std::throw_with_nested(std::runtime_error("Delimiter not found! Got this: " + boost::lexical_cast<char>(mStack.top().data())));
+            std::throw_with_nested(std::runtime_error("Delimiter not found!"));
         else
             mStack.pop();
     }
-
-    // call up function and send parameters
-    std::cout << "CALL - Calling: " << mSOP[mCurrentSOP]->getSOPImportName(*reinterpret_cast<uint16_t*>(reinterpret_cast<void*>(mStack.top().data()))) << std::endl;
-    mStack.pop();
+    call_function(parameter);
 }
 
 void Aesop::do_INTC(){
+    // push word in bytecode onto stack
     std::vector<uint8_t> temp(sizeof(uint16_t));
     *reinterpret_cast<uint16_t*>(reinterpret_cast<void*>(temp.data())) = mSOP[mCurrentSOP]->getWord();
     mStack.push(temp);
+}
+
+void Aesop::do_LAB(){
+    uint16_t value = mSOP[mCurrentSOP]->getWord();
+}
+
+void Aesop::do_LAD(){
+    uint16_t offset = mSOP[mCurrentSOP]->getWord()-sizeof(int32_t); // offset of long
+    std::cout << "LAD offset:" << (uint16_t) offset << std::endl;
+    {
+        std::vector<uint8_t> value(sizeof(int32_t));
+        std::copy(value.begin(), value.end(), mLocalVariable.data()+offset);
+        mStack.push(value);
+    }
+    std::cout << "LAD value:" << *reinterpret_cast<int32_t*>(mStack.top().data()) << " " << *reinterpret_cast<int32_t*>(mLocalVariable.data()+offset) << std::endl;
+}
+
+void Aesop::do_LAW(){
+    uint16_t value = mSOP[mCurrentSOP]->getWord();
 }
 
 void Aesop::do_LECA(){
@@ -269,6 +271,45 @@ void Aesop::do_LNGC(){
     mStack.push(temp);
 }
 
+void Aesop::do_LXB(){
+    uint16_t value = mSOP[mCurrentSOP]->getWord();
+}
+
+void Aesop::do_LXD(){
+    uint16_t value = mSOP[mCurrentSOP]->getWord();
+}
+
+void Aesop::do_LXDA(){
+    uint16_t value = mSOP[mCurrentSOP]->getWord();
+}
+
+void Aesop::do_RCRS(){
+    std::vector<uint8_t> function_id(sizeof(uint16_t));
+    *reinterpret_cast<uint16_t*>(reinterpret_cast<void*>(function_id.data())) = mSOP[mCurrentSOP]->getWord();
+    mStack.push(function_id);
+    std::cout << "RCRS: "
+              << mSOP[mCurrentSOP]->getSOPImportName(*reinterpret_cast<uint16_t*>(reinterpret_cast<void*>(mStack.top().data())))
+              << std::endl;
+}
+
+void Aesop::do_SAB(){
+    uint16_t value = mSOP[mCurrentSOP]->getWord();
+}
+
+void Aesop::do_SAD(){
+    // Store Auto Dword
+    uint16_t offset = mSOP[mCurrentSOP]->getWord()-4; // offset of long
+    std::cout << "SAD offset:" << (uint16_t) offset << std::endl;
+    std::cout << "SAD value:" << *reinterpret_cast<int32_t*>(mStack.top().data()) << " " << *reinterpret_cast<int32_t*>(mLocalVariable.data()+offset) << std::endl;
+    std::copy(mStack.top().begin(), mStack.top().end(), mLocalVariable.data()+offset);
+    std::cout << "SAD value:" << *reinterpret_cast<int32_t*>(mStack.top().data()) << " " << *reinterpret_cast<int32_t*>(mLocalVariable.data()+offset) << std::endl;
+    mStack.pop();
+}
+
+void Aesop::do_SAW(){
+    uint16_t value = mSOP[mCurrentSOP]->getWord();
+}
+
 void Aesop::do_SHTC(){
     std::vector<uint8_t> temp(sizeof(uint8_t));
     *reinterpret_cast<uint8_t*>(reinterpret_cast<void*>(temp.data())) = mSOP[mCurrentSOP]->getByte();
@@ -281,6 +322,46 @@ void Aesop::do_SEND(){
     value = mSOP[mCurrentSOP]->getWord();
     std::cout << " -> '" << mRes.getTableEntry(value, 4) // TODO: get this through SOP
               << "'" << std::endl;
+}
+
+void Aesop::do_SXB(){
+    uint16_t value = mSOP[mCurrentSOP]->getWord();
+}
+
+void Aesop::call_function(std::map<uint8_t, std::vector<uint8_t>> &parameters){
+    // call up function and send parameters
+    uint16_t function_id = *reinterpret_cast<uint16_t*>(reinterpret_cast<void*>(mStack.top().data()));
+    std::cout << "CALL - Calling: " << mSOP[mCurrentSOP]->getSOPImportName(function_id) << std::endl;
+    mStack.pop();
+
+    /*
+    if (mStack.top().size() == 1)
+        parameter[i] = *reinterpret_cast<int8_t*>(reinterpret_cast<void*>(mStack.top().data()));
+    else if (mStack.top().size() == 2)
+        parameter[i] = *reinterpret_cast<int16_t*>(reinterpret_cast<void*>(mStack.top().data()));
+    else if (mStack.top().size() == 4)
+        parameter[i] = *reinterpret_cast<int32_t*>(reinterpret_cast<void*>(mStack.top().data()));
+    else if (mStack.top().size() > 4) // maybe a string?
+        std::cout << "CALL - Parameter: " << std::string(mStack.top().begin(), mStack.top().end()) << " at index: " << (int16_t) i << std::endl;
+
+    std::cout << "CALL - Parameter: " << parameter[i] << " at index: " << (int16_t) i << std::endl;
+    */
+
+    switch(function_id){
+    case C_PEEKMEM:
+    {
+        std::vector<uint8_t> value(sizeof(int32_t));
+        *value.data() = peekmem(parameters);
+        mStack.push(value);
+    }
+        break;
+    case C_POKEMEM:
+        pokemem(parameters);
+        break;
+    default:
+        std::cout << "CALL -> Unimplimented function: " << std::hex << function_id << std::dec<< std::endl;
+    }
+
 }
 
 }
