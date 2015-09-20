@@ -18,8 +18,9 @@ namespace STATE {
 
 // Function Defines
 
-#define C_PEEKMEM 0x08
-#define C_POKEMEM 0x0C
+#define C_PEEKMEM   0x08
+#define C_POKEMEM   0x0C
+#define C_LAUNCH    0x18
 
 class Functions {
     std::map<uint32_t, std::vector<uint8_t>> mMemory;
@@ -41,8 +42,8 @@ public:
     void beep(void);
     int32_t strval(int32_t argcnt, int8_t *string);
     int32_t envval(int32_t argcnt, int8_t *name);
-    void pokemem(std::map<uint8_t, std::vector<uint8_t>> parameters); //void pokemem(int32_t argcnt, int32_t *addr, int32_t data);
-    int32_t peekmem(std::map<uint8_t, std::vector<uint8_t>> parameters); //int32_t peekmem(int32_t argcnt, int32_t *addr);
+    void pokemem(std::map<uint8_t, std::vector<uint8_t>> &parameters); //void pokemem(int32_t argcnt, int32_t *addr, int32_t data);
+    int32_t peekmem(std::map<uint8_t, std::vector<uint8_t>> &parameters); //int32_t peekmem(int32_t argcnt, int32_t *addr);
     uint32_t rnd(int32_t argcnt, uint32_t low, uint32_t high);
     uint32_t dice(int32_t argcnt, uint32_t ndice, uint32_t nsides, uint32_t bonus);
     uint32_t absv(int32_t argcnt, int32_t val);
@@ -193,8 +194,7 @@ public:
     void read_initial_items(void);
     void write_initial_tempfiles(void);
     void create_initial_binary_files(void);
-    void launch(int32_t argcnt, int8_t *dirname, int8_t *prgname, int8_t *argn1,
-       int8_t *argn2);
+    void launch(std::map<uint8_t, std::vector<uint8_t>> parameters); // void launch(int32_t argcnt, int8_t *dirname, int8_t *prgname, int8_t *argn1, int8_t *argn2);
 
     // Eye II savegame file access
     void *open_transfer_file(int32_t argcnt, int8_t *filename);
