@@ -188,7 +188,7 @@ void Aesop::do_BRT(){
 void Aesop::do_CASE(){
     // case statement
     uint16_t case_entries = mSOP[mCurrentSOP]->getWord();  //number of entries in this CASE
-    uint32_t switch_value = *mStack.top().data();
+    int32_t switch_value = *reinterpret_cast<int32_t*>(reinterpret_cast<void*>(mStack.top().data()));
     mStack.pop();
     int32_t jump_address = -1;
     std::cout << "CASE: entries - " << case_entries << ", switch: " << switch_value << std::endl;
@@ -251,7 +251,7 @@ void Aesop::do_LAD(){
     std::cout << "LAD offset:" << (uint16_t) offset << std::endl;
     {
         std::vector<uint8_t> value(sizeof(int32_t));
-        std::copy(value.begin(), value.end(), mLocalVariable.data()+offset);
+        std::copy(mLocalVariable.data()+offset, mLocalVariable.data()+offset+sizeof(int32_t), value.begin());
         mStack.push(value);
     }
     std::cout << "LAD value:" << *reinterpret_cast<int32_t*>(mStack.top().data()) << " " << *reinterpret_cast<int32_t*>(mLocalVariable.data()+offset) << std::endl;
@@ -341,29 +341,27 @@ void Aesop::call_function(std::map<uint8_t, std::vector<uint8_t>> &parameters){
     std::cout << "CALL - Calling: " << mSOP[mCurrentSOP]->getSOPImportName(function_id) << std::endl;
     mStack.pop();
 
-    /*
-    if (mStack.top().size() == 1)
-        parameter[i] = *reinterpret_cast<int8_t*>(reinterpret_cast<void*>(mStack.top().data()));
-    else if (mStack.top().size() == 2)
-        parameter[i] = *reinterpret_cast<int16_t*>(reinterpret_cast<void*>(mStack.top().data()));
-    else if (mStack.top().size() == 4)
-        parameter[i] = *reinterpret_cast<int32_t*>(reinterpret_cast<void*>(mStack.top().data()));
-    else if (mStack.top().size() > 4) // maybe a string?
-        std::cout << "CALL - Parameter: " << std::string(mStack.top().begin(), mStack.top().end()) << " at index: " << (int16_t) i << std::endl;
-
-    std::cout << "CALL - Parameter: " << parameter[i] << " at index: " << (int16_t) i << std::endl;
-    */
-
     switch(function_id){
     case C_PEEKMEM:
     {
         std::vector<uint8_t> value(sizeof(int32_t));
-        *value.data() = peekmem(parameters);
+        *reinterpret_cast<int32_t*>(reinterpret_cast<void*>(value.data())) = peekmem(parameters);
         mStack.push(value);
     }
         break;
     case C_POKEMEM:
         pokemem(parameters);
+        break;
+    case C_LAUNCH:
+        // TODO: launch application, for now we'll just jump right back
+        // into the SOP bytecode from the beginning.
+        mCurrentSOP = mRes.getIndex("start");
+        mSOP[mCurrentSOP]->setPC(mSOP[mCurrentSOP]->getSOPMessagePosition(INDEX_CREATE));
+        {
+            uint16_t local_var_size = reinterpret_cast<uint16_t&>(mSOP[mCurrentSOP]->getWord()); // get THIS
+            mLocalVariable.resize(local_var_size);
+            *reinterpret_cast<uint16_t*>(reinterpret_cast<void*>(mLocalVariable.data())) = local_var_size;
+        }
         break;
     default:
         std::cout << "CALL -> Unimplimented function: " << std::hex << function_id << std::dec<< std::endl;
