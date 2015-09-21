@@ -20,7 +20,6 @@ Aesop::Aesop(RESOURCES::Resource &resource):mRes(resource) {
     // load and initialize 'start' sop
     mCurrentSOP = mRes.getIndex("start");
     mSOP[mCurrentSOP] = std::make_shared<SOP>(mRes, mCurrentSOP);
-
     // set position counter to where the 'create' message is
     mSOP[mCurrentSOP]->setPC(mSOP[mCurrentSOP]->getSOPMessagePosition(INDEX_CREATE));
     mStaticVariable.reserve(512);   // total static variable capacity in uint8_t units
@@ -77,6 +76,7 @@ void Aesop::run() {
             break;
         case OP_NEG:
             s_op = "NEG";
+            do_NEG();
             break;
         case OP_EXP:
             s_op = "EXP";
@@ -243,7 +243,14 @@ void Aesop::do_INTC(){
 }
 
 void Aesop::do_LAB(){
-    uint16_t value = mSOP[mCurrentSOP]->getWord();
+    uint16_t offset = mSOP[mCurrentSOP]->getWord()-sizeof(int8_t); // offset of byte
+    std::cout << "LAB offset:" << (uint16_t) offset << std::endl;
+    {
+        std::vector<uint8_t> value(sizeof(int8_t));
+        std::copy(mLocalVariable.data()+offset, mLocalVariable.data()+offset+sizeof(int8_t), value.begin());
+        mStack.push(value);
+    }
+    std::cout << "LAB value:" << *reinterpret_cast<int8_t*>(mStack.top().data()) << " " << *reinterpret_cast<int8_t*>(mLocalVariable.data()+offset) << std::endl;
 }
 
 void Aesop::do_LAD(){
@@ -258,7 +265,14 @@ void Aesop::do_LAD(){
 }
 
 void Aesop::do_LAW(){
-    uint16_t value = mSOP[mCurrentSOP]->getWord();
+    uint16_t offset = mSOP[mCurrentSOP]->getWord()-sizeof(int16_t); // offset of word
+    std::cout << "LAW offset:" << (uint16_t) offset << std::endl;
+    {
+        std::vector<uint8_t> value(sizeof(uint16_t));
+        std::copy(mLocalVariable.data()+offset, mLocalVariable.data()+offset+sizeof(uint16_t), value.begin());
+        mStack.push(value);
+    }
+    std::cout << "LAW value:" << *reinterpret_cast<int16_t*>(mStack.top().data()) << " " << *reinterpret_cast<int16_t*>(mLocalVariable.data()+offset) << std::endl;
 }
 
 void Aesop::do_LECA(){
@@ -290,6 +304,21 @@ void Aesop::do_LXDA(){
     uint16_t value = mSOP[mCurrentSOP]->getWord();
 }
 
+void Aesop::do_NEG(){
+    std::vector<uint8_t> value(sizeof(uint8_t));
+    if (mStack.top().size() == sizeof(uint8_t))
+        *reinterpret_cast<int8_t*>(reinterpret_cast<void*>(value.data())) = *reinterpret_cast<int8_t*>(reinterpret_cast<void*>(mStack.top().data())) * -1;
+    else if (mStack.top().size() == sizeof(uint16_t))
+        *reinterpret_cast<int16_t*>(reinterpret_cast<void*>(value.data())) = *reinterpret_cast<int16_t*>(reinterpret_cast<void*>(mStack.top().data())) * -1;
+    else if (mStack.top().size() == sizeof(uint32_t))
+        *reinterpret_cast<int32_t*>(reinterpret_cast<void*>(value.data())) = *reinterpret_cast<int32_t*>(reinterpret_cast<void*>(mStack.top().data())) * -1;
+    else
+        std::throw_with_nested(std::runtime_error("Unknown vector to negate!"));
+
+    mStack.pop();
+    mStack.push(value);
+}
+
 void Aesop::do_RCRS(){
     std::vector<uint8_t> function_id(sizeof(uint16_t));
     *reinterpret_cast<uint16_t*>(reinterpret_cast<void*>(function_id.data())) = mSOP[mCurrentSOP]->getWord();
@@ -300,12 +329,17 @@ void Aesop::do_RCRS(){
 }
 
 void Aesop::do_SAB(){
-    uint16_t value = mSOP[mCurrentSOP]->getWord();
+    uint16_t offset = mSOP[mCurrentSOP]->getWord()-sizeof(int8_t); // offset of byte
+    std::cout << "SAB offset:" << (uint16_t) offset << std::endl;
+    std::cout << "SAB value:" << *reinterpret_cast<int8_t*>(mStack.top().data()) << " " << *reinterpret_cast<int8_t*>(mLocalVariable.data()+offset) << std::endl;
+    std::copy(mStack.top().begin(), mStack.top().end(), mLocalVariable.data()+offset);
+    std::cout << "SAB value:" << *reinterpret_cast<int8_t*>(mStack.top().data()) << " " << *reinterpret_cast<int8_t*>(mLocalVariable.data()+offset) << std::endl;
+    mStack.pop();
 }
 
 void Aesop::do_SAD(){
     // Store Auto Dword
-    uint16_t offset = mSOP[mCurrentSOP]->getWord()-4; // offset of long
+    uint16_t offset = mSOP[mCurrentSOP]->getWord()-sizeof(int32_t); // offset of long
     std::cout << "SAD offset:" << (uint16_t) offset << std::endl;
     std::cout << "SAD value:" << *reinterpret_cast<int32_t*>(mStack.top().data()) << " " << *reinterpret_cast<int32_t*>(mLocalVariable.data()+offset) << std::endl;
     std::copy(mStack.top().begin(), mStack.top().end(), mLocalVariable.data()+offset);
@@ -314,7 +348,12 @@ void Aesop::do_SAD(){
 }
 
 void Aesop::do_SAW(){
-    uint16_t value = mSOP[mCurrentSOP]->getWord();
+    uint16_t offset = mSOP[mCurrentSOP]->getWord()-sizeof(int16_t); // offset of word
+    std::cout << "SAW offset:" << (uint16_t) offset << std::endl;
+    std::cout << "SAW value:" << *reinterpret_cast<int16_t*>(mStack.top().data()) << " " << *reinterpret_cast<int16_t*>(mLocalVariable.data()+offset) << std::endl;
+    std::copy(mStack.top().begin(), mStack.top().end(), mLocalVariable.data()+offset);
+    std::cout << "SAW value:" << *reinterpret_cast<int16_t*>(mStack.top().data()) << " " << *reinterpret_cast<int16_t*>(mLocalVariable.data()+offset) << std::endl;
+    mStack.pop();
 }
 
 void Aesop::do_SHTC(){
@@ -363,6 +402,21 @@ void Aesop::call_function(std::map<uint8_t, std::vector<uint8_t>> &parameters){
             *reinterpret_cast<uint16_t*>(reinterpret_cast<void*>(mLocalVariable.data())) = local_var_size;
         }
         break;
+    case C_CREATE_PROGRAM:
+        // TODO: create program
+        {
+            std::cout << "CALL - C_CREATE_PROGRAM 1: "
+                      << (int16_t) *reinterpret_cast<int8_t*>(reinterpret_cast<void*>(parameters[1].data())) << std::endl;
+            int32_t program_index = *reinterpret_cast<int16_t*>(reinterpret_cast<void*>(parameters[2].data()));
+            std::cout << "CALL - C_CREATE_PROGRAM 2: " << program_index << std::endl;
+            mSOP[program_index] = std::make_shared<SOP>(mRes, program_index);
+            std::vector<uint8_t> value(sizeof(int16_t));
+            *reinterpret_cast<int16_t*>(reinterpret_cast<void*>(value.data())) = program_index;
+            mStack.push(value);
+        }
+        break;
+
+
     default:
         std::cout << "CALL -> Unimplimented function: " << std::hex << function_id << std::dec<< std::endl;
     }
