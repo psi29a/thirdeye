@@ -18,6 +18,7 @@ namespace STATE {
 
 // Function Defines
 
+#define C_CREATE_PROGRAM 0x00
 #define C_PEEKMEM   0x08
 #define C_POKEMEM   0x0C
 #define C_LAUNCH    0x18
@@ -156,7 +157,7 @@ public:
 
     // Eye III object management
     int32_t create_object(int32_t argcnt, uint32_t name);
-    int32_t create_program(int32_t argcnt, int32_t index, uint32_t name);
+    //int32_t create_program(int32_t argcnt, int32_t index, uint32_t name);
     int32_t destroy_object(int32_t argcnt, int32_t index);
     void thrash_cache(void);
     uint32_t flush_cache(int32_t argcnt, uint32_t goal);
