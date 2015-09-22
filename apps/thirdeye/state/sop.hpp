@@ -92,6 +92,8 @@ public:
     int16_t getSOPMessagePosition(uint16_t index);
     std::string getSOPImportName(uint16_t index);
     std::string getStringFromLECA(uint32_t start, uint32_t end);
+
+    std::vector<uint8_t> mLocalVariable;
 };
 
 }

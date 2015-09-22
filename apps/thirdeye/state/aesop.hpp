@@ -129,10 +129,9 @@ class Aesop : private Functions
     RESOURCES::Resource &mRes;
     boost::filesystem::path resPath;
     uint16_t mCurrentSOP;
-    std::map<uint16_t, std::shared_ptr<SOP>> mSOP;
+    std::map<uint16_t, std::unique_ptr<SOP>> mSOP;
     std::stack<std::vector<uint8_t>> mStack;
     std::vector<uint8_t> mStaticVariable;
-    std::vector<uint8_t> mLocalVariable;
 
 private:
     void do_BRA();
@@ -146,6 +145,9 @@ private:
     void do_LAW();
     void do_LECA();
     void do_LNGC();
+    void do_LSB();
+    void do_LSD();
+    void do_LSW();
     void do_LXB();
     void do_LXD();
     void do_LXDA();
@@ -155,6 +157,9 @@ private:
     void do_SAB();
     void do_SAD();
     void do_SAW();
+    void do_SSB();
+    void do_SSD();
+    void do_SSW();
     void do_SEND();
     void do_SHTC();
     void do_SXB();
