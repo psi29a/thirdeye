@@ -71,6 +71,10 @@ void Aesop::run() {
             s_op = "PUSH";
             do_PUSH();
             break;
+        case OP_NOT:
+            s_op = "NOT";
+            do_NOT();
+            break;
         case OP_NEG:
             s_op = "NEG";
             do_NEG();
@@ -126,13 +130,29 @@ void Aesop::run() {
             s_op = "SAD";
             do_SAD();
             break;
+        case OP_LSB:
+            s_op = "LSB";
+            do_LSB();
+            break;
         case OP_LSW:
             s_op = "LSW";
             do_LSW();
             break;
+        case OP_LSD:
+            s_op = "LSD";
+            do_LSD();
+            break;
+        case OP_SSB:
+            s_op = "SSB";
+            do_SSB();
+            break;
         case OP_SSW:
             s_op = "SSW";
             do_SSW();
+            break;
+        case OP_SSD:
+            s_op = "SSD";
+            do_SSD();
             break;
         case OP_LXD:
             s_op = "LXD";
@@ -181,13 +201,33 @@ void Aesop::do_BRA(){
 void Aesop::do_BRF(){
     // branch when false
     uint16_t location = mSOP[mCurrentSOP]->getWord();
-    //mSOP[mCurrentSOP]->setPC(location);
+    bool do_branch = false;
+    if (mStack.top().size() == sizeof(uint8_t) && *reinterpret_cast<int8_t*>(reinterpret_cast<void*>(mStack.top().data())) == 0)
+        do_branch = true;
+    else if (mStack.top().size() == sizeof(uint16_t) && *reinterpret_cast<int16_t*>(reinterpret_cast<void*>(mStack.top().data())) == 0)
+        do_branch = true;
+    else if (mStack.top().size() == sizeof(uint32_t) && *reinterpret_cast<int32_t*>(reinterpret_cast<void*>(mStack.top().data())) == 0)
+        do_branch = true;
+
+    mStack.pop();
+    if (do_branch)
+        mSOP[mCurrentSOP]->setPC(location);
 }
 
 void Aesop::do_BRT(){
     // branch when true
     uint16_t location = mSOP[mCurrentSOP]->getWord();
-    //mSOP[mCurrentSOP]->setPC(location);
+    bool do_branch = false;
+    if (mStack.top().size() == sizeof(uint8_t) && *reinterpret_cast<int8_t*>(reinterpret_cast<void*>(mStack.top().data())) != 0)
+        do_branch = true;
+    else if (mStack.top().size() == sizeof(uint16_t) && *reinterpret_cast<int16_t*>(reinterpret_cast<void*>(mStack.top().data())) != 0)
+        do_branch = true;
+    else if (mStack.top().size() == sizeof(uint32_t) && *reinterpret_cast<int32_t*>(reinterpret_cast<void*>(mStack.top().data())) != 0)
+        do_branch = true;
+
+    mStack.pop();
+    if (do_branch)
+        mSOP[mCurrentSOP]->setPC(location);
 }
 
 void Aesop::do_CASE(){
@@ -351,7 +391,22 @@ void Aesop::do_NEG(){
     else if (mStack.top().size() == sizeof(uint32_t))
         *reinterpret_cast<int32_t*>(reinterpret_cast<void*>(value.data())) = *reinterpret_cast<int32_t*>(reinterpret_cast<void*>(mStack.top().data())) * -1;
     else
-        std::throw_with_nested(std::runtime_error("Unknown vector to negate!"));
+        std::throw_with_nested(std::runtime_error("Unknown vector to NEGate!"));
+
+    mStack.pop();
+    mStack.push(value);
+}
+
+void Aesop::do_NOT(){
+    std::vector<uint8_t> value(sizeof(uint8_t));
+    if (mStack.top().size() == sizeof(uint8_t))
+        *reinterpret_cast<int8_t*>(reinterpret_cast<void*>(value.data())) = *reinterpret_cast<int8_t*>(reinterpret_cast<void*>(mStack.top().data())) * ~1;
+    else if (mStack.top().size() == sizeof(uint16_t))
+        *reinterpret_cast<int16_t*>(reinterpret_cast<void*>(value.data())) = *reinterpret_cast<int16_t*>(reinterpret_cast<void*>(mStack.top().data())) * ~1;
+    else if (mStack.top().size() == sizeof(uint32_t))
+        *reinterpret_cast<int32_t*>(reinterpret_cast<void*>(value.data())) = *reinterpret_cast<int32_t*>(reinterpret_cast<void*>(mStack.top().data())) * ~1;
+    else
+        std::throw_with_nested(std::runtime_error("Unknown vector to logical NOT!"));
 
     mStack.pop();
     mStack.push(value);

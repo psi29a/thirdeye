@@ -152,6 +152,7 @@ private:
     void do_LXD();
     void do_LXDA();
     void do_NEG();
+    void do_NOT();
     void do_PUSH();
     void do_RCRS();
     void do_SAB();
