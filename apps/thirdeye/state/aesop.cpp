@@ -385,11 +385,11 @@ void Aesop::do_LXDA(){
 void Aesop::do_NEG(){
     std::vector<uint8_t> value(sizeof(uint8_t));
     if (mStack.top().size() == sizeof(uint8_t))
-        *reinterpret_cast<int8_t*>(reinterpret_cast<void*>(value.data())) = *reinterpret_cast<int8_t*>(reinterpret_cast<void*>(mStack.top().data())) * -1;
+        *reinterpret_cast<int8_t*>(reinterpret_cast<void*>(value.data())) = -*reinterpret_cast<int8_t*>(reinterpret_cast<void*>(mStack.top().data()));
     else if (mStack.top().size() == sizeof(uint16_t))
-        *reinterpret_cast<int16_t*>(reinterpret_cast<void*>(value.data())) = *reinterpret_cast<int16_t*>(reinterpret_cast<void*>(mStack.top().data())) * -1;
+        *reinterpret_cast<int16_t*>(reinterpret_cast<void*>(value.data())) = -*reinterpret_cast<int16_t*>(reinterpret_cast<void*>(mStack.top().data()));
     else if (mStack.top().size() == sizeof(uint32_t))
-        *reinterpret_cast<int32_t*>(reinterpret_cast<void*>(value.data())) = *reinterpret_cast<int32_t*>(reinterpret_cast<void*>(mStack.top().data())) * -1;
+        *reinterpret_cast<int32_t*>(reinterpret_cast<void*>(value.data())) = -*reinterpret_cast<int32_t*>(reinterpret_cast<void*>(mStack.top().data()));
     else
         std::throw_with_nested(std::runtime_error("Unknown vector to NEGate!"));
 
@@ -400,11 +400,11 @@ void Aesop::do_NEG(){
 void Aesop::do_NOT(){
     std::vector<uint8_t> value(sizeof(uint8_t));
     if (mStack.top().size() == sizeof(uint8_t))
-        *reinterpret_cast<int8_t*>(reinterpret_cast<void*>(value.data())) = *reinterpret_cast<int8_t*>(reinterpret_cast<void*>(mStack.top().data())) * ~1;
+        *reinterpret_cast<int8_t*>(reinterpret_cast<void*>(value.data())) = ~*reinterpret_cast<int8_t*>(reinterpret_cast<void*>(mStack.top().data()));
     else if (mStack.top().size() == sizeof(uint16_t))
-        *reinterpret_cast<int16_t*>(reinterpret_cast<void*>(value.data())) = *reinterpret_cast<int16_t*>(reinterpret_cast<void*>(mStack.top().data())) * ~1;
+        *reinterpret_cast<int16_t*>(reinterpret_cast<void*>(value.data())) = ~*reinterpret_cast<int16_t*>(reinterpret_cast<void*>(mStack.top().data()));
     else if (mStack.top().size() == sizeof(uint32_t))
-        *reinterpret_cast<int32_t*>(reinterpret_cast<void*>(value.data())) = *reinterpret_cast<int32_t*>(reinterpret_cast<void*>(mStack.top().data())) * ~1;
+        *reinterpret_cast<int32_t*>(reinterpret_cast<void*>(value.data())) = ~*reinterpret_cast<int32_t*>(reinterpret_cast<void*>(mStack.top().data()));
     else
         std::throw_with_nested(std::runtime_error("Unknown vector to logical NOT!"));
 
