@@ -36,6 +36,7 @@ mRes(resource), mIndex(index){
     std::cout << std::endl << "EXPORT:" << std::endl;
     getImExData(mRes.getAsset(mSOPHeader.export_resource), false);
 
+    mLocalVariable.reserve(512);    // total local variable capacity in uint8_t units
 }
 
 SOP::~SOP() {

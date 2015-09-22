@@ -19,11 +19,10 @@ namespace STATE {
 Aesop::Aesop(RESOURCES::Resource &resource):mRes(resource) {
     // load and initialize 'start' sop
     mCurrentSOP = mRes.getIndex("start");
-    mSOP[mCurrentSOP] = std::make_shared<SOP>(mRes, mCurrentSOP);
+    mSOP[mCurrentSOP] = std::make_unique<SOP>(mRes, mCurrentSOP);
     // set position counter to where the 'create' message is
     mSOP[mCurrentSOP]->setPC(mSOP[mCurrentSOP]->getSOPMessagePosition(INDEX_CREATE));
-    mStaticVariable.reserve(512);   // total static variable capacity in uint8_t units
-    mLocalVariable.reserve(512);    // total local variable capacity in uint8_t units
+    mStaticVariable.resize(512);   // total static variable capacity in uint8_t units
 }
 
 Aesop::~Aesop() {
@@ -34,13 +33,11 @@ void Aesop::run() {
     std::stringbuf op_output;
     std::ostream op_output_stream(&op_output);
 
-    std::shared_ptr<STATE::SOP> sop = mSOP[mCurrentSOP];  // for convience
-
-    std::cout << "Entering '" << sop->getSOPMessageName(INDEX_CREATE) << "'"<< std::endl;
+    std::cout << "Entering '" << mSOP[mCurrentSOP]->getSOPMessageName(INDEX_CREATE) << "'"<< std::endl;
     // Find the total size of all local variables, including THIS
     uint16_t local_var_size = reinterpret_cast<uint16_t&>(mSOP[mCurrentSOP]->getWord()); // get THIS
-    mLocalVariable.resize(local_var_size);
-    *reinterpret_cast<uint16_t*>(reinterpret_cast<void*>(mLocalVariable.data())) = local_var_size;
+    mSOP[mCurrentSOP]->mLocalVariable.resize(local_var_size);
+    *reinterpret_cast<uint16_t*>(reinterpret_cast<void*>(mSOP[mCurrentSOP]->mLocalVariable.data())) = local_var_size;
 
     // the big loop
     bool is_more = true;
@@ -50,9 +47,9 @@ void Aesop::run() {
         std::string s_value = "";
 
         uint32_t value = 0;
-        uint32_t pc = sop->getPC();
+        uint32_t pc = mSOP[mCurrentSOP]->getPC();
 
-        uint8_t &op = sop->getByte();
+        uint8_t &op = mSOP[mCurrentSOP]->getByte();
         switch (op) {
         case OP_BRT:
             s_op = "BRT";
@@ -129,6 +126,14 @@ void Aesop::run() {
             s_op = "SAD";
             do_SAD();
             break;
+        case OP_LSW:
+            s_op = "LSW";
+            do_LSW();
+            break;
+        case OP_SSW:
+            s_op = "SSW";
+            do_SSW();
+            break;
         case OP_LXD:
             s_op = "LXD";
             do_LXD();
@@ -176,13 +181,13 @@ void Aesop::do_BRA(){
 void Aesop::do_BRF(){
     // branch when false
     uint16_t location = mSOP[mCurrentSOP]->getWord();
-    //sop->setPC(location);
+    //mSOP[mCurrentSOP]->setPC(location);
 }
 
 void Aesop::do_BRT(){
     // branch when true
     uint16_t location = mSOP[mCurrentSOP]->getWord();
-    //sop->setPC(location);
+    //mSOP[mCurrentSOP]->setPC(location);
 }
 
 void Aesop::do_CASE(){
@@ -247,10 +252,10 @@ void Aesop::do_LAB(){
     std::cout << "LAB offset:" << (uint16_t) offset << std::endl;
     {
         std::vector<uint8_t> value(sizeof(int8_t));
-        std::copy(mLocalVariable.data()+offset, mLocalVariable.data()+offset+sizeof(int8_t), value.begin());
+        std::copy(mSOP[mCurrentSOP]->mLocalVariable.data()+offset, mSOP[mCurrentSOP]->mLocalVariable.data()+offset+sizeof(int8_t), value.begin());
         mStack.push(value);
     }
-    std::cout << "LAB value:" << *reinterpret_cast<int8_t*>(mStack.top().data()) << " " << *reinterpret_cast<int8_t*>(mLocalVariable.data()+offset) << std::endl;
+    std::cout << "LAB value:" << *reinterpret_cast<int8_t*>(mStack.top().data()) << " " << *reinterpret_cast<int8_t*>(mSOP[mCurrentSOP]->mLocalVariable.data()+offset) << std::endl;
 }
 
 void Aesop::do_LAD(){
@@ -258,10 +263,10 @@ void Aesop::do_LAD(){
     std::cout << "LAD offset:" << (uint16_t) offset << std::endl;
     {
         std::vector<uint8_t> value(sizeof(int32_t));
-        std::copy(mLocalVariable.data()+offset, mLocalVariable.data()+offset+sizeof(int32_t), value.begin());
+        std::copy(mSOP[mCurrentSOP]->mLocalVariable.data()+offset, mSOP[mCurrentSOP]->mLocalVariable.data()+offset+sizeof(int32_t), value.begin());
         mStack.push(value);
     }
-    std::cout << "LAD value:" << *reinterpret_cast<int32_t*>(mStack.top().data()) << " " << *reinterpret_cast<int32_t*>(mLocalVariable.data()+offset) << std::endl;
+    std::cout << "LAD value:" << *reinterpret_cast<int32_t*>(mStack.top().data()) << " " << *reinterpret_cast<int32_t*>(mSOP[mCurrentSOP]->mLocalVariable.data()+offset) << std::endl;
 }
 
 void Aesop::do_LAW(){
@@ -269,10 +274,10 @@ void Aesop::do_LAW(){
     std::cout << "LAW offset:" << (uint16_t) offset << std::endl;
     {
         std::vector<uint8_t> value(sizeof(uint16_t));
-        std::copy(mLocalVariable.data()+offset, mLocalVariable.data()+offset+sizeof(uint16_t), value.begin());
+        std::copy(mSOP[mCurrentSOP]->mLocalVariable.data()+offset, mSOP[mCurrentSOP]->mLocalVariable.data()+offset+sizeof(uint16_t), value.begin());
         mStack.push(value);
     }
-    std::cout << "LAW value:" << *reinterpret_cast<int16_t*>(mStack.top().data()) << " " << *reinterpret_cast<int16_t*>(mLocalVariable.data()+offset) << std::endl;
+    std::cout << "LAW value:" << *reinterpret_cast<int16_t*>(mStack.top().data()) << " " << *reinterpret_cast<int16_t*>(mSOP[mCurrentSOP]->mLocalVariable.data()+offset) << std::endl;
 }
 
 void Aesop::do_LECA(){
@@ -290,6 +295,39 @@ void Aesop::do_LNGC(){
     std::vector<uint8_t> temp(sizeof(uint32_t));
     *reinterpret_cast<uint32_t*>(reinterpret_cast<void*>(temp.data())) = mSOP[mCurrentSOP]->getLong();
     mStack.push(temp);
+}
+
+void Aesop::do_LSB(){
+    uint16_t offset = mSOP[mCurrentSOP]->getWord();
+    std::cout << "LSB offset:" << (uint16_t) offset << std::endl;
+    {
+        std::vector<uint8_t> value(sizeof(uint8_t));
+        std::copy(mStaticVariable.data()+offset, mStaticVariable.data()+offset+sizeof(uint8_t), value.begin());
+        mStack.push(value);
+    }
+    std::cout << "LSB value:" << *mStack.top().data() << " " << *reinterpret_cast<int8_t*>(mStaticVariable.data()+offset) << std::endl;
+}
+
+void Aesop::do_LSD(){
+    uint16_t offset = mSOP[mCurrentSOP]->getWord();
+    std::cout << "LSD offset:" << (uint16_t) offset << std::endl;
+    {
+        std::vector<uint8_t> value(sizeof(uint32_t));
+        std::copy(mStaticVariable.data()+offset, mStaticVariable.data()+offset+sizeof(uint32_t), value.begin());
+        mStack.push(value);
+    }
+    std::cout << "LSD value:" << *mStack.top().data() << " " << *reinterpret_cast<int32_t*>(mStaticVariable.data()+offset) << std::endl;
+}
+
+void Aesop::do_LSW(){
+    uint16_t offset = mSOP[mCurrentSOP]->getWord();
+    std::cout << "LSW offset:" << (uint16_t) offset << std::endl;
+    {
+        std::vector<uint8_t> value(sizeof(uint16_t));
+        std::copy(mStaticVariable.data()+offset, mStaticVariable.data()+offset+sizeof(uint16_t), value.begin());
+        mStack.push(value);
+    }
+    std::cout << "LSW value:" << *mStack.top().data() << " " << *reinterpret_cast<int16_t*>(mStaticVariable.data()+offset) << std::endl;
 }
 
 void Aesop::do_LXB(){
@@ -331,9 +369,9 @@ void Aesop::do_RCRS(){
 void Aesop::do_SAB(){
     uint16_t offset = mSOP[mCurrentSOP]->getWord()-sizeof(int8_t); // offset of byte
     std::cout << "SAB offset:" << (uint16_t) offset << std::endl;
-    std::cout << "SAB value:" << *reinterpret_cast<int8_t*>(mStack.top().data()) << " " << *reinterpret_cast<int8_t*>(mLocalVariable.data()+offset) << std::endl;
-    std::copy(mStack.top().begin(), mStack.top().end(), mLocalVariable.data()+offset);
-    std::cout << "SAB value:" << *reinterpret_cast<int8_t*>(mStack.top().data()) << " " << *reinterpret_cast<int8_t*>(mLocalVariable.data()+offset) << std::endl;
+    std::cout << "SAB value:" << *reinterpret_cast<int8_t*>(mStack.top().data()) << " " << *reinterpret_cast<int8_t*>(mSOP[mCurrentSOP]->mLocalVariable.data()+offset) << std::endl;
+    std::copy(mStack.top().begin(), mStack.top().end(), mSOP[mCurrentSOP]->mLocalVariable.data()+offset);
+    std::cout << "SAB value:" << *reinterpret_cast<int8_t*>(mStack.top().data()) << " " << *reinterpret_cast<int8_t*>(mSOP[mCurrentSOP]->mLocalVariable.data()+offset) << std::endl;
     mStack.pop();
 }
 
@@ -341,18 +379,18 @@ void Aesop::do_SAD(){
     // Store Auto Dword
     uint16_t offset = mSOP[mCurrentSOP]->getWord()-sizeof(int32_t); // offset of long
     std::cout << "SAD offset:" << (uint16_t) offset << std::endl;
-    std::cout << "SAD value:" << *reinterpret_cast<int32_t*>(mStack.top().data()) << " " << *reinterpret_cast<int32_t*>(mLocalVariable.data()+offset) << std::endl;
-    std::copy(mStack.top().begin(), mStack.top().end(), mLocalVariable.data()+offset);
-    std::cout << "SAD value:" << *reinterpret_cast<int32_t*>(mStack.top().data()) << " " << *reinterpret_cast<int32_t*>(mLocalVariable.data()+offset) << std::endl;
+    std::cout << "SAD value:" << *reinterpret_cast<int32_t*>(mStack.top().data()) << " " << *reinterpret_cast<int32_t*>(mSOP[mCurrentSOP]->mLocalVariable.data()+offset) << std::endl;
+    std::copy(mStack.top().begin(), mStack.top().end(), mSOP[mCurrentSOP]->mLocalVariable.data()+offset);
+    std::cout << "SAD value:" << *reinterpret_cast<int32_t*>(mStack.top().data()) << " " << *reinterpret_cast<int32_t*>(mSOP[mCurrentSOP]->mLocalVariable.data()+offset) << std::endl;
     mStack.pop();
 }
 
 void Aesop::do_SAW(){
     uint16_t offset = mSOP[mCurrentSOP]->getWord()-sizeof(int16_t); // offset of word
     std::cout << "SAW offset:" << (uint16_t) offset << std::endl;
-    std::cout << "SAW value:" << *reinterpret_cast<int16_t*>(mStack.top().data()) << " " << *reinterpret_cast<int16_t*>(mLocalVariable.data()+offset) << std::endl;
-    std::copy(mStack.top().begin(), mStack.top().end(), mLocalVariable.data()+offset);
-    std::cout << "SAW value:" << *reinterpret_cast<int16_t*>(mStack.top().data()) << " " << *reinterpret_cast<int16_t*>(mLocalVariable.data()+offset) << std::endl;
+    std::cout << "SAW value:" << *reinterpret_cast<int16_t*>(mStack.top().data()) << " " << *reinterpret_cast<int16_t*>(mSOP[mCurrentSOP]->mLocalVariable.data()+offset) << std::endl;
+    std::copy(mStack.top().begin(), mStack.top().end(), mSOP[mCurrentSOP]->mLocalVariable.data()+offset);
+    std::cout << "SAW value:" << *reinterpret_cast<int16_t*>(mStack.top().data()) << " " << *reinterpret_cast<int16_t*>(mSOP[mCurrentSOP]->mLocalVariable.data()+offset) << std::endl;
     mStack.pop();
 }
 
@@ -364,10 +402,50 @@ void Aesop::do_SHTC(){
 
 void Aesop::do_SEND(){
     uint16_t value = mSOP[mCurrentSOP]->getByte();
+
     std::cout << "SEND: " << value;
-    value = mSOP[mCurrentSOP]->getWord();
-    std::cout << " -> '" << mRes.getTableEntry(value, 4) // TODO: get this through SOP
+    if (value == 0)
+        std::cout << " (THIS) ";
+
+    uint16_t message_number = mSOP[mCurrentSOP]->getWord();
+    std::cout << ", " << message_number
+              << " -> '" << mRes.getTableEntry(message_number, 4) // TODO: get this through SOP
               << "'" << std::endl;
+
+    // TODO: is this right? set it to the value on the stack?
+    mCurrentSOP = *reinterpret_cast<uint16_t*>(reinterpret_cast<void*>(mStack.top().data()));
+    mStack.pop();
+    mSOP[mCurrentSOP]->setPC(mSOP[mCurrentSOP]->getSOPMessagePosition(message_number));
+    uint16_t local_var_size = reinterpret_cast<uint16_t&>(mSOP[mCurrentSOP]->getWord()); // get THIS
+    mSOP[mCurrentSOP]->mLocalVariable.resize(local_var_size);
+    *reinterpret_cast<uint16_t*>(reinterpret_cast<void*>(mSOP[mCurrentSOP]->mLocalVariable.data())) = local_var_size;
+}
+
+void Aesop::do_SSB(){
+    uint16_t offset = mSOP[mCurrentSOP]->getWord();
+    std::cout << "SSB offset:" << (int16_t) offset << std::endl;
+    std::cout << "SSB value:" << *mStack.top().data() << " " << *reinterpret_cast<int8_t*>(mStaticVariable.data()+offset) << std::endl;
+    std::copy(mStack.top().begin(), mStack.top().end(), mStaticVariable.data()+offset);
+    std::cout << "SSB value:" << *mStack.top().data() << " " << *reinterpret_cast<int8_t*>(mStaticVariable.data()+offset) << std::endl;
+    mStack.pop();
+}
+
+void Aesop::do_SSD(){
+    uint16_t offset = mSOP[mCurrentSOP]->getWord();
+    std::cout << "SSD offset:" << (int16_t) offset << std::endl;
+    std::cout << "SSD value:" << *mStack.top().data() << " " << *reinterpret_cast<int32_t*>(mStaticVariable.data()+offset) << std::endl;
+    std::copy(mStack.top().begin(), mStack.top().end(), mStaticVariable.data()+offset);
+    std::cout << "SSD value:" << *mStack.top().data() << " " << *reinterpret_cast<int32_t*>(mStaticVariable.data()+offset) << std::endl;
+    mStack.pop();
+}
+
+void Aesop::do_SSW(){
+    uint16_t offset = mSOP[mCurrentSOP]->getWord();
+    std::cout << "SSW offset:" << (int16_t) offset << std::endl;
+    std::cout << "SSW value:" << *mStack.top().data() << " " << *reinterpret_cast<int16_t*>(mStaticVariable.data()+offset) << std::endl;
+    std::copy(mStack.top().begin(), mStack.top().end(), mStaticVariable.data()+offset);
+    std::cout << "SSW value:" << *mStack.top().data() << " " << *reinterpret_cast<int16_t*>(mStaticVariable.data()+offset) << std::endl;
+    mStack.pop();
 }
 
 void Aesop::do_SXB(){
@@ -398,8 +476,8 @@ void Aesop::call_function(std::map<uint8_t, std::vector<uint8_t>> &parameters){
         mSOP[mCurrentSOP]->setPC(mSOP[mCurrentSOP]->getSOPMessagePosition(INDEX_CREATE));
         {
             uint16_t local_var_size = reinterpret_cast<uint16_t&>(mSOP[mCurrentSOP]->getWord()); // get THIS
-            mLocalVariable.resize(local_var_size);
-            *reinterpret_cast<uint16_t*>(reinterpret_cast<void*>(mLocalVariable.data())) = local_var_size;
+            mSOP[mCurrentSOP]->mLocalVariable.resize(local_var_size);
+            *reinterpret_cast<uint16_t*>(reinterpret_cast<void*>(mSOP[mCurrentSOP]->mLocalVariable.data())) = local_var_size;
         }
         break;
     case C_CREATE_PROGRAM:
@@ -409,7 +487,7 @@ void Aesop::call_function(std::map<uint8_t, std::vector<uint8_t>> &parameters){
                       << (int16_t) *reinterpret_cast<int8_t*>(reinterpret_cast<void*>(parameters[1].data())) << std::endl;
             int32_t program_index = *reinterpret_cast<int16_t*>(reinterpret_cast<void*>(parameters[2].data()));
             std::cout << "CALL - C_CREATE_PROGRAM 2: " << program_index << std::endl;
-            mSOP[program_index] = std::make_shared<SOP>(mRes, program_index);
+            mSOP[program_index] = std::make_unique<SOP>(mRes, program_index);
             std::vector<uint8_t> value(sizeof(int16_t));
             *reinterpret_cast<int16_t*>(reinterpret_cast<void*>(value.data())) = program_index;
             mStack.push(value);
