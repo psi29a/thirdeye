@@ -22,7 +22,7 @@
 
 namespace STATE {
 
-#define INDEX_CREATE    0   /* this is the index of the 'create' function in the 'start' SOP
+#define INDEX_CREATE    0   /* this is the index of the 'create' function in the 'start' SOP */
 
 /* SOP OPERANDS */
 #define OP_BRT  0x00    /* 00   BRT   word            BRanch if True   */
@@ -134,11 +134,13 @@ class Aesop : private Functions
     std::vector<uint8_t> mStaticVariable;
 
 private:
+    void do_ADD();
     void do_BRA();
     void do_BRF();
     void do_BRT();
     void do_CASE();
     void do_CALL();
+    void do_DIV();
     void do_INTC();
     void do_LAB();
     void do_LAD();
@@ -148,6 +150,7 @@ private:
     void do_LSB();
     void do_LSD();
     void do_LSW();
+    void do_LT();
     void do_LXB();
     void do_LXD();
     void do_LXDA();
