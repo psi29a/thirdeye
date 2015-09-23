@@ -79,8 +79,20 @@ void Aesop::run() {
             s_op = "NEG";
             do_NEG();
             break;
+        case OP_ADD:
+            s_op = "ADD";
+            do_ADD();
+            break;
+        case OP_DIV:
+            s_op = "DIV";
+            do_DIV();
+            break;
         case OP_EXP:
             s_op = "EXP";
+            break;
+        case OP_LT:
+            s_op = "LT";
+            do_LT();
             break;
         case OP_SHTC:
             s_op = "SHTC";
@@ -193,6 +205,38 @@ void Aesop::run() {
     return;
 }
 
+void Aesop::do_ADD(){
+    // add the top two values from the stack
+    std::vector<uint8_t> value(sizeof(uint16_t));
+    uint8_t ops = 2;
+    int32_t op[ops];
+
+    for (uint8_t i = 0; i < ops; i++){
+        if (mStack.top().size() == sizeof(uint8_t))
+            op[i] = *reinterpret_cast<int8_t*>(reinterpret_cast<void*>(mStack.top().data()));
+        else if (mStack.top().size() == sizeof(uint16_t))
+            op[i] = *reinterpret_cast<int16_t*>(reinterpret_cast<void*>(mStack.top().data()));
+        else if (mStack.top().size() == sizeof(uint32_t))
+            op[i] = *reinterpret_cast<int32_t*>(reinterpret_cast<void*>(mStack.top().data()));
+        else
+            std::throw_with_nested(std::runtime_error("Unknown vector in op of LT!"));
+        mStack.pop();
+
+        if (i == 0 && *mStack.top().data() == 0)
+            mStack.pop();
+        else if (i == 0 && *mStack.top().data() != 0)
+            std::throw_with_nested(std::runtime_error("Delimiter not found!"));
+    }
+
+    *reinterpret_cast<int16_t*>(reinterpret_cast<void*>(value.data())) = op[1] + op[0];
+
+    std::cout << "ADD: " << op[1] << " + " << op[0] << " = "
+              << *reinterpret_cast<int16_t*>(reinterpret_cast<void*>(value.data()))
+              << std::endl;
+
+    mStack.push(value);
+}
+
 void Aesop::do_BRA(){
     // branch unconditionaly
     mSOP[mCurrentSOP]->setPC(mSOP[mCurrentSOP]->getWord());
@@ -255,13 +299,6 @@ void Aesop::do_CASE(){
     mSOP[mCurrentSOP]->setPC(jump_address);
 }
 
-void Aesop::do_PUSH(){
-    // push 0 on to stack, used a delimiter for CALL and SEND
-    std::vector<uint8_t> temp(sizeof(uint8_t));
-    *temp.data() = 0;
-    mStack.push(temp);
-}
-
 void Aesop::do_CALL(){
     // call function with parameter validation
     uint8_t num_of_parameters = mSOP[mCurrentSOP]->getByte(); // number of parameters
@@ -271,6 +308,7 @@ void Aesop::do_CALL(){
         std::copy(mStack.top().begin(), mStack.top().end(), parameter[i].begin());
         mStack.pop();
 
+        std::cout << "CALL: - parameter (" << (uint16_t) i << ") " << (uint16_t) *parameter[i].data() << std::endl;
         // check for parameter delimiter
         if (*mStack.top().data() != 0)
             std::throw_with_nested(std::runtime_error("Delimiter not found!"));
@@ -278,6 +316,37 @@ void Aesop::do_CALL(){
             mStack.pop();
     }
     call_function(parameter);
+}
+
+void Aesop::do_DIV(){
+    std::vector<uint8_t> value(sizeof(uint16_t));
+    uint8_t ops = 2;
+    int32_t op[ops];
+
+    for (uint8_t i = 0; i < ops; i++){
+        if (mStack.top().size() == sizeof(uint8_t))
+            op[i] = *reinterpret_cast<int8_t*>(reinterpret_cast<void*>(mStack.top().data()));
+        else if (mStack.top().size() == sizeof(uint16_t))
+            op[i] = *reinterpret_cast<int16_t*>(reinterpret_cast<void*>(mStack.top().data()));
+        else if (mStack.top().size() == sizeof(uint32_t))
+            op[i] = *reinterpret_cast<int32_t*>(reinterpret_cast<void*>(mStack.top().data()));
+        else
+            std::throw_with_nested(std::runtime_error("Unknown vector in op of LT!"));
+        mStack.pop();
+
+        if (i == 0 && *mStack.top().data() == 0)
+            mStack.pop();
+        else if (i == 0 && *mStack.top().data() != 0)
+            std::throw_with_nested(std::runtime_error("Delimiter not found!"));
+    }
+
+    *value.data() = op[1] / op[0];
+
+    std::cout << "DIV: " << op[1] << " / " << op[0] << " = "
+              << *reinterpret_cast<int16_t*>(reinterpret_cast<void*>(value.data()))
+              << std::endl;
+
+    mStack.push(value);
 }
 
 void Aesop::do_INTC(){
@@ -290,33 +359,27 @@ void Aesop::do_INTC(){
 void Aesop::do_LAB(){
     uint16_t offset = mSOP[mCurrentSOP]->getWord()-sizeof(int8_t); // offset of byte
     std::cout << "LAB offset:" << (uint16_t) offset << std::endl;
-    {
-        std::vector<uint8_t> value(sizeof(int8_t));
-        std::copy(mSOP[mCurrentSOP]->mLocalVariable.data()+offset, mSOP[mCurrentSOP]->mLocalVariable.data()+offset+sizeof(int8_t), value.begin());
-        mStack.push(value);
-    }
+    std::vector<uint8_t> value(sizeof(int8_t));
+    std::copy(mSOP[mCurrentSOP]->mLocalVariable.data()+offset, mSOP[mCurrentSOP]->mLocalVariable.data()+offset+sizeof(int8_t), value.begin());
+    mStack.push(value);
     std::cout << "LAB value:" << *reinterpret_cast<int8_t*>(mStack.top().data()) << " " << *reinterpret_cast<int8_t*>(mSOP[mCurrentSOP]->mLocalVariable.data()+offset) << std::endl;
 }
 
 void Aesop::do_LAD(){
     uint16_t offset = mSOP[mCurrentSOP]->getWord()-sizeof(int32_t); // offset of long
     std::cout << "LAD offset:" << (uint16_t) offset << std::endl;
-    {
-        std::vector<uint8_t> value(sizeof(int32_t));
-        std::copy(mSOP[mCurrentSOP]->mLocalVariable.data()+offset, mSOP[mCurrentSOP]->mLocalVariable.data()+offset+sizeof(int32_t), value.begin());
-        mStack.push(value);
-    }
+    std::vector<uint8_t> value(sizeof(int32_t));
+    std::copy(mSOP[mCurrentSOP]->mLocalVariable.data()+offset, mSOP[mCurrentSOP]->mLocalVariable.data()+offset+sizeof(int32_t), value.begin());
+    mStack.push(value);
     std::cout << "LAD value:" << *reinterpret_cast<int32_t*>(mStack.top().data()) << " " << *reinterpret_cast<int32_t*>(mSOP[mCurrentSOP]->mLocalVariable.data()+offset) << std::endl;
 }
 
 void Aesop::do_LAW(){
     uint16_t offset = mSOP[mCurrentSOP]->getWord()-sizeof(int16_t); // offset of word
     std::cout << "LAW offset:" << (uint16_t) offset << std::endl;
-    {
-        std::vector<uint8_t> value(sizeof(uint16_t));
-        std::copy(mSOP[mCurrentSOP]->mLocalVariable.data()+offset, mSOP[mCurrentSOP]->mLocalVariable.data()+offset+sizeof(uint16_t), value.begin());
-        mStack.push(value);
-    }
+    std::vector<uint8_t> value(sizeof(uint16_t));
+    std::copy(mSOP[mCurrentSOP]->mLocalVariable.data()+offset, mSOP[mCurrentSOP]->mLocalVariable.data()+offset+sizeof(uint16_t), value.begin());
+    mStack.push(value);
     std::cout << "LAW value:" << *reinterpret_cast<int16_t*>(mStack.top().data()) << " " << *reinterpret_cast<int16_t*>(mSOP[mCurrentSOP]->mLocalVariable.data()+offset) << std::endl;
 }
 
@@ -340,34 +403,61 @@ void Aesop::do_LNGC(){
 void Aesop::do_LSB(){
     uint16_t offset = mSOP[mCurrentSOP]->getWord();
     std::cout << "LSB offset:" << (uint16_t) offset << std::endl;
-    {
-        std::vector<uint8_t> value(sizeof(uint8_t));
-        std::copy(mStaticVariable.data()+offset, mStaticVariable.data()+offset+sizeof(uint8_t), value.begin());
-        mStack.push(value);
-    }
+    std::vector<uint8_t> value(sizeof(uint8_t));
+    std::copy(mStaticVariable.data()+offset, mStaticVariable.data()+offset+sizeof(uint8_t), value.begin());
+    mStack.push(value);
     std::cout << "LSB value:" << *mStack.top().data() << " " << *reinterpret_cast<int8_t*>(mStaticVariable.data()+offset) << std::endl;
 }
 
 void Aesop::do_LSD(){
     uint16_t offset = mSOP[mCurrentSOP]->getWord();
     std::cout << "LSD offset:" << (uint16_t) offset << std::endl;
-    {
-        std::vector<uint8_t> value(sizeof(uint32_t));
-        std::copy(mStaticVariable.data()+offset, mStaticVariable.data()+offset+sizeof(uint32_t), value.begin());
-        mStack.push(value);
-    }
+    std::vector<uint8_t> value(sizeof(uint32_t));
+    std::copy(mStaticVariable.data()+offset, mStaticVariable.data()+offset+sizeof(uint32_t), value.begin());
+    mStack.push(value);
     std::cout << "LSD value:" << *mStack.top().data() << " " << *reinterpret_cast<int32_t*>(mStaticVariable.data()+offset) << std::endl;
 }
 
 void Aesop::do_LSW(){
     uint16_t offset = mSOP[mCurrentSOP]->getWord();
     std::cout << "LSW offset:" << (uint16_t) offset << std::endl;
-    {
-        std::vector<uint8_t> value(sizeof(uint16_t));
-        std::copy(mStaticVariable.data()+offset, mStaticVariable.data()+offset+sizeof(uint16_t), value.begin());
-        mStack.push(value);
-    }
+    std::vector<uint8_t> value(sizeof(uint16_t));
+    std::copy(mStaticVariable.data()+offset, mStaticVariable.data()+offset+sizeof(uint16_t), value.begin());
+    mStack.push(value);
     std::cout << "LSW value:" << *mStack.top().data() << " " << *reinterpret_cast<int16_t*>(mStaticVariable.data()+offset) << std::endl;
+}
+
+void Aesop::do_LT(){
+    std::vector<uint8_t> value(sizeof(uint8_t));
+    uint8_t ops = 2;
+    int32_t op[ops];
+
+    for (uint8_t i = 0; i < ops; i++){
+        if (mStack.top().size() == sizeof(uint8_t))
+            op[i] = *reinterpret_cast<int8_t*>(reinterpret_cast<void*>(mStack.top().data()));
+        else if (mStack.top().size() == sizeof(uint16_t))
+            op[i] = *reinterpret_cast<int16_t*>(reinterpret_cast<void*>(mStack.top().data()));
+        else if (mStack.top().size() == sizeof(uint32_t))
+            op[i] = *reinterpret_cast<int32_t*>(reinterpret_cast<void*>(mStack.top().data()));
+        else
+            std::throw_with_nested(std::runtime_error("Unknown vector in op of LT!"));
+        mStack.pop();
+
+        if (i == 0 && *mStack.top().data() == 0)
+            mStack.pop();
+        else if (i == 0 && *mStack.top().data() != 0)
+            std::throw_with_nested(std::runtime_error("Delimiter not found!"));
+    }
+
+    if (op[1] < op[0])
+        *value.data() = 1;
+    else
+        *value.data() = 0;
+
+    std::cout << "LT: " << op[1] << " < " << op[0] << " == "
+              << (uint16_t) *value.data() << std::endl;
+
+    mStack.push(value);
 }
 
 void Aesop::do_LXB(){
@@ -410,6 +500,13 @@ void Aesop::do_NOT(){
 
     mStack.pop();
     mStack.push(value);
+}
+
+void Aesop::do_PUSH(){
+    // push 0 on to stack, used a delimiter for CALL and SEND
+    std::vector<uint8_t> temp(sizeof(uint8_t));
+    *temp.data() = 0;
+    mStack.push(temp);
 }
 
 void Aesop::do_RCRS(){
@@ -536,16 +633,17 @@ void Aesop::call_function(std::map<uint8_t, std::vector<uint8_t>> &parameters){
         }
         break;
     case C_CREATE_PROGRAM:
-        // TODO: create program
-        {
+        {   /* When creating a program, we automatically launch into it's CREATE function. */
             std::cout << "CALL - C_CREATE_PROGRAM 1: "
                       << (int16_t) *reinterpret_cast<int8_t*>(reinterpret_cast<void*>(parameters[1].data())) << std::endl;
-            int32_t program_index = *reinterpret_cast<int16_t*>(reinterpret_cast<void*>(parameters[2].data()));
-            std::cout << "CALL - C_CREATE_PROGRAM 2: " << program_index << std::endl;
-            mSOP[program_index] = std::make_unique<SOP>(mRes, program_index);
-            std::vector<uint8_t> value(sizeof(int16_t));
-            *reinterpret_cast<int16_t*>(reinterpret_cast<void*>(value.data())) = program_index;
-            mStack.push(value);
+            mCurrentSOP = *reinterpret_cast<int16_t*>(reinterpret_cast<void*>(parameters[2].data()));
+            std::cout << "CALL - C_CREATE_PROGRAM 2: " << mCurrentSOP << std::endl;
+            mSOP[mCurrentSOP] = std::make_unique<SOP>(mRes, mCurrentSOP);
+
+            mSOP[mCurrentSOP]->setPC(mSOP[mCurrentSOP]->getSOPMessagePosition(INDEX_CREATE));
+            uint16_t local_var_size = reinterpret_cast<uint16_t&>(mSOP[mCurrentSOP]->getWord()); // get THIS
+            mSOP[mCurrentSOP]->mLocalVariable.resize(local_var_size);
+            *reinterpret_cast<uint16_t*>(reinterpret_cast<void*>(mSOP[mCurrentSOP]->mLocalVariable.data())) = local_var_size;
         }
         break;
 
