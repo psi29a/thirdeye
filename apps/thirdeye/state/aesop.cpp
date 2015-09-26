@@ -83,6 +83,10 @@ void Aesop::run() {
             s_op = "ADD";
             do_ADD();
             break;
+        case OP_MUL:
+            s_op = "MUL";
+            do_MUL();
+            break;
         case OP_DIV:
             s_op = "DIV";
             do_DIV();
@@ -117,6 +121,10 @@ void Aesop::run() {
         case OP_SEND:
             s_op = "SEND";
             do_SEND();
+            break;
+        case OP_AIS:
+            s_op = "AIS";
+            do_AIS();
             break;
         case OP_LAB:
             s_op = "LAB";
@@ -237,6 +245,35 @@ void Aesop::do_ADD(){
     mStack.push(value);
 }
 
+void Aesop::do_AIS(){
+    // Array Index Shift
+    std::vector<uint8_t> value(sizeof(uint16_t));
+    uint8_t shift = mSOP[mCurrentSOP]->getByte();
+    uint32_t op = 0;
+
+    if (mStack.top().size() == sizeof(uint8_t))
+        op = *reinterpret_cast<int8_t*>(reinterpret_cast<void*>(mStack.top().data()));
+    else if (mStack.top().size() == sizeof(uint16_t))
+        op = *reinterpret_cast<int16_t*>(reinterpret_cast<void*>(mStack.top().data()));
+    else if (mStack.top().size() == sizeof(uint32_t))
+        op = *reinterpret_cast<int32_t*>(reinterpret_cast<void*>(mStack.top().data()));
+    else
+        std::throw_with_nested(std::runtime_error("Unknown vector in op of AIS!"));
+    mStack.pop();
+
+    /* is this necessary? */
+    if (*mStack.top().data() != 0)
+        std::throw_with_nested(std::runtime_error("Delimiter not found!"));
+    mStack.pop();
+
+    std::cout << "AIS: " << op << " << " << (uint16_t) shift << " = ";
+    op <<= shift;
+    std::cout << op << std::endl;
+    *value.data() = op;
+    mStack.push(value);
+
+}
+
 void Aesop::do_BRA(){
     // branch unconditionaly
     mSOP[mCurrentSOP]->setPC(mSOP[mCurrentSOP]->getWord());
@@ -331,7 +368,7 @@ void Aesop::do_DIV(){
         else if (mStack.top().size() == sizeof(uint32_t))
             op[i] = *reinterpret_cast<int32_t*>(reinterpret_cast<void*>(mStack.top().data()));
         else
-            std::throw_with_nested(std::runtime_error("Unknown vector in op of LT!"));
+            std::throw_with_nested(std::runtime_error("Unknown vector in op of DIV!"));
         mStack.pop();
 
         if (i == 0 && *mStack.top().data() == 0)
@@ -472,6 +509,37 @@ void Aesop::do_LXDA(){
     uint16_t value = mSOP[mCurrentSOP]->getWord();
 }
 
+void Aesop::do_MUL(){
+    std::vector<uint8_t> value(sizeof(uint16_t));
+    uint8_t ops = 2;
+    int32_t op[ops];
+
+    for (uint8_t i = 0; i < ops; i++){
+        if (mStack.top().size() == sizeof(uint8_t))
+            op[i] = *reinterpret_cast<int8_t*>(reinterpret_cast<void*>(mStack.top().data()));
+        else if (mStack.top().size() == sizeof(uint16_t))
+            op[i] = *reinterpret_cast<int16_t*>(reinterpret_cast<void*>(mStack.top().data()));
+        else if (mStack.top().size() == sizeof(uint32_t))
+            op[i] = *reinterpret_cast<int32_t*>(reinterpret_cast<void*>(mStack.top().data()));
+        else
+            std::throw_with_nested(std::runtime_error("Unknown vector in op of MUL!"));
+        mStack.pop();
+
+        if (i == 0 && *mStack.top().data() == 0)
+            mStack.pop();
+        else if (i == 0 && *mStack.top().data() != 0)
+            std::throw_with_nested(std::runtime_error("Delimiter not found!"));
+    }
+
+    *value.data() = op[1] * op[0];
+
+    std::cout << "MUL: " << op[1] << " * " << op[0] << " = "
+              << *reinterpret_cast<int16_t*>(reinterpret_cast<void*>(value.data()))
+              << std::endl;
+
+    mStack.push(value);
+}
+
 void Aesop::do_NEG(){
     std::vector<uint8_t> value(sizeof(uint8_t));
     if (mStack.top().size() == sizeof(uint8_t))
@@ -594,7 +662,7 @@ void Aesop::do_SSD(){
 void Aesop::do_SSW(){
     uint16_t offset = mSOP[mCurrentSOP]->getWord();
     std::cout << "SSW offset:" << (int16_t) offset << std::endl;
-    std::cout << "SSW value:" << *mStack.top().data() << " " << *reinterpret_cast<int16_t*>(mStaticVariable.data()+offset) << std::endl;
+    std::cout << "SSW value:" << mStack.top().data() << " " << *reinterpret_cast<int16_t*>(mStaticVariable.data()+offset) << std::endl;
     std::copy(mStack.top().begin(), mStack.top().end(), mStaticVariable.data()+offset);
     std::cout << "SSW value:" << *mStack.top().data() << " " << *reinterpret_cast<int16_t*>(mStaticVariable.data()+offset) << std::endl;
     mStack.pop();

@@ -135,6 +135,7 @@ class Aesop : private Functions
 
 private:
     void do_ADD();
+    void do_AIS();
     void do_BRA();
     void do_BRF();
     void do_BRT();
@@ -154,6 +155,7 @@ private:
     void do_LXB();
     void do_LXD();
     void do_LXDA();
+    void do_MUL();
     void do_NEG();
     void do_NOT();
     void do_PUSH();
