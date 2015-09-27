@@ -166,6 +166,7 @@ private:
     void do_SSB();
     void do_SSD();
     void do_SSW();
+    void do_SSWA();
     void do_SEND();
     void do_SHTC();
     void do_SXB();
