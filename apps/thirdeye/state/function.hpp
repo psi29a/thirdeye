@@ -16,13 +16,6 @@
 
 namespace STATE {
 
-// Function Defines
-
-#define C_CREATE_PROGRAM 0x00
-#define C_PEEKMEM   0x08
-#define C_POKEMEM   0x0C
-#define C_LAUNCH    0x18
-
 class Functions {
     std::map<uint32_t, std::vector<uint8_t>> mMemory;
 
