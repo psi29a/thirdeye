@@ -174,6 +174,10 @@ void Aesop::run() {
             s_op = "SSD";
             do_SSD();
             break;
+        case OP_SSWA:
+            s_op = "SSWA";
+            do_SSWA();
+            break;
         case OP_LXD:
             s_op = "LXD";
             do_LXD();
@@ -663,6 +667,17 @@ void Aesop::do_SSD(){
 }
 
 void Aesop::do_SSW(){
+    uint16_t offset = mSOP[mCurrentSOP]->getWord();
+    std::cout << "SSW offset:" << (int16_t) offset << std::endl;
+    std::cout << "SSW value:" << mStack.top().data() << " " << *reinterpret_cast<int16_t*>(mStaticVariable.data()+offset) << std::endl;
+    std::copy(mStack.top().begin(), mStack.top().end(), mStaticVariable.data()+offset);
+    std::cout << "SSW value:" << *mStack.top().data() << " " << *reinterpret_cast<int16_t*>(mStaticVariable.data()+offset) << std::endl;
+    mStack.pop();
+}
+
+void Aesop::do_SSWA(){
+    // Store Static Word Array
+    // TODO: Is this correct?
     uint16_t offset = mSOP[mCurrentSOP]->getWord();
     std::cout << "SSW offset:" << (int16_t) offset << std::endl;
     std::cout << "SSW value:" << mStack.top().data() << " " << *reinterpret_cast<int16_t*>(mStaticVariable.data()+offset) << std::endl;
