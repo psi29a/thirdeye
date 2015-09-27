@@ -338,6 +338,7 @@ void Aesop::do_CASE(){
 
 void Aesop::do_CALL(){
     // call function with parameter validation
+    std::cout << "CALL: before - mStack.size() == " << mStack.size() << std::endl;
     uint8_t num_of_parameters = mSOP[mCurrentSOP]->getByte(); // number of parameters
     std::map<uint8_t, std::vector<uint8_t>> parameter;
     for (uint8_t i = num_of_parameters; i > 0; i--){
@@ -352,7 +353,9 @@ void Aesop::do_CALL(){
         else
             mStack.pop();
     }
+    std::cout << "CALL: about - mStack.size() == " << mStack.size() << std::endl;
     call_function(parameter);
+    std::cout << "CALL: after - mStack.size() == " << mStack.size() << std::endl;
 }
 
 void Aesop::do_DIV(){
@@ -675,48 +678,48 @@ void Aesop::do_SXB(){
 void Aesop::call_function(std::map<uint8_t, std::vector<uint8_t>> &parameters){
     // call up function and send parameters
     uint16_t function_id = *reinterpret_cast<uint16_t*>(reinterpret_cast<void*>(mStack.top().data()));
-    std::cout << "CALL - Calling: " << mSOP[mCurrentSOP]->getSOPImportName(function_id) << std::endl;
+    std::string function_name = mSOP[mCurrentSOP]->getSOPImportName(function_id);
+    std::cout << "CALL - Calling: " << function_name
+              << " (SOP:" << mCurrentSOP << " / ID:"
+              << function_id << ") " << std::endl;
     mStack.pop();
 
-    switch(function_id){
-    case C_PEEKMEM:
+    if (function_name == "peekmem")
     {
         std::vector<uint8_t> value(sizeof(int32_t));
         *reinterpret_cast<int32_t*>(reinterpret_cast<void*>(value.data())) = peekmem(parameters);
         mStack.push(value);
     }
-        break;
-    case C_POKEMEM:
+    else if (function_name == "pokemem")
+    {
         pokemem(parameters);
-        break;
-    case C_LAUNCH:
+    }
+    else if (function_name == "launch")
+    {
         // TODO: launch application, for now we'll just jump right back
         // into the SOP bytecode from the beginning.
         mCurrentSOP = mRes.getIndex("start");
         mSOP[mCurrentSOP]->setPC(mSOP[mCurrentSOP]->getSOPMessagePosition(INDEX_CREATE));
-        {
-            uint16_t local_var_size = reinterpret_cast<uint16_t&>(mSOP[mCurrentSOP]->getWord()); // get THIS
-            mSOP[mCurrentSOP]->mLocalVariable.resize(local_var_size);
-            *reinterpret_cast<uint16_t*>(reinterpret_cast<void*>(mSOP[mCurrentSOP]->mLocalVariable.data())) = local_var_size;
-        }
-        break;
-    case C_CREATE_PROGRAM:
-        {   /* When creating a program, we automatically launch into it's CREATE function. */
-            std::cout << "CALL - C_CREATE_PROGRAM 1: "
-                      << (int16_t) *reinterpret_cast<int8_t*>(reinterpret_cast<void*>(parameters[1].data())) << std::endl;
-            mCurrentSOP = *reinterpret_cast<int16_t*>(reinterpret_cast<void*>(parameters[2].data()));
-            std::cout << "CALL - C_CREATE_PROGRAM 2: " << mCurrentSOP << std::endl;
-            mSOP[mCurrentSOP] = std::make_unique<SOP>(mRes, mCurrentSOP);
+        uint16_t local_var_size = reinterpret_cast<uint16_t&>(mSOP[mCurrentSOP]->getWord()); // get THIS
+        mSOP[mCurrentSOP]->mLocalVariable.resize(local_var_size);
+        *reinterpret_cast<uint16_t*>(reinterpret_cast<void*>(mSOP[mCurrentSOP]->mLocalVariable.data())) = local_var_size;
+    }
+    else if (function_name == "create_program")
+    {
+        /* When creating a program, we automatically launch into it's CREATE function. */
+        std::cout << "CALL - C_CREATE_PROGRAM 1: "
+                  << (int16_t) *reinterpret_cast<int8_t*>(reinterpret_cast<void*>(parameters[1].data())) << std::endl;
+        mCurrentSOP = *reinterpret_cast<int16_t*>(reinterpret_cast<void*>(parameters[2].data()));
+        std::cout << "CALL - C_CREATE_PROGRAM 2: " << mCurrentSOP << std::endl;
+        mSOP[mCurrentSOP] = std::make_unique<SOP>(mRes, mCurrentSOP);
 
-            mSOP[mCurrentSOP]->setPC(mSOP[mCurrentSOP]->getSOPMessagePosition(INDEX_CREATE));
-            uint16_t local_var_size = reinterpret_cast<uint16_t&>(mSOP[mCurrentSOP]->getWord()); // get THIS
-            mSOP[mCurrentSOP]->mLocalVariable.resize(local_var_size);
-            *reinterpret_cast<uint16_t*>(reinterpret_cast<void*>(mSOP[mCurrentSOP]->mLocalVariable.data())) = local_var_size;
-        }
-        break;
-
-
-    default:
+        mSOP[mCurrentSOP]->setPC(mSOP[mCurrentSOP]->getSOPMessagePosition(INDEX_CREATE));
+        uint16_t local_var_size = reinterpret_cast<uint16_t&>(mSOP[mCurrentSOP]->getWord()); // get THIS
+        mSOP[mCurrentSOP]->mLocalVariable.resize(local_var_size);
+        *reinterpret_cast<uint16_t*>(reinterpret_cast<void*>(mSOP[mCurrentSOP]->mLocalVariable.data())) = local_var_size;
+    }
+    else
+    {
         std::cout << "CALL -> Unimplimented function: " << std::hex << function_id << std::dec<< std::endl;
     }
 
