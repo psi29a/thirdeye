@@ -141,7 +141,9 @@ private:
     void do_BRT();
     void do_CASE();
     void do_CALL();
+    void do_DEC();
     void do_DIV();
+    void do_INC();
     void do_INTC();
     void do_LAB();
     void do_LAD();
