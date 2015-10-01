@@ -98,6 +98,14 @@ void Aesop::run() {
             s_op = "LT";
             do_LT();
             break;
+        case OP_INC:
+            s_op = "INC";
+            do_INC();
+            break;
+        case OP_DEC:
+            s_op = "DEC";
+            do_DEC();
+            break;
         case OP_SHTC:
             s_op = "SHTC";
             do_SHTC();
@@ -362,6 +370,21 @@ void Aesop::do_CALL(){
     std::cout << "CALL: after - mStack.size() == " << mStack.size() << std::endl;
 }
 
+void Aesop::do_DEC(){
+    std::vector<uint8_t> value(sizeof(uint8_t));
+    if (mStack.top().size() == sizeof(uint8_t))
+        *reinterpret_cast<int8_t*>(reinterpret_cast<void*>(value.data())) = *reinterpret_cast<int8_t*>(reinterpret_cast<void*>(mStack.top().data()))-1;
+    else if (mStack.top().size() == sizeof(uint16_t))
+        *reinterpret_cast<int16_t*>(reinterpret_cast<void*>(value.data())) = *reinterpret_cast<int16_t*>(reinterpret_cast<void*>(mStack.top().data()))-1;
+    else if (mStack.top().size() == sizeof(uint32_t))
+        *reinterpret_cast<int32_t*>(reinterpret_cast<void*>(value.data())) = *reinterpret_cast<int32_t*>(reinterpret_cast<void*>(mStack.top().data()))-1;
+    else
+        std::throw_with_nested(std::runtime_error("Unknown vector to DECrement!"));
+
+    mStack.pop();
+    mStack.push(value);
+}
+
 void Aesop::do_DIV(){
     std::vector<uint8_t> value(sizeof(uint16_t));
     uint8_t ops = 2;
@@ -390,6 +413,21 @@ void Aesop::do_DIV(){
               << *reinterpret_cast<int16_t*>(reinterpret_cast<void*>(value.data()))
               << std::endl;
 
+    mStack.push(value);
+}
+
+void Aesop::do_INC(){
+    std::vector<uint8_t> value(sizeof(uint8_t));
+    if (mStack.top().size() == sizeof(uint8_t))
+        *reinterpret_cast<int8_t*>(reinterpret_cast<void*>(value.data())) = *reinterpret_cast<int8_t*>(reinterpret_cast<void*>(mStack.top().data()))+1;
+    else if (mStack.top().size() == sizeof(uint16_t))
+        *reinterpret_cast<int16_t*>(reinterpret_cast<void*>(value.data())) = *reinterpret_cast<int16_t*>(reinterpret_cast<void*>(mStack.top().data()))+1;
+    else if (mStack.top().size() == sizeof(uint32_t))
+        *reinterpret_cast<int32_t*>(reinterpret_cast<void*>(value.data())) = *reinterpret_cast<int32_t*>(reinterpret_cast<void*>(mStack.top().data()))+1;
+    else
+        std::throw_with_nested(std::runtime_error("Unknown vector to INCrement!"));
+
+    mStack.pop();
     mStack.push(value);
 }
 
@@ -628,23 +666,36 @@ void Aesop::do_SHTC(){
 }
 
 void Aesop::do_SEND(){
-    uint16_t value = mSOP[mCurrentSOP]->getByte();
+    uint16_t num_of_parameters = mSOP[mCurrentSOP]->getByte();
 
-    std::cout << "SEND: " << value;
-    if (value == 0)
-        std::cout << " (THIS) ";
+    std::cout << "SEND - params: " << num_of_parameters;
 
     uint16_t message_number = mSOP[mCurrentSOP]->getWord();
-    std::cout << ", " << message_number
+    std::cout << ", message:" << message_number
               << " -> '" << mRes.getTableEntry(message_number, 4) // TODO: get this through SOP
               << "'" << std::endl;
 
-    // TODO: is this right? set it to the value on the stack?
+    /* Gather params */
+    std::map<uint8_t, std::vector<uint8_t>> parameter;
+    for (uint8_t i = num_of_parameters; i > 0; i--){
+        parameter[i] = std::vector<uint8_t>(mStack.top().size());
+        std::copy(mStack.top().begin(), mStack.top().end(), parameter[i].begin());
+        mStack.pop();
+
+        std::cout << "SEND: - parameter (" << (uint16_t) i << ") " << (uint16_t) *parameter[i].data() << std::endl;
+        // check for parameter delimiter
+        if (*mStack.top().data() != 0)
+            std::throw_with_nested(std::runtime_error("Delimiter not found!"));
+        else
+            mStack.pop();
+    }
+
     mCurrentSOP = *reinterpret_cast<uint16_t*>(reinterpret_cast<void*>(mStack.top().data()));
     mStack.pop();
     mSOP[mCurrentSOP]->setPC(mSOP[mCurrentSOP]->getSOPMessagePosition(message_number));
     uint16_t local_var_size = reinterpret_cast<uint16_t&>(mSOP[mCurrentSOP]->getWord()); // get THIS
     mSOP[mCurrentSOP]->mLocalVariable.resize(local_var_size);
+
     *reinterpret_cast<uint16_t*>(reinterpret_cast<void*>(mSOP[mCurrentSOP]->mLocalVariable.data())) = local_var_size;
 }
 
