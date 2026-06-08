@@ -109,7 +109,7 @@ public:
 	};
 	
 	void read(char *b, int len) {
-		fread(b, 1, len, f);
+		(void)fread(b, 1, len, f);
 	};
 	
 	virtual void write1(unsigned int val)

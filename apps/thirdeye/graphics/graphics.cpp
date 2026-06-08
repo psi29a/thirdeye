@@ -5,6 +5,7 @@
 #include <random>
 #include <sstream>
 #include <string>
+#include <ctime>
 
 #define SOFTWARE	0
 #define HARDWARE	1
