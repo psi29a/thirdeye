@@ -42,10 +42,6 @@ target_link_libraries(thirdeye
     components
 )
 
-if (Boost_FOUND)
-    target_link_libraries(thirdeye ${Boost_LIBRARIES})
-endif()
-
 # Fix for not visible pthreads functions for linker with glibc 2.15
 if (UNIX AND NOT APPLE)
 target_link_libraries(thirdeye ${CMAKE_THREAD_LIBS_INIT})

@@ -24,7 +24,6 @@ add_executable(runtests
 )
 
 target_link_libraries(runtests
-    ${Boost_LIBRARIES}
     ${SDL2_LIBRARY}
     ${SDL2MAIN_LIBRARY}
     ${WILDMIDI_LIBRARY}
