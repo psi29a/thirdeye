@@ -914,8 +914,9 @@ void displayImportDictionary(char *aImportResourceName,
 		int loCurrentlyDisplayedType;
 		char loFirst[256];
 		char loSecond[256];
-		char loTmp[256];
-		char loTmp2[256];
+		// large enough to hold a quoted 256-byte string (two quotes + NUL)
+		char loTmp[259];
+		char loTmp2[259];
 
 		loCurrentImportEntry = aFullImportResourceDictionary[i];
 		loCurrentImportEntryType = loCurrentImportEntry->importType;
@@ -1024,7 +1025,8 @@ void displayExportDictionary(char *aExportResourceName,
 		int loCurrentlyDisplayedType;
 		char loFirst[256];
 		char loSecond[256];
-		char loTmp[256];
+		// large enough to hold a quoted 256-byte string (two quotes + NUL)
+		char loTmp[259];
 
 		loCurrentExportEntry = aFullExportResourceDictionary[i];
 		loCurrentExportEntryType = loCurrentExportEntry->exportType;

@@ -109,7 +109,11 @@ public:
 	};
 	
 	void read(char *b, int len) {
-		(void)fread(b, 1, len, f);
+		size_t bytesRead = fread(b, 1, len, f);
+		if (bytesRead < (size_t) len) {
+			// zero-fill the remainder on a short read
+			memset(b + bytesRead, 0, len - bytesRead);
+		}
 	};
 	
 	virtual void write1(unsigned int val)
