@@ -1,4 +1,4 @@
-#include <malloc.h>
+#include <cstdlib>
 #include <stdio.h>
 #include <string.h>
 
@@ -28,7 +28,7 @@ int testOneOldBitmap(FILE *aResFile, DIRPOINTER *aDirectoryPointers,
 			&loResourceSize);
 	if (loBuffer == NULL) {
 		char loError[256];
-		sprintf(loError,
+		snprintf(loError, sizeof(loError),
 				"Error: failure while reading the bitmap resource number %d, name: %s!",
 				aBitmapNumber, aBitmapName);
 		fprintf(aOutputFile, "%s\n", loError);
@@ -40,7 +40,7 @@ int testOneOldBitmap(FILE *aResFile, DIRPOINTER *aDirectoryPointers,
 			| (loBuffer[3] << 24);
 	if (loBitmapHeaderSize != loResourceSize) {
 		char loError[256];
-		sprintf(loError,
+		snprintf(loError, sizeof(loError),
 				"Error: size in the bitmap header does not agree with the size of the resource!");
 		fprintf(aOutputFile, "%s\n", loError);
 		printf("%s\n", loError);
@@ -77,7 +77,7 @@ int testOneOldBitmap(FILE *aResFile, DIRPOINTER *aDirectoryPointers,
 		loWidth = loBuffer[loPos + 0] | (loBuffer[loPos + 1] << 8);
 		if (loWidth <= 0 || loWidth > MAX_BITMAP_WIDTH) {
 			char loError[256];
-			sprintf(loError, "Error: wrong bitmap width: %d!", loWidth);
+			snprintf(loError, sizeof(loError), "Error: wrong bitmap width: %d!", loWidth);
 			printf("%s\n", loError);
 			fprintf(aOutputFile, "%s\n", loError);
 			free(loBuffer);
@@ -87,7 +87,7 @@ int testOneOldBitmap(FILE *aResFile, DIRPOINTER *aDirectoryPointers,
 		loHeight = loBuffer[loPos + 2] | (loBuffer[loPos + 3] << 8);
 		if (loHeight <= 0 || loHeight > MAX_BITMAP_WIDTH) {
 			char loError[256];
-			sprintf(loError, "Error: wrong bitmap height: %d!", loHeight);
+			snprintf(loError, sizeof(loError), "Error: wrong bitmap height: %d!", loHeight);
 			printf("%s\n", loError);
 			fprintf(aOutputFile, "%s\n", loError);
 			free(loBuffer);
@@ -114,7 +114,7 @@ int testOneOldBitmap(FILE *aResFile, DIRPOINTER *aDirectoryPointers,
 
 			if ((loY < 0) || (loY >= loHeight)) {
 				char loError[256];
-				sprintf(loError,
+				snprintf(loError, sizeof(loError),
 						"Error: probably out of sync. Reported y-coord: %d",
 						loY);
 				printf("%s\n", loError);
@@ -167,7 +167,7 @@ int testOneOldBitmap(FILE *aResFile, DIRPOINTER *aDirectoryPointers,
 
 				if (loRLE_width != 0) {
 					char loError[256];
-					sprintf(loError,
+					snprintf(loError, sizeof(loError),
 							"Error: out of sync while depacking RLE (rle_width=%d).",
 							loRLE_width);
 					printf("%s\n", loError);
@@ -416,7 +416,7 @@ unsigned char *getNewBitmapForOldBitmap(unsigned char *aOldResourceBuffer,
 			| (aOldResourceBuffer[2] << 16) | (aOldResourceBuffer[3] << 24);
 	if (loOldBitmapHeaderSize != aOldResourceLength) {
 		char loError[256];
-		sprintf(loError,
+		snprintf(loError, sizeof(loError),
 				"Error: size in the bitmap header does not agree with the size of the resource!");
 		printf("%s\n", loError);
 		return (NULL);
@@ -597,7 +597,7 @@ int convertOneOldSubpicture(unsigned char *aOldResourceBuffer,
 			| (aOldResourceBuffer[loPos + 1] << 8);
 	if (loWidth <= 0 || loWidth > MAX_BITMAP_WIDTH) {
 		char loError[256];
-		sprintf(loError, "Error: wrong bitmap width: %d!", loWidth);
+		snprintf(loError, sizeof(loError), "Error: wrong bitmap width: %d!", loWidth);
 		printf("%s\n", loError);
 		return (false);
 	}
@@ -605,7 +605,7 @@ int convertOneOldSubpicture(unsigned char *aOldResourceBuffer,
 			| (aOldResourceBuffer[loPos + 3] << 8);
 	if (loHeight <= 0 || loHeight > MAX_BITMAP_WIDTH) {
 		char loError[256];
-		sprintf(loError, "Error: wrong bitmap height: %d!", loHeight);
+		snprintf(loError, sizeof(loError), "Error: wrong bitmap height: %d!", loHeight);
 		printf("%s\n", loError);
 		return (false);
 	}
@@ -651,7 +651,7 @@ int convertOneOldSubpicture(unsigned char *aOldResourceBuffer,
 
 		if ((loY < 0) || (loY >= loHeight)) {
 			char loError[256];
-			sprintf(loError,
+			snprintf(loError, sizeof(loError),
 					"Error: probably out of sync. Reported y-coord: %d", loY);
 			printf("%s\n", loError);
 			return (false);
@@ -718,7 +718,7 @@ int convertOneOldSubpicture(unsigned char *aOldResourceBuffer,
 
 			if (loRLE_width != 0) {
 				char loError[256];
-				sprintf(loError,
+				snprintf(loError, sizeof(loError),
 						"Error: out of sync while depacking RLE (rle_width=%d).",
 						loRLE_width);
 				printf("%s\n", loError);

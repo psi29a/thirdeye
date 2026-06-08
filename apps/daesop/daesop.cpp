@@ -1,8 +1,7 @@
 #include "daesop.hpp"
 
-#include <malloc.h>
+#include <cstdlib>
 #include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
 
@@ -677,7 +676,7 @@ void displaySpecialAESOPResource(FILE *aResFile, DIRPOINTER *aDirectoryPointers,
 		}
 		strcpy(loText, "\n  *** SPECIAL TABLE (sorted by the FIRST ENTRY) ***");
 		strcpy(loFormat, "%30s     %20s");
-		sprintf((char*) &loHeader, loFormat, "FIRST ENTRY", "SECOND ENTRY");
+		snprintf((char*)&loHeader, sizeof loHeader, loFormat, "FIRST ENTRY", "SECOND ENTRY");
 		displayDictionary(loText, loHeader, loFormat, aOutputFile,
 				loSpecialDictionary, loSecondIsDecimalNumber);
 		fprintf(aOutputFile, "\n");
@@ -694,7 +693,7 @@ void displaySpecialAESOPResource(FILE *aResFile, DIRPOINTER *aDirectoryPointers,
 			strcpy(loText,
 					"\n  *** SPECIAL TABLE (sorted by the SECOND ENTRY taken as a number) ***");
 			strcpy(loFormat, "%30s     %20s");
-			sprintf((char*) &loHeader, loFormat, "FIRST ENTRY", "SECOND ENTRY");
+			snprintf((char*)&loHeader, sizeof loHeader, loFormat, "FIRST ENTRY", "SECOND ENTRY");
 		} else {
 			// otherwise sort according to the second entry (as string)
 			if (sortDictionaryAccordingToSecondString(loSpecialDictionary)
@@ -706,7 +705,7 @@ void displaySpecialAESOPResource(FILE *aResFile, DIRPOINTER *aDirectoryPointers,
 			strcpy(loText,
 					"\n  *** SPECIAL TABLE (sorted by the SECOND ENTRY) ***");
 			strcpy(loFormat, "%30s     %20s");
-			sprintf((char*) &loHeader, loFormat, "FIRST ENTRY", "SECOND ENTRY");
+			snprintf((char*)&loHeader, sizeof loHeader, loFormat, "FIRST ENTRY", "SECOND ENTRY");
 		}
 		displayDictionary(loText, loHeader, loFormat, aOutputFile,
 				loSpecialDictionary, loSecondIsDecimalNumber);
@@ -1176,12 +1175,12 @@ int getOffsetInformation(FILE *aResFile, DIRPOINTER *aDirectoryPointers,
 
 	fprintf(loOutputFile, "Analyzed file:      %s\n\n", myResName);
 
-	sprintf(loTmp, "The offset value: %d (#%06x)", loOffset, loOffset);
+	snprintf(loTmp, sizeof(loTmp), "The offset value: %d (#%06x)", loOffset, loOffset);
 	fprintf(loOutputFile, "%s\n", loTmp);
 	printf("%s\n", loTmp);
 
 	if (loOffset < loFileHeaderSize) {
-		sprintf(loTmp, "The offset %d points to the RES file header.",
+		snprintf(loTmp, sizeof(loTmp), "The offset %d points to the RES file header.",
 				loOffset);
 		fprintf(loOutputFile, "%s\n", loTmp);
 		printf("%s\n", loTmp);
@@ -1191,7 +1190,7 @@ int getOffsetInformation(FILE *aResFile, DIRPOINTER *aDirectoryPointers,
 	if (loOffset >= (int) myHeader.first_directory_block
 			&& loOffset
 					< (int) myHeader.first_directory_block + loDirBlockSize) {
-		sprintf(loTmp, "The offset %d points to the directory block %d.",
+		snprintf(loTmp, sizeof(loTmp), "The offset %d points to the directory block %d.",
 				loOffset, 1);
 		fprintf(loOutputFile, "%s\n", loTmp);
 		printf("%s\n", loTmp);
@@ -1205,7 +1204,7 @@ int getOffsetInformation(FILE *aResFile, DIRPOINTER *aDirectoryPointers,
 					&& loOffset
 							< (int) aDirectoryPointers[i]->next_directory_block
 									+ loDirBlockSize) {
-				sprintf(loTmp,
+				snprintf(loTmp, sizeof(loTmp),
 						"The offset %d points to the directory block %d.",
 						loOffset, i + 1);
 				fprintf(loOutputFile, "%s\n", loTmp);
@@ -1249,7 +1248,7 @@ int getOffsetInformation(FILE *aResFile, DIRPOINTER *aDirectoryPointers,
 
 		if (loOffset >= loResourceEntryIndex
 				&& loOffset < loResourceEntryIndex + loResEntryHeaderSize) {
-			sprintf(loTmp,
+			snprintf(loTmp, sizeof(loTmp),
 					"The offset %d points to the header of the resource number: %d, name \"%s\".",
 					loOffset, loResourceNumber, loResourceName);
 			fprintf(loOutputFile, "%s\n", loTmp);
@@ -1263,7 +1262,7 @@ int getOffsetInformation(FILE *aResFile, DIRPOINTER *aDirectoryPointers,
 				&& loOffset
 						< loResourceEntryIndex + loResEntryHeaderSize
 								+ loDataSize) {
-			sprintf(loTmp,
+			snprintf(loTmp, sizeof(loTmp),
 					"The offset %d points to the content of the resource number: %d, name \"%s\".",
 					loOffset, loResourceNumber, loResourceName);
 			fprintf(loOutputFile, "%s\n", loTmp);
@@ -1275,7 +1274,7 @@ int getOffsetInformation(FILE *aResFile, DIRPOINTER *aDirectoryPointers,
 
 		free(loResEntryHeader);
 	}
-	sprintf(loTmp, "The offset %d points to an unknown part of the file!",
+	snprintf(loTmp, sizeof(loTmp), "The offset %d points to an unknown part of the file!",
 			loOffset);
 	fprintf(loOutputFile, "%s\n", loTmp);
 	printf("%s\n", loTmp);

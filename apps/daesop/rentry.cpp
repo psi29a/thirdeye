@@ -1,4 +1,4 @@
-#include <malloc.h>
+#include <cstdlib>
 
 #include "dblocks.hpp"
 
@@ -106,7 +106,7 @@ unsigned char *readResourceBinary(int aResourceNumber, FILE *aResFile,
 	loBuffer = (unsigned char *) malloc(loDataSize);
 	if (loBuffer == NULL) {
 		char loError[256];
-		sprintf(loError,
+		snprintf(loError, sizeof(loError),
 				"Unable to allocate %d bytes while reading the resource %d into memory!",
 				loDataSize, aResourceNumber);
 		printf("%s\n", loError);

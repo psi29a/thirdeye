@@ -4,9 +4,44 @@
 #include <fstream>
 #include <iostream>
 #include <algorithm>
+#include <cctype>
 
-#include <boost/bind.hpp>
-#include <boost/algorithm/string/erase.hpp>
+namespace
+{
+
+static void replace_all(std::string& str, const std::string& from, const std::string& to)
+{
+    if (from.empty())
+        return;
+    std::string::size_type start_pos = 0;
+    while ((start_pos = str.find(from, start_pos)) != std::string::npos)
+    {
+        str.replace(start_pos, from.length(), to);
+        start_pos += to.length();
+    }
+}
+
+static void erase_all(std::string& str, const std::string& pattern)
+{
+    replace_all(str, pattern, "");
+}
+
+static std::string trim(const std::string& value)
+{
+    auto begin = value.find_first_not_of(" \t\r\n");
+    if (begin == std::string::npos)
+        return std::string();
+    auto end = value.find_last_not_of(" \t\r\n");
+    return value.substr(begin, end - begin + 1);
+}
+
+static bool empty_or_comment(const std::string& line)
+{
+    auto trimmed = trim(line);
+    return trimmed.empty() || trimmed[0] == '#';
+}
+
+} // namespace
 
 /**
  * \namespace Files
@@ -26,7 +61,7 @@ ConfigurationManager::ConfigurationManager()
 {
     setupTokensMapping();
 
-    boost::filesystem::create_directories(mFixedPath.getUserPath());
+    std::filesystem::create_directories(mFixedPath.getUserPath());
 
     mLogPath = mFixedPath.getUserPath();
 }
@@ -42,17 +77,11 @@ void ConfigurationManager::setupTokensMapping()
     mTokensMapping.insert(std::make_pair(globalToken, &FixedPath<>::getGlobalDataPath));
 }
 
-void ConfigurationManager::readConfiguration(boost::program_options::variables_map& variables,
-    boost::program_options::options_description& description)
+void ConfigurationManager::readConfiguration(VariablesMap& variables)
 {
-    loadConfig(mFixedPath.getUserPath(), variables, description);
-    boost::program_options::notify(variables);
-
-    loadConfig(mFixedPath.getLocalPath(), variables, description);
-    boost::program_options::notify(variables);
-    loadConfig(mFixedPath.getGlobalPath(), variables, description);
-    boost::program_options::notify(variables);
-
+    loadConfig(mFixedPath.getUserPath(), variables);
+    loadConfig(mFixedPath.getLocalPath(), variables);
+    loadConfig(mFixedPath.getGlobalPath(), variables);
 }
 
 void ConfigurationManager::processPaths(Files::PathContainer& dataDirs)
@@ -61,8 +90,8 @@ void ConfigurationManager::processPaths(Files::PathContainer& dataDirs)
     for (Files::PathContainer::iterator it = dataDirs.begin(); it != dataDirs.end(); ++it)
     {
         path = it->string();
-        boost::erase_all(path, "\"");
-        *it = boost::filesystem::path(path);
+        erase_all(path, "\"");
+        *it = std::filesystem::path(path);
 
         // Check if path contains a token
         if (!path.empty() && *path.begin() == '?')
@@ -73,7 +102,7 @@ void ConfigurationManager::processPaths(Files::PathContainer& dataDirs)
                 TokensMappingContainer::iterator tokenIt = mTokensMapping.find(path.substr(0, pos + 1));
                 if (tokenIt != mTokensMapping.end())
                 {
-                    boost::filesystem::path tempPath(((mFixedPath).*(tokenIt->second))());
+                    std::filesystem::path tempPath(((mFixedPath).*(tokenIt->second))());
                     if (pos < path.length() - 1)
                     {
                         // There is something after the token, so we should
@@ -91,32 +120,45 @@ void ConfigurationManager::processPaths(Files::PathContainer& dataDirs)
             }
         }
 
-        if (!boost::filesystem::is_directory(*it))
+        if (!std::filesystem::is_directory(*it))
         {
             (*it).clear();
         }
     }
 
     dataDirs.erase(std::remove_if(dataDirs.begin(), dataDirs.end(),
-        boost::bind(&boost::filesystem::path::empty, _1)), dataDirs.end());
+        [](const std::filesystem::path& path) { return path.empty(); }), dataDirs.end());
 }
 
-void ConfigurationManager::loadConfig(const boost::filesystem::path& path,
-    boost::program_options::variables_map& variables,
-    boost::program_options::options_description& description)
+void ConfigurationManager::loadConfig(const std::filesystem::path& path,
+    VariablesMap& variables)
 {
-    boost::filesystem::path cfgFile(path);
-    //cfgFile /= std::string(thirdeyeCfgFile);
-    if (boost::filesystem::is_regular_file(cfgFile))
+    static const std::string thirdeyeCfgFile = "thirdeye.cfg";
+    std::filesystem::path cfgFile = path / thirdeyeCfgFile;
+    if (std::filesystem::is_regular_file(cfgFile))
     {
         std::cout << "Loading config file: " << cfgFile.string() << "... ";
 
-        std::ifstream configFileStream(cfgFile.string().c_str());
+        std::ifstream configFileStream(cfgFile.string());
         if (configFileStream.is_open())
         {
-            boost::program_options::store(boost::program_options::parse_config_file(
-                configFileStream, description, true), variables);
+            std::string line;
+            while (std::getline(configFileStream, line))
+            {
+                if (empty_or_comment(line))
+                    continue;
 
+                auto pos = line.find('=');
+                if (pos == std::string::npos)
+                    continue;
+
+                std::string key = trim(line.substr(0, pos));
+                std::string value = trim(line.substr(pos + 1));
+                if (!key.empty())
+                {
+                    variables[key] = value;
+                }
+            }
             std::cout << "done." << std::endl;
         }
         else
@@ -126,27 +168,27 @@ void ConfigurationManager::loadConfig(const boost::filesystem::path& path,
     }
 }
 
-const boost::filesystem::path& ConfigurationManager::getGlobalPath() const
+const std::filesystem::path& ConfigurationManager::getGlobalPath() const
 {
     return (mFixedPath.getGlobalPath());
 }
 
-const boost::filesystem::path& ConfigurationManager::getUserPath() const
+const std::filesystem::path& ConfigurationManager::getUserPath() const
 {
     return (mFixedPath.getUserPath());
 }
 
-const boost::filesystem::path& ConfigurationManager::getLocalPath() const
+const std::filesystem::path& ConfigurationManager::getLocalPath() const
 {
     return (mFixedPath.getLocalPath());
 }
 
-const boost::filesystem::path& ConfigurationManager::getGlobalDataPath() const
+const std::filesystem::path& ConfigurationManager::getGlobalDataPath() const
 {
     return (mFixedPath.getGlobalDataPath());
 }
 
-const boost::filesystem::path& ConfigurationManager::getLogPath() const
+const std::filesystem::path& ConfigurationManager::getLogPath() const
 {
     return (mLogPath);
 }

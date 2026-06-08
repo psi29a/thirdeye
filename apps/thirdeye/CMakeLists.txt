@@ -35,13 +35,16 @@ add_executable(thirdeye
 )
 
 target_link_libraries(thirdeye
-    ${Boost_LIBRARIES}
     ${SDL2_LIBRARY}
     ${SDL2MAIN_LIBRARY}
     ${WILDMIDI_LIBRARY}
     ${OPENAL_LIBRARY}
     components
 )
+
+if (Boost_FOUND)
+    target_link_libraries(thirdeye ${Boost_LIBRARIES})
+endif()
 
 # Fix for not visible pthreads functions for linker with glibc 2.15
 if (UNIX AND NOT APPLE)

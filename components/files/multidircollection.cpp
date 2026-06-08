@@ -7,7 +7,7 @@
 #include <stdexcept>
 #include <iostream>
 
-#include <boost/filesystem.hpp>
+#include <filesystem>
 
 namespace Files
 {
@@ -49,21 +49,21 @@ namespace Files
         for (PathContainer::const_iterator iter = directories.begin();
             iter!=directories.end(); ++iter)
         {
-            if (!boost::filesystem::is_directory(*iter))
+            if (!std::filesystem::is_directory(*iter))
             {
                 std::cout << "Skipping invalid directory: " << (*iter).string() << std::endl;
                 continue;
             }
 
-            for (boost::filesystem::directory_iterator dirIter(*iter);
-                    dirIter != boost::filesystem::directory_iterator(); ++dirIter)
+            for (std::filesystem::directory_iterator dirIter(*iter);
+                    dirIter != std::filesystem::directory_iterator(); ++dirIter)
             {
-                boost::filesystem::path path = *dirIter;
+                std::filesystem::path path = *dirIter;
 
-                if (!equal (extension, boost::filesystem::path (path.extension()).string()))
+                if (!equal (extension, std::filesystem::path (path.extension()).string()))
                     continue;
 
-                std::string filename = boost::filesystem::path (path.filename()).string();
+                std::string filename = std::filesystem::path (path.filename()).string();
 
                 TIter result = mFiles.find (filename);
 
@@ -85,7 +85,7 @@ namespace Files
         }
     }
 
-    boost::filesystem::path MultiDirCollection::getPath (const std::string& file) const
+    std::filesystem::path MultiDirCollection::getPath (const std::string& file) const
     {
         TIter iter = mFiles.find (file);
 

@@ -6,7 +6,7 @@
 #include <cstring>
 #include <pwd.h>
 #include <unistd.h>
-#include <boost/filesystem/fstream.hpp>
+#include <filesystem>
 
 /**
  * \namespace Files
@@ -19,9 +19,9 @@ LinuxPath::LinuxPath(const std::string& application_name)
 {
 }
 
-boost::filesystem::path LinuxPath::getUserPath() const
+std::filesystem::path LinuxPath::getUserPath() const
 {
-    boost::filesystem::path userPath(".");
+    std::filesystem::path userPath(".");
 
     const char* theDir = getenv("HOME");
     if (theDir == NULL)
@@ -35,26 +35,26 @@ boost::filesystem::path LinuxPath::getUserPath() const
 
     if (theDir != NULL)
     {
-        userPath = boost::filesystem::path(theDir);
+        userPath = std::filesystem::path(theDir);
     }
 
     return (userPath / ".config" / mName);
 }
 
-boost::filesystem::path LinuxPath::getGlobalPath() const
+std::filesystem::path LinuxPath::getGlobalPath() const
 {
-    boost::filesystem::path globalPath("/etc/");
+    std::filesystem::path globalPath("/etc/");
     return (globalPath / mName);
 }
 
-boost::filesystem::path LinuxPath::getLocalPath() const
+std::filesystem::path LinuxPath::getLocalPath() const
 {
-    return (boost::filesystem::path("./"));
+    return (std::filesystem::path("./"));
 }
 
-boost::filesystem::path LinuxPath::getGlobalDataPath() const
+std::filesystem::path LinuxPath::getGlobalDataPath() const
 {
-    boost::filesystem::path globalDataPath("/usr/share/games/");
+    std::filesystem::path globalDataPath("/usr/share/games/");
     return (globalDataPath / mName);
 }
 
