@@ -6,6 +6,10 @@ if(POLICY CMP0167)
   cmake_policy(SET CMP0167 NEW)
 endif()
 
+if(POLICY CMP0177)
+  cmake_policy(SET CMP0177 NEW)
+endif()
+
 # Require modern C++ standard
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -52,7 +56,6 @@ option(DEBUG "Use debug build options" FALSE)
 option(UNIT_TESTS "Run unit tests" FALSE)
 
 # Are we building statically?
-option(BOOST_STATIC "Link static build of Boost into the binaries" FALSE)
 option(SDL2_STATIC "Link static build of SDL into the binaries" FALSE)
 
 # Apps and tools
@@ -88,7 +91,6 @@ ENDIF()
 
 if (WIN32)
     set(PLATFORM_INCLUDE_DIR "platform")
-    add_definitions(-DBOOST_ALL_NO_LIB)
 else (WIN32)
     set(PLATFORM_INCLUDE_DIR "")
     if (UNIX AND NOT APPLE)
@@ -111,26 +113,12 @@ if (UNIX AND NOT APPLE)
     find_package (Threads)
 endif()
 
-set(BOOST_COMPONENTS system filesystem program_options thread)
-find_package(Boost QUIET COMPONENTS ${BOOST_COMPONENTS})
-
-if (Boost_FOUND)
-    message(STATUS "Found Boost ${Boost_VERSION}")
-    set(HAVE_BOOST TRUE)
-else()
-    message(WARNING "Boost not found; Boost-dependent targets may fail to build.")
-    set(HAVE_BOOST FALSE)
-endif()
-
 include_directories("."
     ${PLATFORM_INCLUDE_DIR}
     ${SDL2_INCLUDE_DIR}
     ${OPENAL_INCLUDE_DIR}
     ${LIBDIR}
-    ${Boost_INCLUDE_DIRS}
 )
-
-link_directories(${Boost_LIBRARY_DIRS} ${Boost_LIBRARY_DIRS} )
 
 if (UNIT_TESTS)
     # Locate GTest
@@ -170,8 +158,9 @@ if (APPLE)
 
         configure_file(${Thirdeye_SOURCE_DIR}/files/mac/THIRDEYE.icns
             "${APP_BUNDLE_DIR}/Contents/Resources/THIRDEYE.icns" COPYONLY)
+        set(APPLE_BUNDLE_ENABLED TRUE)
     else()
-        message(WARNING "Apple bundle resources not found; skipping .app bundle configuration.")
+        message(STATUS "Apple bundle resources not found; building as a normal executable.")
     endif()
 endif (APPLE)
 
@@ -179,11 +168,11 @@ endif (APPLE)
 set_directory_properties(PROPERTIES COMPILE_DEFINITIONS_DEBUG DEBUG=1)
 
 # Specify build paths
-if (APPLE)
-	set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${APP_BUNDLE_DIR}/Contents/MacOS")
-else (APPLE)
-	set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${Thirdeye_BINARY_DIR}")
-endif (APPLE)
+if (APPLE AND APPLE_BUNDLE_ENABLED)
+    set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${APP_BUNDLE_DIR}/Contents/MacOS")
+else()
+    set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${Thirdeye_BINARY_DIR}")
+endif()
 
 if (NOT WIN32 AND NOT APPLE)
     configure_file(${Thirdeye_SOURCE_DIR}/files/thirdeye.desktop
