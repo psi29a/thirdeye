@@ -1,0 +1,75 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - master
+      - main
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        config: [Release]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y cmake ninja-build build-essential libsdl2-dev libopenal-dev libwildmidi-dev
+
+      - name: Install dependencies (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          brew update
+          brew install cmake ninja sdl2 openal-soft wildmidi
+
+      - name: Install dependencies (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          choco install -y cmake ninja git
+          git clone https://github.com/microsoft/vcpkg.git $env:USERPROFILE\vcpkg
+          & "$env:USERPROFILE\vcpkg\bootstrap-vcpkg.bat"
+          & "$env:USERPROFILE\vcpkg\vcpkg.exe" install sdl2 openal-soft wildmidi --triplet x64-windows
+
+      - name: Configure (Linux/macOS)
+        if: runner.os != 'Windows'
+        run: |
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=${{ matrix.config }}
+        shell: bash
+
+      - name: Configure (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=${{ matrix.config }} -DCMAKE_TOOLCHAIN_FILE=$env:USERPROFILE\vcpkg\scripts\buildsystems\vcpkg.cmake
+
+      - name: Build
+        run: cmake --build build --config ${{ matrix.config }} -- -j 2
+
+      - name: Package artifacts (Linux/macOS)
+        if: runner.os != 'Windows'
+        run: |
+          mkdir -p artifacts
+          tar -czf artifacts/thirdeye-${{ matrix.os }}.tgz build/thirdeye build/daesop build/thirdeye.app || true
+        shell: bash
+
+      - name: Package artifacts (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $artifactDir = "artifacts"
+          New-Item -ItemType Directory -Force -Path $artifactDir | Out-Null
+          Compress-Archive -Path build\thirdeye.exe,build\daesop.exe -DestinationPath "$artifactDir\thirdeye-${{ matrix.os }}.zip" -Force
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: thirdeye-${{ matrix.os }}
+          path: artifacts
