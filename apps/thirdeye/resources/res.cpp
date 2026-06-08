@@ -11,6 +11,7 @@
 #include <fstream>
 #include <iomanip>
 #include <sstream>
+#include <cstring>
 
 
 RESOURCES::Resource::Resource(std::filesystem::path resourcePath) {
