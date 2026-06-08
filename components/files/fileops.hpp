@@ -14,15 +14,15 @@ namespace Files
 ///\param [in] name - filename
 bool isFile(const char *name);
 
-    /// A vector of Boost Paths, very handy
+    /// A vector of filesystem paths, very handy
     typedef std::vector<std::filesystem::path> PathContainer;
 
-    /// Makes a list of files from a directory by taking a boost
+    /// Makes a list of files from a directory by taking a filesystem
     /// path and a Path Container and adds to the Path container
     /// all files in the path. It has a recursive option.
     void FileLister( std::filesystem::path currentPath, Files::PathContainer& list, bool recursive);
 
-    /// Locates boost path in path container
+    /// Locates a path in the path container
     /// returns the path from the container
     /// that contains the searched path.
     /// If it's not found it returns and empty path
