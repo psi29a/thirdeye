@@ -1,4 +1,4 @@
-#include <malloc.h>
+#include <cstdlib>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -439,7 +439,7 @@ void displayDictionary(char *aText, char *aHeader, char *aFormat,
 					strcpy(loTmp, aDictionary[i]->second);
 				} else {
 					// number
-					sprintf(loTmp, "%4s  (%04x)", aDictionary[i]->second,
+					snprintf(loTmp, sizeof(loTmp), "%4s  (%04x)", aDictionary[i]->second,
 							loNum);
 				}
 			}
@@ -919,8 +919,8 @@ void displayImportDictionary(char *aImportResourceName,
 
 		loCurrentImportEntry = aFullImportResourceDictionary[i];
 		loCurrentImportEntryType = loCurrentImportEntry->importType;
-		sprintf(loFirst, "%s", loCurrentImportEntry->firstOriginal);
-		sprintf(loSecond, "%s", loCurrentImportEntry->secondOriginal);
+		snprintf(loFirst, sizeof(loFirst), "%s", loCurrentImportEntry->firstOriginal);
+		snprintf(loSecond, sizeof(loSecond), "%s", loCurrentImportEntry->secondOriginal);
 
 		// the second can be a decimal number and we may want to add a hexadecimal value to it
 		if (aSecondIsDecimalNumber
@@ -934,7 +934,7 @@ int		loNum = atoi(loCurrentImportEntry->secondOriginal);
 		else
 		{
 			// number
-			sprintf(loSecond, "%4s  (%04x)", loCurrentImportEntry->secondOriginal, loNum);
+			snprintf(loSecond, sizeof(loSecond), "%4s  (%04x)", loCurrentImportEntry->secondOriginal, loNum);
 		}
 	}
 
@@ -947,7 +947,7 @@ int		loNum = atoi(loCurrentImportEntry->secondOriginal);
 				fprintf(aOutputFile, "%-35s     %-10s\n",
 						"FIRST ENTRY (FUNCTION)", "SECOND ENTRY (NUMBER)");
 			}
-			sprintf(loTmp, "\"%s\"", loFirst);
+			snprintf(loTmp, sizeof(loTmp), "\"%s\"", loFirst);
 			fprintf(aOutputFile, "%-35s     %-10s\n", loTmp, loSecond);
 			break;
 		case IMPORT_ENTRY_BYTE:
@@ -972,8 +972,8 @@ int		loNum = atoi(loCurrentImportEntry->secondOriginal);
 						"FIRST ENTRY (NAME)", "SECOND ENTRY (NUMBER,FROM)",
 						"ORIGINAL RESOURCE NAME");
 			}
-			sprintf(loTmp, "\"%s\"", loFirst);
-			sprintf(loTmp2, "\"%s\"",
+			snprintf(loTmp, sizeof(loTmp), "\"%s\"", loFirst);
+			snprintf(loTmp2, sizeof(loTmp2), "\"%s\"",
 					loCurrentImportEntry->originalResourceName);
 			fprintf(aOutputFile, "%-20s  %-26s  %-20s\n", loTmp, loSecond,
 					loTmp2);
@@ -1028,8 +1028,8 @@ void displayExportDictionary(char *aExportResourceName,
 
 		loCurrentExportEntry = aFullExportResourceDictionary[i];
 		loCurrentExportEntryType = loCurrentExportEntry->exportType;
-		sprintf(loFirst, "%s", loCurrentExportEntry->firstOriginal);
-		sprintf(loSecond, "%s", loCurrentExportEntry->secondOriginal);
+		snprintf(loFirst, sizeof(loFirst), "%s", loCurrentExportEntry->firstOriginal);
+		snprintf(loSecond, sizeof(loSecond), "%s", loCurrentExportEntry->secondOriginal);
 
 		// the second can be a decimal number and we may want to add a hexadecimal value to it
 		if (aSecondIsDecimalNumber
@@ -1043,7 +1043,7 @@ int		loNum = atoi(loCurrentExportEntry->secondOriginal);
 		else
 		{
 			// number
-			sprintf(loSecond, "%4s  (%04x)", loCurrentExportEntry->secondOriginal, loNum);
+			snprintf(loSecond, sizeof(loSecond), "%4s  (%04x)", loCurrentExportEntry->secondOriginal, loNum);
 		}
 	}
 
@@ -1056,7 +1056,7 @@ int		loNum = atoi(loCurrentExportEntry->secondOriginal);
 				fprintf(aOutputFile, "%-20s  %-20s\n", "FIRST ENTRY",
 						"SECOND ENTRY (NAME)");
 			}
-			sprintf(loTmp, "\"%s\"", loSecond);
+			snprintf(loTmp, sizeof(loTmp), "\"%s\"", loSecond);
 			fprintf(aOutputFile, "%-20s  %-20s\n", loFirst, loTmp);
 			break;
 		case EXPORT_ENTRY_PARENT_NUMBER:
@@ -1067,7 +1067,7 @@ int		loNum = atoi(loCurrentExportEntry->secondOriginal);
 				fprintf(aOutputFile, "%-20s  %-20s  %-20s\n", "FIRST ENTRY",
 						"SECOND ENTRY", "NAME");
 			}
-			sprintf(loTmp, "\"%s\"", loCurrentExportEntry->parentResourceName);
+			snprintf(loTmp, sizeof(loTmp), "\"%s\"", loCurrentExportEntry->parentResourceName);
 			fprintf(aOutputFile, "%-20s  %-20s  %-20s\n", loFirst, loSecond,
 					loTmp);
 			break;
@@ -1079,7 +1079,7 @@ int		loNum = atoi(loCurrentExportEntry->secondOriginal);
 				fprintf(aOutputFile, "%-20s  %-20s  %-30s\n", "FIRST ENTRY",
 						"SECOND ENTRY (START)", "NAME");
 			}
-			sprintf(loTmp, "\"%s\"", loCurrentExportEntry->messageHandlerName);
+			snprintf(loTmp, sizeof(loTmp), "\"%s\"", loCurrentExportEntry->messageHandlerName);
 			fprintf(aOutputFile, "%-20s  %-20s  %-30s\n", loFirst, loSecond,
 					loTmp);
 			break;
@@ -1093,7 +1093,7 @@ int		loNum = atoi(loCurrentExportEntry->secondOriginal);
 				fprintf(aOutputFile, "%-20s  %-20s\n", "FIRST ENTRY (NAME)",
 						"SECOND ENTRY (POSITION)");
 			}
-			sprintf(loTmp, "\"%s\"", loFirst);
+			snprintf(loTmp, sizeof(loTmp), "\"%s\"", loFirst);
 			fprintf(aOutputFile, "%-20s  %-20s\n", loTmp, loSecond);
 			break;
 		case EXPORT_ENTRY_ARRAY_BYTE:
@@ -1106,7 +1106,7 @@ int		loNum = atoi(loCurrentExportEntry->secondOriginal);
 				fprintf(aOutputFile, "%-20s  %-20s\n", "FIRST ENTRY (NAME)",
 						"SECOND ENTRY (POSITION, ELEMENTS)");
 			}
-			sprintf(loTmp, "\"%s\"", loFirst);
+			snprintf(loTmp, sizeof(loTmp), "\"%s\"", loFirst);
 			fprintf(aOutputFile, "%-20s  %-20s\n", loTmp, loSecond);
 			break;
 		default:

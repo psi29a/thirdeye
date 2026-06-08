@@ -2,7 +2,7 @@
 #define COMPONENTS_FILES_FIXEDPATH_HPP
 
 #include <string>
-#include <boost/filesystem.hpp>
+#include <filesystem>
 
 #if defined(__linux__) || defined(__FreeBSD__)
     #include <components/files/linuxpath.hpp>
@@ -58,9 +58,9 @@ struct FixedPath
     /**
      * \brief Return path pointing to the user local configuration directory.
      *
-     * \return boost::filesystem::path
+     * \return std::filesystem::path
      */
-    const boost::filesystem::path& getUserPath() const
+    const std::filesystem::path& getUserPath() const
     {
         return (mUserPath);
     }
@@ -68,9 +68,9 @@ struct FixedPath
     /**
      * \brief Return path pointing to the global (system) configuration directory.
      *
-     * \return boost::filesystem::path
+     * \return std::filesystem::path
      */
-    const boost::filesystem::path& getGlobalPath() const
+    const std::filesystem::path& getGlobalPath() const
     {
         return (mGlobalPath);
     }
@@ -78,14 +78,14 @@ struct FixedPath
     /**
      * \brief Return path pointing to the directory where application was started.
      *
-     * \return boost::filesystem::path
+     * \return std::filesystem::path
      */
-    const boost::filesystem::path& getLocalPath() const
+    const std::filesystem::path& getLocalPath() const
     {
         return (mLocalPath);
     }
 
-    const boost::filesystem::path& getGlobalDataPath() const
+    const std::filesystem::path& getGlobalDataPath() const
     {
         return (mGlobalDataPath);
     }
@@ -93,10 +93,10 @@ struct FixedPath
     private:
         PathType mPath;
 
-        boost::filesystem::path mUserPath;       /**< User path  */
-        boost::filesystem::path mGlobalPath;     /**< Global path */
-        boost::filesystem::path mLocalPath;      /**< It is the same directory where application was run */
-        boost::filesystem::path mGlobalDataPath; /**< Global application data path */
+        std::filesystem::path mUserPath;       /**< User path  */
+        std::filesystem::path mGlobalPath;     /**< Global path */
+        std::filesystem::path mLocalPath;      /**< It is the same directory where application was run */
+        std::filesystem::path mGlobalDataPath; /**< Global application data path */
 
 };
 

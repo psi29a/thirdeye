@@ -6,8 +6,8 @@
 
 #include <components/files/configurationmanager.hpp>
 
-#include <boost/algorithm/string.hpp>
-using boost::algorithm::to_lower;
+#include <algorithm>
+#include <cctype>
 
 THIRDEYE::Engine::Engine(Files::ConfigurationManager& configurationManager) :
 		mNewGame(false), mUseSound(true), mDebug(false), mGame(GAME_UNKN), mCfgMgr(
@@ -25,7 +25,8 @@ THIRDEYE::Engine::~Engine() {
 
 // Setup engine via parameters
 void THIRDEYE::Engine::setGame(std::string game) {
-	boost::algorithm::to_lower(game);
+	std::transform(game.begin(), game.end(), game.begin(),
+			[](unsigned char c) { return std::tolower(c); });
 
 	if (game == "eob3") {
 		mGame = GAME_EOB3;
@@ -39,7 +40,7 @@ void THIRDEYE::Engine::setGame(std::string game) {
 }
 
 void THIRDEYE::Engine::setGameData(std::string gameData) {
-	mGameData = boost::filesystem::path(gameData);
+	mGameData = std::filesystem::path(gameData);
 }
 void THIRDEYE::Engine::setDebugMode(bool debug) {
 	mDebug = debug;
@@ -106,7 +107,7 @@ void THIRDEYE::Engine::go() {
 	uint32_t fps = 0;	// number of fps (iterations of main loop)
 
 	// get our intro cinematic, set state and play
-	RESOURCES::GFFI introVideo(mGameData.remove_leaf() /= "INTRO.GFF");
+	RESOURCES::GFFI introVideo(mGameData.parent_path() / "INTRO.GFF");
 	mixer.playMusic(introVideo.getMusic());
 	gfx.playVideo(introVideo.getSequence());
 	uint8_t state = STATE_INTRO;

@@ -13,7 +13,7 @@
 #include <map>
 #include <iostream>
 
-#include <boost/filesystem.hpp>
+#include <filesystem>
 #include <SDL.h>
 
 // Types of games
@@ -39,7 +39,7 @@ class Engine
 	bool mRenderer;
 	uint8_t mGame;
 	uint16_t mScale;
-	boost::filesystem::path mGameData;
+	std::filesystem::path mGameData;
 
 	// not implemented
 	Engine(const Engine&);
