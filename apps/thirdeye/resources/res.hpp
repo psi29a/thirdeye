@@ -8,7 +8,11 @@
 #ifndef RES_HPP
 #define RES_HPP
 
+#include <cstdint>
+#include <fstream>
 #include <map>
+#include <string>
+#include <vector>
 #include <filesystem>
 
 #if defined(__GNUC__)
