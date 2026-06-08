@@ -14,9 +14,6 @@ extern "C" {
 #include <wildmidi_lib.h>
 }
 
-#include <al.h>
-#include <alc.h>
-
 void MIXER::Mixer::update() {
 	ALenum state = 0;
 	for (std::map<ALuint, Sources>::iterator iter = mSources.begin();
@@ -75,7 +72,7 @@ void MIXER::Mixer::playMusic(std::vector<uint8_t> xmidi) {
 	mSources[MUSIC_ID].buffer.resize(wm_info->approx_total_samples * 4);
 
 	WildMidi_GetOutput(midi_ptr,
-			reinterpret_cast<char*>(&mSources[MUSIC_ID].buffer[0]),
+			reinterpret_cast<int8_t*>(&mSources[MUSIC_ID].buffer[0]),
 			mSources[MUSIC_ID].buffer.size());
 	WildMidi_Close(midi_ptr);
 	WildMidi_Shutdown();

@@ -1,4 +1,4 @@
-#include <malloc.h>
+#include <cstdlib>
 #include <stdio.h>
 #include <string.h>
 #include <ctype.h>
@@ -25,7 +25,7 @@ char *unpackDate(unsigned int aDate, char *aDateString) {
 	const char *months[12] = { "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul",
 			"Aug", "Sep", "Oct", "Nov", "Dec" };
 
-	sprintf(aDateString, "%s %d, %4d %02d:%02d:%02d",
+	snprintf(aDateString, 64, "%s %d, %4d %02d:%02d:%02d",
 			months[((aDate >> 21) & 0x000f) - 1], (aDate >> 16) & 0x001f,
 			1980 + ((aDate >> 25) & 0x003f), (aDate >> 11) & 0x001f,
 			(aDate >> 5) & 0x001f, (aDate & 0x001f) << 1);

@@ -15,12 +15,11 @@
 #include <vector>
 #include <stdint.h>
 #include <iostream>
+#include <tuple>
+#include <random>
 
-#include "boost/tuple/tuple.hpp"
-using boost::tuples::tuple;
-
-#include <boost/random/mersenne_twister.hpp>
-typedef boost::mt19937 RNGType;
+using std::tuple;
+using RNGType = std::mt19937;
 
 #define NOOP	 		0
 #define SET_PAL			1

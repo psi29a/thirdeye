@@ -1,3 +1,4 @@
+#include <filesystem>
 /*
  * res.cpp
  *
@@ -9,22 +10,21 @@
 #include <iostream>
 #include <fstream>
 #include <iomanip>
+#include <sstream>
 
-#include <boost/filesystem.hpp>
-#include <boost/lexical_cast.hpp>
 
-RESOURCES::Resource::Resource(boost::filesystem::path resourcePath) {
+RESOURCES::Resource::Resource(std::filesystem::path resourcePath) {
 	mResFile = resourcePath;
 
 	std::cout << "Initializing Resources:" << std::endl;
 	// does resource exist
-	if (boost::filesystem::exists(mResFile) == false)
+	if (std::filesystem::exists(mResFile) == false)
 		throw std::runtime_error(mResFile.string() + " does not exist!");
 	else
 		std::cout << "  Loading: " << mResFile;
 
 	// how big is the file on disk?
-	resourceFileSize = boost::filesystem::file_size(mResFile);
+	resourceFileSize = std::filesystem::file_size(mResFile);
 	std::cout << " " << resourceFileSize << " bytes " << std::endl;
 
 	// open our resource
@@ -211,11 +211,9 @@ uint16_t RESOURCES::Resource::getAssets(std::ifstream &resourceFile) {
 	std::map<std::string, Dictionary>::iterator dictionary;
 	for (dictionary = mTable0.begin(); dictionary != mTable0.end();
 			dictionary++) {
-		id = boost::lexical_cast<uint16_t>(dictionary->second.second);
-		currentDirBlock = boost::lexical_cast<uint16_t>(
-				id) / DIRECTORY_BLOCK_ITEMS;
-		currentEntry =
-				boost::lexical_cast<uint16_t>(id) % DIRECTORY_BLOCK_ITEMS;
+		id = static_cast<uint16_t>(std::stoi(dictionary->second.second));
+		currentDirBlock = id / DIRECTORY_BLOCK_ITEMS;
+		currentEntry = id % DIRECTORY_BLOCK_ITEMS;
 		table1 = searchDictionary(mTable1, dictionary->second.first);
 		table2 = searchDictionary(mTable2, dictionary->second.first);
 		start = mDirBlocks[currentDirBlock].entry_header_index[currentEntry];
@@ -228,7 +226,7 @@ uint16_t RESOURCES::Resource::getAssets(std::ifstream &resourceFile) {
 				mEntryHeaders[id].data_size);
 
 		mAssets[id] = Assets(
-				boost::lexical_cast<uint16_t>(dictionary->second.second),
+				id,
 				dictionary->second.first, mEntryHeaders[id].storage_time,
 				mEntryHeaders[id].data_attributes, mEntryHeaders[id].data_size,
 				start, offset, table1, table2, data);
@@ -274,7 +272,7 @@ uint16_t RESOURCES::Resource::getTable(std::ifstream &resourceFile,
 
 			if (counter % 2 == 0) {
 
-				dictionary[boost::lexical_cast<std::string>(prevString)] =
+				dictionary[std::string(prevString)] =
 						Dictionary(prevString, string);
 			} else {
 				std::strcpy(prevString, string);
@@ -295,8 +293,8 @@ std::string RESOURCES::Resource::searchDictionary(
 }
 
 std::vector<uint8_t> &RESOURCES::Resource::getAsset(std::string name) {
-	return (getAsset(
-			boost::lexical_cast<uint16_t>(searchDictionary(mTable0, name))));
+	return getAsset(
+			static_cast<uint16_t>(std::stoi(searchDictionary(mTable0, name))));
 }
 
 std::vector<uint8_t> &RESOURCES::Resource::getAsset(uint16_t number) {
@@ -305,9 +303,9 @@ std::vector<uint8_t> &RESOURCES::Resource::getAsset(uint16_t number) {
 
 std::string RESOURCES::Resource::getTableEntry(std::string name,
 		uint8_t table) {
-	return (getTableEntry(
-			boost::lexical_cast<uint16_t>(searchDictionary(mTable0, name)),
-			table));
+	return getTableEntry(
+			static_cast<uint16_t>(std::stoi(searchDictionary(mTable0, name))),
+			table);
 }
 
 std::string RESOURCES::Resource::getTableEntry(uint16_t number, uint8_t table) {

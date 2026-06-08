@@ -20,11 +20,7 @@
 #endif
 
 #include <map>
-#include <boost/filesystem.hpp>
-#include "boost/tuple/tuple.hpp"
-
-using boost::tuples::tuple;
-using boost::tuples::tie;
+#include <filesystem>
 
 namespace RESOURCES {
 
@@ -88,14 +84,14 @@ struct File {
 class GFFI {
 
 private:
-	boost::filesystem::path mGFFIFile;
+	std::filesystem::path mGFFIFile;
 	uint32_t mGFFIFileSize;
 	GFFIHeader mGFFIHeader;
 	GFFIDirectoryHeader mGFFIDirectoryHeader;
 	std::map<std::string, std::map<uint32_t, File> > mFiles;
 
 public:
-	GFFI(boost::filesystem::path gffiPath);
+	GFFI(std::filesystem::path gffiPath);
 	sequence getSequence();
 	std::vector<uint8_t> getMusic();
 	virtual ~GFFI();

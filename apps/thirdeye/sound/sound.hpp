@@ -8,7 +8,21 @@
 #include <stdint.h>
 #include <iostream>
 
-#if !defined(__APPLE__) || defined(HAVE_AL_AL_H)
+#if defined(__has_include)
+#  if __has_include(<AL/al.h>)
+#    include <AL/al.h>
+#    include <AL/alc.h>
+#    if __has_include(<AL/alext.h>)
+#      include <AL/alext.h>
+#    endif
+#  elif __has_include(<OpenAL/al.h>)
+#    include <OpenAL/al.h>
+#    include <OpenAL/alc.h>
+#    if __has_include(<OpenAL/alext.h>)
+#      include <OpenAL/alext.h>
+#    endif
+#  endif
+#elif !defined(__APPLE__) || defined(HAVE_AL_AL_H)
 #  include <AL/al.h>
 #  include <AL/alc.h>
 #  include <AL/alext.h>

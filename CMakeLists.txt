@@ -1,7 +1,15 @@
+cmake_minimum_required(VERSION 3.15)
+
 project(Thirdeye)
 
-# We probably support older versions than this.
-cmake_minimum_required(VERSION 2.6)
+if(POLICY CMP0167)
+  cmake_policy(SET CMP0167 NEW)
+endif()
+
+# Require modern C++ standard
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
 
 # Macros
 set(CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/cmake/)
@@ -83,12 +91,19 @@ if (WIN32)
     add_definitions(-DBOOST_ALL_NO_LIB)
 else (WIN32)
     set(PLATFORM_INCLUDE_DIR "")
-    find_path (UUID_INCLUDE_DIR uuid/uuid.h)
-    include_directories(${UUID_INCLUDE_DIR})
+    if (UNIX AND NOT APPLE)
+        find_path (UUID_INCLUDE_DIR uuid/uuid.h)
+    else()
+        unset(UUID_INCLUDE_DIR CACHE)
+    endif()
 endif (WIN32)
 
 if (MSVC10)
     set(PLATFORM_INCLUDE_DIR "")
+endif()
+
+if (UUID_INCLUDE_DIR)
+    include_directories(SYSTEM ${UUID_INCLUDE_DIR})
 endif()
 
 ## Fix for not visible pthreads functions for linker with glibc 2.15
@@ -96,18 +111,23 @@ if (UNIX AND NOT APPLE)
     find_package (Threads)
 endif()
 
-## find boost without components so we can use Boost_VERSION
-find_package(Boost REQUIRED)
 set(BOOST_COMPONENTS system filesystem program_options thread)
-find_package(Boost REQUIRED COMPONENTS ${BOOST_COMPONENTS})
+find_package(Boost QUIET COMPONENTS ${BOOST_COMPONENTS})
+
+if (Boost_FOUND)
+    message(STATUS "Found Boost ${Boost_VERSION}")
+    set(HAVE_BOOST TRUE)
+else()
+    message(WARNING "Boost not found; Boost-dependent targets may fail to build.")
+    set(HAVE_BOOST FALSE)
+endif()
 
 include_directories("."
     ${PLATFORM_INCLUDE_DIR}
     ${SDL2_INCLUDE_DIR}
-    ${Boost_INCLUDE_DIR}
-    ${UUID_INCLUDE_DIR}
     ${OPENAL_INCLUDE_DIR}
     ${LIBDIR}
+    ${Boost_INCLUDE_DIRS}
 )
 
 link_directories(${Boost_LIBRARY_DIRS} ${Boost_LIBRARY_DIRS} )
@@ -122,20 +142,37 @@ endif()
 Find_package(SDL2 REQUIRED)
 include_directories(${SDL2_INCLUDE_DIR})
 
-# Find OpenAL
+# Find OpenAL: use our FindOpenAL.cmake module to prefer Homebrew openal-soft and fall back to system OpenAL.
 find_package(OpenAL REQUIRED)
-include_directories(${OPENAL_INCLUDE_DIR})
+
+if(OPENAL_INCLUDE_DIR)
+    include_directories(${OPENAL_INCLUDE_DIR})
+    set(OPENAL_INCLUDE_DIR ${OPENAL_INCLUDE_DIR} CACHE PATH "OpenAL include dir" FORCE)
+    message(STATUS "Using OpenAL include: ${OPENAL_INCLUDE_DIR}")
+endif()
+
+if(OPENAL_LIBRARY)
+    set(OPENAL_LIBRARY ${OPENAL_LIBRARY} CACHE PATH "OpenAL library path" FORCE)
+    message(STATUS "Using OpenAL library: ${OPENAL_LIBRARY}")
+endif()
 
 # Find WildMIDI
 Find_package(WILDMIDI REQUIRED)
 include_directories(${WILDMIDI_INCLUDE_DIR})
 
 if (APPLE)
-    configure_file(${Thirdeye_SOURCE_DIR}/files/mac/Info.plist
-        "${APP_BUNDLE_DIR}/Contents/Info.plist")
+    if (NOT DEFINED APP_BUNDLE_DIR)
+        set(APP_BUNDLE_DIR "${Thirdeye_BINARY_DIR}/thirdeye.app")
+    endif()
+    if (EXISTS "${Thirdeye_SOURCE_DIR}/files/mac/Info.plist" AND EXISTS "${Thirdeye_SOURCE_DIR}/files/mac/THIRDEYE.icns")
+        configure_file(${Thirdeye_SOURCE_DIR}/files/mac/Info.plist
+            "${APP_BUNDLE_DIR}/Contents/Info.plist")
 
-    configure_file(${Thirdeye_SOURCE_DIR}/files/mac/THIRDEYE.icns
-        "${APP_BUNDLE_DIR}/Contents/Resources/THIRDEYE.icns" COPYONLY)
+        configure_file(${Thirdeye_SOURCE_DIR}/files/mac/THIRDEYE.icns
+            "${APP_BUNDLE_DIR}/Contents/Resources/THIRDEYE.icns" COPYONLY)
+    else()
+        message(WARNING "Apple bundle resources not found; skipping .app bundle configuration.")
+    endif()
 endif (APPLE)
 
 # Set up DEBUG define

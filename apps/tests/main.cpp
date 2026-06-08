@@ -1,5 +1,4 @@
 #include "gtest/gtest.h"
-#include <boost/assign/list_of.hpp>
 
 #include "../thirdeye/graphics/graphics.hpp"
 
@@ -39,7 +38,7 @@ TEST (Palette_Test, Zeros_GFFI){
 }
 
 TEST (Palette_Test, ProperlyShifted_GFFI){
-	std::vector<uint8_t> data = boost::assign::list_of(1)(2)(63);
+	std::vector<uint8_t> data = { 1, 2, 63 };
 	GRAPHICS::Palette pal(data, false);
 	EXPECT_EQ(4, pal[0].r);
 	EXPECT_EQ(8, pal[0].g);
