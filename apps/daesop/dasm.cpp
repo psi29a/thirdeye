@@ -1013,7 +1013,8 @@ int writeOneInstruction(unsigned char *aResource, int aLength,
 	char loInstruction[256];
 	char loHexaCodes[256];
 	char loResultLine[256];
-	char loTmp[256];
+	// large enough to hold a quoted 256-byte name plus " ;" and an int suffix
+	char loTmp[288];
 	int loCurrentInstruction;
 
 	loInstructionStartAddress = *loCurrentAddress;
