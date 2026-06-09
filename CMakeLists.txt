@@ -366,6 +366,13 @@ if (WIN32)
         4355 # Using 'this' in member initialization list
         4701 # Potentially uninitialized local variable used
 		4800 # Boolean optimization warning, e.g. myBool = (myInt != 0) instead of myBool = myInt
+
+        # Noise from /Wall on system / third-party headers, or intentional patterns
+        4464 # Relative include path contains '..' (cosmetic)
+        4774 # Format string is not a string literal (intentional: runtime format args)
+        5039 # Throwing function passed to extern "C" (Windows SDK headers)
+        5045 # Spectre mitigation insertion note (informational, requires /Qspectre)
+        5262 # Implicit fall-through (occurs inside SDL headers)
         )
 
     foreach(d ${WARNINGS_DISABLE})

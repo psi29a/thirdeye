@@ -217,11 +217,11 @@ int initializeStaticVariableList(
 		return (false);
 	} else {
 		// exported variables are public static variables so add them there
-		int i;
+		int j;
 		int loStaticVariablesTableIndex = 0;
-		for (i = 0;
-				i < MAX_EXPORT_TABLE_ITEMS
-						&& aFullExportResourceDictionary[i] != NULL; i++) {
+		for (j = 0;
+				j < MAX_EXPORT_TABLE_ITEMS
+						&& aFullExportResourceDictionary[j] != NULL; j++) {
 			EXPORTENTRYPOINTER loCurrentExportEntry;
 			int loCurrentExportEntryType;
 			STATVARPOINTER loStatVarEntry = NULL;
@@ -232,7 +232,7 @@ int initializeStaticVariableList(
 				return (false);
 			}
 
-			loCurrentExportEntry = aFullExportResourceDictionary[i];
+			loCurrentExportEntry = aFullExportResourceDictionary[j];
 			loCurrentExportEntryType = loCurrentExportEntry->exportType;
 			switch (loCurrentExportEntryType) {
 			case EXPORT_ENTRY_BYTE:
@@ -333,7 +333,7 @@ int addPrivateStaticVariableIfNotExisting(int aVariableIndex, int aIsArray,
 
 	// ok, it is not there so make a new one
 	// WARNING: this code does not handle well the instruction LESA (it defaults to an an array, but we cannot be sure - the instruction does not imply the type)
-	if (aIsArray == true) {
+	if (aIsArray) {
 		snprintf(loNewName, sizeof(loNewName), "%c:%s%d", aVariableType, STATIC_ARRAY_PREFIX,
 				aVariableIndex);
 	} else {
@@ -405,9 +405,9 @@ int writeExportedVariablesInfo(FILE *aOutputFile) {
 		loIsPublic = loCurrentEntry->isPublic;
 		loIsArray = loCurrentEntry->isArray;
 		snprintf(loName, sizeof(loName), "\"%s\"", loCurrentEntry->name);
-		if (loIsPublic == true) {
+		if (loIsPublic) {
 			// public (exported) arrays/variables
-			if (loIsArray == true) {
+			if (loIsArray) {
 				// public array
 				fprintf(aOutputFile, "%s %-18s  %d, %d\n",
 						META_PUBLIC_STATIC_ARRAY, loName,
@@ -421,7 +421,7 @@ int writeExportedVariablesInfo(FILE *aOutputFile) {
 			}
 		} else {
 			// private arrays/variables
-			if (loIsArray == true) {
+			if (loIsArray) {
 				// private array
 				fprintf(aOutputFile, "%s %-18s  %d, %d\n",
 						META_PRIVATE_STATIC_ARRAY, loName,
@@ -795,8 +795,8 @@ void displayLocalVariableReferencesList() {
 		printf(
 				"  Address: %d, Instruction: %d,Index: %d, Local variable: %s, Array: %s\n",
 				loOneEntry->address, loOneEntry->instruction, loOneEntry->index,
-				(loOneEntry->isLocalVariableOrArray == true) ? "YES" : "NO",
-				(loOneEntry->isArray == true) ? "YES" : "NO");
+				(loOneEntry->isLocalVariableOrArray) ? "YES" : "NO",
+				(loOneEntry->isArray) ? "YES" : "NO");
 	}
 	printf("*** Local variable references list end ***\n");
 }
@@ -869,11 +869,10 @@ int getParametersOrLocalVariables(LOCALVARIABLEPOINTER aResultArray[],
 			continue;
 		}
 
-		if ((aGetLocalVariables == false
-				&& loVariableReferenceEntry->isLocalVariableOrArray == false)
-				|| (aGetLocalVariables == true
-						&& loVariableReferenceEntry->isLocalVariableOrArray
-								== true)) {
+		if ((!aGetLocalVariables
+				&& !loVariableReferenceEntry->isLocalVariableOrArray)
+				|| (aGetLocalVariables
+						&& loVariableReferenceEntry->isLocalVariableOrArray)) {
 			// ok it is what we want
 			int j;
 			for (j = 0; j < loItemCounter; j++) {
@@ -913,7 +912,7 @@ int getParametersOrLocalVariables(LOCALVARIABLEPOINTER aResultArray[],
 	}
 	if (loItemCounter > 1) {
 		// needs sorting
-		if (aGetLocalVariables == true) {
+		if (aGetLocalVariables) {
 			printf("Sorting local variables...\n");
 			qsort(aResultArray, loItemCounter, sizeof(LOCALVARIABLEPOINTER),
 					compareLocaleVariables);
@@ -943,7 +942,7 @@ void writeParameters(FILE *aOutputFile, int aCurrentAddress, int aEndAddress) {
 	}
 	// write out the parameters
 	for (i = 0; loParameters[i] != NULL; i++) {
-		if (loParameters[i]->isArray == true) {
+		if (loParameters[i]->isArray) {
 			// parameter array
 			fprintf(aOutputFile, "%s %-18s  %d, %d\n", META_PARAMETER_ARRAY,
 					loParameters[i]->name, loParameters[i]->index, -1);
@@ -984,7 +983,7 @@ void writeLocalVariables(FILE *aOutputFile, int aCurrentAddress,
 	}
 	// write out the local variables
 	for (i = 0; loLocalVariables[i] != NULL; i++) {
-		if (loLocalVariables[i]->isArray == true) {
+		if (loLocalVariables[i]->isArray) {
 			// local array
 			fprintf(aOutputFile, "%s %-18s  %d, %d\n", META_LOCAL_ARRAY,
 					loLocalVariables[i]->name, loLocalVariables[i]->index, -1);

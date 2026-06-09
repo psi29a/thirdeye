@@ -26,8 +26,8 @@ int readDirectoryBlocks(FILE *aResFile, DIRPOINTER * loDirectoryPointers) {
 		printf("Reading the directory block %d from the position %ld\n",
 				loDirCounter, ftell(aResFile));
 		loDirectoryPointers[loDirCounter] = (DIRPOINTER) malloc(loDirBlockSize);
-		loReadSize = fread(loDirectoryPointers[loDirCounter], 1, loDirBlockSize,
-				aResFile);
+		loReadSize = static_cast<int>(fread(loDirectoryPointers[loDirCounter], 1, loDirBlockSize,
+				aResFile));
 		if (loReadSize != loDirBlockSize) {
 			free(loDirectoryPointers[loDirCounter]);
 			loDirectoryPointers[loDirCounter] = NULL;
@@ -83,7 +83,7 @@ FILE* openAESOPResourceAndSetToFirstDirectoryBlock(char *aResName,
 	fseek(loResFile, 0, SEEK_SET);
 
 	loHeaderSize = sizeof(struct RESGlobalHeader);
-	loReadSize = fread(aHeaderPointer, 1, loHeaderSize, loResFile);
+	loReadSize = static_cast<int>(fread(aHeaderPointer, 1, loHeaderSize, loResFile));
 	if (loHeaderSize != loReadSize) {
 		printf("The file header could not be read!\n");
 		fclose(loResFile);

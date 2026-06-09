@@ -51,7 +51,6 @@ namespace Files
 
 //static const char* const thirdeyeCfgFile = "thirdeye.cfg";
 
-const char* const gameToken = "?game?";
 const char* const localToken = "?local?";
 const char* const userToken = "?user?";
 const char* const globalToken = "?global?";

@@ -210,7 +210,7 @@ void GRAPHICS::Graphics::panDirection(uint8_t panDir,
 	uint8_t fgPanels = 2;
 
 	// bonus texture?
-	SDL_Surface *bgFarLeftSurface;
+	SDL_Surface *bgFarLeftSurface = nullptr;
 	std::vector<uint8_t> bBGFarLeftD;
 	if (!bgFarLeft.empty()) {
 		bgPanels = 3;
@@ -415,11 +415,11 @@ void GRAPHICS::Graphics::update() {
 	// materialize image on to screen
 	if (mState == MATERIALIZE) {
 		uint16_t size = mSurface[0]->w * mSurface[0]->h;
-		std::mt19937 rng(static_cast<unsigned int>(std::clock()));
+		std::mt19937 localRng(static_cast<unsigned int>(std::clock()));
 		std::uniform_int_distribution<uint16_t> rngRange(1, size);
 
 		for (uint16_t i = 0; i < size / 10; i++) {
-			uint16_t randomNumber = rngRange(rng);
+			uint16_t randomNumber = rngRange(localRng);
 			SDL_Rect rect = {
 				static_cast<int>(randomNumber % mSurface[0]->w),
 				static_cast<int>(randomNumber / mSurface[0]->w),
@@ -536,10 +536,10 @@ void GRAPHICS::Graphics::update() {
 	// zoom into a image
 	if (mState == ZOOM_INTO) {
 		float percentage = (float) mCounter / 100;
-		uint16_t width = mSurface[0]->w * percentage;
-		uint16_t height = mSurface[0]->h * percentage;
-		uint8_t x = mScreen->w / 2 - percentage * mScreen->w / 2;
-		uint8_t y = mScreen->h / 2 - percentage * mScreen->h / 2;
+		uint16_t width = static_cast<float>(mSurface[0]->w) * percentage;
+		uint16_t height = static_cast<float>(mSurface[0]->h) * percentage;
+		uint8_t x = mScreen->w / 2 - percentage * static_cast<float>(mScreen->w) / 2;
+		uint8_t y = mScreen->h / 2 - percentage * static_cast<float>(mScreen->h) / 2;
 		SDL_Rect rect = { x, y, width, height };
 
 		SDL_Surface *scaledImage = SDL_CreateRGBSurface(0, width, height, 32, 0,

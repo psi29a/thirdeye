@@ -78,7 +78,7 @@ int setCodeMapAddress(int aAddress, unsigned char aValue) {
 		return (false);
 	}
 	// restore label
-	if (loLabel == true) {
+	if (loLabel) {
 		setLabelForAddress(aAddress);
 	}
 	return (true);
@@ -297,10 +297,10 @@ void displayCodeTableMap(FILE *aOutputFile) {
 		}
 		if (aOutputFile == NULL) {
 			printf("%5d:  %d  label %s\n", i, loValue,
-					(loLabel == true) ? "yes" : "no");
+					(loLabel) ? "yes" : "no");
 		} else {
 			fprintf(aOutputFile, "%5d:  %d  label %s\n", i, loValue,
-					(loLabel == true) ? "yes" : "no");
+					(loLabel) ? "yes" : "no");
 		}
 	}
 	return;

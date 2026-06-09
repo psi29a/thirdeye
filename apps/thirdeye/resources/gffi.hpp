@@ -11,6 +11,9 @@
 #include "../graphics/graphics.hpp"
 
 // because the compiler wants to pad and we have different compiler extensions
+#ifdef PACK
+#undef PACK
+#endif
 #if defined(__GNUC__)
 #define PACK( __Declaration__ ) __Declaration__ __attribute__((__packed__))
 #elif defined(_MSC_VER )

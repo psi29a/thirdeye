@@ -140,8 +140,8 @@ DICTENTRYPOINTER *readTheDictionary(int aResource, int aMaxDictionaryEntries,
 		return (NULL);
 	}
 
-	loReadSize = fread(&loDictionaryStringListsNumber, 1,
-			sizeof(unsigned short), aResFile);
+	loReadSize = static_cast<int>(fread(&loDictionaryStringListsNumber, 1,
+			sizeof(unsigned short), aResFile));
 	if (loReadSize != sizeof(unsigned short)
 			|| loDictionaryStringListsNumber > 2048) // 512 is the standard in AESOP
 					{
@@ -168,8 +168,8 @@ DICTENTRYPOINTER *readTheDictionary(int aResource, int aMaxDictionaryEntries,
 
 		//printf("seek: %d\n", loDictionaryStart + sizeof(unsigned short) + i * sizeof(unsigned int));
 
-		loReadSize = fread(&loStringListIndex, 1, sizeof(unsigned int),
-				aResFile);
+		loReadSize = static_cast<int>(fread(&loStringListIndex, 1, sizeof(unsigned int),
+				aResFile));
 		if (loReadSize != sizeof(unsigned int)) {
 			printf(
 					"Failure to read a string list index from the dictionary resource %d!\n",
@@ -181,9 +181,9 @@ DICTENTRYPOINTER *readTheDictionary(int aResource, int aMaxDictionaryEntries,
 			// not empty
 			loStringListIndex += loDictionaryStart; // add the start of the index table to get the real offset
 			//printf("loStringListIndex: %u\n",loStringListIndex);
-			if (readDictionaryStringList(loDictionaryArray,
+			if (!readDictionaryStringList(loDictionaryArray,
 					aMaxDictionaryEntries, &loCurrentIndexInDictionary,
-					aResFile, loStringListIndex) != true) {
+					aResFile, loStringListIndex)) {
 				// something failed
 				printf("Error while reading dictionary resource: %d\n",
 						aResource);
@@ -217,8 +217,8 @@ int readDictionaryStringList(DICTENTRYPOINTER *aDictionaryArray,
 	//printf("index: %u\n",aStringListIndex);
 
 	for (;;) {
-		loReadSize = fread(&loStringLength, 1, sizeof(unsigned short),
-				aResFile);
+		loReadSize = static_cast<int>(fread(&loStringLength, 1, sizeof(unsigned short),
+				aResFile));
 		if (loReadSize != sizeof(unsigned short)) {
 			printf("Failure to read the string length from the dictionary!\n");
 			return (false);
@@ -229,7 +229,7 @@ int readDictionaryStringList(DICTENTRYPOINTER *aDictionaryArray,
 		}
 		//printf("string length: %u\n",loStringLength);
 
-		loReadSize = fread(loReadString, 1, loStringLength, aResFile);
+		loReadSize = static_cast<int>(fread(loReadString, 1, loStringLength, aResFile));
 		if (loReadSize != loStringLength) {
 			printf("Failure to read the string from the dictionary!\n");
 			return (false);
@@ -427,7 +427,7 @@ void displayDictionary(char *aText, char *aHeader, char *aFormat,
 	for (i = 0; i < MAX_NUMBER_OF_DICTIONARY_ITEMS && aDictionary[i] != NULL;
 			i++) {
 		char loTmp[256];
-		if (aSecondIsDecimalNumber == true) {
+		if (aSecondIsDecimalNumber) {
 			if (strchr(aDictionary[i]->second, ',') != NULL) {
 				// not a number
 				strcpy(loTmp, aDictionary[i]->second);
@@ -897,7 +897,7 @@ void displayImportDictionary(char *aImportResourceName,
 	fprintf(aOutputFile,
 			"\n*** IMPORT DICTIONARY (resource name %s, resource number: %d) ***\n",
 			aImportResourceName, aImportResourceNumber);
-	if (aSecondIsDecimalNumber == true) {
+	if (aSecondIsDecimalNumber) {
 		fprintf(aOutputFile,
 				"(for some decadic numbers their hexadecimal values are provided in () )\n");
 	}
@@ -925,7 +925,7 @@ void displayImportDictionary(char *aImportResourceName,
 
 		// the second can be a decimal number and we may want to add a hexadecimal value to it
 		if (aSecondIsDecimalNumber
-				== true&& strchr(loCurrentImportEntry->secondOriginal, ',') == NULL) {
+				&& strchr(loCurrentImportEntry->secondOriginal, ',') == NULL) {
 		// probably a number
 int		loNum = atoi(loCurrentImportEntry->secondOriginal);
 		if (loNum == 0 && strcmp(loCurrentImportEntry->secondOriginal, "0") != 0)
@@ -1007,7 +1007,7 @@ void displayExportDictionary(char *aExportResourceName,
 	fprintf(aOutputFile,
 			"\n*** EXPORT DICTIONARY (resource name %s, resource number: %d) ***\n",
 			aExportResourceName, aExportResourceNumber);
-	if (aSecondIsDecimalNumber == true) {
+	if (aSecondIsDecimalNumber) {
 		fprintf(aOutputFile,
 				"(for some decadic numbers their hexadecimal values are provided in () )\n");
 	}
@@ -1035,7 +1035,7 @@ void displayExportDictionary(char *aExportResourceName,
 
 		// the second can be a decimal number and we may want to add a hexadecimal value to it
 		if (aSecondIsDecimalNumber
-				== true&& strchr(loCurrentExportEntry->secondOriginal, ',') == NULL) {
+				&& strchr(loCurrentExportEntry->secondOriginal, ',') == NULL) {
 		// probably a number
 int		loNum = atoi(loCurrentExportEntry->secondOriginal);
 		if (loNum == 0 && strcmp(loCurrentExportEntry->secondOriginal, "0") != 0)
@@ -1424,24 +1424,23 @@ int getResourceType(FILE *aResFile, DIRPOINTER *aDirectoryPointers,
 	toUpperCase(aInfoString2UpperCase);
 
 	// test file extensions
-	if (stringEndsWith(aResourceName, IMPORT_EXTENSION) == true) {
+	if (stringEndsWith(aResourceName, IMPORT_EXTENSION)) {
 		return (RESOURCE_TYPE_IMPORT);
 	}
-	if (stringEndsWith(aResourceName, EXPORT_EXTENSION) == true) {
+	if (stringEndsWith(aResourceName, EXPORT_EXTENSION)) {
 		return (RESOURCE_TYPE_EXPORT);
 	}
-	if (stringEndsWith(aInfoString2UpperCase, BITMAP1_FILE_EXTENSION) == true
-			|| stringEndsWith(aInfoString2UpperCase, BITMAP2_FILE_EXTENSION)
-					== true) {
+	if (stringEndsWith(aInfoString2UpperCase, BITMAP1_FILE_EXTENSION)
+			|| stringEndsWith(aInfoString2UpperCase, BITMAP2_FILE_EXTENSION)) {
 		return (RESOURCE_TYPE_BITMAP);
 	}
-	if (stringEndsWith(aInfoString2UpperCase, SOUND_FILE_EXTENSION) == true) {
+	if (stringEndsWith(aInfoString2UpperCase, SOUND_FILE_EXTENSION)) {
 		return (RESOURCE_TYPE_SOUND);
 	}
-	if (stringEndsWith(aInfoString2UpperCase, MUSIC_FILE_EXTENSION) == true) {
+	if (stringEndsWith(aInfoString2UpperCase, MUSIC_FILE_EXTENSION)) {
 		return (RESOURCE_TYPE_MUSIC);
 	}
-	if (stringEndsWith(aInfoString2UpperCase, FONT_FILE_EXTENSION) == true) {
+	if (stringEndsWith(aInfoString2UpperCase, FONT_FILE_EXTENSION)) {
 		return (RESOURCE_TYPE_FONT);
 	}
 	strcpy(loExportResource, aResourceName);
@@ -1455,7 +1454,7 @@ int getResourceType(FILE *aResFile, DIRPOINTER *aDirectoryPointers,
 		}
 	}
 
-	if (aLookForStringResources == true) {
+	if (aLookForStringResources) {
 		// check whether it is not a string
 		struct RESEntryHeader *loResEntryHeader;
 		unsigned int loDataSize;
@@ -1541,21 +1540,21 @@ void displayResourcesInfoEntries(FILE *aOutputFile,
 		}
 		// basic info
 		fprintf(aOutputFile, "%-5d %-10s %-45s %s\n", loNumber, loType, loName,
-				((loAdditionalInfoPresent == true || loStringValue != NULL) ?
+				((loAdditionalInfoPresent || loStringValue != NULL) ?
 						"(see below)" : ""));
 
-		if (loAdditionalInfoPresent == true) {
+		if (loAdditionalInfoPresent) {
 			fprintf(aOutputFile, "               %s\n               %s\n",
 					((loInfoFromResource1 == NULL) ? "-" : loInfoFromResource1),
 					((loInfoFromResource2 == NULL) ? "-" : loInfoFromResource2));
 		}
 		if (loStringValue != NULL) {
-			int i;
+			int j;
 			int loStringValueLength;
-			loStringValueLength = strlen(loStringValue);
+			loStringValueLength = static_cast<int>(strlen(loStringValue));
 			fprintf(aOutputFile, "String value: \"");
-			for (i = 0; i < loStringValueLength; i++) {
-				switch (loStringValue[i]) {
+			for (j = 0; j < loStringValueLength; j++) {
+				switch (loStringValue[j]) {
 				case '\n':
 					fprintf(aOutputFile, "%s", "\\n");
 					break;
@@ -1572,14 +1571,14 @@ void displayResourcesInfoEntries(FILE *aOutputFile,
 					fprintf(aOutputFile, "%s", "\\\\");
 					break;
 				default:
-					fprintf(aOutputFile, "%c", loStringValue[i]);
+					fprintf(aOutputFile, "%c", loStringValue[j]);
 					break;
 				}
 			}
 			fprintf(aOutputFile, "\"\n");
 
 		}
-		if (loAdditionalInfoPresent == true || loStringValue != NULL) {
+		if (loAdditionalInfoPresent || loStringValue != NULL) {
 			// one more empty line
 			fprintf(aOutputFile, "\n");
 		}
