@@ -132,6 +132,9 @@ public:
 	/// Names of SOP code resources (those with the code attribute set).
 	std::vector<std::string> getCodeResourceNames();
 
+	/// Resource number for a given name, or -1 if not found.
+	int getResourceNumber(const std::string &name);
+
 	/// Parse a code object's <name>.EXPT export dictionary into key->value
 	/// pairs (e.g. "N:OBJECT"->object name, "M:0"->handler entry offset).
 	/// Returns an empty map if the export resource is missing.
