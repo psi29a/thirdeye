@@ -8,6 +8,79 @@ Version: 0.86.0
 License: GPL (see GPL3.txt for more information)  
 Website:  http://www.mindwerks.net/projects/thirdeye/  
 
+BUILDING
+
+Thirdeye is built with CMake and a C++20 toolchain.
+
+Dependencies
+------------
+Build tools:
+* CMake >= 3.15
+* A C++20 compiler (GCC 10+, Clang 12+, or MSVC 2019+)
+* Ninja (recommended generator; any CMake generator works)
+* Git (required: unit tests fetch GoogleTest via CMake FetchContent)
+
+Libraries:
+* SDL2          - windowing, input, audio output
+* OpenAL        - digital sound mixer (openal-soft)
+* WildMIDI      - XMIDI / MIDI playback
+
+GoogleTest is NOT a system dependency: when unit tests are enabled (the
+default) CMake downloads and builds it automatically via FetchContent, so an
+internet connection is needed the first time you configure.
+
+Installing dependencies
+-----------------------
+Linux (Debian/Ubuntu):
+    sudo apt-get install -y cmake ninja-build build-essential \
+        libsdl2-dev libopenal-dev libwildmidi-dev
+
+macOS (Homebrew):
+    brew install cmake ninja sdl2 openal-soft wildmidi
+
+Windows (vcpkg):
+    git clone https://github.com/microsoft/vcpkg.git
+    .\vcpkg\bootstrap-vcpkg.bat
+    .\vcpkg\vcpkg.exe install sdl2 openal-soft wildmidi --triplet x64-windows
+
+Configure and build
+-------------------
+Linux / macOS:
+    cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+    cmake --build build
+
+Windows (from a Developer Command Prompt, using the vcpkg toolchain):
+    cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release ^
+        -DCMAKE_TOOLCHAIN_FILE=<path-to-vcpkg>\scripts\buildsystems\vcpkg.cmake
+    cmake --build build
+
+Useful CMake options (defaults in parentheses):
+    -DUNIT_TESTS=ON|OFF      build the unit tests (ON)
+    -DBUILD_DAESOP=ON|OFF    build the daesop RES tool / disassembler (ON)
+    -DBUILD_ARC=ON|OFF       build the arc resource compiler (OFF)
+    -DBUILD_LAUNCHER=ON|OFF  build the launcher front-end (OFF)
+    -DDEBUG=ON|OFF           extra debug build options (OFF)
+
+Tip: if you already have a configured build/ dir and want to flip an option,
+re-run cmake on it (e.g. `cmake build -DUNIT_TESTS=OFF`) or delete
+build/CMakeCache.txt.
+
+RUNNING TESTS
+
+Unit tests are built by default into the `runtests` executable (GoogleTest).
+
+    cmake -S . -B build -G Ninja          # UNIT_TESTS is ON by default
+    cmake --build build --target runtests
+    ctest --test-dir build --output-on-failure   # or run the binary directly:
+
+    # macOS (app bundle layout):
+    ./build/thirdeye.app/Contents/MacOS/runtests
+    # Linux / Windows:
+    ./build/runtests
+
+To configure without tests (also avoids the GoogleTest download):
+    cmake -S . -B build -G Ninja -DUNIT_TESTS=OFF
+
 INSTALLATION
 
 Windows:

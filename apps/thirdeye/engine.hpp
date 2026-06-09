@@ -29,6 +29,8 @@
 #define STATE_SUMMON	4
 #define STATE_ABANDON	5
 
+namespace RESOURCES { class Resource; }
+
 namespace THIRDEYE {
 // Main engine class, that brings together all the components of Thirdeye
 class Engine
@@ -68,6 +70,16 @@ public:
 	void setRenderer(bool renderer);
 	void setScale(uint16_t);
 private:
+	/// Resolve the game-data path (which may be a directory or a direct .RES
+	/// file) into the actual resource file to open, auto-detecting the game
+	/// from the filename when a file is given.
+	std::filesystem::path resolveResourceFile();
+
+	/// Drive each SOP code object's message handlers through the bytecode VM,
+	/// reporting where each one ends (END, or the first unimplemented opcode).
+	/// With debug mode on, prints a per-instruction trace.
+	void runResourceVM(RESOURCES::Resource &resource);
+
 	Files::ConfigurationManager& mCfgMgr;
 	std::string mResource;
 };
