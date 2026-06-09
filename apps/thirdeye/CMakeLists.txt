@@ -27,7 +27,7 @@ add_thirdeye_dir (graphics
     )
 
 add_thirdeye_dir (vm
-    vm opcodes
+    vm opcodes objects
     )
 
 # Main executable

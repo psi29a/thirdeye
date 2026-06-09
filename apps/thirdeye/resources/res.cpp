@@ -388,6 +388,11 @@ std::map<std::string, std::string> RESOURCES::Resource::getExports(
 	return parseDictionary(getAsset(static_cast<uint16_t>(std::stoi(num))));
 }
 
+int RESOURCES::Resource::getResourceNumber(const std::string &name) {
+	std::string num = searchDictionary(mTable0, name);
+	return num.empty() ? -1 : std::stoi(num);
+}
+
 std::map<std::string, std::string> RESOURCES::Resource::getImports(
 		const std::string &codeName) {
 	std::string num = searchDictionary(mTable0, codeName + ".IMPT");

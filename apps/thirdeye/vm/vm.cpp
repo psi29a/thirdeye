@@ -70,21 +70,29 @@ void Interpreter::writeStk(uint32_t off, Value v) {
 
 // --- frame entry / public execute -------------------------------------------
 
-void Interpreter::enterFrame(uint32_t handlerOffset, uint16_t thisIndex) {
-	mFptr = mSp;                                  // frame base = current SP
+void Interpreter::enterFrame(uint32_t handlerOffset, uint16_t thisIndex,
+                             const std::vector<Value>& args) {
+	// Parameters sit just above the frame base: arg1 at fptr+0, arg2 at fptr+4,
+	// ... (so the handler reads them via negative auto offsets). THIS sits at
+	// fptr-2; locals + operand stack grow downward below the frame base.
+	uint32_t n = static_cast<uint32_t>(args.size());
+	mFptr = mSp - n * kValueSize;
+	for (uint32_t i = 0; i < n; ++i)
+		writeStk(mFptr + i * kValueSize, args[i]);
+
 	mStk[mFptr - kOffThis] = thisIndex & 0xFF;    // THIS at fptr-2 (16-bit)
 	mStk[mFptr - kOffThis + 1] = (thisIndex >> 8) & 0xFF;
 
 	mPC = handlerOffset;
 	uint16_t autoSize = fetch16();                // MHDR.auto_size (includes THIS)
-	mSp -= autoSize;                              // reserve auto space
-	mSp -= kValueSize;                           // first free operand slot
+	mSp = mFptr - autoSize - kValueSize;          // first free operand slot
 	// mPC now points just past the 2-byte MHDR, at the first instruction.
 }
 
-Value Interpreter::execute(uint32_t handlerOffset, uint16_t thisIndex) {
+Value Interpreter::execute(uint32_t handlerOffset, uint16_t thisIndex,
+                           const std::vector<Value>& args) {
 	mSp = kStackBytes;                            // top of (empty) stack
-	enterFrame(handlerOffset, thisIndex);
+	enterFrame(handlerOffset, thisIndex, args);
 	return run();
 }
 
@@ -172,22 +180,23 @@ Value Interpreter::run() {
 		case Op::LNGC: setTop(static_cast<Value>(fetch32())); break;
 
 		// --- auto (local/param) scalar load/store; byte-addressed at fptr-off ---
-		case Op::LAB: { uint16_t off = fetch16();
-			setTop(static_cast<int8_t>(mStk[mFptr - off])); break; }       // sign-extend
-		case Op::LAW: { uint16_t off = fetch16();
-			int16_t w; std::memcpy(&w, &mStk[mFptr - off], 2);
+		// Offsets are SIGNED (see autoAddr): locals/THIS below fptr, params above.
+		case Op::LAB: { uint32_t p = autoAddr(static_cast<int16_t>(fetch16()));
+			setTop(static_cast<int8_t>(mStk[p])); break; }                 // sign-extend
+		case Op::LAW: { uint32_t p = autoAddr(static_cast<int16_t>(fetch16()));
+			int16_t w; std::memcpy(&w, &mStk[p], 2);
 			setTop(w); break; }                                            // sign-extend
-		case Op::LAD: { uint16_t off = fetch16();
-			setTop(readStk(mFptr - off)); break; }
-		case Op::SAB: { uint16_t off = fetch16();
-			mStk[mFptr - off] = static_cast<uint8_t>(topVal()); break; }    // no pop
-		case Op::SAW: { uint16_t off = fetch16();
+		case Op::LAD: { uint32_t p = autoAddr(static_cast<int16_t>(fetch16()));
+			setTop(readStk(p)); break; }
+		case Op::SAB: { uint32_t p = autoAddr(static_cast<int16_t>(fetch16()));
+			mStk[p] = static_cast<uint8_t>(topVal()); break; }             // no pop
+		case Op::SAW: { uint32_t p = autoAddr(static_cast<int16_t>(fetch16()));
 			uint16_t w = static_cast<uint16_t>(topVal());
-			std::memcpy(&mStk[mFptr - off], &w, 2); break; }               // no pop
-		case Op::SAD: { uint16_t off = fetch16();
-			writeStk(mFptr - off, topVal()); break; }                      // no pop
-		case Op::LEAA: { uint16_t off = fetch16();
-			setTop(static_cast<Value>(mFptr - off)); break; }              // effective addr
+			std::memcpy(&mStk[p], &w, 2); break; }                         // no pop
+		case Op::SAD: { uint32_t p = autoAddr(static_cast<int16_t>(fetch16()));
+			writeStk(p, topVal()); break; }                                // no pop
+		case Op::LEAA: { uint32_t p = autoAddr(static_cast<int16_t>(fetch16()));
+			setTop(static_cast<Value>(p)); break; }                        // effective addr
 
 		// --- inline code address (e.g. address of an inline string) ---
 		case Op::LECA: setTop(static_cast<Value>(fetch16())); break;
@@ -195,11 +204,14 @@ Value Interpreter::run() {
 		// --- procedures ---
 		case Op::JSR: {
 			uint16_t target = fetch16();
+			// A subroutine runs in the current object context: preserve THIS.
+			uint16_t curThis = static_cast<uint16_t>(
+				mStk[mFptr - kOffThis] | (mStk[mFptr - kOffThis + 1] << 8));
 			// save return PC, SP, frame on the byte stack (mirrors do_JSR pushes)
 			pushVal(static_cast<Value>(mPC));
 			pushVal(static_cast<Value>(mSp + kValueSize)); // SP before this push set
 			pushVal(static_cast<Value>(mFptr));
-			enterFrame(target, /*thisIndex preserved via fptr-2*/ 0);
+			enterFrame(target, curThis, {});
 			break;
 		}
 		case Op::RTS: {
@@ -233,16 +245,90 @@ Value Interpreter::run() {
 			break;
 		}
 
-		// --- not yet implemented (need object system / runtime fns / link) ---
-		case Op::SEND: case Op::PASS:
-		case Op::AIM:  case Op::AIS:
-		case Op::LTBA: case Op::LTWA: case Op::LTDA: case Op::LETA:
+		// --- object messages ---
+		// SEND <argc> <message>: dispatch `message` to the object instance whose
+		// handle sits just below the args. Result replaces the instance slot.
+		case Op::SEND: {
+			uint8_t argc = fetch8();
+			uint16_t message = fetch16();
+			std::vector<Value> args(argc);
+			for (int i = argc - 1; i >= 0; --i)
+				args[i] = popVal();
+			Value instance = topVal(); // object handle below the args
+			if (!mSendHook)
+				throw VmError("SEND but no object system is wired in");
+			setTop(mSendHook(static_cast<int>(instance), message, args));
+			break;
+		}
+		// PASS <argc>: re-dispatch the CURRENT message to the parent class, using
+		// the current THIS. Result replaces the reserved slot below the args.
+		case Op::PASS: {
+			uint8_t argc = fetch8();
+			std::vector<Value> args(argc);
+			for (int i = argc - 1; i >= 0; --i)
+				args[i] = popVal();
+			if (!mPassHook)
+				throw VmError("PASS but no object system is wired in");
+			setTop(mPassHook(args));
+			break;
+		}
+
+		// --- array index building (scale + accumulate; see RT.ASM do_AIM/do_AIS) ---
+		// idx = pop; top += idx * width  (top is the index accumulator).
+		case Op::AIM: { uint16_t width = fetch16(); Value idx = popVal();
+			setTop(topVal() + idx * static_cast<Value>(width)); break; }
+		case Op::AIS: { uint8_t shift = fetch8(); Value idx = popVal();
+			setTop(topVal() + (idx << shift)); break; }
+
+		// --- constant tables (live in the code resource; index from top) ---
+		case Op::LTBA: { uint16_t off = fetch16();
+			setTop(static_cast<int8_t>(*codePtr(off + topVal(), 1))); break; }
+		case Op::LTWA: { uint16_t off = fetch16();
+			int16_t w; std::memcpy(&w, codePtr(off + topVal(), 2), 2);
+			setTop(w); break; }
+		case Op::LTDA: { uint16_t off = fetch16();
+			int32_t d; std::memcpy(&d, codePtr(off + topVal(), 4), 4);
+			setTop(d); break; }
+
+		// --- static (object-state) scalars; per-instance storage ---
+		case Op::LSB: { uint16_t off = fetch16();
+			setTop(static_cast<int8_t>(*staticPtr(off, 1))); break; }
+		case Op::LSW: { uint16_t off = fetch16();
+			int16_t w; std::memcpy(&w, staticPtr(off, 2), 2); setTop(w); break; }
+		case Op::LSD: { uint16_t off = fetch16();
+			int32_t d; std::memcpy(&d, staticPtr(off, 4), 4); setTop(d); break; }
+		case Op::SSB: { uint16_t off = fetch16();
+			*staticPtr(off, 1) = static_cast<uint8_t>(topVal()); break; }   // no pop
+		case Op::SSW: { uint16_t off = fetch16();
+			uint16_t w = static_cast<uint16_t>(topVal());
+			std::memcpy(staticPtr(off, 2), &w, 2); break; }                // no pop
+		case Op::SSD: { uint16_t off = fetch16();
+			int32_t d = topVal(); std::memcpy(staticPtr(off, 4), &d, 4); break; } // no pop
+
+		// --- static arrays (index from top; index is byte-scaled via AIM/AIS) ---
+		case Op::LSBA: { uint16_t off = fetch16();
+			setTop(static_cast<int8_t>(*staticPtr(off + topVal(), 1))); break; }
+		case Op::LSWA: { uint16_t off = fetch16();
+			int16_t w; std::memcpy(&w, staticPtr(off + topVal(), 2), 2);
+			setTop(w); break; }
+		case Op::LSDA: { uint16_t off = fetch16();
+			int32_t d; std::memcpy(&d, staticPtr(off + topVal(), 4), 4);
+			setTop(d); break; }
+		case Op::SSBA: { uint16_t off = fetch16(); Value data = popVal();
+			*staticPtr(off + topVal(), 1) = static_cast<uint8_t>(data);
+			setTop(data); break; }                                         // leaves data
+		case Op::SSWA: { uint16_t off = fetch16(); Value data = popVal();
+			uint16_t w = static_cast<uint16_t>(data);
+			std::memcpy(staticPtr(off + topVal(), 2), &w, 2);
+			setTop(data); break; }
+		case Op::SSDA: { uint16_t off = fetch16(); Value data = popVal();
+			std::memcpy(staticPtr(off + topVal(), 4), &data, 4);
+			setTop(data); break; }
+
+		// --- not yet implemented (need the cross-object address/link model) ---
+		case Op::LETA: case Op::LESA:
 		case Op::LABA: case Op::LAWA: case Op::LADA:
 		case Op::SABA: case Op::SAWA: case Op::SADA:
-		case Op::LSB:  case Op::LSW:  case Op::LSD:
-		case Op::SSB:  case Op::SSW:  case Op::SSD:
-		case Op::LSBA: case Op::LSWA: case Op::LSDA:
-		case Op::SSBA: case Op::SSWA: case Op::SSDA: case Op::LESA:
 		case Op::LXB:  case Op::LXW:  case Op::LXD:
 		case Op::SXB:  case Op::SXW:  case Op::SXD:
 		case Op::LXBA: case Op::LXWA: case Op::LXDA:
@@ -272,36 +358,36 @@ std::string Interpreter::describe(uint32_t pc) const {
 		           : 0;
 	};
 
-	std::ostringstream s;
-	s << std::left << std::setw(5) << opName(op);
-
+	// Build the operand text on its own so we can pad it to a fixed column,
+	// keeping the "; description" aligned across every line.
+	std::ostringstream operand;
 	switch (op) {
 	case Op::BRT: case Op::BRF: case Op::BRA: case Op::JSR:
-		s << " ->" << pk16(a); break;
+		operand << "->" << pk16(a); break;
 	case Op::LECA:
-		s << " @" << pk16(a); break;
-	case Op::SHTC: s << ' ' << pk8(a);  break;
-	case Op::INTC: s << ' ' << pk16(a); break;
-	case Op::LNGC: s << ' ' << pk32(a); break;
+		operand << '@' << pk16(a); break;
+	case Op::SHTC: operand << pk8(a);  break;
+	case Op::INTC: operand << pk16(a); break;
+	case Op::LNGC: operand << pk32(a); break;
 	case Op::CALL: case Op::PASS:
-		s << ' ' << pk8(a) << (pk8(a) == 1 ? " arg" : " args"); break;
-	case Op::AIS: s << ' ' << pk8(a);  break;
-	case Op::AIM: s << ' ' << pk16(a); break;
+		operand << pk8(a) << (pk8(a) == 1 ? " arg" : " args"); break;
+	case Op::AIS: operand << pk8(a);  break;
+	case Op::AIM: operand << pk16(a); break;
 	case Op::SEND:
-		s << ' ' << pk8(a) << " args, msg " << pk16(a + 1); break;
+		operand << pk8(a) << " args, msg " << pk16(a + 1); break;
 	case Op::RCRS: {
 		uint32_t n = pk16(a);
-		s << " #" << n;
+		operand << '#' << n;
 		auto it = mImports.find(static_cast<int32_t>(n));
 		if (it != mImports.end())
-			s << " (" << it->second << ')';
+			operand << " (" << it->second << ')';
 		break;
 	}
 	// import-indexed extern ops
 	case Op::LXB: case Op::LXW: case Op::LXD: case Op::SXB: case Op::SXW: case Op::SXD:
 	case Op::LXBA: case Op::LXWA: case Op::LXDA: case Op::SXBA: case Op::SXWA: case Op::SXDA:
 	case Op::LEXA:
-		s << " #" << pk16(a); break;
+		operand << '#' << pk16(a); break;
 	// word-offset auto/static/table ops
 	case Op::LAB: case Op::LAW: case Op::LAD: case Op::SAB: case Op::SAW: case Op::SAD:
 	case Op::LABA: case Op::LAWA: case Op::LADA: case Op::SABA: case Op::SAWA: case Op::SADA:
@@ -310,12 +396,15 @@ std::string Interpreter::describe(uint32_t pc) const {
 	case Op::LSBA: case Op::LSWA: case Op::LSDA: case Op::SSBA: case Op::SSWA: case Op::SSDA:
 	case Op::LESA:
 	case Op::LTBA: case Op::LTWA: case Op::LTDA: case Op::LETA:
-		s << " @" << pk16(a); break;
+		operand << '@' << pk16(a); break;
 	default:
 		break; // no operand
 	}
 
-	s << "  ; " << opDesc(op);
+	// Columns: mnemonic (5) | operand (18) | "; description"
+	std::ostringstream s;
+	s << std::left << std::setw(5) << opName(op) << ' '
+	  << std::setw(18) << operand.str() << "; " << opDesc(op);
 	return s.str();
 }
 
@@ -328,6 +417,22 @@ Value Interpreter::callRuntime(Value handle, const std::vector<Value>& args) {
 		throw VmError("runtime function \"" + name + "\" called, but no runtime "
 		              "library is wired in yet");
 	return mRuntimeCall(*this, name, args);
+}
+
+uint8_t* Interpreter::staticPtr(uint32_t off, uint32_t size) {
+	if (mStatics == nullptr)
+		throw VmError("static variable access but no instance storage is set");
+	if (static_cast<uint64_t>(off) + size > mStatics->size())
+		throw VmError("static variable access out of range (offset " +
+		              std::to_string(off) + ", size " + std::to_string(size) + ")");
+	return mStatics->data() + off;
+}
+
+const uint8_t* Interpreter::codePtr(uint32_t off, uint32_t size) {
+	if (static_cast<uint64_t>(off) + size > mCode.size())
+		throw VmError("table/code access out of range (offset " +
+		              std::to_string(off) + ", size " + std::to_string(size) + ")");
+	return mCode.data() + off;
 }
 
 std::string Interpreter::readCodeString(uint32_t addr) const {
