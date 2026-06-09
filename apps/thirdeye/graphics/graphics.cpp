@@ -538,8 +538,8 @@ void GRAPHICS::Graphics::update() {
 		float percentage = (float) mCounter / 100;
 		uint16_t width = static_cast<float>(mSurface[0]->w) * percentage;
 		uint16_t height = static_cast<float>(mSurface[0]->h) * percentage;
-		uint8_t x = mScreen->w / 2 - percentage * static_cast<float>(mScreen->w) / 2;
-		uint8_t y = mScreen->h / 2 - percentage * static_cast<float>(mScreen->h) / 2;
+		uint8_t x = static_cast<float>(mScreen->w) / 2 - percentage * static_cast<float>(mScreen->w) / 2;
+		uint8_t y = static_cast<float>(mScreen->h) / 2 - percentage * static_cast<float>(mScreen->h) / 2;
 		SDL_Rect rect = { x, y, width, height };
 
 		SDL_Surface *scaledImage = SDL_CreateRGBSurface(0, width, height, 32, 0,
