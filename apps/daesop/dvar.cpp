@@ -1,4 +1,4 @@
-#include <malloc.h>
+#include <cstdlib>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -147,7 +147,7 @@ int writeExternalReferencesInfo(
 		loCurrentImportEntryType = loCurrentImportEntry->importType;
 		switch (loCurrentImportEntryType) {
 		case IMPORT_ENTRY_RUNTIME_FUNCTION:
-			sprintf(loTmp, "\"%s\"", loCurrentImportEntry->firstOriginal);
+			snprintf(loTmp, sizeof(loTmp), "\"%s\"", loCurrentImportEntry->firstOriginal);
 			fprintf(aOutputFile, "%s %-32s ;runtime_function: %d\n",
 					META_IMPORTED_RUNTIME_FUNCTION, loTmp,
 					loCurrentImportEntry->runtimeFunctionNumber);
@@ -155,8 +155,8 @@ int writeExternalReferencesInfo(
 		case IMPORT_ENTRY_BYTE:
 		case IMPORT_ENTRY_WORD:
 		case IMPORT_ENTRY_LONG:
-			sprintf(loTmp, "\"%s\",", loCurrentImportEntry->firstOriginal);
-			sprintf(loTmp2, "\"%s\"",
+			snprintf(loTmp, sizeof(loTmp), "\"%s\",", loCurrentImportEntry->firstOriginal);
+			snprintf(loTmp2, sizeof(loTmp2), "\"%s\"",
 					loCurrentImportEntry->originalResourceName);
 			fprintf(aOutputFile,
 					"%s %-18s  %5d, %-14s ;original_resource: %d\n",
@@ -167,8 +167,8 @@ int writeExternalReferencesInfo(
 		case IMPORT_ENTRY_ARRAY_BYTE:
 		case IMPORT_ENTRY_ARRAY_WORD:
 		case IMPORT_ENTRY_ARRAY_LONG:
-			sprintf(loTmp, "\"%s\",", loCurrentImportEntry->firstOriginal);
-			sprintf(loTmp2, "\"%s\"",
+			snprintf(loTmp, sizeof(loTmp), "\"%s\",", loCurrentImportEntry->firstOriginal);
+			snprintf(loTmp2, sizeof(loTmp2), "\"%s\"",
 					loCurrentImportEntry->originalResourceName);
 			fprintf(aOutputFile,
 					"%s %-18s  %d, %d, %-14s ;original_resource: %d\n",
@@ -217,11 +217,11 @@ int initializeStaticVariableList(
 		return (false);
 	} else {
 		// exported variables are public static variables so add them there
-		int i;
+		int j;
 		int loStaticVariablesTableIndex = 0;
-		for (i = 0;
-				i < MAX_EXPORT_TABLE_ITEMS
-						&& aFullExportResourceDictionary[i] != NULL; i++) {
+		for (j = 0;
+				j < MAX_EXPORT_TABLE_ITEMS
+						&& aFullExportResourceDictionary[j] != NULL; j++) {
 			EXPORTENTRYPOINTER loCurrentExportEntry;
 			int loCurrentExportEntryType;
 			STATVARPOINTER loStatVarEntry = NULL;
@@ -232,7 +232,7 @@ int initializeStaticVariableList(
 				return (false);
 			}
 
-			loCurrentExportEntry = aFullExportResourceDictionary[i];
+			loCurrentExportEntry = aFullExportResourceDictionary[j];
 			loCurrentExportEntryType = loCurrentExportEntry->exportType;
 			switch (loCurrentExportEntryType) {
 			case EXPORT_ENTRY_BYTE:
@@ -333,11 +333,11 @@ int addPrivateStaticVariableIfNotExisting(int aVariableIndex, int aIsArray,
 
 	// ok, it is not there so make a new one
 	// WARNING: this code does not handle well the instruction LESA (it defaults to an an array, but we cannot be sure - the instruction does not imply the type)
-	if (aIsArray == true) {
-		sprintf(loNewName, "%c:%s%d", aVariableType, STATIC_ARRAY_PREFIX,
+	if (aIsArray) {
+		snprintf(loNewName, sizeof(loNewName), "%c:%s%d", aVariableType, STATIC_ARRAY_PREFIX,
 				aVariableIndex);
 	} else {
-		sprintf(loNewName, "%c:%s%d", aVariableType, STATIC_VARIABLE_PREFIX,
+		snprintf(loNewName, sizeof(loNewName), "%c:%s%d", aVariableType, STATIC_VARIABLE_PREFIX,
 				aVariableIndex);
 	}
 	loNewStatVarEntry = (STATVARPOINTER) malloc(
@@ -404,10 +404,10 @@ int writeExportedVariablesInfo(FILE *aOutputFile) {
 		loCurrentEntry = myStaticVariablesTable[i];
 		loIsPublic = loCurrentEntry->isPublic;
 		loIsArray = loCurrentEntry->isArray;
-		sprintf(loName, "\"%s\"", loCurrentEntry->name);
-		if (loIsPublic == true) {
+		snprintf(loName, sizeof(loName), "\"%s\"", loCurrentEntry->name);
+		if (loIsPublic) {
 			// public (exported) arrays/variables
-			if (loIsArray == true) {
+			if (loIsArray) {
 				// public array
 				fprintf(aOutputFile, "%s %-18s  %d, %d\n",
 						META_PUBLIC_STATIC_ARRAY, loName,
@@ -421,7 +421,7 @@ int writeExportedVariablesInfo(FILE *aOutputFile) {
 			}
 		} else {
 			// private arrays/variables
-			if (loIsArray == true) {
+			if (loIsArray) {
 				// private array
 				fprintf(aOutputFile, "%s %-18s  %d, %d\n",
 						META_PRIVATE_STATIC_ARRAY, loName,
@@ -530,7 +530,7 @@ int addConstantTableEntryIfNotExisting(int aTableIndex, char aVariableType) {
 		printf("Unable to allocate a contant table entry!\n");
 		return (false);
 	}
-	sprintf(loNewName, "%c:%s%d", aVariableType, CONSTANT_TABLE_PREFIX,
+	snprintf(loNewName, sizeof(loNewName), "%c:%s%d", aVariableType, CONSTANT_TABLE_PREFIX,
 			aTableIndex);
 	loNewEntry->name = makeString(loNewName);
 	loNewEntry->tableIndex = aTableIndex;
@@ -663,14 +663,14 @@ void getAutoVariableNameForIndex(char *aResult, int aCurrentInstruction,
 		strcat(aResult, "?");
 		break;
 	default:
-		sprintf(loTmp, "getAutoVariableNameForIndex(): unknown instruction %d!",
+		snprintf(loTmp, sizeof(loTmp), "getAutoVariableNameForIndex(): unknown instruction %d!",
 				aCurrentInstruction);
 		printf("%s\n", loTmp);
 		strcat(aResult, loTmp);
 		return;
 	}
 	// add the index to the name
-	sprintf(loTmp, ":%d", aVariableIndex);
+	snprintf(loTmp, sizeof(loTmp), ":%d", aVariableIndex);
 	strcat(aResult, loTmp);
 }
 
@@ -795,8 +795,8 @@ void displayLocalVariableReferencesList() {
 		printf(
 				"  Address: %d, Instruction: %d,Index: %d, Local variable: %s, Array: %s\n",
 				loOneEntry->address, loOneEntry->instruction, loOneEntry->index,
-				(loOneEntry->isLocalVariableOrArray == true) ? "YES" : "NO",
-				(loOneEntry->isArray == true) ? "YES" : "NO");
+				(loOneEntry->isLocalVariableOrArray) ? "YES" : "NO",
+				(loOneEntry->isArray) ? "YES" : "NO");
 	}
 	printf("*** Local variable references list end ***\n");
 }
@@ -869,11 +869,10 @@ int getParametersOrLocalVariables(LOCALVARIABLEPOINTER aResultArray[],
 			continue;
 		}
 
-		if ((aGetLocalVariables == false
-				&& loVariableReferenceEntry->isLocalVariableOrArray == false)
-				|| (aGetLocalVariables == true
-						&& loVariableReferenceEntry->isLocalVariableOrArray
-								== true)) {
+		if ((!aGetLocalVariables
+				&& !loVariableReferenceEntry->isLocalVariableOrArray)
+				|| (aGetLocalVariables
+						&& loVariableReferenceEntry->isLocalVariableOrArray)) {
 			// ok it is what we want
 			int j;
 			for (j = 0; j < loItemCounter; j++) {
@@ -913,7 +912,7 @@ int getParametersOrLocalVariables(LOCALVARIABLEPOINTER aResultArray[],
 	}
 	if (loItemCounter > 1) {
 		// needs sorting
-		if (aGetLocalVariables == true) {
+		if (aGetLocalVariables) {
 			printf("Sorting local variables...\n");
 			qsort(aResultArray, loItemCounter, sizeof(LOCALVARIABLEPOINTER),
 					compareLocaleVariables);
@@ -943,7 +942,7 @@ void writeParameters(FILE *aOutputFile, int aCurrentAddress, int aEndAddress) {
 	}
 	// write out the parameters
 	for (i = 0; loParameters[i] != NULL; i++) {
-		if (loParameters[i]->isArray == true) {
+		if (loParameters[i]->isArray) {
 			// parameter array
 			fprintf(aOutputFile, "%s %-18s  %d, %d\n", META_PARAMETER_ARRAY,
 					loParameters[i]->name, loParameters[i]->index, -1);
@@ -984,7 +983,7 @@ void writeLocalVariables(FILE *aOutputFile, int aCurrentAddress,
 	}
 	// write out the local variables
 	for (i = 0; loLocalVariables[i] != NULL; i++) {
-		if (loLocalVariables[i]->isArray == true) {
+		if (loLocalVariables[i]->isArray) {
 			// local array
 			fprintf(aOutputFile, "%s %-18s  %d, %d\n", META_LOCAL_ARRAY,
 					loLocalVariables[i]->name, loLocalVariables[i]->index, -1);

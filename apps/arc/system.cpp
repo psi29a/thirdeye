@@ -27,7 +27,7 @@
 
 //#include <conio.h>
 #include <stdio.h>
-#include <malloc.h>
+#include <cstdlib>
 #include <stdarg.h>
 #include <string.h>
 #include <stdlib.h>

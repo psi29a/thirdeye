@@ -21,8 +21,8 @@ bool begins(const char* str1, const char* str2) {
 }
 
 bool ends(const char* str1, const char* str2) {
-	int len1 = strlen(str1);
-	int len2 = strlen(str2);
+	int len1 = static_cast<int>(strlen(str1));
+	int len2 = static_cast<int>(strlen(str2));
 
 	if (len1 < len2)
 		return (false);
@@ -52,8 +52,8 @@ bool ibegins(const char* str1, const char* str2) {
 }
 
 bool iends(const char* str1, const char* str2) {
-	int len1 = strlen(str1);
-	int len2 = strlen(str2);
+	int len1 = static_cast<int>(strlen(str1));
+	int len2 = static_cast<int>(strlen(str2));
 
 	if (len1 < len2)
 		return (false);

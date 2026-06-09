@@ -1,3 +1,4 @@
+#include <filesystem>
 /*
  * res.cpp
  *
@@ -9,22 +10,22 @@
 #include <iostream>
 #include <fstream>
 #include <iomanip>
+#include <sstream>
+#include <cstring>
 
-#include <boost/filesystem.hpp>
-#include <boost/lexical_cast.hpp>
 
-RESOURCES::Resource::Resource(boost::filesystem::path resourcePath) {
+RESOURCES::Resource::Resource(std::filesystem::path resourcePath) {
 	mResFile = resourcePath;
 
 	std::cout << "Initializing Resources:" << std::endl;
 	// does resource exist
-	if (boost::filesystem::exists(mResFile) == false)
+	if (std::filesystem::exists(mResFile) == false)
 		throw std::runtime_error(mResFile.string() + " does not exist!");
 	else
 		std::cout << "  Loading: " << mResFile;
 
 	// how big is the file on disk?
-	resourceFileSize = boost::filesystem::file_size(mResFile);
+	resourceFileSize = std::filesystem::file_size(mResFile);
 	std::cout << " " << resourceFileSize << " bytes " << std::endl;
 
 	// open our resource
@@ -99,13 +100,13 @@ std::string RESOURCES::Resource::getDate(uint32_t uiDate) {
 	return (out.str());
 }
 
-void RESOURCES::Resource::showFileHeader(GlobalHeader fileHeader) {
-	std::cout << "    Signature:		" << fileHeader.signature << std::endl;
-	std::cout << "    Size:		" << fileHeader.file_size << std::endl;
-	std::cout << "    Lost Space:		" << fileHeader.lost_space << std::endl;
-	std::cout << "    Created:		" << getDate(fileHeader.create_time)
+void RESOURCES::Resource::showFileHeader(GlobalHeader localFileHeader) {
+	std::cout << "    Signature:		" << localFileHeader.signature << std::endl;
+	std::cout << "    Size:		" << localFileHeader.file_size << std::endl;
+	std::cout << "    Lost Space:		" << localFileHeader.lost_space << std::endl;
+	std::cout << "    Created:		" << getDate(localFileHeader.create_time)
 			<< std::endl;
-	std::cout << "    Modified:		" << getDate(fileHeader.modify_time)
+	std::cout << "    Modified:		" << getDate(localFileHeader.modify_time)
 			<< std::endl;
 }
 
@@ -115,7 +116,7 @@ uint16_t RESOURCES::Resource::getDirBlocks(std::ifstream &resourceFile,
 	uint32_t currentBlock = firstBlock;
 
 	if (mDirBlocks.size() > 0)	// if already initialized, return how big it is
-		return (mDirBlocks.size());
+		return (static_cast<uint16_t>(mDirBlocks.size()));
 
 	// loop through all our blocks
 	do {
@@ -130,14 +131,14 @@ uint16_t RESOURCES::Resource::getDirBlocks(std::ifstream &resourceFile,
 	} while (currentBlock != 0);
 	//std::cout << "blocks: " << mDirBlocks.size() << std::endl;
 
-	return (mDirBlocks.size());
+	return (static_cast<uint16_t>(mDirBlocks.size()));
 }
 
 uint16_t RESOURCES::Resource::getEntries(std::ifstream &resourceFile) {
 	uint16_t entries = 0;
 
 	if (mEntryHeaders.size() > 0)// if already initialized, return how big it is
-		return (mEntryHeaders.size());
+		return (static_cast<uint16_t>(mEntryHeaders.size()));
 
 	std::map<uint16_t, DirectoryBlock>::iterator block;
 	for (block = mDirBlocks.begin(); block != mDirBlocks.end(); block++) {
@@ -154,7 +155,7 @@ uint16_t RESOURCES::Resource::getEntries(std::ifstream &resourceFile) {
 			entries++;
 		}
 	}
-	return (mEntryHeaders.size());
+	return (static_cast<uint16_t>(mEntryHeaders.size()));
 }
 
 uint16_t RESOURCES::Resource::getAssets(std::ifstream &resourceFile) {
@@ -169,7 +170,7 @@ uint16_t RESOURCES::Resource::getAssets(std::ifstream &resourceFile) {
 	std::vector<uint8_t> blank(sizeof(uint8_t));
 
 	if (mAssets.size() > 0)	// if already initialized, return how big it is
-		return (mAssets.size());
+		return (static_cast<uint16_t>(mAssets.size()));
 
 	blank[0] = ' ';
 	// add info about the first 5 special tables
@@ -211,11 +212,9 @@ uint16_t RESOURCES::Resource::getAssets(std::ifstream &resourceFile) {
 	std::map<std::string, Dictionary>::iterator dictionary;
 	for (dictionary = mTable0.begin(); dictionary != mTable0.end();
 			dictionary++) {
-		id = boost::lexical_cast<uint16_t>(dictionary->second.second);
-		currentDirBlock = boost::lexical_cast<uint16_t>(
-				id) / DIRECTORY_BLOCK_ITEMS;
-		currentEntry =
-				boost::lexical_cast<uint16_t>(id) % DIRECTORY_BLOCK_ITEMS;
+		id = static_cast<uint16_t>(std::stoi(dictionary->second.second));
+		currentDirBlock = id / DIRECTORY_BLOCK_ITEMS;
+		currentEntry = id % DIRECTORY_BLOCK_ITEMS;
 		table1 = searchDictionary(mTable1, dictionary->second.first);
 		table2 = searchDictionary(mTable2, dictionary->second.first);
 		start = mDirBlocks[currentDirBlock].entry_header_index[currentEntry];
@@ -228,12 +227,12 @@ uint16_t RESOURCES::Resource::getAssets(std::ifstream &resourceFile) {
 				mEntryHeaders[id].data_size);
 
 		mAssets[id] = Assets(
-				boost::lexical_cast<uint16_t>(dictionary->second.second),
+				id,
 				dictionary->second.first, mEntryHeaders[id].storage_time,
 				mEntryHeaders[id].data_attributes, mEntryHeaders[id].data_size,
 				start, offset, table1, table2, data);
 	}
-	return (mAssets.size());
+	return (static_cast<uint16_t>(mAssets.size()));
 }
 
 uint16_t RESOURCES::Resource::getTable(std::ifstream &resourceFile,
@@ -274,7 +273,7 @@ uint16_t RESOURCES::Resource::getTable(std::ifstream &resourceFile,
 
 			if (counter % 2 == 0) {
 
-				dictionary[boost::lexical_cast<std::string>(prevString)] =
+				dictionary[std::string(prevString)] =
 						Dictionary(prevString, string);
 			} else {
 				std::strcpy(prevString, string);
@@ -295,8 +294,8 @@ std::string RESOURCES::Resource::searchDictionary(
 }
 
 std::vector<uint8_t> &RESOURCES::Resource::getAsset(std::string name) {
-	return (getAsset(
-			boost::lexical_cast<uint16_t>(searchDictionary(mTable0, name))));
+	return getAsset(
+			static_cast<uint16_t>(std::stoi(searchDictionary(mTable0, name))));
 }
 
 std::vector<uint8_t> &RESOURCES::Resource::getAsset(uint16_t number) {
@@ -305,9 +304,9 @@ std::vector<uint8_t> &RESOURCES::Resource::getAsset(uint16_t number) {
 
 std::string RESOURCES::Resource::getTableEntry(std::string name,
 		uint8_t table) {
-	return (getTableEntry(
-			boost::lexical_cast<uint16_t>(searchDictionary(mTable0, name)),
-			table));
+	return getTableEntry(
+			static_cast<uint16_t>(std::stoi(searchDictionary(mTable0, name))),
+			table);
 }
 
 std::string RESOURCES::Resource::getTableEntry(uint16_t number, uint8_t table) {

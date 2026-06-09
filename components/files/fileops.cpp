@@ -2,16 +2,32 @@
 
 #include <iostream>
 
-#include <boost/filesystem.hpp>
-#include <boost/algorithm/string.hpp>
+#include <filesystem>
 #include <../components/misc/stringops.hpp>
+
+namespace
+{
+
+static void replace_all(std::string& str, const std::string& from, const std::string& to)
+{
+    if (from.empty())
+        return;
+    std::string::size_type start_pos = 0;
+    while ((start_pos = str.find(from, start_pos)) != std::string::npos)
+    {
+        str.replace(start_pos, from.length(), to);
+        start_pos += to.length();
+    }
+}
+
+} // anonymous namespace
 
 namespace Files
 {
 
 bool isFile(const char *name)
 {
-    return (boost::filesystem::exists(boost::filesystem::path(name)));
+    return (std::filesystem::exists(std::filesystem::path(name)));
 }
 
     // Returns true if the last part of the superset matches the subset
@@ -23,44 +39,44 @@ bool isFile(const char *name)
     }
 
     // Makes a list of files from a directory
-    void FileLister( boost::filesystem::path currentPath, Files::PathContainer& list, bool recursive)
+    void FileLister( std::filesystem::path currentPath, Files::PathContainer& list, bool recursive)
     {
-        if (!boost::filesystem::exists(currentPath))
+        if (!std::filesystem::exists(currentPath))
         {
             std::cout << "WARNING: " << currentPath.string() << " does not exist.\n";
             return ;
         }
         if (recursive)
         {
-            for ( boost::filesystem::recursive_directory_iterator end, itr(currentPath.string());
+            for ( std::filesystem::recursive_directory_iterator end, itr(currentPath.string());
                 itr != end; ++itr )
             {
-                if ( boost::filesystem::is_regular_file(*itr))
+                if ( std::filesystem::is_regular_file(*itr))
                     list.push_back(itr->path());
             }
         }
         else
         {
-            for ( boost::filesystem::directory_iterator end, itr(currentPath.string());
+            for ( std::filesystem::directory_iterator end, itr(currentPath.string());
                 itr != end; ++itr )
             {
-                if ( boost::filesystem::is_regular_file(*itr))
+                if ( std::filesystem::is_regular_file(*itr))
                     list.push_back(itr->path());
             }
         }
     }
 
     // Locates path in path container
-    boost::filesystem::path FileListLocator (const Files::PathContainer& list, const boost::filesystem::path& toFind,
+    std::filesystem::path FileListLocator (const Files::PathContainer& list, const std::filesystem::path& toFind,
                                              bool strict, bool ignoreExtensions)
     {
-        boost::filesystem::path result("");
+        std::filesystem::path result("");
         if (list.empty())
             return (result);
 
         std::string toFindStr;
         if (ignoreExtensions)
-            toFindStr = boost::filesystem::basename(toFind);
+            toFindStr = toFind.stem().string();
         else
             toFindStr = toFind.string();
 
@@ -83,7 +99,7 @@ bool isFile(const char *name)
         // The file being looked for is converted to the new slash
         if(toFindStr.find(wrongslash) != std::string::npos )
         {
-            boost::replace_all(toFindStr, wrongslash, slash);
+            replace_all(toFindStr, wrongslash, slash);
         }
 
         if (!strict)
@@ -96,7 +112,7 @@ bool isFile(const char *name)
             fullPath = it->string();
             if (ignoreExtensions)
                 fullPath.erase(fullPath.length() -
-                    boost::filesystem::path (it->extension()).string().length());
+                    std::filesystem::path (it->extension()).string().length());
 
             if (!strict)
             {
@@ -114,7 +130,7 @@ bool isFile(const char *name)
     // Overloaded form of the locator that takes a string and returns a string
     std::string FileListLocator (const Files::PathContainer& list,const std::string& toFind, bool strict, bool ignoreExtensions)
     {
-        return (FileListLocator(list, boost::filesystem::path(toFind), strict, ignoreExtensions).string());
+        return (FileListLocator(list, std::filesystem::path(toFind), strict, ignoreExtensions).string());
     }
 
 }
