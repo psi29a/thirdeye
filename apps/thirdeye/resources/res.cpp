@@ -100,13 +100,13 @@ std::string RESOURCES::Resource::getDate(uint32_t uiDate) {
 	return (out.str());
 }
 
-void RESOURCES::Resource::showFileHeader(GlobalHeader fileHeader) {
-	std::cout << "    Signature:		" << fileHeader.signature << std::endl;
-	std::cout << "    Size:		" << fileHeader.file_size << std::endl;
-	std::cout << "    Lost Space:		" << fileHeader.lost_space << std::endl;
-	std::cout << "    Created:		" << getDate(fileHeader.create_time)
+void RESOURCES::Resource::showFileHeader(GlobalHeader localFileHeader) {
+	std::cout << "    Signature:		" << localFileHeader.signature << std::endl;
+	std::cout << "    Size:		" << localFileHeader.file_size << std::endl;
+	std::cout << "    Lost Space:		" << localFileHeader.lost_space << std::endl;
+	std::cout << "    Created:		" << getDate(localFileHeader.create_time)
 			<< std::endl;
-	std::cout << "    Modified:		" << getDate(fileHeader.modify_time)
+	std::cout << "    Modified:		" << getDate(localFileHeader.modify_time)
 			<< std::endl;
 }
 
@@ -116,7 +116,7 @@ uint16_t RESOURCES::Resource::getDirBlocks(std::ifstream &resourceFile,
 	uint32_t currentBlock = firstBlock;
 
 	if (mDirBlocks.size() > 0)	// if already initialized, return how big it is
-		return (mDirBlocks.size());
+		return (static_cast<uint16_t>(mDirBlocks.size()));
 
 	// loop through all our blocks
 	do {
@@ -131,14 +131,14 @@ uint16_t RESOURCES::Resource::getDirBlocks(std::ifstream &resourceFile,
 	} while (currentBlock != 0);
 	//std::cout << "blocks: " << mDirBlocks.size() << std::endl;
 
-	return (mDirBlocks.size());
+	return (static_cast<uint16_t>(mDirBlocks.size()));
 }
 
 uint16_t RESOURCES::Resource::getEntries(std::ifstream &resourceFile) {
 	uint16_t entries = 0;
 
 	if (mEntryHeaders.size() > 0)// if already initialized, return how big it is
-		return (mEntryHeaders.size());
+		return (static_cast<uint16_t>(mEntryHeaders.size()));
 
 	std::map<uint16_t, DirectoryBlock>::iterator block;
 	for (block = mDirBlocks.begin(); block != mDirBlocks.end(); block++) {
@@ -155,7 +155,7 @@ uint16_t RESOURCES::Resource::getEntries(std::ifstream &resourceFile) {
 			entries++;
 		}
 	}
-	return (mEntryHeaders.size());
+	return (static_cast<uint16_t>(mEntryHeaders.size()));
 }
 
 uint16_t RESOURCES::Resource::getAssets(std::ifstream &resourceFile) {
@@ -170,7 +170,7 @@ uint16_t RESOURCES::Resource::getAssets(std::ifstream &resourceFile) {
 	std::vector<uint8_t> blank(sizeof(uint8_t));
 
 	if (mAssets.size() > 0)	// if already initialized, return how big it is
-		return (mAssets.size());
+		return (static_cast<uint16_t>(mAssets.size()));
 
 	blank[0] = ' ';
 	// add info about the first 5 special tables
@@ -232,7 +232,7 @@ uint16_t RESOURCES::Resource::getAssets(std::ifstream &resourceFile) {
 				mEntryHeaders[id].data_attributes, mEntryHeaders[id].data_size,
 				start, offset, table1, table2, data);
 	}
-	return (mAssets.size());
+	return (static_cast<uint16_t>(mAssets.size()));
 }
 
 uint16_t RESOURCES::Resource::getTable(std::ifstream &resourceFile,

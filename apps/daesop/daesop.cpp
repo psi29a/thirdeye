@@ -367,7 +367,7 @@ int getInformation(FILE *aResFile, DIRPOINTER *aDirectoryPointers,
 		// print it
 		fprintf(loOutputFile, "%6d  %8ld  (%10ld)  %8ld   %21s  %8d  %s\n",
 				loResourceNumber, (long) loResourceEntryIndex,
-				(long) loResourceEntryIndex + sizeof(struct RESEntryHeader),
+				(long) (loResourceEntryIndex + sizeof(struct RESEntryHeader)),
 				(long) loDataSize, loStorageTime, loResourceAttributes,
 				loResourceName);
 		free(loResEntryHeader);
@@ -450,7 +450,7 @@ int getResource(FILE *aResFile, DIRPOINTER *aDirectoryPointers, int aFunction,
 				loResourceEntryIndex);
 		return (false);
 	}
-	loReadSize = fread(loBuffer, 1, loDataSize, aResFile);
+	loReadSize = static_cast<unsigned int>(fread(loBuffer, 1, loDataSize, aResFile));
 	if (loReadSize != loDataSize) {
 		printf("The resource could not be read!\n");
 		free(loBuffer);
@@ -682,7 +682,7 @@ void displaySpecialAESOPResource(FILE *aResFile, DIRPOINTER *aDirectoryPointers,
 		fprintf(aOutputFile, "\n");
 
 		// sorting accoding to the second entry
-		if (loSecondIsDecimalNumber == true) {
+		if (loSecondIsDecimalNumber) {
 			// these special AESOP resources have the second entry numeric so sort it like that
 			if (sortDictionaryAccordingToSecondNumber(loSpecialDictionary)
 					== false) {
@@ -854,19 +854,19 @@ int getResourceInformation(FILE *aResFile, DIRPOINTER *aDirectoryPointers,
 	fprintf(loOutputFile, "Resource name:   %s\n", loResourceName);
 	fprintf(loOutputFile, "Resource number: %d\n", loExtractedResourceNumber);
 	fprintf(loOutputFile, "Starts at:       %ld\n",
-			(long) loResourceEntryIndex + sizeof(struct RESEntryHeader));
+			(long) (loResourceEntryIndex + sizeof(struct RESEntryHeader)));
 	fprintf(loOutputFile, "Length:          %u\n", loDataSize);
 	fprintf(loOutputFile, "Attributes:      %u\n", loResourceAttributes);
 	fprintf(loOutputFile, "Time:            %s\n", loStorageTime);
 
 	strcpy(loTmp, loResourceName);
 	//toUpperCase(loTmp); // resouce names ARE CASE SENSITIVE, so do not convert to uppercase!
-	if (stringEndsWith(loTmp, IMPORT_EXTENSION) == true) {
+	if (stringEndsWith(loTmp, IMPORT_EXTENSION)) {
 		loResourceType = RESOURCE_TYPE_IMPORT;
 		displayCodeResourceInformation(aResFile, aDirectoryPointers,
 				loOutputFile, loResourceType, loResourceName,
 				loResourceNameArray);
-	} else if (stringEndsWith(loTmp, EXPORT_EXTENSION) == true) {
+	} else if (stringEndsWith(loTmp, EXPORT_EXTENSION)) {
 		loResourceType = RESOURCE_TYPE_EXPORT;
 		displayCodeResourceInformation(aResFile, aDirectoryPointers,
 				loOutputFile, loResourceType, loResourceName,
@@ -1088,7 +1088,7 @@ int replaceResourceByResourceFromFile(FILE *aResFile,
 	}
 
 	fseek(loAddedResourceFile, 0, SEEK_SET);  // at the beginning
-	loReadSize = fread(loBuffer, 1, loAddedResourceSize, loAddedResourceFile);
+	loReadSize = static_cast<int>(fread(loBuffer, 1, loAddedResourceSize, loAddedResourceFile));
 	if (loReadSize != loAddedResourceSize) {
 		printf("Failure to read the added resource into memory!\n");
 		free(loBuffer);
@@ -1261,7 +1261,7 @@ int getOffsetInformation(FILE *aResFile, DIRPOINTER *aDirectoryPointers,
 		if (loOffset >= loResourceEntryIndex + loResEntryHeaderSize
 				&& loOffset
 						< loResourceEntryIndex + loResEntryHeaderSize
-								+ loDataSize) {
+								+ (long) loDataSize) {
 			snprintf(loTmp, sizeof(loTmp),
 					"The offset %d points to the content of the resource number: %d, name \"%s\".",
 					loOffset, loResourceNumber, loResourceName);
