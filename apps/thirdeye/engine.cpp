@@ -9,6 +9,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cstdlib>
 
 THIRDEYE::Engine::Engine(Files::ConfigurationManager& configurationManager) :
 		mNewGame(false), mUseSound(true), mDebug(false), mRenderer(false), mGame(
@@ -95,9 +96,64 @@ void THIRDEYE::Engine::runResourceVM(RESOURCES::Resource &resource) {
 	std::cout << "\nRunning SOP bytecode (" << codeNames.size()
 	          << " code object(s))..." << std::endl;
 
+	// Runtime-function library. Most functions are still stubs (log + return 0),
+	// but where we can do the real thing, we do. Each is logged with its
+	// arguments, resolving address arguments to inline strings when possible.
+	VM::Interpreter::RuntimeCall runtimeStub =
+		[](VM::Interpreter &vm, const std::string &fn,
+		   const std::vector<VM::Value> &args) -> VM::Value {
+			// Pretty-print the call, showing strings where an arg points at one.
+			std::cout << "    CALL " << fn << "(";
+			for (size_t i = 0; i < args.size(); ++i) {
+				std::cout << (i ? ", " : "");
+				std::string str = vm.readCodeString(static_cast<uint32_t>(args[i]));
+				if (!str.empty())
+					std::cout << '"' << str << '"';
+				else
+					std::cout << args[i];
+			}
+			std::cout << ")";
+
+			// launch(mode, program, arg1, arg2): spawn a secondary program.
+			// (In AESOP this is how EOB3 hands off to its sub-programs.)
+			if (fn == "launch") {
+				std::string program;
+				for (VM::Value a : args) {
+					std::string s = vm.readCodeString(static_cast<uint32_t>(a));
+					if (!s.empty()) { program = s; break; }
+				}
+				if (program.empty()) {
+					std::cout << "  [launch: no program name]" << std::endl;
+					return 0;
+				}
+				if (std::filesystem::exists(program)) {
+					// Use the absolute path so the shell doesn't depend on PATH.
+					std::string path =
+						std::filesystem::absolute(program).string();
+					std::cout << "  [launch: running \"" << path << "\"]"
+					          << std::endl;
+					return std::system(path.c_str());
+				}
+				std::cout << "  [launch: \"" << program
+				          << "\" not found -- it's a SAMPLE.RES placeholder, "
+				             "nothing to run]" << std::endl;
+				return 0;
+			}
+
+			std::cout << "  [stub -> 0]" << std::endl;
+			return 0;
+		};
+
 	for (const std::string &name : codeNames) {
 		std::vector<uint8_t> code = resource.getAsset(name);
 		std::map<std::string, std::string> exports = resource.getExports(name);
+
+		// Build runtime-function number -> name from the .IMPT ("C:<name>").
+		std::map<int32_t, std::string> imports;
+		for (const auto &imp : resource.getImports(name)) {
+			if (imp.first.rfind("C:", 0) == 0)
+				imports[std::stoi(imp.second)] = imp.first.substr(2);
+		}
 
 		VM::Interpreter info(code);
 		const VM::SopHeader &h = info.header();
@@ -118,6 +174,8 @@ void THIRDEYE::Engine::runResourceVM(RESOURCES::Resource &resource) {
 
 			VM::Interpreter vm(code); // fresh stack/frame per handler
 			vm.setTrace(mDebug);
+			vm.setImports(imports);
+			vm.setRuntimeCall(runtimeStub);
 			if (mDebug)
 				std::cout << std::endl;
 			try {

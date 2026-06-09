@@ -150,6 +150,101 @@ inline const char* opName(Op op) {
 	return "?";
 }
 
+// Short human-readable description of what an opcode does (for trace output).
+inline const char* opDesc(Op op) {
+	switch (op) {
+	case Op::BRT:  return "branch if top is true";
+	case Op::BRF:  return "branch if top is false";
+	case Op::BRA:  return "branch always";
+	case Op::CASE: return "jump table on top-of-stack";
+	case Op::PUSH: return "push 0 (reserve a stack slot)";
+	case Op::DUP:  return "duplicate top of stack";
+	case Op::NOT:  return "logical NOT of top";
+	case Op::SETB: return "coerce top to boolean 0/1";
+	case Op::NEG:  return "negate top";
+	case Op::ADD:  return "add: second + top";
+	case Op::SUB:  return "subtract: second - top";
+	case Op::MUL:  return "multiply: second * top";
+	case Op::DIV:  return "divide: second / top";
+	case Op::MOD:  return "modulo: second % top";
+	case Op::EXP:  return "power: second ^ top";
+	case Op::BAND: return "bitwise AND";
+	case Op::BOR:  return "bitwise OR";
+	case Op::XOR:  return "bitwise XOR";
+	case Op::BNOT: return "bitwise NOT of top";
+	case Op::SHL:  return "shift left: second << top";
+	case Op::SHR:  return "shift right: second >> top";
+	case Op::LT:   return "compare: second < top";
+	case Op::LE:   return "compare: second <= top";
+	case Op::EQ:   return "compare: second == top";
+	case Op::NE:   return "compare: second != top";
+	case Op::GE:   return "compare: second >= top";
+	case Op::GT:   return "compare: second > top";
+	case Op::INC:  return "increment top";
+	case Op::DEC:  return "decrement top";
+	case Op::SHTC: return "load byte constant";
+	case Op::INTC: return "load word constant";
+	case Op::LNGC: return "load long constant";
+	case Op::RCRS: return "reference runtime function";
+	case Op::CALL: return "call runtime function";
+	case Op::SEND: return "send message to object";
+	case Op::PASS: return "pass message to parent class";
+	case Op::JSR:  return "call subroutine";
+	case Op::RTS:  return "return from subroutine";
+	case Op::AIM:  return "array index *= width";
+	case Op::AIS:  return "array index <<= shift";
+	case Op::LTBA: return "load table byte[index]";
+	case Op::LTWA: return "load table word[index]";
+	case Op::LTDA: return "load table dword[index]";
+	case Op::LETA: return "table element address";
+	case Op::LAB:  return "load auto byte (local/param)";
+	case Op::LAW:  return "load auto word (local/param)";
+	case Op::LAD:  return "load auto dword (local/param)";
+	case Op::SAB:  return "store auto byte (local/param)";
+	case Op::SAW:  return "store auto word (local/param)";
+	case Op::SAD:  return "store auto dword (local/param)";
+	case Op::LABA: return "load auto byte[index]";
+	case Op::LAWA: return "load auto word[index]";
+	case Op::LADA: return "load auto dword[index]";
+	case Op::SABA: return "store auto byte[index]";
+	case Op::SAWA: return "store auto word[index]";
+	case Op::SADA: return "store auto dword[index]";
+	case Op::LEAA: return "auto variable address";
+	case Op::LSB:  return "load static byte (object state)";
+	case Op::LSW:  return "load static word (object state)";
+	case Op::LSD:  return "load static dword (object state)";
+	case Op::SSB:  return "store static byte (object state)";
+	case Op::SSW:  return "store static word (object state)";
+	case Op::SSD:  return "store static dword (object state)";
+	case Op::LSBA: return "load static byte[index]";
+	case Op::LSWA: return "load static word[index]";
+	case Op::LSDA: return "load static dword[index]";
+	case Op::SSBA: return "store static byte[index]";
+	case Op::SSWA: return "store static word[index]";
+	case Op::SSDA: return "store static dword[index]";
+	case Op::LESA: return "static variable address";
+	case Op::LXB:  return "load extern byte (cross-object)";
+	case Op::LXW:  return "load extern word (cross-object)";
+	case Op::LXD:  return "load extern dword (cross-object)";
+	case Op::SXB:  return "store extern byte (cross-object)";
+	case Op::SXW:  return "store extern word (cross-object)";
+	case Op::SXD:  return "store extern dword (cross-object)";
+	case Op::LXBA: return "load extern byte[index]";
+	case Op::LXWA: return "load extern word[index]";
+	case Op::LXDA: return "load extern dword[index]";
+	case Op::SXBA: return "store extern byte[index]";
+	case Op::SXWA: return "store extern word[index]";
+	case Op::SXDA: return "store extern dword[index]";
+	case Op::LEXA: return "extern variable address";
+	case Op::SXAS: return "set extern array source";
+	case Op::LECA: return "address of inline code data (e.g. string)";
+	case Op::SOLE: return "select object-list entry";
+	case Op::END:  return "end of handler / return";
+	case Op::BRK:  return "debug breakpoint";
+	}
+	return "";
+}
+
 } // namespace VM
 
 #endif // THIRDEYE_VM_OPCODES_HPP

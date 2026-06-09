@@ -11,6 +11,7 @@
 #include <cstring>
 #include <iomanip>
 #include <iostream>
+#include <sstream>
 
 namespace {
 // Two-digit hex like "0x20" for an opcode byte.
@@ -101,7 +102,7 @@ Value Interpreter::run() {
 
 		if (mTrace)
 			std::cout << "  [vm] " << std::setw(5) << opPC << "  "
-			          << hexByte(raw) << " " << opName(op) << std::endl;
+			          << hexByte(raw) << "  " << describe(opPC) << std::endl;
 
 		switch (op) {
 		// --- branches (absolute 16-bit target into the resource) ---
@@ -214,8 +215,26 @@ Value Interpreter::run() {
 		case Op::END:
 			return topVal();
 
+		// --- runtime-function call ---
+		// RCRS resolves an import entry to a runtime-function reference and
+		// pushes it (in place, like a load). The import operand is the runtime
+		// function's number; we keep that number as the "handle" on the stack.
+		case Op::RCRS: setTop(static_cast<Value>(fetch16())); break;
+		// CALL pops `argc` arguments (top == last arg), then the slot below holds
+		// the RCRS handle. We dispatch via the runtime hook and the result
+		// replaces the handle slot.
+		case Op::CALL: {
+			uint8_t argc = fetch8();
+			std::vector<Value> args(argc);
+			for (int i = argc - 1; i >= 0; --i)
+				args[i] = popVal();
+			Value handle = topVal(); // runtime-function number from RCRS
+			setTop(callRuntime(handle, args));
+			break;
+		}
+
 		// --- not yet implemented (need object system / runtime fns / link) ---
-		case Op::RCRS: case Op::CALL: case Op::SEND: case Op::PASS:
+		case Op::SEND: case Op::PASS:
 		case Op::AIM:  case Op::AIS:
 		case Op::LTBA: case Op::LTWA: case Op::LTDA: case Op::LETA:
 		case Op::LABA: case Op::LAWA: case Op::LADA:
@@ -232,6 +251,98 @@ Value Interpreter::run() {
 			unimplemented(op);
 		}
 	}
+}
+
+std::string Interpreter::describe(uint32_t pc) const {
+	if (pc >= mCode.size())
+		return "??";
+	Op op = static_cast<Op>(mCode[pc]);
+	uint32_t a = pc + 1; // operand start
+
+	auto pk8 = [&](uint32_t o) -> uint32_t {
+		return o < mCode.size() ? mCode[o] : 0;
+	};
+	auto pk16 = [&](uint32_t o) -> uint32_t {
+		return (o + 1 < mCode.size()) ? (mCode[o] | (mCode[o + 1] << 8)) : 0;
+	};
+	auto pk32 = [&](uint32_t o) -> uint32_t {
+		return (o + 3 < mCode.size())
+		           ? (mCode[o] | (mCode[o + 1] << 8) | (mCode[o + 2] << 16) |
+		              (static_cast<uint32_t>(mCode[o + 3]) << 24))
+		           : 0;
+	};
+
+	std::ostringstream s;
+	s << std::left << std::setw(5) << opName(op);
+
+	switch (op) {
+	case Op::BRT: case Op::BRF: case Op::BRA: case Op::JSR:
+		s << " ->" << pk16(a); break;
+	case Op::LECA:
+		s << " @" << pk16(a); break;
+	case Op::SHTC: s << ' ' << pk8(a);  break;
+	case Op::INTC: s << ' ' << pk16(a); break;
+	case Op::LNGC: s << ' ' << pk32(a); break;
+	case Op::CALL: case Op::PASS:
+		s << ' ' << pk8(a) << (pk8(a) == 1 ? " arg" : " args"); break;
+	case Op::AIS: s << ' ' << pk8(a);  break;
+	case Op::AIM: s << ' ' << pk16(a); break;
+	case Op::SEND:
+		s << ' ' << pk8(a) << " args, msg " << pk16(a + 1); break;
+	case Op::RCRS: {
+		uint32_t n = pk16(a);
+		s << " #" << n;
+		auto it = mImports.find(static_cast<int32_t>(n));
+		if (it != mImports.end())
+			s << " (" << it->second << ')';
+		break;
+	}
+	// import-indexed extern ops
+	case Op::LXB: case Op::LXW: case Op::LXD: case Op::SXB: case Op::SXW: case Op::SXD:
+	case Op::LXBA: case Op::LXWA: case Op::LXDA: case Op::SXBA: case Op::SXWA: case Op::SXDA:
+	case Op::LEXA:
+		s << " #" << pk16(a); break;
+	// word-offset auto/static/table ops
+	case Op::LAB: case Op::LAW: case Op::LAD: case Op::SAB: case Op::SAW: case Op::SAD:
+	case Op::LABA: case Op::LAWA: case Op::LADA: case Op::SABA: case Op::SAWA: case Op::SADA:
+	case Op::LEAA:
+	case Op::LSB: case Op::LSW: case Op::LSD: case Op::SSB: case Op::SSW: case Op::SSD:
+	case Op::LSBA: case Op::LSWA: case Op::LSDA: case Op::SSBA: case Op::SSWA: case Op::SSDA:
+	case Op::LESA:
+	case Op::LTBA: case Op::LTWA: case Op::LTDA: case Op::LETA:
+		s << " @" << pk16(a); break;
+	default:
+		break; // no operand
+	}
+
+	s << "  ; " << opDesc(op);
+	return s.str();
+}
+
+Value Interpreter::callRuntime(Value handle, const std::vector<Value>& args) {
+	auto it = mImports.find(handle);
+	std::string name = (it != mImports.end())
+	                       ? it->second
+	                       : ("fn#" + std::to_string(handle));
+	if (!mRuntimeCall)
+		throw VmError("runtime function \"" + name + "\" called, but no runtime "
+		              "library is wired in yet");
+	return mRuntimeCall(*this, name, args);
+}
+
+std::string Interpreter::readCodeString(uint32_t addr) const {
+	// Inline strings live in the code resource past the 14-byte header. Treat
+	// anything else (NULL, header, OOB) as "not a string".
+	if (addr < 14 || addr >= mCode.size())
+		return "";
+	std::string s;
+	for (uint32_t i = addr; i < mCode.size() && mCode[i] != 0; ++i) {
+		char c = static_cast<char>(mCode[i]);
+		if (c < 0x20 || static_cast<unsigned char>(c) > 0x7e)
+			return ""; // not a printable string -- probably a real numeric arg
+		s.push_back(c);
+	}
+	return s;
 }
 
 void Interpreter::unimplemented(Op op) {
