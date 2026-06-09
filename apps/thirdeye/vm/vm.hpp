@@ -37,6 +37,8 @@
 #include "opcodes.hpp"
 
 #include <cstdint>
+#include <functional>
+#include <map>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -78,6 +80,27 @@ public:
 	// When enabled, each executed instruction is printed (PC + mnemonic).
 	void setTrace(bool trace) { mTrace = trace; }
 
+	// Runtime-function dispatch hook. CALL resolves the RCRS handle to a name
+	// via the import map, then invokes this. The Interpreter& lets the function
+	// dereference address arguments (e.g. readCodeString for string pointers).
+	// Should return the function result; throw VmError if unsupported. If unset,
+	// CALL throws.
+	using RuntimeCall = std::function<Value(
+		Interpreter& vm, const std::string& name, const std::vector<Value>& args)>;
+	void setRuntimeCall(RuntimeCall fn) { mRuntimeCall = std::move(fn); }
+
+	// Read a NUL-terminated string from an address that points into the code
+	// resource (as produced by LECA for inline string/data). Returns "" if the
+	// address isn't a plausible in-code string (0, in the header, OOB, or
+	// non-printable) -- so it's safe to probe arbitrary integer arguments.
+	std::string readCodeString(uint32_t addr) const;
+
+	// Map of runtime-function number (as referenced by RCRS) -> function name,
+	// built from the code object's .IMPT dictionary.
+	void setImports(std::map<int32_t, std::string> imports) {
+		mImports = std::move(imports);
+	}
+
 	// Runs a tiny hand-assembled program and checks results. Returns true on
 	// success. Lets us validate the core before real handler entry points exist.
 	static bool selfTest();
@@ -92,6 +115,9 @@ private:
 	uint32_t mFptr = 0;  // current frame base (== fptr)
 	uint32_t mPC = 0;    // byte offset into mCode
 	bool mTrace = false; // print each executed instruction
+
+	std::map<int32_t, std::string> mImports; // runtime-fn number -> name
+	RuntimeCall mRuntimeCall;                 // dispatch hook for CALL
 
 	static constexpr uint32_t kStackBytes = 16384; // matches RT.ASM STK_SIZE
 	static constexpr int kValueSize = 4;
@@ -120,6 +146,13 @@ private:
 
 	void enterFrame(uint32_t handlerOffset, uint16_t thisIndex);
 	Value run(); // dispatch loop until END; returns top of stack
+
+	// Resolve an RCRS handle to a function name and dispatch via mRuntimeCall.
+	Value callRuntime(Value handle, const std::vector<Value>& args);
+
+	// Human-readable, annotated form of the instruction at `pc` (mnemonic +
+	// decoded operand + description). Does not modify VM state. Used for tracing.
+	std::string describe(uint32_t pc) const;
 
 	[[noreturn]] void unimplemented(Op op);
 };

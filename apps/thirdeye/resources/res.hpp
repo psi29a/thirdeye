@@ -137,6 +137,10 @@ public:
 	/// Returns an empty map if the export resource is missing.
 	std::map<std::string, std::string> getExports(const std::string &codeName);
 
+	/// Parse a code object's <name>.IMPT import dictionary into key->value
+	/// pairs (e.g. "C:launch"->runtime-function number). Empty if missing.
+	std::map<std::string, std::string> getImports(const std::string &codeName);
+
 	void showFileHeader(GlobalHeader fileHeader);
 	void showResources();
 };
