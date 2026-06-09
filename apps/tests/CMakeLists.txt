@@ -22,7 +22,7 @@ add_runtests_dir (resources
     )
 
 add_runtests_dir (vm
-    vm opcodes
+    vm opcodes objects
     )
 
 # Main executable

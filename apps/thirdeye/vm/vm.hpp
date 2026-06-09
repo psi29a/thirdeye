@@ -72,8 +72,11 @@ public:
 
 	// Execute the handler/procedure whose MHDR begins at `handlerOffset` (an
 	// absolute offset into the code resource, >= 14). `thisIndex` is the object
-	// list index bound to THIS. Returns the value left on top of stack at END.
-	Value execute(uint32_t handlerOffset, uint16_t thisIndex = 0);
+	// list index bound to THIS. `args` are the message/handler parameters, laid
+	// out above the frame base as the original engine does (see enterFrame).
+	// Returns the value left on top of stack at END.
+	Value execute(uint32_t handlerOffset, uint16_t thisIndex = 0,
+	              const std::vector<Value>& args = {});
 
 	const SopHeader& header() const { return mHeader; }
 
@@ -88,6 +91,21 @@ public:
 	using RuntimeCall = std::function<Value(
 		Interpreter& vm, const std::string& name, const std::vector<Value>& args)>;
 	void setRuntimeCall(RuntimeCall fn) { mRuntimeCall = std::move(fn); }
+
+	// Object-message hooks (supplied by the ObjectSystem). SEND dispatches a
+	// message to a target object instance; PASS re-dispatches the *current*
+	// message to the parent class. Both return the handler's result; if unset,
+	// the corresponding opcode throws.
+	using SendHook =
+		std::function<Value(int objIndex, int message, std::vector<Value>& args)>;
+	using PassHook = std::function<Value(std::vector<Value>& args)>;
+	void setSendHook(SendHook fn) { mSendHook = std::move(fn); }
+	void setPassHook(PassHook fn) { mPassHook = std::move(fn); }
+
+	// Per-instance static-variable storage (object state). The pointer is owned
+	// by the caller (the ObjectSystem instance) so writes persist across SENDs.
+	// If unset, static opcodes throw.
+	void setStatics(std::vector<uint8_t>* statics) { mStatics = statics; }
 
 	// Read a NUL-terminated string from an address that points into the code
 	// resource (as produced by LECA for inline string/data). Returns "" if the
@@ -118,6 +136,9 @@ private:
 
 	std::map<int32_t, std::string> mImports; // runtime-fn number -> name
 	RuntimeCall mRuntimeCall;                 // dispatch hook for CALL
+	SendHook mSendHook;                       // dispatch hook for SEND
+	PassHook mPassHook;                       // dispatch hook for PASS
+	std::vector<uint8_t>* mStatics = nullptr; // instance static storage (object state)
 
 	static constexpr uint32_t kStackBytes = 16384; // matches RT.ASM STK_SIZE
 	static constexpr int kValueSize = 4;
@@ -144,8 +165,22 @@ private:
 		setTop(f(topVal(), r));
 	}
 
-	void enterFrame(uint32_t handlerOffset, uint16_t thisIndex);
+	void enterFrame(uint32_t handlerOffset, uint16_t thisIndex,
+	                const std::vector<Value>& args);
 	Value run(); // dispatch loop until END; returns top of stack
+
+	// Byte address of an auto (local/param) variable. Offsets are SIGNED: locals
+	// and THIS live below the frame base (positive offset), parameters above it
+	// (negative offset), per the original frame layout.
+	uint32_t autoAddr(int16_t off) const {
+		return static_cast<uint32_t>(static_cast<int32_t>(mFptr) - off);
+	}
+
+	// Bounds-checked pointer into instance static storage (throws if no storage
+	// is set or the access is out of range).
+	uint8_t* staticPtr(uint32_t off, uint32_t size);
+	// Bounds-checked pointer into the code resource (for constant tables).
+	const uint8_t* codePtr(uint32_t off, uint32_t size);
 
 	// Resolve an RCRS handle to a function name and dispatch via mRuntimeCall.
 	Value callRuntime(Value handle, const std::vector<Value>& args);

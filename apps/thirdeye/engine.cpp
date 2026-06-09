@@ -4,6 +4,7 @@
 #include "sound/sound.hpp"
 #include "graphics/graphics.hpp"
 #include "vm/vm.hpp"
+#include "vm/objects.hpp"
 
 #include <components/files/configurationmanager.hpp>
 
@@ -144,19 +145,37 @@ void THIRDEYE::Engine::runResourceVM(RESOURCES::Resource &resource) {
 			return 0;
 		};
 
+	// Register every code object as a class in the object system. Registering
+	// all of them first lets parent links (class hierarchy) resolve.
+	VM::ObjectSystem objects;
+	objects.setTrace(mDebug);
+	objects.setRuntimeCall(runtimeStub);
+
 	for (const std::string &name : codeNames) {
-		std::vector<uint8_t> code = resource.getAsset(name);
-		std::map<std::string, std::string> exports = resource.getExports(name);
-
-		// Build runtime-function number -> name from the .IMPT ("C:<name>").
-		std::map<int32_t, std::string> imports;
-		for (const auto &imp : resource.getImports(name)) {
-			if (imp.first.rfind("C:", 0) == 0)
-				imports[std::stoi(imp.second)] = imp.first.substr(2);
+		VM::SopClass cls;
+		cls.name = name;
+		cls.number = static_cast<uint16_t>(resource.getResourceNumber(name));
+		cls.code = resource.getAsset(name);
+		cls.header = VM::Interpreter(cls.code).header();
+		for (const auto &exp : resource.getExports(name)) {
+			if (exp.first.rfind("M:", 0) == 0) // "M:<n>" -> handler entry offset
+				cls.handlers[std::stoi(exp.first.substr(2))] =
+					static_cast<uint32_t>(std::stoul(exp.second));
 		}
+		for (const auto &imp : resource.getImports(name)) {
+			if (imp.first.rfind("C:", 0) == 0) // "C:<name>" -> runtime-fn number
+				cls.imports[std::stoi(imp.second)] = imp.first.substr(2);
+		}
+		objects.addClass(std::move(cls));
+	}
 
-		VM::Interpreter info(code);
-		const VM::SopHeader &h = info.header();
+	// Instantiate each class and run its message handlers via SEND dispatch.
+	for (const std::string &name : codeNames) {
+		uint16_t classNumber = 0;
+		objects.findClassByName(name, classNumber);
+		const VM::SopClass *cls = objects.classByNumber(classNumber);
+		const VM::SopHeader &h = cls->header;
+
 		std::cout << "\n=== code object \"" << name << "\" ==="
 		          << "  (static=" << h.static_size << " import=" << h.import_resource
 		          << " export=" << h.export_resource << " parent="
@@ -164,22 +183,14 @@ void THIRDEYE::Engine::runResourceVM(RESOURCES::Resource &resource) {
 		                                      : std::to_string(h.parent))
 		          << ")" << std::endl;
 
-		// Each "M:<n>" export maps a message number to a handler entry offset.
-		for (const auto &entry : exports) {
-			if (entry.first.rfind("M:", 0) != 0)
-				continue; // skip non-handler entries (e.g. "N:OBJECT")
-
-			uint32_t offset = static_cast<uint32_t>(std::stoul(entry.second));
-			std::cout << "  handler " << entry.first << " @ " << offset << ": ";
-
-			VM::Interpreter vm(code); // fresh stack/frame per handler
-			vm.setTrace(mDebug);
-			vm.setImports(imports);
-			vm.setRuntimeCall(runtimeStub);
+		int objIndex = objects.createInstance(classNumber);
+		for (const auto &handler : cls->handlers) {
+			std::cout << "  handler M:" << handler.first << " @ " << handler.second
+			          << ": ";
 			if (mDebug)
 				std::cout << std::endl;
 			try {
-				VM::Value result = vm.execute(offset);
+				VM::Value result = objects.send(objIndex, handler.first, {});
 				std::cout << "END (returned " << result << ")" << std::endl;
 			} catch (const VM::VmError &e) {
 				std::cout << "stopped -- " << e.what() << std::endl;
