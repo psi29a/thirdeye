@@ -388,6 +388,14 @@ std::map<std::string, std::string> RESOURCES::Resource::getExports(
 	return parseDictionary(getAsset(static_cast<uint16_t>(std::stoi(num))));
 }
 
+std::map<std::string, std::string> RESOURCES::Resource::getImports(
+		const std::string &codeName) {
+	std::string num = searchDictionary(mTable0, codeName + ".IMPT");
+	if (num.empty())
+		return {};
+	return parseDictionary(getAsset(static_cast<uint16_t>(std::stoi(num))));
+}
+
 void RESOURCES::Resource::showResources() {
 	std::cout << "NUMBER	START	OFFSET	SIZE	DATE			ATTRIB	NAME" << std::endl;
 	for (uint16_t i = 0; i < mEntryHeaders.size(); i++) {
