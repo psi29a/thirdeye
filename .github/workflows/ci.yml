@@ -30,14 +30,28 @@ jobs:
           brew update
           brew install cmake ninja sdl2 openal-soft wildmidi
 
+      # cmake, ninja and git are preinstalled on the windows-latest image, so we
+      # only need vcpkg. (Installing via choco modifies the machine PATH, which
+      # does not propagate into the same step's environment.)
       - name: Install dependencies (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          choco install -y cmake ninja git
           git clone https://github.com/microsoft/vcpkg.git $env:USERPROFILE\vcpkg
           & "$env:USERPROFILE\vcpkg\bootstrap-vcpkg.bat"
           & "$env:USERPROFILE\vcpkg\vcpkg.exe" install sdl2 openal-soft wildmidi --triplet x64-windows
+
+      # Ensure Ninja is on PATH for later steps. (gha-setup-ninja registers it
+      # via $GITHUB_PATH, which — unlike choco — propagates across steps.)
+      - name: Set up Ninja (Windows)
+        if: runner.os == 'Windows'
+        uses: seanmiddleditch/gha-setup-ninja@master
+
+      # The Ninja generator needs cl.exe on PATH, which requires the MSVC
+      # developer environment to be activated.
+      - name: Set up MSVC environment (Windows)
+        if: runner.os == 'Windows'
+        uses: ilammy/msvc-dev-cmd@v1
 
       - name: Configure (Linux/macOS)
         if: runner.os != 'Windows'
@@ -49,7 +63,7 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=${{ matrix.config }} -DCMAKE_TOOLCHAIN_FILE=$env:USERPROFILE\vcpkg\scripts\buildsystems\vcpkg.cmake
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=${{ matrix.config }} -DCMAKE_TOOLCHAIN_FILE="$env:USERPROFILE\vcpkg\scripts\buildsystems\vcpkg.cmake"
 
       - name: Build
         run: cmake --build build --config ${{ matrix.config }} -- -j 2
@@ -67,7 +81,11 @@ jobs:
         run: |
           $artifactDir = "artifacts"
           New-Item -ItemType Directory -Force -Path $artifactDir | Out-Null
-          Compress-Archive -Path build\thirdeye.exe,build\daesop.exe -DestinationPath "$artifactDir\thirdeye-${{ matrix.os }}.zip" -Force
+          # Copy the vcpkg runtime DLLs (SDL2, OpenAL32, libWildMidi, ...) next to
+          # the executables so the zipped artifact runs standalone.
+          $vcpkgBin = "$env:USERPROFILE\vcpkg\installed\x64-windows\bin"
+          Copy-Item -Path "$vcpkgBin\*.dll" -Destination build -Force
+          Compress-Archive -Path build\thirdeye.exe,build\daesop.exe,build\*.dll -DestinationPath "$artifactDir\thirdeye-${{ matrix.os }}.zip" -Force
 
       - uses: actions/upload-artifact@v4
         with:
