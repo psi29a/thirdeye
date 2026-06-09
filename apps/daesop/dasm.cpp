@@ -1,4 +1,4 @@
-#include <malloc.h>
+#include <cstdlib>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -421,7 +421,7 @@ int makeFirstDisassemblyPass(unsigned char *aResource, int aLength,
 		int loInstructionLength;
 		int loInstructionEndsDisassembly;
 		int i;
-		if (shouldBeAddressDisassembled(loCurrentAddress) != true) {
+		if (!shouldBeAddressDisassembled(loCurrentAddress)) {
 			// time to end;
 			break;
 		}
@@ -450,7 +450,7 @@ int makeFirstDisassemblyPass(unsigned char *aResource, int aLength,
 		// find out whether the instruction ends the disassembly (END or uncond. jump)
 		loInstructionEndsDisassembly = endsDisassembly(aResource, aLength,
 				loCurrentAddress);
-		if (loInstructionEndsDisassembly == true) {
+		if (loInstructionEndsDisassembly) {
 			// ends this disassembly (end or unconditional jump)
 			break;
 		}
@@ -783,7 +783,7 @@ void makeSecondDisassemblyPass(unsigned char *aResource, int aLength,
 			unsigned short loLocalVariablesSize;
 			char loProcedureName[256];
 			int loEndAddress;
-			sprintf(loProcedureName, "%s%d", PROCEDURE_PREFIX,
+			snprintf(loProcedureName, sizeof(loProcedureName), "%s%d", PROCEDURE_PREFIX,
 					(int) loCurrentAddress);
 			fprintf(aOutputFile, ";\n");
 			fprintf(aOutputFile, "%s \"%s\"\n", META_PROCEDURE_NAME,
@@ -802,7 +802,7 @@ void makeSecondDisassemblyPass(unsigned char *aResource, int aLength,
 			loCurrentAddress += 2; // set the address at the first instruction
 		} else if (loCodeMapValue == MAP_DATA_BYTE) {
 			char loDBString[256];
-			if (hasAddressLabel(loCurrentAddress) == true) {
+			if (hasAddressLabel(loCurrentAddress)) {
 				writeLabel(loCurrentAddress, aOutputFile);
 			}
 			getDBByteString(loDBString, aResource, aLength, loCurrentAddress);
@@ -810,7 +810,7 @@ void makeSecondDisassemblyPass(unsigned char *aResource, int aLength,
 			loCurrentAddress++;
 		} else if (loCodeMapValue == MAP_DATA_WORD) {
 			char loDBString[256];
-			if (hasAddressLabel(loCurrentAddress) == true) {
+			if (hasAddressLabel(loCurrentAddress)) {
 				writeLabel(loCurrentAddress, aOutputFile);
 			}
 			getDWWordString(loDBString, aResource, aLength, loCurrentAddress);
@@ -818,7 +818,7 @@ void makeSecondDisassemblyPass(unsigned char *aResource, int aLength,
 			loCurrentAddress += 2;
 		} else if (loCodeMapValue == MAP_DATA_LONG) {
 			char loDBString[256];
-			if (hasAddressLabel(loCurrentAddress) == true) {
+			if (hasAddressLabel(loCurrentAddress)) {
 				writeLabel(loCurrentAddress, aOutputFile);
 			}
 			getDLLongString(loDBString, aResource, aLength, loCurrentAddress);
@@ -881,7 +881,7 @@ void makeSecondDisassemblyPass(unsigned char *aResource, int aLength,
 			return;
 		} else {
 			char loError[256];
-			sprintf(loError,
+			snprintf(loError, sizeof(loError),
 					"Unimplemented code map value %d on the address %d\n",
 					loCodeMapValue, loCurrentAddress);
 			printf("%s\n", loError);
@@ -934,7 +934,7 @@ void getDBByteString(char *aResult, unsigned char *aResource, int aLength,
 	getHexCodes(loHexaCodes, aResource, aLength, aAddress, 1);
 	strcpy(loResultLine, loHexaCodes);
 	// instruction
-	sprintf(loTmp, INSTRUCTION_FORMAT_STRING, "DB");
+	snprintf(loTmp, sizeof(loTmp), INSTRUCTION_FORMAT_STRING, "DB");
 	strcat(loResultLine, loTmp);
 	getParameterString(loTmp, 'b', loValue, true, true);
 	strcat(loResultLine, loTmp);
@@ -963,7 +963,7 @@ void getDWWordString(char *aResult, unsigned char *aResource, int aLength,
 	getHexCodes(loHexaCodes, aResource, aLength, aAddress, 2);
 	strcpy(loResultLine, loHexaCodes);
 	// instruction
-	sprintf(loTmp, INSTRUCTION_FORMAT_STRING, "DW");
+	snprintf(loTmp, sizeof(loTmp), INSTRUCTION_FORMAT_STRING, "DW");
 	strcat(loResultLine, loTmp);
 	getParameterString(loTmp, 'w', loValue, true, true);
 	strcat(loResultLine, loTmp);
@@ -992,7 +992,7 @@ void getDLLongString(char *aResult, unsigned char *aResource, int aLength,
 	getHexCodes(loHexaCodes, aResource, aLength, aAddress, 4);
 	strcpy(loResultLine, loHexaCodes);
 	// instruction
-	sprintf(loTmp, INSTRUCTION_FORMAT_STRING, "DL");
+	snprintf(loTmp, sizeof(loTmp), INSTRUCTION_FORMAT_STRING, "DL");
 	strcat(loResultLine, loTmp);
 	getParameterString(loTmp, 'l', loValue, true, true);
 	strcat(loResultLine, loTmp);
@@ -1013,7 +1013,8 @@ int writeOneInstruction(unsigned char *aResource, int aLength,
 	char loInstruction[256];
 	char loHexaCodes[256];
 	char loResultLine[256];
-	char loTmp[256];
+	// large enough to hold a quoted 256-byte name plus " ;" and an int suffix
+	char loTmp[288];
 	int loCurrentInstruction;
 
 	loInstructionStartAddress = *loCurrentAddress;
@@ -1021,7 +1022,7 @@ int writeOneInstruction(unsigned char *aResource, int aLength,
 	if (loCurrentInstruction > MAX_BYTECODES
 			|| bytecodeTable[loCurrentInstruction] == NULL) {
 		char loError[256];
-		sprintf(loError,
+		snprintf(loError, sizeof(loError),
 				"writeOneInstruction(): there is no instruction with the code %x on the address %d!\n",
 				loCurrentInstruction, *loCurrentAddress);
 		printf("%s\n", loError);
@@ -1032,7 +1033,7 @@ int writeOneInstruction(unsigned char *aResource, int aLength,
 	// move to the parameters
 	(*loCurrentAddress)++;
 	// instruction name
-	sprintf(loTmp, INSTRUCTION_FORMAT_STRING,
+	snprintf(loTmp, sizeof(loTmp), INSTRUCTION_FORMAT_STRING,
 			bytecodeTable[loCurrentInstruction]->name);
 	strcpy(loInstruction, loTmp);
 
@@ -1047,7 +1048,7 @@ int writeOneInstruction(unsigned char *aResource, int aLength,
 		if (loCurrentInstruction != INSTRUCTION_CASE) {
 			// looks like nonsense
 			char loError[256];
-			sprintf(loError,
+			snprintf(loError, sizeof(loError),
 					"The parameter handling in code is not supported for the instruction %s on the address %d!",
 					bytecodeTable[loCurrentInstruction]->name,
 					loInstructionStartAddress);
@@ -1133,13 +1134,13 @@ int writeOneInstruction(unsigned char *aResource, int aLength,
 						strcpy(loRuntimeCodeResourceName,
 								"__unknown_runtime_function__");
 					}
-					sprintf(loTmp, "\"%s\"", loRuntimeCodeResourceName);
+					snprintf(loTmp, sizeof(loTmp), "\"%s\"", loRuntimeCodeResourceName);
 					strcat(loInstruction, loTmp);
 					/*
 					 if (loIsLastParameter == true)
 					 {
 					 // it is last parameter, add the number as a comment
-					 sprintf(loTmp, "  ;runtime_function_number: %d", loParameterValue);
+					 snprintf(loTmp, sizeof(loTmp), "  ;runtime_function_number: %d", loParameterValue);
 					 strcat(loInstruction, loTmp);
 					 }
 					 */
@@ -1157,13 +1158,13 @@ int writeOneInstruction(unsigned char *aResource, int aLength,
 							aFullImportResourceDictionary) == NULL) {
 						strcpy(loVariableName, "__unknown_external_variable__");
 					}
-					sprintf(loTmp, "\"%s\"", loVariableName);
+					snprintf(loTmp, sizeof(loTmp), "\"%s\"", loVariableName);
 					strcat(loInstruction, loTmp);
 					/*
 					 if (loIsLastParameter == true)
 					 {
 					 // it is last parameter, add the number as a comment
-					 sprintf(loTmp, "  ;external_variable_number: %d", loParameterValue);
+					 snprintf(loTmp, sizeof(loTmp), "  ;external_variable_number: %d", loParameterValue);
 					 strcat(loInstruction, loTmp);
 					 }
 					 */
@@ -1180,7 +1181,7 @@ int writeOneInstruction(unsigned char *aResource, int aLength,
 							aFullImportResourceDictionary) == NULL) {
 						strcpy(loArrayName, "__unknown_external_array__");
 					}
-					sprintf(loTmp, "\"%s\"", loArrayName);
+					snprintf(loTmp, sizeof(loTmp), "\"%s\"", loArrayName);
 					strcat(loInstruction, loTmp);
 				} else {
 					printf(
@@ -1192,16 +1193,16 @@ int writeOneInstruction(unsigned char *aResource, int aLength,
 				// the parameter refers import resource
 				char loMessageName[256];
 				char loMessageID[256];
-				sprintf(loMessageID, "M:%d", (int) loParameterValue);
+				snprintf(loMessageID, sizeof(loMessageID), "M:%d", (int) loParameterValue);
 				if (getMessageName(loMessageName, loMessageID, aResFile,
 						aDirectoryPointers) == NULL) {
 					strcpy(loMessageName, "__unknown_message__");
 				}
-				sprintf(loTmp, "\"%s\"", loMessageName);
+				snprintf(loTmp, sizeof(loTmp), "\"%s\"", loMessageName);
 				strcat(loInstruction, loTmp);
 				if (i == loParamCount - 1) {
 					// it is last parameter, add the number as a comment
-					sprintf(loTmp, "  ;message_number: %ld", loParameterValue);
+					snprintf(loTmp, sizeof(loTmp), "  ;message_number: %ld", loParameterValue);
 					strcat(loInstruction, loTmp);
 				}
 			} else {
@@ -1211,7 +1212,7 @@ int writeOneInstruction(unsigned char *aResource, int aLength,
 						|| loCurrentInstruction == INSTRUCTION_LECA)
 						&& loParamCount == 1) {
 					// show label for BRT/BRF/BRA/LECA
-					sprintf(loTmp, "%s%d ;%d", LABEL_PREFIX,
+					snprintf(loTmp, sizeof(loTmp), "%s%d ;%d", LABEL_PREFIX,
 							(int) loParameterValue, (int) loParameterValue);
 					strcat(loInstruction, loTmp);
 
@@ -1238,7 +1239,7 @@ int writeOneInstruction(unsigned char *aResource, int aLength,
 						strcpy(loStaticVariableName,
 								"__unknown_static_variable__");
 					}
-					sprintf(loTmp, "\"%s\" ;%d", loStaticVariableName,
+					snprintf(loTmp, sizeof(loTmp), "\"%s\" ;%d", loStaticVariableName,
 							(int) loParameterValue);
 					strcat(loInstruction, loTmp);
 				} else if (loCurrentInstruction == INSTRUCTION_LAB
@@ -1258,7 +1259,7 @@ int writeOneInstruction(unsigned char *aResource, int aLength,
 					char loAutoVariableName[256];
 					getAutoVariableNameForIndex(loAutoVariableName,
 							loCurrentInstruction, loParameterValue);
-					sprintf(loTmp, "\"%s\" ;%d", loAutoVariableName,
+					snprintf(loTmp, sizeof(loTmp), "\"%s\" ;%d", loAutoVariableName,
 							(int) loParameterValue);
 					strcat(loInstruction, loTmp);
 				} else if (loCurrentInstruction == INSTRUCTION_LTBA
@@ -1275,12 +1276,12 @@ int writeOneInstruction(unsigned char *aResource, int aLength,
 						strcpy(loConstantTableName,
 								"__unknown_constant_table__");
 					}
-					sprintf(loTmp, "\"%s\" ;%d", loConstantTableName,
+					snprintf(loTmp, sizeof(loTmp), "\"%s\" ;%d", loConstantTableName,
 							(int) loParameterValue);
 					strcat(loInstruction, loTmp);
 				} else if (loCurrentInstruction == INSTRUCTION_JSR) {
 					// show procedure name for JSR
-					sprintf(loTmp, "\"%s%d\" ;%d", PROCEDURE_PREFIX,
+					snprintf(loTmp, sizeof(loTmp), "\"%s%d\" ;%d", PROCEDURE_PREFIX,
 							(int) loParameterValue, (int) loParameterValue);
 					strcat(loInstruction, loTmp);
 
@@ -1295,9 +1296,8 @@ int writeOneInstruction(unsigned char *aResource, int aLength,
 								loParameterValue, aResourcesInfoTable,
 								aOutputFile);
 					}
-					if (getParameterString(loTmp, loParameterType,
-							loParameterValue, loIsLastParameter, true)
-							!= true) {
+					if (!getParameterString(loTmp, loParameterType,
+							loParameterValue, loIsLastParameter, true)) {
 						printf(
 								"Failure to get the parameter value for the parameter type %c, value %ld for the instruction %d on the address %d!\n",
 								(unsigned char) loParameterType,
@@ -1315,7 +1315,7 @@ int writeOneInstruction(unsigned char *aResource, int aLength,
 		getHexCodes(loHexaCodes, aResource, aLength, loInstructionStartAddress,
 				*loCurrentAddress - loInstructionStartAddress);
 		// add label if needed
-		if (hasAddressLabel(loInstructionStartAddress) == true) {
+		if (hasAddressLabel(loInstructionStartAddress)) {
 			writeLabel(loInstructionStartAddress, aOutputFile);
 		}
 		// complete the line
@@ -1344,10 +1344,10 @@ void getHexCodes(char *aString, unsigned char *aResource, int aBufferLength,
 		return;
 	}
 
-	sprintf(loTmp, "%6d (%06x): ", aStartAddress, aStartAddress);
+	snprintf(loTmp, sizeof(loTmp), "%6d (%06x): ", aStartAddress, aStartAddress);
 	strcpy(aString, loTmp);
 	for (i = aStartAddress; i < aStartAddress + aSize; i++) {
-		sprintf(loTmp, "%02x ", (int) aResource[i]);
+		snprintf(loTmp, sizeof(loTmp), "%02x ", (int) aResource[i]);
 		strcat(aString, loTmp);
 	}
 
@@ -1366,13 +1366,13 @@ void writeCaseHeader(unsigned char *aResource, int aLength, int aStartAddress,
 	char loTmp[256];
 	char loInstruction[256];
 	char loResultLine[256];
-	if (hasAddressLabel(aStartAddress) == true) {
+	if (hasAddressLabel(aStartAddress)) {
 		writeLabel(aStartAddress, aOutputFile);
 	}
 	// hex codes
 	getHexCodes(loHexCodes, aResource, aLength, aStartAddress, 3);
 	// instruction
-	sprintf(loTmp, INSTRUCTION_FORMAT_STRING,
+	snprintf(loTmp, sizeof(loTmp), INSTRUCTION_FORMAT_STRING,
 			bytecodeTable[INSTRUCTION_CASE]->name);
 	strcpy(loInstruction, loTmp);
 	getParameterString(loTmp, 'w', aCaseOptions, true, false);
@@ -1395,9 +1395,9 @@ void writeCaseEntry(unsigned char *aResource, int aLength, int aStartAddress,
 	// hex codes
 	getHexCodes(loHexCodes, aResource, aLength, aStartAddress, 6);
 	// instruction
-	sprintf(loTmp, INSTRUCTION_FORMAT_STRING, CASE_ENTRY);
+	snprintf(loTmp, sizeof(loTmp), INSTRUCTION_FORMAT_STRING, CASE_ENTRY);
 	strcpy(loInstruction, loTmp);
-	sprintf(loTmp, "#%08lx, %s%d     ;%ld, %d", aValue, LABEL_PREFIX, aTarget,
+	snprintf(loTmp, sizeof(loTmp), "#%08lx, %s%d     ;%ld, %d", aValue, LABEL_PREFIX, aTarget,
 			aValue, aTarget);
 	strcat(loInstruction, loTmp);
 	// result
@@ -1418,9 +1418,9 @@ void writeCaseDefault(unsigned char *aResource, int aLength, int aStartAddress,
 	// hex codes
 	getHexCodes(loHexCodes, aResource, aLength, aStartAddress, 2);
 	// instruction
-	sprintf(loTmp, INSTRUCTION_FORMAT_STRING, CASE_DEFAULT);
+	snprintf(loTmp, sizeof(loTmp), INSTRUCTION_FORMAT_STRING, CASE_DEFAULT);
 	strcpy(loInstruction, loTmp);
-	sprintf(loTmp, "%s%d     ;%d", LABEL_PREFIX, aTarget, aTarget);
+	snprintf(loTmp, sizeof(loTmp), "%s%d     ;%d", LABEL_PREFIX, aTarget, aTarget);
 	strcat(loInstruction, loTmp);
 	// result
 	strcpy(loResultLine, loHexCodes);
@@ -1445,45 +1445,45 @@ int getParameterString(char *aString, unsigned char aParameterType,
 	int loSize;
 	if (aParameterType == 'b') {
 		loSize = 1;
-		sprintf(loTmp, "#%02lx", aParameterValue);
-		sprintf(aString, "%-8s", loTmp);
+		snprintf(loTmp, sizeof(loTmp), "#%02lx", aParameterValue);
+		snprintf(aString, 256, "%-8s", loTmp);
 	} else if (aParameterType == 'w') {
 		loSize = 2;
-		sprintf(loTmp, "#%04lx", aParameterValue);
-		sprintf(aString, "%-8s", loTmp);
+		snprintf(loTmp, sizeof(loTmp), "#%04lx", aParameterValue);
+		snprintf(aString, 256, "%-8s", loTmp);
 	} else if (aParameterType == 'l') {
 		loSize = 4;
-		sprintf(loTmp, "#%08lx", aParameterValue);
-		sprintf(aString, "%-8s", loTmp);
+		snprintf(loTmp, sizeof(loTmp), "#%08lx", aParameterValue);
+		snprintf(aString, 256, "%-8s", loTmp);
 	} else {
 		printf("Unknown parameter type: %c\n", aParameterType);
-		sprintf(aString, "%ld", aParameterValue);
+		snprintf(aString, 256, "%ld", aParameterValue);
 		return (false);
 	}
 
-	if (aAddParameterComment == true) {
+	if (aAddParameterComment) {
 		// ok, add a comment
-		char loTmp[256];
+		char loTmp2[256];
 		int i;
 		unsigned char loArray[4];
 		int loPrintableCharacters = true;
 		if (loSize == 1) {
 			unsigned char loChar = (unsigned char) aParameterValue;
 			memcpy(loArray, &loChar, 1);
-			sprintf(loTmp, "     ;%u", (unsigned int) aParameterValue);
-			strcat(aString, loTmp);
+			snprintf(loTmp2, sizeof(loTmp2), "     ;%u", (unsigned int) aParameterValue);
+			strcat(aString, loTmp2);
 		}
 		if (loSize == 2) {
 			unsigned short loWord = (unsigned short) aParameterValue;
 			memcpy(loArray, &loWord, 2);
-			sprintf(loTmp, "     ;%u", (unsigned int) aParameterValue);
-			strcat(aString, loTmp);
+			snprintf(loTmp2, sizeof(loTmp2), "     ;%u", (unsigned int) aParameterValue);
+			strcat(aString, loTmp2);
 		}
 		if (loSize == 4) {
 			unsigned int loLong = (unsigned int) aParameterValue;
 			memcpy(loArray, &loLong, 4);
-			sprintf(loTmp, "     ;%u", (unsigned int) aParameterValue);
-			strcat(aString, loTmp);
+			snprintf(loTmp2, sizeof(loTmp2), "     ;%u", (unsigned int) aParameterValue);
+			strcat(aString, loTmp2);
 		}
 		for (i = 0; i < loSize; i++) {
 			if (loArray[i] < 32) {
@@ -1492,13 +1492,13 @@ int getParameterString(char *aString, unsigned char aParameterType,
 				break;
 			}
 		}
-		if (loPrintableCharacters == true
-				&& aAddCharactersInTheComment == true) {
+		if (loPrintableCharacters
+				&& aAddCharactersInTheComment) {
 			// add the printable characters in ""
 			strcat(aString, ", \"");
 			for (i = 0; i < loSize; i++) {
-				sprintf(loTmp, "%c", loArray[i]);
-				strcat(aString, loTmp);
+				snprintf(loTmp2, sizeof(loTmp2), "%c", loArray[i]);
+				strcat(aString, loTmp2);
 			}
 			strcat(aString, "\"");
 		}
@@ -1810,7 +1810,7 @@ void writeInfoAboutReferredResourceIfAvailable(long aParameterValue,
 					&& aResourcesInfoTable[i]->stringValue != NULL) {
 				// write string value
 				char *loStringValue = aResourcesInfoTable[i]->stringValue;
-				int loStringValueLength = strlen(loStringValue);
+				int loStringValueLength = static_cast<int>(strlen(loStringValue));
 				fprintf(aOutputFile, "%7s%s ", " ", ";value: ");
 				fprintf(aOutputFile, "\"");
 				for (j = 0; j < loStringValueLength; j++) {

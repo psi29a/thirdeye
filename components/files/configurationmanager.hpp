@@ -1,13 +1,8 @@
 #ifndef COMPONENTS_FILES_CONFIGURATIONMANAGER_HPP
 #define COMPONENTS_FILES_CONFIGURATIONMANAGER_HPP
 
-#ifdef _WIN32
-#include <boost/tr1/tr1/unordered_map>
-#else
-#include <tr1/unordered_map>
-#endif
-
-#include <boost/program_options.hpp>
+#include <unordered_map>
+#include <string>
 
 #include <components/files/fixedpath.hpp>
 #include <components/files/collections.hpp>
@@ -26,36 +21,36 @@ struct ConfigurationManager
     ConfigurationManager();
     virtual ~ConfigurationManager();
 
-    void readConfiguration(boost::program_options::variables_map& variables,
-        boost::program_options::options_description& description);
+    using VariablesMap = std::unordered_map<std::string, std::string>;
+
+    void readConfiguration(VariablesMap& variables);
     void processPaths(Files::PathContainer& dataDirs);
 
     /**< Fixed paths */
-    const boost::filesystem::path& getGlobalPath() const;
-    const boost::filesystem::path& getUserPath() const;
-    const boost::filesystem::path& getLocalPath() const;
+    const std::filesystem::path& getGlobalPath() const;
+    const std::filesystem::path& getUserPath() const;
+    const std::filesystem::path& getLocalPath() const;
 
-    const boost::filesystem::path& getGlobalDataPath() const;
-    const boost::filesystem::path& getUserDataPath() const;
-    const boost::filesystem::path& getLocalDataPath() const;
+    const std::filesystem::path& getGlobalDataPath() const;
+    const std::filesystem::path& getUserDataPath() const;
+    const std::filesystem::path& getLocalDataPath() const;
 
-    const boost::filesystem::path& getLogPath() const;
+    const std::filesystem::path& getLogPath() const;
 
     private:
         typedef Files::FixedPath<> FixedPathType;
 
-        typedef const boost::filesystem::path& (FixedPathType::*path_type_f)() const;
-        typedef std::tr1::unordered_map<std::string, path_type_f> TokensMappingContainer;
+        typedef const std::filesystem::path& (FixedPathType::*path_type_f)() const;
+        typedef std::unordered_map<std::string, path_type_f> TokensMappingContainer;
 
-        void loadConfig(const boost::filesystem::path& path,
-            boost::program_options::variables_map& variables,
-            boost::program_options::options_description& description);
+        void loadConfig(const std::filesystem::path& path,
+            VariablesMap& variables);
 
         void setupTokensMapping();
 
         FixedPathType mFixedPath;
 
-        boost::filesystem::path mLogPath;
+        std::filesystem::path mLogPath;
 
         TokensMappingContainer mTokensMapping;
 };

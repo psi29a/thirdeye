@@ -2,13 +2,10 @@
 
 #include <iostream>
 #include <stdexcept>
-
-#include <boost/tokenizer.hpp>
-#include <boost/foreach.hpp>
-#include <boost/lexical_cast.hpp>
-#include <boost/random/uniform_int.hpp>
-#include <boost/random/mersenne_twister.hpp>
-#include <boost/random/variate_generator.hpp>
+#include <random>
+#include <sstream>
+#include <string>
+#include <ctime>
 
 #define SOFTWARE	0
 #define HARDWARE	1
@@ -59,6 +56,9 @@ GRAPHICS::Graphics::Graphics(uint16_t scale, bool renderer) {
 			break;
 		case SDL_SYSWM_UIKIT:
 			std::cout << "UIKit";
+			break;
+		default:
+			std::cout << "an unsupported or unknown system (" << info.subsystem << ")";
 			break;
 		}
 		std::cout << std::endl;
@@ -210,7 +210,7 @@ void GRAPHICS::Graphics::panDirection(uint8_t panDir,
 	uint8_t fgPanels = 2;
 
 	// bonus texture?
-	SDL_Surface *bgFarLeftSurface;
+	SDL_Surface *bgFarLeftSurface = nullptr;
 	std::vector<uint8_t> bBGFarLeftD;
 	if (!bgFarLeft.empty()) {
 		bgPanels = 3;
@@ -352,58 +352,58 @@ void GRAPHICS::Graphics::update() {
 		//std::cout << "Playing mVideo: " << std::dec << (int) index << std::endl;
 		tuple<uint8_t, uint8_t, std::vector<uint8_t> > scene =
 				mVideo.begin()->second;
-		mVideoWait = scene.get<1>();
-		switch (scene.get<0>()) {
+		mVideoWait = std::get<1>(scene);
+		switch (std::get<0>(scene)) {
 		case SET_PAL:
-			loadPalette(scene.get<2>(), false);
+			loadPalette(std::get<2>(scene), false);
 			break;
 		case PAN_LEFT: {
-			uint8_t bgPanels = scene.get<1>();
+			uint8_t bgPanels = std::get<1>(scene);
 
-			std::vector<uint8_t> bgRight = scene.get<2>();
+			std::vector<uint8_t> bgRight = std::get<2>(scene);
 			mVideo.erase(index++);
 			scene = mVideo.begin()->second;
-			std::vector<uint8_t> bgLeft = scene.get<2>();
+			std::vector<uint8_t> bgLeft = std::get<2>(scene);
 			mVideo.erase(index++);
 			std::vector<uint8_t> bgFarLeft;
 			if (bgPanels == 3) {
 				scene = mVideo.begin()->second;
-				bgFarLeft = scene.get<2>();
+				bgFarLeft = std::get<2>(scene);
 				mVideo.erase(index++);
 			}
 
 			scene = mVideo.begin()->second;
-			//uint8_t fgPanels = scene.get<1>();
-			std::vector<uint8_t> fgRight = scene.get<2>();
+			//uint8_t fgPanels = std::get<1>(scene);
+			std::vector<uint8_t> fgRight = std::get<2>(scene);
 			mVideo.erase(index++);
 			scene = mVideo.begin()->second;
-			std::vector<uint8_t> fgLeft = scene.get<2>();
-			mVideoWait = scene.get<1>();
+			std::vector<uint8_t> fgLeft = std::get<2>(scene);
+			mVideoWait = std::get<1>(scene);
 
 			panDirection(0, bgRight, bgLeft, bgFarLeft, fgRight, fgLeft);
 		}
 			break;
 		case DISP_BMP:
-			drawImage(scene.get<2>(), 0, 0, 0, false);
+			drawImage(std::get<2>(scene), 0, 0, 0, false);
 			break;
 		case DISP_OVERLAY:
-			drawImage(scene.get<2>(), 0, 0, 0, true);
+			drawImage(std::get<2>(scene), 0, 0, 0, true);
 			break;
 		case DISP_BMA:
-			playAnimation(scene.get<2>());
+			playAnimation(std::get<2>(scene));
 			break;
 		case FADE_IN:
-			drawImage(scene.get<2>(), 0, 0, 0, false);
+			drawImage(std::get<2>(scene), 0, 0, 0, false);
 			fadeIn();
 			break;
 		case SCROLL_LEFT:
-			scrollLeft(scene.get<2>());
+			scrollLeft(std::get<2>(scene));
 			break;
 		case DRAW_CURTAIN:
-			drawCurtain(scene.get<2>());
+			drawCurtain(std::get<2>(scene));
 			break;
 		case MATERIALIZE:
-			materializeImage(scene.get<2>());
+			materializeImage(std::get<2>(scene));
 			break;
 		default:
 			std::cerr << "Case not yet implemented." << std::endl;
@@ -415,16 +415,17 @@ void GRAPHICS::Graphics::update() {
 	// materialize image on to screen
 	if (mState == MATERIALIZE) {
 		uint16_t size = mSurface[0]->w * mSurface[0]->h;
-		typedef boost::mt19937 RNGType;
-		RNGType rng(std::clock());
-		boost::uniform_int<> rngRange( 1, size );
-		boost::variate_generator< RNGType, boost::uniform_int<> > random(rng, rngRange);
+		std::mt19937 localRng(static_cast<unsigned int>(std::clock()));
+		std::uniform_int_distribution<uint16_t> rngRange(1, size);
 
 		for (uint16_t i = 0; i < size / 10; i++) {
-			uint16_t randomNumber = random();
-
-			SDL_Rect rect = { (randomNumber % mSurface[0]->w), (randomNumber
-							/ mSurface[0]->w), 1, 1 };
+			uint16_t randomNumber = rngRange(localRng);
+			SDL_Rect rect = {
+				static_cast<int>(randomNumber % mSurface[0]->w),
+				static_cast<int>(randomNumber / mSurface[0]->w),
+				1,
+				1
+			};
 
 			SDL_BlitSurface(mSurface[0], &rect, mScreen, &rect);
 		}
@@ -535,10 +536,10 @@ void GRAPHICS::Graphics::update() {
 	// zoom into a image
 	if (mState == ZOOM_INTO) {
 		float percentage = (float) mCounter / 100;
-		uint16_t width = mSurface[0]->w * percentage;
-		uint16_t height = mSurface[0]->h * percentage;
-		uint8_t x = mScreen->w / 2 - percentage * mScreen->w / 2;
-		uint8_t y = mScreen->h / 2 - percentage * mScreen->h / 2;
+		uint16_t width = static_cast<float>(mSurface[0]->w) * percentage;
+		uint16_t height = static_cast<float>(mSurface[0]->h) * percentage;
+		uint8_t x = static_cast<float>(mScreen->w) / 2 - percentage * static_cast<float>(mScreen->w) / 2;
+		uint8_t y = static_cast<float>(mScreen->h) / 2 - percentage * static_cast<float>(mScreen->h) / 2;
 		SDL_Rect rect = { x, y, width, height };
 
 		SDL_Surface *scaledImage = SDL_CreateRGBSurface(0, width, height, 32, 0,
@@ -655,24 +656,26 @@ void GRAPHICS::Graphics::loadMouse(std::vector<uint8_t> &bitmap,
 void GRAPHICS::Graphics::loadPalette(std::vector<uint8_t> &basePal,
 		std::vector<uint8_t> &subPal, std::string index) {
 
-	boost::char_separator<char> sep(",");
-	boost::tokenizer<boost::char_separator<char> > tokens(index, sep);
+	std::vector<std::string> tokens;
+	std::stringstream stream(index);
+	std::string token;
+	while (std::getline(stream, token, ',')) {
+		tokens.push_back(token);
+	}
 
-	boost::tokenizer<boost::char_separator<char> >::iterator it =
-			tokens.begin();
-	it++;
-	uint16_t start = boost::lexical_cast<uint16_t>(it.current_token());
-	it++;
-	uint16_t end = boost::lexical_cast<uint16_t>(it.current_token());
+	if (tokens.size() < 2) {
+		return;
+	}
 
-	uint8_t counter = 0;
-	std::cout << "text: " << start << " " << end << std::endl;
+	uint16_t start = static_cast<uint16_t>(std::stoi(tokens[0]));
+	uint16_t end = static_cast<uint16_t>(std::stoi(tokens[1]));
 
 	SDL_FreePalette(mPalette);
 	mPalette = SDL_AllocPalette(256);
 
 	Palette basePalette(basePal);
 	Palette subPalette(subPal);
+	uint16_t counter = 0;
 
 	// assign our game palette to a SDL palette
 	for (uint16_t i = 0; i < basePalette.getNumOfColours(); i++) {

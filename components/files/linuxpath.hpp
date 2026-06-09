@@ -3,7 +3,7 @@
 
 #if defined(__linux__) || defined(__FreeBSD__)
 
-#include <boost/filesystem.hpp>
+#include <filesystem>
 
 /**
  * \namespace Files
@@ -21,31 +21,31 @@ struct LinuxPath
     /**
      * \brief Return path to the user directory.
      *
-     * \return boost::filesystem::path
+     * \return std::filesystem::path
      */
-    boost::filesystem::path getUserPath() const;
+    std::filesystem::path getUserPath() const;
 
     /**
      * \brief Return path to the global (system) directory where game files could be placed.
      *
-     * \return boost::filesystem::path
+     * \return std::filesystem::path
      */
-    boost::filesystem::path getGlobalPath() const;
+    std::filesystem::path getGlobalPath() const;
 
     /**
      * \brief Return path to the runtime configuration directory which is the
      * place where an application was started.
      *
-     * \return boost::filesystem::path
+     * \return std::filesystem::path
      */
-    boost::filesystem::path getLocalPath() const;
+    std::filesystem::path getLocalPath() const;
 
     /**
      * \brief
      *
-     * \return boost::filesystem::path
+     * \return std::filesystem::path
      */
-    boost::filesystem::path getGlobalDataPath() const;
+    std::filesystem::path getGlobalDataPath() const;
 
     std::string mName;
 };

@@ -31,13 +31,13 @@ namespace Files
         return (iter->second);
     }
 
-    boost::filesystem::path Collections::getPath(const std::string& file) const
+    std::filesystem::path Collections::getPath(const std::string& file) const
     {
         for (Files::PathContainer::const_iterator iter = mDirectories.begin();
              iter != mDirectories.end(); ++iter)
         {
-            const boost::filesystem::path path = *iter / file;
-            if (boost::filesystem::exists(path))
+            const std::filesystem::path path = *iter / file;
+            if (std::filesystem::exists(path))
                 return (path.string());
         }
 
@@ -49,8 +49,8 @@ namespace Files
         for (Files::PathContainer::const_iterator iter = mDirectories.begin();
              iter != mDirectories.end(); ++iter)
         {
-            const boost::filesystem::path path = *iter / file;
-            if (boost::filesystem::exists(path))
+            const std::filesystem::path path = *iter / file;
+            if (std::filesystem::exists(path))
                 return (true);
         }
 

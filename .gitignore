@@ -21,4 +21,4 @@ Thumbs.db
 .preferences.xml
 .project
 .settings/
-
+build/

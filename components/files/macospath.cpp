@@ -5,7 +5,7 @@
 #include <cstdlib>
 #include <pwd.h>
 #include <unistd.h>
-#include <boost/filesystem/fstream.hpp>
+#include <filesystem>
 
 /**
  * FIXME: Someone with MacOS system should check this and correct if necessary
@@ -22,9 +22,9 @@ MacOsPath::MacOsPath(const std::string& application_name)
 {
 }
 
-boost::filesystem::path MacOsPath::getUserPath() const
+std::filesystem::path MacOsPath::getUserPath() const
 {
-    boost::filesystem::path userPath(".");
+    std::filesystem::path userPath(".");
 
     const char* theDir = getenv("HOME");
     if (theDir == NULL)
@@ -37,31 +37,28 @@ boost::filesystem::path MacOsPath::getUserPath() const
     }
     if (theDir != NULL)
     {
-        userPath = boost::filesystem::path(theDir) / "Library/Preferences/";
+        userPath = std::filesystem::path(theDir) / "Library/Preferences/";
     }
 
     return userPath / mName;
 }
 
-boost::filesystem::path MacOsPath::getGlobalPath() const
+std::filesystem::path MacOsPath::getGlobalPath() const
 {
-    boost::filesystem::path globalPath("/Library/Preferences/");
+    std::filesystem::path globalPath("/Library/Preferences/");
     return globalPath / mName;
 }
 
-boost::filesystem::path MacOsPath::getLocalPath() const
+std::filesystem::path MacOsPath::getLocalPath() const
 {
-    return boost::filesystem::path("./");
+    return std::filesystem::path("./");
 }
 
-boost::filesystem::path MacOsPath::getGlobalDataPath() const
+std::filesystem::path MacOsPath::getGlobalDataPath() const
 {
-    boost::filesystem::path globalDataPath("/Library/Application Support/");
+    std::filesystem::path globalDataPath("/Library/Application Support/");
     return globalDataPath / mName;
 }
-
-}
-
 
 } /* namespace Files */
 

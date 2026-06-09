@@ -1,4 +1,4 @@
-#include <malloc.h>
+#include <cstdlib>
 
 #include "dblocks.hpp"
 
@@ -57,7 +57,7 @@ struct RESEntryHeader *getResourceEntryHeader(int aNumber, FILE *aResFile,
 
 	loEntryHeaderSize = sizeof(struct RESEntryHeader);
 	loEntryHeader = (struct RESEntryHeader *) malloc(loEntryHeaderSize);
-	loReadSize = fread(loEntryHeader, 1, loEntryHeaderSize, aResFile);
+	loReadSize = static_cast<unsigned int>(fread(loEntryHeader, 1, loEntryHeaderSize, aResFile));
 	if (loEntryHeaderSize != loReadSize) {
 		free(loEntryHeader);
 		printf("The resource entry header could not be read!\n");
@@ -106,7 +106,7 @@ unsigned char *readResourceBinary(int aResourceNumber, FILE *aResFile,
 	loBuffer = (unsigned char *) malloc(loDataSize);
 	if (loBuffer == NULL) {
 		char loError[256];
-		sprintf(loError,
+		snprintf(loError, sizeof(loError),
 				"Unable to allocate %d bytes while reading the resource %d into memory!",
 				loDataSize, aResourceNumber);
 		printf("%s\n", loError);
@@ -121,7 +121,7 @@ unsigned char *readResourceBinary(int aResourceNumber, FILE *aResFile,
 		free(loResEntryHeader);
 		return (NULL);
 	}
-	loReadSize = fread(loBuffer, 1, loDataSize, aResFile);
+	loReadSize = static_cast<unsigned int>(fread(loBuffer, 1, loDataSize, aResFile));
 	if (loReadSize != loDataSize) {
 		printf("The resource could not be read!\n");
 		free(loBuffer);

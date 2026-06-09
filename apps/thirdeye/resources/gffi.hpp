@@ -11,6 +11,9 @@
 #include "../graphics/graphics.hpp"
 
 // because the compiler wants to pad and we have different compiler extensions
+#ifdef PACK
+#undef PACK
+#endif
 #if defined(__GNUC__)
 #define PACK( __Declaration__ ) __Declaration__ __attribute__((__packed__))
 #elif defined(_MSC_VER )
@@ -20,11 +23,7 @@
 #endif
 
 #include <map>
-#include <boost/filesystem.hpp>
-#include "boost/tuple/tuple.hpp"
-
-using boost::tuples::tuple;
-using boost::tuples::tie;
+#include <filesystem>
 
 namespace RESOURCES {
 
@@ -88,14 +87,14 @@ struct File {
 class GFFI {
 
 private:
-	boost::filesystem::path mGFFIFile;
+	std::filesystem::path mGFFIFile;
 	uint32_t mGFFIFileSize;
 	GFFIHeader mGFFIHeader;
 	GFFIDirectoryHeader mGFFIDirectoryHeader;
 	std::map<std::string, std::map<uint32_t, File> > mFiles;
 
 public:
-	GFFI(boost::filesystem::path gffiPath);
+	GFFI(std::filesystem::path gffiPath);
 	sequence getSequence();
 	std::vector<uint8_t> getMusic();
 	virtual ~GFFI();
