@@ -318,6 +318,76 @@ std::string RESOURCES::Resource::getTableEntry(uint16_t number, uint8_t table) {
 		throw(std::runtime_error("Wrong table!"));
 }
 
+std::vector<std::string> RESOURCES::Resource::getCodeResourceNames() {
+	std::vector<std::string> names;
+	for (const auto &entry : mAssets) {
+		// Attribute bit 0x10 marks a SOP code (object) resource.
+		if (entry.second.attributes & 0x10)
+			names.push_back(entry.second.name);
+	}
+	return names;
+}
+
+// Parse an AESOP dictionary blob (same on-disk format as the special tables
+// 0..4, see getTable): a u16 bucket count, then that many u32 chain offsets
+// (relative to the blob start); each non-zero chain is a run of length-prefixed
+// strings (u16 length incl. trailing NUL) alternating key, value, terminated by
+// a zero length.
+std::map<std::string, std::string> RESOURCES::Resource::parseDictionary(
+		const std::vector<uint8_t> &d) {
+	std::map<std::string, std::string> out;
+	if (d.size() < 2)
+		return out;
+
+	auto rd16 = [&](size_t off) -> uint16_t {
+		return static_cast<uint16_t>(d[off] | (d[off + 1] << 8));
+	};
+	auto rd32 = [&](size_t off) -> uint32_t {
+		return d[off] | (d[off + 1] << 8) | (d[off + 2] << 16) |
+		       (static_cast<uint32_t>(d[off + 3]) << 24);
+	};
+
+	uint16_t buckets = rd16(0);
+	uint16_t counter = 1;
+	std::string prev;
+	for (uint16_t i = 0; i < buckets; i++) {
+		size_t boff = 2 + static_cast<size_t>(i) * 4;
+		if (boff + 4 > d.size())
+			break;
+		uint32_t chain = rd32(boff);
+		if (chain == 0)
+			continue;
+		size_t p = chain;
+		for (;; counter++) {
+			if (p + 2 > d.size())
+				break;
+			uint16_t len = rd16(p);
+			p += 2;
+			if (len == 0) // end of chain
+				break;
+			if (p + len > d.size())
+				break;
+			std::string s(reinterpret_cast<const char *>(&d[p]), len);
+			if (!s.empty() && s.back() == '\0')
+				s.pop_back(); // drop trailing NUL counted in len
+			p += len;
+			if (counter % 2 == 0)
+				out[prev] = s;
+			else
+				prev = s;
+		}
+	}
+	return out;
+}
+
+std::map<std::string, std::string> RESOURCES::Resource::getExports(
+		const std::string &codeName) {
+	std::string num = searchDictionary(mTable0, codeName + ".EXPT");
+	if (num.empty())
+		return {};
+	return parseDictionary(getAsset(static_cast<uint16_t>(std::stoi(num))));
+}
+
 void RESOURCES::Resource::showResources() {
 	std::cout << "NUMBER	START	OFFSET	SIZE	DATE			ATTRIB	NAME" << std::endl;
 	for (uint16_t i = 0; i < mEntryHeaders.size(); i++) {

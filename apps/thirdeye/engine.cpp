@@ -3,6 +3,7 @@
 #include "resources/gffi.hpp"
 #include "sound/sound.hpp"
 #include "graphics/graphics.hpp"
+#include "vm/vm.hpp"
 
 #include <components/files/configurationmanager.hpp>
 
@@ -28,19 +29,44 @@ void THIRDEYE::Engine::setGame(std::string game) {
 	std::transform(game.begin(), game.end(), game.begin(),
 			[](unsigned char c) { return std::tolower(c); });
 
-	if (game == "eob3") {
+	if (game == "eob3")
 		mGame = GAME_EOB3;
-		mGameData /= "EYE.RES";
-	} else if (game == "hack") {
+	else if (game == "hack")
 		mGame = GAME_HACK;
-		mGameData /= "HACK.RES";
-	} else
+	else
 		mGame = GAME_UNKN;
-
 }
 
 void THIRDEYE::Engine::setGameData(std::string gameData) {
 	mGameData = std::filesystem::path(gameData);
+}
+
+// The game-data path may be either a directory (in which case we append the
+// selected game's main .RES) or a direct path to a .RES file (used as-is, with
+// the game auto-detected from the filename).
+std::filesystem::path THIRDEYE::Engine::resolveResourceFile() {
+	namespace fs = std::filesystem;
+
+	if (fs::is_regular_file(mGameData)) {
+		std::string name = mGameData.filename().string();
+		std::transform(name.begin(), name.end(), name.begin(),
+				[](unsigned char c) { return std::tolower(c); });
+		if (name == "eye.res")
+			mGame = GAME_EOB3;
+		else if (name == "hack.res" || name == "open.res")
+			mGame = GAME_HACK;
+		// Any other .RES (e.g. SAMPLE.RES) is loaded directly; game stays as-is.
+		return mGameData;
+	}
+
+	// Treat as a directory: append the main resource file for the game.
+	switch (mGame) {
+	case GAME_HACK:
+		return mGameData / "HACK.RES";
+	case GAME_EOB3:
+	default:
+		return mGameData / "EYE.RES";
+	}
 }
 void THIRDEYE::Engine::setDebugMode(bool debug) {
 	mDebug = debug;
@@ -55,11 +81,80 @@ void THIRDEYE::Engine::setRenderer(bool renderer) {
 	mRenderer = renderer;
 }
 
+// Drive the SOP bytecode of each code object through the VM. This is the
+// bring-up path: it runs every exported message handler from its entry offset
+// and reports the outcome (END with a return value, or the first opcode we
+// can't execute yet -- typically a CALL/SEND into the not-yet-built runtime).
+void THIRDEYE::Engine::runResourceVM(RESOURCES::Resource &resource) {
+	std::vector<std::string> codeNames = resource.getCodeResourceNames();
+	if (codeNames.empty()) {
+		std::cout << "\nNo SOP code objects in this resource file." << std::endl;
+		return;
+	}
+
+	std::cout << "\nRunning SOP bytecode (" << codeNames.size()
+	          << " code object(s))..." << std::endl;
+
+	for (const std::string &name : codeNames) {
+		std::vector<uint8_t> code = resource.getAsset(name);
+		std::map<std::string, std::string> exports = resource.getExports(name);
+
+		VM::Interpreter info(code);
+		const VM::SopHeader &h = info.header();
+		std::cout << "\n=== code object \"" << name << "\" ==="
+		          << "  (static=" << h.static_size << " import=" << h.import_resource
+		          << " export=" << h.export_resource << " parent="
+		          << (h.parent == 0xFFFFFFFFu ? std::string("none")
+		                                      : std::to_string(h.parent))
+		          << ")" << std::endl;
+
+		// Each "M:<n>" export maps a message number to a handler entry offset.
+		for (const auto &entry : exports) {
+			if (entry.first.rfind("M:", 0) != 0)
+				continue; // skip non-handler entries (e.g. "N:OBJECT")
+
+			uint32_t offset = static_cast<uint32_t>(std::stoul(entry.second));
+			std::cout << "  handler " << entry.first << " @ " << offset << ": ";
+
+			VM::Interpreter vm(code); // fresh stack/frame per handler
+			vm.setTrace(mDebug);
+			if (mDebug)
+				std::cout << std::endl;
+			try {
+				VM::Value result = vm.execute(offset);
+				std::cout << "END (returned " << result << ")" << std::endl;
+			} catch (const VM::VmError &e) {
+				std::cout << "stopped -- " << e.what() << std::endl;
+			}
+		}
+	}
+}
+
 // Initialise and enter main loop.
 void THIRDEYE::Engine::go() {
+	std::filesystem::path resFile = resolveResourceFile();
+
+	if (!std::filesystem::exists(resFile)) {
+		throw std::runtime_error(resFile.string() + " does not exist!");
+	}
+
+	RESOURCES::Resource resource(resFile);	// get our game resources ready
+
+	// The intro/menu flow below is EOB3-specific and needs the cinematic that
+	// ships beside the game's .RES. If we were handed some other resource file
+	// (e.g. SAMPLE.RES) or a real game install isn't present, just report what
+	// we loaded and stop -- no need to spin up graphics/sound. The SOP VM is
+	// not yet wired into the main loop.
+	std::filesystem::path introPath = resFile.parent_path() / "INTRO.GFF";
+	if (mGame == GAME_UNKN || !std::filesystem::exists(introPath)) {
+		std::cout << "Loaded resource file: " << resFile << std::endl;
+		resource.showResources();
+		runResourceVM(resource);
+		return;
+	}
+
 	MIXER::Mixer mixer;		// setup our sound mixer
 	GRAPHICS::Graphics gfx(mScale); // setup our graphics
-	RESOURCES::Resource resource(mGameData);	// get our game resources ready
 
 	/*
 	 Settings::Manager settings;
@@ -107,7 +202,7 @@ void THIRDEYE::Engine::go() {
 	uint32_t fps = 0;	// number of fps (iterations of main loop)
 
 	// get our intro cinematic, set state and play
-	RESOURCES::GFFI introVideo(mGameData.parent_path() / "INTRO.GFF");
+	RESOURCES::GFFI introVideo(introPath);
 	mixer.playMusic(introVideo.getMusic());
 	gfx.playVideo(introVideo.getSequence());
 	uint8_t state = STATE_INTRO;
