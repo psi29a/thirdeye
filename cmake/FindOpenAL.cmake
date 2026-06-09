@@ -34,13 +34,19 @@ find_library(OPENAL_LIBRARY
     NO_DEFAULT_PATH
 )
 
-# If not found, try standard locations and frameworks
+# If not found, try macOS frameworks
 if(NOT OPENAL_LIBRARY)
     find_library(OPENAL_LIBRARY
         NAMES OpenAL openal
         PATHS /Library/Frameworks /System/Library/Frameworks /Library/Developer/CommandLineTools/SDKs
         PATH_SUFFIXES Frameworks
     )
+endif()
+
+# Final fallback: search default paths (covers vcpkg, MSYS2, and system installs).
+# vcpkg's openal-soft import library is named OpenAL32 on Windows.
+if(NOT OPENAL_LIBRARY)
+    find_library(OPENAL_LIBRARY NAMES OpenAL openal OpenAL32 al)
 endif()
 
 if(NOT OPENAL_INCLUDE_DIR)

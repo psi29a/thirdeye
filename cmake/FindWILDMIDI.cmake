@@ -14,7 +14,11 @@ FIND_PATH(WILDMIDI_INCLUDE_DIR wildmidi_lib.h
   /
 )
 
-FIND_LIBRARY(WILDMIDI_LIBRARY NAME WildMidi PATHS /usr/lib /usr/lib32  /usr/local/lib /usr/local/lib32)
+# vcpkg ships the import library as libWildMidi on Windows; Unix uses libWildMidi.so.
+# No NO_DEFAULT_PATH, so default paths (incl. vcpkg's CMAKE_PREFIX_PATH) are searched too.
+FIND_LIBRARY(WILDMIDI_LIBRARY
+  NAMES WildMidi libWildMidi wildmidi libwildmidi
+  PATHS /usr/lib /usr/lib32 /usr/local/lib /usr/local/lib32)
 
 IF(NOT WILDMIDI_LIBRARY MATCHES "^.*-NOTFOUND")
 SET(WILDMIDI_FOUND TRUE CACHE INTERNAL "wildmidi")
