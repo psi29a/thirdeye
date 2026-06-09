@@ -11,10 +11,6 @@
 
 #include <components/files/configurationmanager.hpp>
 
-#if defined(_WIN32) && !defined(_CONSOLE)
-#include <Windows.h>
-#endif
-
 #include "config.hpp"
 
 /**
@@ -180,13 +176,4 @@ int main(int argc, char**argv) {
 
 	return (0);
 }
-
-#if defined(_WIN32) && !defined(_CONSOLE)
-
-int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nShowCmd)
-{
-    return main(__argc, __argv);
-}
-
-#endif
 

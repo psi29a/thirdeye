@@ -126,8 +126,8 @@ RESOURCES::GFFI::GFFI(std::filesystem::path gffiPath) {
 
 					if (isMore) {
 						//printf(" new bitmap found @ offset: %x", anim.getNextBitmapPos());
-						uint32_t nextSize = subBitmap.size()
-								- anim.getNextBitmapPos();
+						uint32_t nextSize = static_cast<uint32_t>(subBitmap.size()
+								- anim.getNextBitmapPos());
 						std::vector<uint8_t> temp(
 								subBitmap.size() - anim.getNextBitmapPos());
 						memcpy(&temp[0],

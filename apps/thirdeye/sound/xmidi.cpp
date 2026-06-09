@@ -889,11 +889,11 @@ int XMIDI::ConvertFiletoList(DataSource *source, const bool is_xmi) {
 		case MIDI_STATUS_SYSEX:
 			if (status == 0xFF) {
 				int pos = source->getPos();
-				unsigned int data = source->read1();
+				unsigned int metaData = source->read1();
 
-				if (data == 0x2F) // End
+				if (metaData == 0x2F) // End
 					end = 1;
-				else if (data == 0x51 && !tempo_set) // Tempo. Need it for PPQN
+				else if (metaData == 0x51 && !tempo_set) // Tempo. Need it for PPQN
 						{
 					source->skip(1);
 					tempo = source->read1() << 16;
@@ -901,10 +901,10 @@ int XMIDI::ConvertFiletoList(DataSource *source, const bool is_xmi) {
 					tempo += source->read1();
 					tempo *= 3;
 					tempo_set = 1;
-				} else if (data == 0x51 && tempo_set && is_xmi) // Skip any other tempo changes
+				} else if (metaData == 0x51 && tempo_set && is_xmi) // Skip any other tempo changes
 						{
-					GetVLQ(source, data);
-					source->skip(data);
+					GetVLQ(source, metaData);
+					source->skip(metaData);
 					break;
 				}
 
@@ -1218,10 +1218,10 @@ int XMIDI::ExtractTracks(DataSource *source) {
 					<< ") tracks specified from XMIDI. Only (" << count << ")"
 					<< std::endl;
 
-			int i = 0;
+			int j = 0;
 
-			for (i = 0; i < info.tracks; i++)
-				DeleteEventList(events[i]);
+			for (j = 0; j < info.tracks; j++)
+				DeleteEventList(events[j]);
 
 			delete[] events;
 			delete[] timing;

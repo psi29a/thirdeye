@@ -421,7 +421,7 @@ int makeFirstDisassemblyPass(unsigned char *aResource, int aLength,
 		int loInstructionLength;
 		int loInstructionEndsDisassembly;
 		int i;
-		if (shouldBeAddressDisassembled(loCurrentAddress) != true) {
+		if (!shouldBeAddressDisassembled(loCurrentAddress)) {
 			// time to end;
 			break;
 		}
@@ -450,7 +450,7 @@ int makeFirstDisassemblyPass(unsigned char *aResource, int aLength,
 		// find out whether the instruction ends the disassembly (END or uncond. jump)
 		loInstructionEndsDisassembly = endsDisassembly(aResource, aLength,
 				loCurrentAddress);
-		if (loInstructionEndsDisassembly == true) {
+		if (loInstructionEndsDisassembly) {
 			// ends this disassembly (end or unconditional jump)
 			break;
 		}
@@ -802,7 +802,7 @@ void makeSecondDisassemblyPass(unsigned char *aResource, int aLength,
 			loCurrentAddress += 2; // set the address at the first instruction
 		} else if (loCodeMapValue == MAP_DATA_BYTE) {
 			char loDBString[256];
-			if (hasAddressLabel(loCurrentAddress) == true) {
+			if (hasAddressLabel(loCurrentAddress)) {
 				writeLabel(loCurrentAddress, aOutputFile);
 			}
 			getDBByteString(loDBString, aResource, aLength, loCurrentAddress);
@@ -810,7 +810,7 @@ void makeSecondDisassemblyPass(unsigned char *aResource, int aLength,
 			loCurrentAddress++;
 		} else if (loCodeMapValue == MAP_DATA_WORD) {
 			char loDBString[256];
-			if (hasAddressLabel(loCurrentAddress) == true) {
+			if (hasAddressLabel(loCurrentAddress)) {
 				writeLabel(loCurrentAddress, aOutputFile);
 			}
 			getDWWordString(loDBString, aResource, aLength, loCurrentAddress);
@@ -818,7 +818,7 @@ void makeSecondDisassemblyPass(unsigned char *aResource, int aLength,
 			loCurrentAddress += 2;
 		} else if (loCodeMapValue == MAP_DATA_LONG) {
 			char loDBString[256];
-			if (hasAddressLabel(loCurrentAddress) == true) {
+			if (hasAddressLabel(loCurrentAddress)) {
 				writeLabel(loCurrentAddress, aOutputFile);
 			}
 			getDLLongString(loDBString, aResource, aLength, loCurrentAddress);
@@ -1296,9 +1296,8 @@ int writeOneInstruction(unsigned char *aResource, int aLength,
 								loParameterValue, aResourcesInfoTable,
 								aOutputFile);
 					}
-					if (getParameterString(loTmp, loParameterType,
-							loParameterValue, loIsLastParameter, true)
-							!= true) {
+					if (!getParameterString(loTmp, loParameterType,
+							loParameterValue, loIsLastParameter, true)) {
 						printf(
 								"Failure to get the parameter value for the parameter type %c, value %ld for the instruction %d on the address %d!\n",
 								(unsigned char) loParameterType,
@@ -1316,7 +1315,7 @@ int writeOneInstruction(unsigned char *aResource, int aLength,
 		getHexCodes(loHexaCodes, aResource, aLength, loInstructionStartAddress,
 				*loCurrentAddress - loInstructionStartAddress);
 		// add label if needed
-		if (hasAddressLabel(loInstructionStartAddress) == true) {
+		if (hasAddressLabel(loInstructionStartAddress)) {
 			writeLabel(loInstructionStartAddress, aOutputFile);
 		}
 		// complete the line
@@ -1367,7 +1366,7 @@ void writeCaseHeader(unsigned char *aResource, int aLength, int aStartAddress,
 	char loTmp[256];
 	char loInstruction[256];
 	char loResultLine[256];
-	if (hasAddressLabel(aStartAddress) == true) {
+	if (hasAddressLabel(aStartAddress)) {
 		writeLabel(aStartAddress, aOutputFile);
 	}
 	// hex codes
@@ -1462,29 +1461,29 @@ int getParameterString(char *aString, unsigned char aParameterType,
 		return (false);
 	}
 
-	if (aAddParameterComment == true) {
+	if (aAddParameterComment) {
 		// ok, add a comment
-		char loTmp[256];
+		char loTmp2[256];
 		int i;
 		unsigned char loArray[4];
 		int loPrintableCharacters = true;
 		if (loSize == 1) {
 			unsigned char loChar = (unsigned char) aParameterValue;
 			memcpy(loArray, &loChar, 1);
-			snprintf(loTmp, sizeof(loTmp), "     ;%u", (unsigned int) aParameterValue);
-			strcat(aString, loTmp);
+			snprintf(loTmp2, sizeof(loTmp2), "     ;%u", (unsigned int) aParameterValue);
+			strcat(aString, loTmp2);
 		}
 		if (loSize == 2) {
 			unsigned short loWord = (unsigned short) aParameterValue;
 			memcpy(loArray, &loWord, 2);
-			snprintf(loTmp, sizeof(loTmp), "     ;%u", (unsigned int) aParameterValue);
-			strcat(aString, loTmp);
+			snprintf(loTmp2, sizeof(loTmp2), "     ;%u", (unsigned int) aParameterValue);
+			strcat(aString, loTmp2);
 		}
 		if (loSize == 4) {
 			unsigned int loLong = (unsigned int) aParameterValue;
 			memcpy(loArray, &loLong, 4);
-			snprintf(loTmp, sizeof(loTmp), "     ;%u", (unsigned int) aParameterValue);
-			strcat(aString, loTmp);
+			snprintf(loTmp2, sizeof(loTmp2), "     ;%u", (unsigned int) aParameterValue);
+			strcat(aString, loTmp2);
 		}
 		for (i = 0; i < loSize; i++) {
 			if (loArray[i] < 32) {
@@ -1493,13 +1492,13 @@ int getParameterString(char *aString, unsigned char aParameterType,
 				break;
 			}
 		}
-		if (loPrintableCharacters == true
-				&& aAddCharactersInTheComment == true) {
+		if (loPrintableCharacters
+				&& aAddCharactersInTheComment) {
 			// add the printable characters in ""
 			strcat(aString, ", \"");
 			for (i = 0; i < loSize; i++) {
-				snprintf(loTmp, sizeof(loTmp), "%c", loArray[i]);
-				strcat(aString, loTmp);
+				snprintf(loTmp2, sizeof(loTmp2), "%c", loArray[i]);
+				strcat(aString, loTmp2);
 			}
 			strcat(aString, "\"");
 		}
@@ -1811,7 +1810,7 @@ void writeInfoAboutReferredResourceIfAvailable(long aParameterValue,
 					&& aResourcesInfoTable[i]->stringValue != NULL) {
 				// write string value
 				char *loStringValue = aResourcesInfoTable[i]->stringValue;
-				int loStringValueLength = strlen(loStringValue);
+				int loStringValueLength = static_cast<int>(strlen(loStringValue));
 				fprintf(aOutputFile, "%7s%s ", " ", ";value: ");
 				fprintf(aOutputFile, "\"");
 				for (j = 0; j < loStringValueLength; j++) {

@@ -10,8 +10,8 @@
 #include <cctype>
 
 THIRDEYE::Engine::Engine(Files::ConfigurationManager& configurationManager) :
-		mNewGame(false), mUseSound(true), mDebug(false), mGame(GAME_UNKN), mCfgMgr(
-				configurationManager), mScale(1), mRenderer(false) {
+		mNewGame(false), mUseSound(true), mDebug(false), mRenderer(false), mGame(
+				GAME_UNKN), mScale(1), mCfgMgr(configurationManager) {
 	std::cout << "Initializing Thirdeye... ";
 
 	std::srand(std::time(NULL));

@@ -50,14 +50,14 @@ void MIXER::Mixer::playMusic(std::vector<uint8_t> xmidi) {
 	stopMusic(); // stop any currently playing music
 
 	DataSource *xmids = new BufferDataSource(reinterpret_cast<char*>(&xmidi[0]),
-			xmidi.size());
+			static_cast<unsigned int>(xmidi.size()));
 	XMIDI *xmi = new XMIDI(xmids,
 			mt32 ? XMIDI_CONVERT_MT32_TO_GS : XMIDI_CONVERT_NOCONVERSION);
 
 	uint32_t midi_size = xmi->retrieve(0, NULL);
 	std::vector<uint8_t> midi(midi_size); // buffer needs to be big enough
 	DataSource *xout = new BufferDataSource(reinterpret_cast<char*>(&midi[0]),
-			midi.size());
+			static_cast<unsigned int>(midi.size()));
 
 	xmi->retrieve(0, xout);
 
@@ -66,14 +66,14 @@ void MIXER::Mixer::playMusic(std::vector<uint8_t> xmidi) {
 		return;
 	}
 	WildMidi_MasterVolume(music_volume);
-	void *midi_ptr = WildMidi_OpenBuffer(&midi[0], midi.size());
+	void *midi_ptr = WildMidi_OpenBuffer(&midi[0], static_cast<uint32_t>(midi.size()));
 	struct _WM_Info * wm_info = WildMidi_GetInfo(midi_ptr);
 
 	mSources[MUSIC_ID].buffer.resize(wm_info->approx_total_samples * 4);
 
 	WildMidi_GetOutput(midi_ptr,
 			reinterpret_cast<int8_t*>(&mSources[MUSIC_ID].buffer[0]),
-			mSources[MUSIC_ID].buffer.size());
+			static_cast<uint32_t>(mSources[MUSIC_ID].buffer.size()));
 	WildMidi_Close(midi_ptr);
 	WildMidi_Shutdown();
 	//std::cout << "done converting xmi to midi" << std::endl;
@@ -81,7 +81,8 @@ void MIXER::Mixer::playMusic(std::vector<uint8_t> xmidi) {
 	// play our new music
 	alGenBuffers(1, &mSources[MUSIC_ID].bufferId);
 	alBufferData(mSources[MUSIC_ID].bufferId, AL_FORMAT_STEREO16,
-			&mSources[MUSIC_ID].buffer[0], mSources[MUSIC_ID].buffer.size(),
+			&mSources[MUSIC_ID].buffer[0],
+			static_cast<ALsizei>(mSources[MUSIC_ID].buffer.size()),
 			MUSIC_RATE);
 	alSourcei(mSources[MUSIC_ID].sourceId, AL_BUFFER,
 			mSources[MUSIC_ID].bufferId);
@@ -115,7 +116,8 @@ void MIXER::Mixer::playSound(std::vector<uint8_t> snd) {
 	mSources[mSourceId].buffer = snd;
 	alGenBuffers(1, &mSources[mSourceId].bufferId);
 	alBufferData(mSources[mSourceId].bufferId, AL_FORMAT_MONO8,
-			&mSources[mSourceId].buffer[0], mSources[mSourceId].buffer.size(),
+			&mSources[mSourceId].buffer[0],
+			static_cast<ALsizei>(mSources[mSourceId].buffer.size()),
 			SOUND_RATE);
 	alSourcei(mSources[mSourceId].sourceId, AL_BUFFER,
 			mSources[mSourceId].bufferId);
