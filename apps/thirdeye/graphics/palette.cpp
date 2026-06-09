@@ -20,7 +20,7 @@ GRAPHICS::Palette::Palette(const std::vector<uint8_t> &pal, bool isRes) {
 			//		<< (int) mPalette[i].g << " " << (int) mPalette[i].b << std::endl;
 		}
 	} else {
-		mNumOfColours = pal.size()/3; // 3 is rgb
+		mNumOfColours = static_cast<uint16_t>(pal.size()/3); // 3 is rgb
 		uint16_t counter = 0;
 		for(uint16_t i=0; i<pal.size(); i+=3){
 			// Bitshift from 8 bits to 6 bits that is which is our palette size

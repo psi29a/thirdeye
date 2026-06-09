@@ -8,8 +8,12 @@
 #ifndef RES_HPP
 #define RES_HPP
 
+#include <cstdint>
+#include <fstream>
 #include <map>
-#include <boost/filesystem.hpp>
+#include <string>
+#include <vector>
+#include <filesystem>
 
 #if defined(__GNUC__)
 #define PACK( __Declaration__ ) __Declaration__ __attribute__((__packed__))
@@ -92,7 +96,7 @@ struct Dictionary {
 };
 
 class Resource {
-	boost::filesystem::path mResFile;
+	std::filesystem::path mResFile;
 	std::map<uint16_t, DirectoryBlock> mDirBlocks;
 	std::map<uint16_t, EntryHeader> mEntryHeaders;
 	std::map<uint16_t, Assets> mAssets;
@@ -115,7 +119,7 @@ private:
 			std::string needle);
 
 public:
-	Resource(boost::filesystem::path resourcePath);
+	Resource(std::filesystem::path resourcePath);
 	virtual ~Resource();
 
 	std::vector<uint8_t> &getAsset(std::string name);

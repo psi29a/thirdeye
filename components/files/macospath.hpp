@@ -3,7 +3,9 @@
 
 #if defined(macintosh) || defined(Macintosh) || defined(__APPLE__) || defined(__MACH__)
 
-#include <boost/filesystem.hpp>
+#include <cerrno>
+#include <string>
+#include <filesystem>
 
 /**
  * \namespace Files
@@ -21,31 +23,31 @@ struct MacOsPath
     /**
      * \brief Return path to the local directory.
      *
-     * \return boost::filesystem::path
+     * \return std::filesystem::path
      */
-    boost::filesystem::path getUserPath() const;
+    std::filesystem::path getUserPath() const;
 
     /**
      * \brief Return path to the global (system) directory.
      *
-     * \return boost::filesystem::path
+     * \return std::filesystem::path
      */
-    boost::filesystem::path getGlobalPath() const;
+    std::filesystem::path getGlobalPath() const;
 
     /**
      * \brief Return path to the runtime directory which is the
      * place where an application was started.
      *
-     * \return boost::filesystem::path
+     * \return std::filesystem::path
      */
-    boost::filesystem::path getLocalPath() const;
+    std::filesystem::path getLocalPath() const;
 
     /**
      * \brief
      *
-     * \return boost::filesystem::path
+     * \return std::filesystem::path
      */
-    boost::filesystem::path getGlobalDataPath() const;
+    std::filesystem::path getGlobalDataPath() const;
 
     std::string mName;
 };

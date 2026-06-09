@@ -3,7 +3,7 @@
 
 #if defined(_WIN32) || defined(__WINDOWS__)
 
-#include <boost/filesystem.hpp>
+#include <filesystem>
 
 /**
  * \namespace Files
@@ -27,31 +27,31 @@ struct WindowsPath
      * \brief Returns user path i.e.:
      * "X:\Documents And Settings\<User name>\My Documents\My Games\"
      *
-     * \return boost::filesystem::path
+     * \return std::filesystem::path
      */
-    boost::filesystem::path getUserPath() const;
+    std::filesystem::path getUserPath() const;
 
     /**
      * \brief Returns "X:\Program Files\"
      *
-     * \return boost::filesystem::path
+     * \return std::filesystem::path
      */
-    boost::filesystem::path getGlobalPath() const;
+    std::filesystem::path getGlobalPath() const;
 
     /**
      * \brief Return local path which is a location where
      * an application was started
      *
-     * \return boost::filesystem::path
+     * \return std::filesystem::path
      */
-    boost::filesystem::path getLocalPath() const;
+    std::filesystem::path getLocalPath() const;
 
     /**
      * \brief Return same path like getGlobalPath
      *
-     * \return boost::filesystem::path
+     * \return std::filesystem::path
      */
-    boost::filesystem::path getGlobalDataPath() const;
+    std::filesystem::path getGlobalDataPath() const;
 
     std::string mName;
 };

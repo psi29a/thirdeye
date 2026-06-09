@@ -1,4 +1,4 @@
-#include <malloc.h>
+#include <cstdlib>
 #include <stdio.h>
 #include <string.h>
 #include <ctype.h>
@@ -25,7 +25,7 @@ char *unpackDate(unsigned int aDate, char *aDateString) {
 	const char *months[12] = { "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul",
 			"Aug", "Sep", "Oct", "Nov", "Dec" };
 
-	sprintf(aDateString, "%s %d, %4d %02d:%02d:%02d",
+	snprintf(aDateString, 64, "%s %d, %4d %02d:%02d:%02d",
 			months[((aDate >> 21) & 0x000f) - 1], (aDate >> 16) & 0x001f,
 			1980 + ((aDate >> 25) & 0x003f), (aDate >> 11) & 0x001f,
 			(aDate >> 5) & 0x001f, (aDate & 0x001f) << 1);
@@ -83,8 +83,8 @@ int stringEndsWith(char *aFullString, const char *aEndString) {
 		printf("stringEndsWith(): at least one parameter is NULL!\n");
 		return (loResult);
 	}
-	loFullStringLength = strlen(aFullString);
-	loEndStringLength = strlen(aEndString);
+	loFullStringLength = static_cast<int>(strlen(aFullString));
+	loEndStringLength = static_cast<int>(strlen(aEndString));
 	if (loFullStringLength < loEndStringLength) {
 		// the second string is longer
 		return (loResult);
@@ -116,7 +116,7 @@ int copyFile(FILE *aSourceFile, char *aNewFileName) {
 
 	// copy the aResFile file into aNewFile
 	fseek(aSourceFile, 0, SEEK_SET);
-	while ((loReadSize = fread(&loBuffer, 1, MAX_COPY_BUFFER, aSourceFile)) != 0) {
+	while ((loReadSize = static_cast<unsigned int>(fread(&loBuffer, 1, MAX_COPY_BUFFER, aSourceFile))) != 0) {
 		if (fwrite(loBuffer, 1, loReadSize, loNewFile) != loReadSize) {
 			printf("Unable to write to the file: %s\n", aNewFileName);
 			fclose(loNewFile);

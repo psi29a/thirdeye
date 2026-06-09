@@ -28,7 +28,6 @@ add_executable(daesop
 )
 
 target_link_libraries(daesop
-    ${Boost_LIBRARIES}
 #    components
 )
 

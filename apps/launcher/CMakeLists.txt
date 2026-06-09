@@ -20,7 +20,6 @@ add_executable(thirdeyelauncher
 )
 
 target_link_libraries(thirdeyelauncher
-    ${Boost_LIBRARIES}
 #    components
 )
 
