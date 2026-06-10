@@ -699,6 +699,13 @@ void GRAPHICS::Graphics::loadPalette(std::vector<uint8_t> &basePal,
 	}
 }
 
+void GRAPHICS::Graphics::setPaletteRange(std::vector<uint8_t> &palRes,
+		uint16_t firstColor) {
+	Palette pal(palRes);
+	for (uint16_t i = 0; i < pal.getNumOfColours() && (firstColor + i) < 256; i++)
+		mPalette->colors[firstColor + i] = pal[i];
+}
+
 /*!
  \brief Stripped down SDL2_gfx zoom function, if we need more we'll
  just use the library instead.
