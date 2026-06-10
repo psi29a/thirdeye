@@ -12,6 +12,7 @@
 #include <algorithm>
 #include <cctype>
 #include <cstdlib>
+#include <memory>
 
 THIRDEYE::Engine::Engine(Files::ConfigurationManager& configurationManager) :
 		mNewGame(false), mUseSound(true), mDebug(false), mRenderer(false), mGame(
@@ -94,10 +95,17 @@ namespace {
 // boot/initialize it (see eob3_research/runtime/DEFS.H + RTOBJECT.C).
 constexpr int MSG_CREATE = 0;
 
+// first_color[region]: where each palette region starts in the 256-colour DAC
+// (GRAPHICS.C). PAL_FIXED=0x00, PAL_WALLS=0xB0, PAL_M1=0xC0, PAL_M2=0xE0, PAL_OUT=0xB0.
+constexpr uint16_t kFirstColor[5] = {0x00, 0xB0, 0xC0, 0xE0, 0xB0};
+
 // Runtime-function library. Most functions are still stubs (log + return 0),
 // but where we can do the real thing, we do. Each call is logged with its
 // arguments, resolving address arguments to inline strings when possible.
+// `gfx` is null when running headless (no display); the graphics functions then
+// fall through to the stub.
 VM::Value defaultRuntimeCall(VM::ObjectSystem &objects, VM::EventSystem &events,
+                             GRAPHICS::Graphics *gfx, RESOURCES::Resource &res,
                              VM::Interpreter &vm, const std::string &fn,
                              const std::vector<VM::Value> &args) {
 	// --- event system (EVENT.C) -- real, and intentionally quiet: the kernel's
@@ -183,6 +191,58 @@ VM::Value defaultRuntimeCall(VM::ObjectSystem &objects, VM::EventSystem &events,
 		return 0;
 	}
 
+	// --- graphics (GRAPHICS.C / INTRFACE.C) wired to thirdeye's Graphics ---
+	// A first, deliberately-crude pass: we ignore the AESOP page/window/clip and
+	// fade model and just blit onto one screen surface, presenting on refresh.
+	// Enough to see the menu; faithful windowing comes with the GIL2VFX port.
+	if (gfx) {
+		auto fetch = [&](VM::Value n) -> std::vector<uint8_t> & {
+			return res.getAsset(static_cast<uint16_t>(n));
+		};
+		// set_palette(region, resource): load a palette resource into the region.
+		if (fn == "set_palette" && args.size() >= 2) {
+			uint16_t region = static_cast<uint16_t>(args[0]);
+			uint16_t first = region < 5 ? kFirstColor[region] : 0;
+			try {
+				gfx->setPaletteRange(fetch(args[1]), first);
+				std::cout << "  [palette region " << region << "]" << std::endl;
+			} catch (const std::exception &e) {
+				std::cout << "  [palette failed: " << e.what() << "]" << std::endl;
+			}
+			return 0;
+		}
+		// draw_bitmap(page, table, number, x, y, scale, flip, fade_table, fade_level)
+		if (fn == "draw_bitmap" && args.size() >= 5) {
+			uint16_t table = static_cast<uint16_t>(args[1]);
+			uint16_t number = static_cast<uint16_t>(args[2]);
+			int x = static_cast<int>(args[3]), y = static_cast<int>(args[4]);
+			try {
+				gfx->drawImage(fetch(table), number, x, y, true);
+				std::cout << "  [drew " << table << ":" << number << " @ " << x
+				          << "," << y << "]" << std::endl;
+			} catch (const std::exception &e) {
+				std::cout << "  [draw failed: " << e.what() << "]" << std::endl;
+			}
+			return 0;
+		}
+		// refresh_window / color_fade / light_fade: present the screen.
+		if (fn == "refresh_window" || fn == "color_fade" || fn == "light_fade") {
+			gfx->update();
+			std::cout << "  [present]" << std::endl;
+			return 0;
+		}
+		// set_mouse_pointer(table, number, hot_X, hot_Y, ...)
+		if (fn == "set_mouse_pointer" && args.size() >= 2) {
+			try {
+				gfx->loadMouse(fetch(args[0]), static_cast<uint16_t>(args[1]));
+				std::cout << "  [cursor]" << std::endl;
+			} catch (const std::exception &e) {
+				std::cout << "  [cursor failed: " << e.what() << "]" << std::endl;
+			}
+			return 0;
+		}
+	}
+
 	std::cout << "  [stub -> 0]" << std::endl;
 	return 0;
 }
@@ -244,9 +304,12 @@ void THIRDEYE::Engine::runResourceVM(RESOURCES::Resource &resource) {
 	events.setVerbose(mDebug);
 	objects.setTrace(mDebug);
 	objects.setRuntimeCall(
-		[&objects, &events](VM::Interpreter &vm, const std::string &fn,
+		[&objects, &events, &resource](VM::Interpreter &vm, const std::string &fn,
 		           const std::vector<VM::Value> &args) {
-			return defaultRuntimeCall(objects, events, vm, fn, args);
+			// runResourceVM stays headless (gfx = nullptr) -- it's for small
+			// resources like SAMPLE.RES, not the full game.
+			return defaultRuntimeCall(objects, events, nullptr, resource, vm, fn,
+			                          args);
 		});
 	objects.setMaxSteps(2000000); // bring-up safety: stop runaway loops
 	registerClasses(resource, objects);
@@ -285,14 +348,26 @@ void THIRDEYE::Engine::runResourceVM(RESOURCES::Resource &resource) {
 // function / opcode we haven't built yet -- our data-driven bring-up to-do list.
 void THIRDEYE::Engine::bootObject(RESOURCES::Resource &resource,
                                   const std::string &objectName) {
+	// Open a window so the SOP runtime's draw calls have somewhere to render.
+	// If there's no display (headless/CI), fall back to running without graphics
+	// (the runtime draw functions then no-op through to the stub).
+	std::unique_ptr<GRAPHICS::Graphics> gfx;
+	try {
+		gfx = std::make_unique<GRAPHICS::Graphics>(mScale, mRenderer);
+	} catch (const std::exception &e) {
+		std::cout << "Graphics unavailable (" << e.what()
+		          << "); booting headless." << std::endl;
+	}
+
 	VM::ObjectSystem objects;
 	VM::EventSystem events(objects);
 	events.setVerbose(mDebug);
 	objects.setTrace(mDebug);
 	objects.setRuntimeCall(
-		[&objects, &events](VM::Interpreter &vm, const std::string &fn,
-		           const std::vector<VM::Value> &args) {
-			return defaultRuntimeCall(objects, events, vm, fn, args);
+		[&objects, &events, &gfx, &resource](VM::Interpreter &vm,
+		           const std::string &fn, const std::vector<VM::Value> &args) {
+			return defaultRuntimeCall(objects, events, gfx.get(), resource, vm, fn,
+			                          args);
 		});
 	objects.setMaxSteps(2000000); // bring-up safety: stop runaway loops
 	registerClasses(resource, objects);
@@ -313,6 +388,28 @@ void THIRDEYE::Engine::bootObject(RESOURCES::Resource &resource,
 	} catch (const VM::VmError &e) {
 		std::cout << "\nBoot stopped at the first unimplemented piece:\n  "
 		          << e.what() << std::endl;
+	}
+
+	// The SOP main loop spins on dispatch_event() with no input to break it, so
+	// the budget trips with the menu already drawn. Hold the rendered frame on
+	// screen until the user quits, so the result is actually visible. (Temporary:
+	// the real fix is to drive the engine off the event queue -- feed SDL input +
+	// a timer heartbeat into dispatch_event so the loop is event-driven.)
+	if (gfx) {
+		std::cout << "\nRendered frame is up -- press ESC or close the window to quit."
+		          << std::endl;
+		bool done = false;
+		SDL_Event event;
+		while (!done) {
+			while (SDL_PollEvent(&event)) {
+				if (event.type == SDL_QUIT ||
+				    (event.type == SDL_KEYDOWN &&
+				     event.key.keysym.sym == SDLK_ESCAPE))
+					done = true;
+			}
+			gfx->update();
+			SDL_Delay(16);
+		}
 	}
 }
 

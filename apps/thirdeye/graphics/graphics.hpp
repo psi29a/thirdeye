@@ -93,6 +93,11 @@ public:
 	void loadPalette(std::vector<uint8_t> &basePal,
 			std::vector<uint8_t> &subPal, std::string index);
 
+	// Write a palette resource's colours into the live palette starting at
+	// `firstColor`, leaving the rest intact (AESOP set_palette writes a region:
+	// PAL_FIXED at 0x00, PAL_WALLS at 0xB0, ...). Used by the SOP runtime.
+	void setPaletteRange(std::vector<uint8_t> &palRes, uint16_t firstColor);
+
 	void loadMouse(std::vector<uint8_t> &bitmap, uint16_t index);
 
 	uint32_t getSleep();
