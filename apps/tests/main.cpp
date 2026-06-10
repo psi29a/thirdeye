@@ -5,6 +5,7 @@
 #include "../thirdeye/resources/res.hpp"
 #include "../thirdeye/vm/vm.hpp"
 #include "../thirdeye/vm/objects.hpp"
+#include "../thirdeye/vm/events.hpp"
 
 #include <filesystem>
 #include <string>
@@ -54,7 +55,8 @@ VM::SopClass makeClassMulti(uint16_t number, uint32_t parent, uint16_t staticSiz
 
 // Opcode bytes used by the fixtures below.
 enum : uint8_t {
-	PUSH = 0x04, SHTC = 0x1D, AIM = 0x26, LTBA = 0x28, PASS = 0x23, LAW = 0x2D,
+	PUSH = 0x04, ADD = 0x09, MUL = 0x0B, SHTC = 0x1D, AIM = 0x26, LTBA = 0x28,
+	PASS = 0x23, LAW = 0x2D,
 	LABA = 0x32, SABA = 0x35,
 	LSW = 0x3A, SSW = 0x3D, LSBA = 0x3F, SSBA = 0x42,
 	LXW = 0x47, SXW = 0x4A, LXBA = 0x4C, SXAS = 0x53, SOLE = 0x55, END = 0x56
@@ -390,6 +392,145 @@ TEST (Object_Test, SoleChecksObjectList) {
 	int cons = os.createInstance(2);
 	EXPECT_EQ(prov, os.send(cons, 3, {prov}));
 	EXPECT_EQ(-1, os.send(cons, 3, {99}));  // no object at index 99
+}
+
+// --- Event system (EVENT.C) ---
+// A class for the event fixtures. Each handler records into the instance's own
+// static word[0], so dispatch effects are observable via a read-back message:
+//   M:5/M:7  record a digit (word[0] = word[0]*10 + N) -- captures fire ORDER
+//   M:9      store the event parameter (arg1) into word[0]
+//   M:8      return word[0]
+namespace {
+VM::SopClass makeEventClass(uint16_t number) {
+	return makeClassMulti(number, 0xFFFFFFFFu, /*static_size*/ 4, {
+		{5, {PUSH, LSW, 0, 0, PUSH, SHTC, 10, MUL, PUSH, SHTC, 5, ADD, SSW, 0, 0, END}},
+		{7, {PUSH, LSW, 0, 0, PUSH, SHTC, 10, MUL, PUSH, SHTC, 7, ADD, SSW, 0, 0, END}},
+		{9, {PUSH, LAW, 0, 0, SSW, 0, 0, END}},  // word[0] = parameter (arg1)
+		{8, {PUSH, LSW, 0, 0, END}},             // return word[0]
+	});
+}
+constexpr int32_t APP_EVENT = 40; // an application event type (>= 32)
+}
+
+// --- post_event then dispatch delivers the event's parameter to the handler ---
+TEST (Event_Test, NotifyPostDispatchDeliversParameter) {
+	VM::ObjectSystem os;
+	os.addClass(makeEventClass(1));
+	VM::EventSystem ev(os);
+	int obj = os.createInstance(1);
+
+	ev.notify(obj, /*message*/ 9, APP_EVENT, /*parameter*/ 7);
+	ev.postEvent(/*owner*/ 0, APP_EVENT, /*parameter*/ 7);
+	EXPECT_EQ(1u, ev.pendingEvents());
+	ev.dispatchEvent();
+	EXPECT_EQ(0u, ev.pendingEvents());      // event consumed
+	EXPECT_EQ(7, os.send(obj, 8, {}));      // handler ran with parameter 7
+}
+
+// --- parameter must match: a different parameter does not fire the handler ---
+TEST (Event_Test, ParameterMustMatch) {
+	VM::ObjectSystem os;
+	os.addClass(makeEventClass(1));
+	VM::EventSystem ev(os);
+	int obj = os.createInstance(1);
+
+	ev.notify(obj, 9, APP_EVENT, /*parameter*/ 7);
+	ev.postEvent(0, APP_EVENT, /*parameter*/ 99); // 99 != 7
+	ev.dispatchEvent();
+	EXPECT_EQ(0, os.send(obj, 8, {})); // never recorded -> still zero
+}
+
+// --- a -1 notify parameter is a wildcard: any event parameter fires it ---
+TEST (Event_Test, WildcardParameterMatchesAny) {
+	VM::ObjectSystem os;
+	os.addClass(makeEventClass(1));
+	VM::EventSystem ev(os);
+	int obj = os.createInstance(1);
+
+	ev.notify(obj, 9, APP_EVENT, /*parameter*/ -1);
+	ev.postEvent(0, APP_EVENT, /*parameter*/ 123);
+	ev.dispatchEvent();
+	EXPECT_EQ(123, os.send(obj, 8, {}));
+}
+
+// --- handlers fire in registration order (observed via the digit sequence) ---
+TEST (Event_Test, HandlersFireInRegistrationOrder) {
+	VM::ObjectSystem os;
+	os.addClass(makeEventClass(1));
+	VM::EventSystem ev(os);
+	int obj = os.createInstance(1);
+
+	ev.notify(obj, 5, APP_EVENT, -1); // M:5 first
+	ev.notify(obj, 7, APP_EVENT, -1); // then M:7
+	ev.postEvent(0, APP_EVENT, 0);
+	ev.dispatchEvent();
+	EXPECT_EQ(57, os.send(obj, 8, {})); // 0*10+5=5, 5*10+7=57 -> order 5 then 7
+}
+
+// --- cancel() removes a request so dispatch no longer fires it ---
+TEST (Event_Test, CancelRemovesRequest) {
+	VM::ObjectSystem os;
+	os.addClass(makeEventClass(1));
+	VM::EventSystem ev(os);
+	int obj = os.createInstance(1);
+
+	ev.notify(obj, 9, APP_EVENT, -1);
+	ev.cancel(obj, 9, APP_EVENT, -1);
+	ev.postEvent(0, APP_EVENT, 55);
+	ev.dispatchEvent();
+	EXPECT_EQ(0, os.send(obj, 8, {})); // cancelled -> never recorded
+}
+
+// --- drain dispatches every queued event; send_event posts + drains ---
+TEST (Event_Test, DrainAndSendEvent) {
+	VM::ObjectSystem os;
+	os.addClass(makeEventClass(1));
+	VM::EventSystem ev(os);
+	int obj = os.createInstance(1);
+
+	ev.notify(obj, 5, APP_EVENT, -1);
+	ev.postEvent(0, APP_EVENT, 0);
+	ev.postEvent(0, APP_EVENT, 0);
+	ev.drainEventQueue();               // fires M:5 twice -> 5, then 55
+	EXPECT_EQ(0u, ev.pendingEvents());
+	EXPECT_EQ(55, os.send(obj, 8, {}));
+
+	ev.sendEvent(0, APP_EVENT, 0);      // posts + drains immediately -> 555
+	EXPECT_EQ(555, os.send(obj, 8, {}));
+}
+
+// --- system events defer behind pending application events (priority) ---
+// A queued SYS event is re-queued behind any pending APP event so the app's
+// response to an earlier action isn't pre-empted (EVENT.C dispatch_event). The
+// digit order proves it: tens = first to fire, ones = second.
+TEST (Event_Test, SystemEventDefersToAppEvent) {
+	VM::ObjectSystem os;
+	os.addClass(makeEventClass(1));
+	VM::EventSystem ev(os);
+	int obj = os.createInstance(1);
+
+	ev.notify(obj, 5, VM::SYS_KEYDOWN, -1); // M:5 on a system (input) event
+	ev.notify(obj, 7, APP_EVENT, -1);       // M:7 on an application event
+
+	ev.postEvent(0, VM::SYS_KEYDOWN, 0);    // queued first...
+	ev.postEvent(0, APP_EVENT, 0);          // ...but an app event is also pending
+
+	ev.drainEventQueue();
+	// 7 (app) ran before 5 (sys) despite the sys event being queued first.
+	EXPECT_EQ(75, os.send(obj, 8, {}));
+}
+
+// --- flush_input_events drops queued input events but keeps app events ---
+TEST (Event_Test, FlushInputEvents) {
+	VM::ObjectSystem os;
+	os.addClass(makeEventClass(1));
+	VM::EventSystem ev(os);
+
+	ev.postEvent(0, VM::SYS_KEYDOWN, 0); // input event
+	ev.postEvent(0, APP_EVENT, 0);       // application event
+	EXPECT_EQ(2u, ev.pendingEvents());
+	ev.flushInputEvents();
+	EXPECT_EQ(1u, ev.pendingEvents());   // only the app event survives
 }
 
 int main(int argc, char **argv) {
