@@ -5,6 +5,7 @@
 #include "graphics/graphics.hpp"
 #include "vm/vm.hpp"
 #include "vm/objects.hpp"
+#include "vm/events.hpp"
 
 #include <components/files/configurationmanager.hpp>
 
@@ -96,9 +97,37 @@ constexpr int MSG_CREATE = 0;
 // Runtime-function library. Most functions are still stubs (log + return 0),
 // but where we can do the real thing, we do. Each call is logged with its
 // arguments, resolving address arguments to inline strings when possible.
-VM::Value defaultRuntimeCall(VM::ObjectSystem &objects, VM::Interpreter &vm,
-                             const std::string &fn,
+VM::Value defaultRuntimeCall(VM::ObjectSystem &objects, VM::EventSystem &events,
+                             VM::Interpreter &vm, const std::string &fn,
                              const std::vector<VM::Value> &args) {
+	// --- event system (EVENT.C) -- real, and intentionally quiet: the kernel's
+	// main loop calls these in a tight spin, so logging each would bury the
+	// trace. dispatchEvent itself logs the messages it delivers when verbose.
+	if (fn == "notify" && args.size() >= 4) {
+		events.notify(args[0], static_cast<uint32_t>(args[1]), args[2], args[3]);
+		return 0;
+	}
+	if (fn == "cancel" && args.size() >= 4) {
+		events.cancel(args[0], static_cast<uint32_t>(args[1]), args[2], args[3]);
+		return 0;
+	}
+	if (fn == "post_event" && args.size() >= 3) {
+		events.postEvent(args[0], args[1], args[2]);
+		return 0;
+	}
+	if (fn == "send_event" && args.size() >= 3) {
+		events.sendEvent(args[0], args[1], args[2]);
+		return 0;
+	}
+	if (fn == "dispatch_event") { events.dispatchEvent(); return 0; }
+	if (fn == "drain_event_queue") { events.drainEventQueue(); return 0; }
+	if (fn == "peek_event") return events.peekEvent() ? 1 : 0;
+	if (fn == "flush_event_queue" && args.size() >= 3) {
+		events.flushEventQueue(args[0], args[1], args[2]);
+		return 0;
+	}
+	if (fn == "flush_input_events") { events.flushInputEvents(); return 0; }
+
 	std::cout << "    CALL " << fn << "(";
 	for (size_t i = 0; i < args.size(); ++i) {
 		std::cout << (i ? ", " : "");
@@ -124,7 +153,10 @@ VM::Value defaultRuntimeCall(VM::ObjectSystem &objects, VM::Interpreter &vm,
 		return rtn;
 	}
 	if (fn == "destroy_object" && args.size() >= 1) {
+		// RTOBJECT.C destroy_object: MSG_DESTROY, then cancel the object's
+		// outstanding notify requests (release_owned_windows is still a stub).
 		VM::Value rtn = objects.destroyObject(static_cast<int>(args[0]));
+		events.cancelEntityRequests(static_cast<int>(args[0]));
 		std::cout << "  [destroyed]" << std::endl;
 		return rtn;
 	}
@@ -208,11 +240,13 @@ void THIRDEYE::Engine::runResourceVM(RESOURCES::Resource &resource) {
 	          << " code object(s))..." << std::endl;
 
 	VM::ObjectSystem objects;
+	VM::EventSystem events(objects);
+	events.setVerbose(mDebug);
 	objects.setTrace(mDebug);
 	objects.setRuntimeCall(
-		[&objects](VM::Interpreter &vm, const std::string &fn,
+		[&objects, &events](VM::Interpreter &vm, const std::string &fn,
 		           const std::vector<VM::Value> &args) {
-			return defaultRuntimeCall(objects, vm, fn, args);
+			return defaultRuntimeCall(objects, events, vm, fn, args);
 		});
 	objects.setMaxSteps(2000000); // bring-up safety: stop runaway loops
 	registerClasses(resource, objects);
@@ -252,11 +286,13 @@ void THIRDEYE::Engine::runResourceVM(RESOURCES::Resource &resource) {
 void THIRDEYE::Engine::bootObject(RESOURCES::Resource &resource,
                                   const std::string &objectName) {
 	VM::ObjectSystem objects;
+	VM::EventSystem events(objects);
+	events.setVerbose(mDebug);
 	objects.setTrace(mDebug);
 	objects.setRuntimeCall(
-		[&objects](VM::Interpreter &vm, const std::string &fn,
+		[&objects, &events](VM::Interpreter &vm, const std::string &fn,
 		           const std::vector<VM::Value> &args) {
-			return defaultRuntimeCall(objects, vm, fn, args);
+			return defaultRuntimeCall(objects, events, vm, fn, args);
 		});
 	objects.setMaxSteps(2000000); // bring-up safety: stop runaway loops
 	registerClasses(resource, objects);

@@ -82,6 +82,11 @@ public:
 
 	const SopClass* classByNumber(uint16_t number) const;
 
+	// Object-list indices below this are "entities" (physical game objects);
+	// at/above are program objects (menus, kernel, ...). From SHARED.H
+	// NUM_ENTITIES; the event layer uses it to scope entity-wide cancels.
+	static constexpr int kNumEntities = 2000;
+
 	// --- the cross-object link layer (RTLINK.C construct_thunk, on demand) ---
 	// Instance statics are laid out base-class-FIRST: an instance of class C
 	// allocates the whole parent chain's statics, and each class's block sits

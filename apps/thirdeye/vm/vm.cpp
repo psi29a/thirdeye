@@ -32,7 +32,13 @@ Interpreter::Interpreter(std::vector<uint8_t> code) : mCode(std::move(code)) {
 		std::memcpy(&mHeader.export_resource, &mCode[6], 4);
 		std::memcpy(&mHeader.parent, &mCode[10], 4);
 	}
-	mStk.assign(kStackBytes, 0);
+	// kStackGuard bytes of slack above the logical top: AESOP loads THIS (a word
+	// at fptr-2) with a dword opcode, reading 2 bytes past the top of stack. The
+	// original tolerated this because stk_off started at the top of a malloc'd
+	// block with adjacent heap slack; we make that slack explicit so a benign
+	// boundary straddle doesn't trip the bounds check while a real runaway still
+	// does. mSp still starts at kStackBytes (see execute()).
+	mStk.assign(kStackBytes + kStackGuard, 0);
 }
 
 // --- bytecode fetch ---------------------------------------------------------
@@ -57,13 +63,28 @@ uint32_t Interpreter::fetch32() {
 
 // --- byte-stack access (little-endian) --------------------------------------
 
+// Guard every operand-stack access. The original ran on a fixed STK_SIZE block
+// of raw memory; here mStk is a heap vector, so an out-of-range index (mSp
+// marching past the ends -- e.g. a handler that nets pops because it loops on a
+// stubbed runtime function returning the "wrong" value) would corrupt the heap.
+// We trade the original's raw access for a clean VmError during bring-up.
+void Interpreter::boundsCheck(uint32_t off, uint32_t size) const {
+	if (static_cast<uint64_t>(off) + size > mStk.size())
+		throw VmError("VM operand-stack access out of range (offset " +
+		              std::to_string(off) + ", size " + std::to_string(size) +
+		              ") -- stack overflow/underflow, likely a handler looping "
+		              "on a stubbed runtime function");
+}
+
 Value Interpreter::readStk(uint32_t off) const {
+	boundsCheck(off, 4);
 	uint32_t v;
 	std::memcpy(&v, &mStk[off], 4);
 	return static_cast<Value>(v);
 }
 
 void Interpreter::writeStk(uint32_t off, Value v) {
+	boundsCheck(off, 4);
 	uint32_t u = static_cast<uint32_t>(v);
 	std::memcpy(&mStk[off], &u, 4);
 }
@@ -120,8 +141,12 @@ Value Interpreter::run() {
 
 		switch (op) {
 		// --- branches (absolute 16-bit target into the resource) ---
-		case Op::BRT: { uint16_t t = fetch16(); if (popVal() != 0) mPC = t; break; }
-		case Op::BRF: { uint16_t t = fetch16(); if (popVal() == 0) mPC = t; break; }
+		// Branches read the top value but do NOT pop it (RT.ASM do_BRT/do_BRF
+		// test [edi] without advancing edi). The leftover value is overwritten
+		// in place by the next load/constant -- popping here would drift the
+		// stack upward one slot per branch (a real bug over long loops).
+		case Op::BRT: { uint16_t t = fetch16(); if (topVal() != 0) mPC = t; break; }
+		case Op::BRF: { uint16_t t = fetch16(); if (topVal() == 0) mPC = t; break; }
 		case Op::BRA: { mPC = fetch16(); break; }
 		case Op::CASE: {
 			Value sel = topVal();              // CASE keeps selector? asm reads [edi], pops via branch
@@ -188,15 +213,19 @@ Value Interpreter::run() {
 		// --- auto (local/param) scalar load/store; byte-addressed at fptr-off ---
 		// Offsets are SIGNED (see autoAddr): locals/THIS below fptr, params above.
 		case Op::LAB: { uint32_t p = autoAddr(static_cast<int16_t>(fetch16()));
+			boundsCheck(p, 1);
 			setTop(static_cast<int8_t>(mStk[p])); break; }                 // sign-extend
 		case Op::LAW: { uint32_t p = autoAddr(static_cast<int16_t>(fetch16()));
+			boundsCheck(p, 2);
 			int16_t w; std::memcpy(&w, &mStk[p], 2);
 			setTop(w); break; }                                            // sign-extend
 		case Op::LAD: { uint32_t p = autoAddr(static_cast<int16_t>(fetch16()));
 			setTop(readStk(p)); break; }
 		case Op::SAB: { uint32_t p = autoAddr(static_cast<int16_t>(fetch16()));
+			boundsCheck(p, 1);
 			mStk[p] = static_cast<uint8_t>(topVal()); break; }             // no pop
 		case Op::SAW: { uint32_t p = autoAddr(static_cast<int16_t>(fetch16()));
+			boundsCheck(p, 2);
 			uint16_t w = static_cast<uint16_t>(topVal());
 			std::memcpy(&mStk[p], &w, 2); break; }                         // no pop
 		case Op::SAD: { uint32_t p = autoAddr(static_cast<int16_t>(fetch16()));
@@ -342,19 +371,23 @@ Value Interpreter::run() {
 		// --- auto (local/param) arrays: addr = fptr - offset + index(top) ---
 		case Op::LABA: { uint32_t p = autoAddr(static_cast<int16_t>(fetch16()))
 			                          + topVal();
+			boundsCheck(p, 1);
 			setTop(static_cast<int8_t>(mStk[p])); break; }                 // sign-extend
 		case Op::LAWA: { uint32_t p = autoAddr(static_cast<int16_t>(fetch16()))
 			                          + topVal();
+			boundsCheck(p, 2);
 			int16_t w; std::memcpy(&w, &mStk[p], 2); setTop(w); break; }   // sign-extend
 		case Op::LADA: { uint32_t p = autoAddr(static_cast<int16_t>(fetch16()))
 			                          + topVal();
 			setTop(readStk(p)); break; }
 		case Op::SABA: { uint16_t off = fetch16(); Value data = popVal();
 			uint32_t p = autoAddr(static_cast<int16_t>(off)) + topVal();
+			boundsCheck(p, 1);
 			mStk[p] = static_cast<uint8_t>(data);
 			setTop(data); break; }                                         // leaves data
 		case Op::SAWA: { uint16_t off = fetch16(); Value data = popVal();
 			uint32_t p = autoAddr(static_cast<int16_t>(off)) + topVal();
+			boundsCheck(p, 2);
 			uint16_t w = static_cast<uint16_t>(data);
 			std::memcpy(&mStk[p], &w, 2); setTop(data); break; }
 		case Op::SADA: { uint16_t off = fetch16(); Value data = popVal();
