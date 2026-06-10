@@ -319,11 +319,22 @@ std::string RESOURCES::Resource::getTableEntry(uint16_t number, uint8_t table) {
 }
 
 std::vector<std::string> RESOURCES::Resource::getCodeResourceNames() {
+	// A SOP code object always has a companion "<name>.EXPT" export resource.
+	// (The data attribute alone is not reliable -- bitmaps etc. can share it.)
 	std::vector<std::string> names;
 	for (const auto &entry : mAssets) {
-		// Attribute bit 0x10 marks a SOP code (object) resource.
-		if (entry.second.attributes & 0x10)
-			names.push_back(entry.second.name);
+		const std::string &name = entry.second.name;
+		if (name.empty())
+			continue;
+		// Skip the .IMPT/.EXPT companions themselves.
+		auto endsWith = [&](const char *suf) {
+			size_t n = std::strlen(suf);
+			return name.size() >= n && name.compare(name.size() - n, n, suf) == 0;
+		};
+		if (endsWith(".EXPT") || endsWith(".IMPT"))
+			continue;
+		if (!searchDictionary(mTable0, name + ".EXPT").empty())
+			names.push_back(name);
 	}
 	return names;
 }

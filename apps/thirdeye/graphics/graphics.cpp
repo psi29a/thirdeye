@@ -406,8 +406,9 @@ void GRAPHICS::Graphics::update() {
 			materializeImage(std::get<2>(scene));
 			break;
 		default:
-			std::cerr << "Case not yet implemented." << std::endl;
-			throw;
+			throw std::runtime_error(
+					"Video scene type not yet implemented: " +
+					std::to_string(static_cast<int>(std::get<0>(scene))));
 		}
 		mVideo.erase(index);
 	}

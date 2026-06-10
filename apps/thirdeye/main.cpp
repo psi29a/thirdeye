@@ -44,6 +44,7 @@ int main(int argc, char** argv) {
         std::string start    = "LEVEL4";
         uint16_t    scale     = 1;
         bool        renderer  = false;
+        bool        forceVM   = false;
         bool        debug     = false;
         bool        nosound   = false;
         bool        newGame   = false;
@@ -56,6 +57,8 @@ int main(int argc, char** argv) {
         app.add_option("--start", start, "Starting location");
         app.add_option("--scale", scale, "Resolution scale");
         app.add_flag("--renderer", renderer, "Enable hardware renderer");
+        app.add_flag("--vm", forceVM,
+                     "Boot the SOP bytecode VM (run the 'start' object) instead of the intro");
         app.add_flag("--debug", debug, "Enable debug mode");
         app.add_flag("--nosound", nosound, "Disable all sounds");
         app.add_flag("--new-game", newGame, "Activate new game mechanics");
@@ -71,6 +74,7 @@ int main(int argc, char** argv) {
             {"start",     start},
             {"scale",     std::to_string(scale)},
             {"renderer",  renderer ? "true" : "false"},
+            {"vm",        forceVM  ? "true" : "false"},
             {"debug",     debug    ? "true" : "false"},
             {"nosound",   nosound  ? "true" : "false"},
             {"new-game",  newGame  ? "true" : "false"},
@@ -81,6 +85,7 @@ int main(int argc, char** argv) {
         THIRDEYE::Engine engine(cfgMgr);
         engine.setGameData(variables["game-data"]);
         engine.setGame(variables["game"]);
+        engine.setForceVM(toBool(variables["vm"]));
         engine.setDebugMode(toBool(variables["debug"]));
         engine.setSoundUsage(toBool(variables["nosound"]));
         engine.setScale(static_cast<uint16_t>(std::stoi(variables["scale"])));

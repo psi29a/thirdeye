@@ -99,7 +99,13 @@ Value Interpreter::execute(uint32_t handlerOffset, uint16_t thisIndex,
 // --- dispatch loop ----------------------------------------------------------
 
 Value Interpreter::run() {
+	uint64_t steps = 0;
 	for (;;) {
+		if (mMaxSteps && ++steps > mMaxSteps)
+			throw VmError("instruction budget exceeded (" +
+			              std::to_string(mMaxSteps) +
+			              ") -- likely an infinite loop (a stubbed runtime "
+			              "function not advancing real state?)");
 		uint32_t opPC = mPC;
 		uint8_t raw = fetch8();
 		if (raw > kMaxOpcode)
