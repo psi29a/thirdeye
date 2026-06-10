@@ -1,8 +1,6 @@
 Thirdeye: A reimplementation of the AESOP engine
 
-Thirdeye is an attempt at recreating the AESOP engine for the popular
-role-playing games Eye of the Beholder 3 and Dungeon Hack. You need to own and
-install the original games for Thirdeye to work.
+Thirdeye is an attempt at recreating the AESOP engine for the popular role-playing games Eye of the Beholder 3 and Dungeon Hack. You need to own and install the original games for Thirdeye to work.
 
 Version: 0.86.0  
 License: GPL (see GPL3.txt for more information)  

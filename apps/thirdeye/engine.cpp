@@ -43,6 +43,10 @@ void THIRDEYE::Engine::setGameData(std::string gameData) {
 	mGameData = std::filesystem::path(gameData);
 }
 
+void THIRDEYE::Engine::setForceVM(bool forceVM) {
+	mForceVM = forceVM;
+}
+
 // The game-data path may be either a directory (in which case we append the
 // selected game's main .RES) or a direct path to a .RES file (used as-is, with
 // the game auto-detected from the filename).
@@ -83,75 +87,58 @@ void THIRDEYE::Engine::setRenderer(bool renderer) {
 	mRenderer = renderer;
 }
 
-// Drive the SOP bytecode of each code object through the VM. This is the
-// bring-up path: it runs every exported message handler from its entry offset
-// and reports the outcome (END with a return value, or the first opcode we
-// can't execute yet -- typically a CALL/SEND into the not-yet-built runtime).
-void THIRDEYE::Engine::runResourceVM(RESOURCES::Resource &resource) {
-	std::vector<std::string> codeNames = resource.getCodeResourceNames();
-	if (codeNames.empty()) {
-		std::cout << "\nNo SOP code objects in this resource file." << std::endl;
-		return;
+namespace {
+
+// MSG_CREATE: the message the engine sends to a freshly created instance to
+// boot/initialize it (see eob3_research/runtime/DEFS.H + RTOBJECT.C).
+constexpr int MSG_CREATE = 0;
+
+// Runtime-function library. Most functions are still stubs (log + return 0),
+// but where we can do the real thing, we do. Each call is logged with its
+// arguments, resolving address arguments to inline strings when possible.
+VM::Value defaultRuntimeCall(VM::Interpreter &vm, const std::string &fn,
+                             const std::vector<VM::Value> &args) {
+	std::cout << "    CALL " << fn << "(";
+	for (size_t i = 0; i < args.size(); ++i) {
+		std::cout << (i ? ", " : "");
+		std::string str = vm.readCodeString(static_cast<uint32_t>(args[i]));
+		if (!str.empty())
+			std::cout << '"' << str << '"';
+		else
+			std::cout << args[i];
+	}
+	std::cout << ")";
+
+	// launch(mode, program, arg1, arg2): spawn a secondary program. In AESOP
+	// this is how EOB3 hands off to its sub-programs (e.g. CHARGEN).
+	if (fn == "launch") {
+		std::string program;
+		for (VM::Value a : args) {
+			std::string s = vm.readCodeString(static_cast<uint32_t>(a));
+			if (!s.empty()) { program = s; break; }
+		}
+		if (program.empty()) {
+			std::cout << "  [launch: no program name]" << std::endl;
+			return 0;
+		}
+		if (std::filesystem::exists(program)) {
+			std::string path = std::filesystem::absolute(program).string();
+			std::cout << "  [launch: running \"" << path << "\"]" << std::endl;
+			return std::system(path.c_str());
+		}
+		std::cout << "  [launch: \"" << program << "\" not found, nothing to run]"
+		          << std::endl;
+		return 0;
 	}
 
-	std::cout << "\nRunning SOP bytecode (" << codeNames.size()
-	          << " code object(s))..." << std::endl;
+	std::cout << "  [stub -> 0]" << std::endl;
+	return 0;
+}
 
-	// Runtime-function library. Most functions are still stubs (log + return 0),
-	// but where we can do the real thing, we do. Each is logged with its
-	// arguments, resolving address arguments to inline strings when possible.
-	VM::Interpreter::RuntimeCall runtimeStub =
-		[](VM::Interpreter &vm, const std::string &fn,
-		   const std::vector<VM::Value> &args) -> VM::Value {
-			// Pretty-print the call, showing strings where an arg points at one.
-			std::cout << "    CALL " << fn << "(";
-			for (size_t i = 0; i < args.size(); ++i) {
-				std::cout << (i ? ", " : "");
-				std::string str = vm.readCodeString(static_cast<uint32_t>(args[i]));
-				if (!str.empty())
-					std::cout << '"' << str << '"';
-				else
-					std::cout << args[i];
-			}
-			std::cout << ")";
-
-			// launch(mode, program, arg1, arg2): spawn a secondary program.
-			// (In AESOP this is how EOB3 hands off to its sub-programs.)
-			if (fn == "launch") {
-				std::string program;
-				for (VM::Value a : args) {
-					std::string s = vm.readCodeString(static_cast<uint32_t>(a));
-					if (!s.empty()) { program = s; break; }
-				}
-				if (program.empty()) {
-					std::cout << "  [launch: no program name]" << std::endl;
-					return 0;
-				}
-				if (std::filesystem::exists(program)) {
-					// Use the absolute path so the shell doesn't depend on PATH.
-					std::string path =
-						std::filesystem::absolute(program).string();
-					std::cout << "  [launch: running \"" << path << "\"]"
-					          << std::endl;
-					return std::system(path.c_str());
-				}
-				std::cout << "  [launch: \"" << program
-				          << "\" not found -- it's a SAMPLE.RES placeholder, "
-				             "nothing to run]" << std::endl;
-				return 0;
-			}
-
-			std::cout << "  [stub -> 0]" << std::endl;
-			return 0;
-		};
-
-	// Register every code object as a class in the object system. Registering
-	// all of them first lets parent links (class hierarchy) resolve.
-	VM::ObjectSystem objects;
-	objects.setTrace(mDebug);
-	objects.setRuntimeCall(runtimeStub);
-
-	for (const std::string &name : codeNames) {
+// Register every SOP code object in the resource as a class. Registering all of
+// them first lets parent links (the class hierarchy) resolve at dispatch time.
+void registerClasses(RESOURCES::Resource &resource, VM::ObjectSystem &objects) {
+	for (const std::string &name : resource.getCodeResourceNames()) {
 		VM::SopClass cls;
 		cls.name = name;
 		cls.number = static_cast<uint16_t>(resource.getResourceNumber(name));
@@ -168,8 +155,29 @@ void THIRDEYE::Engine::runResourceVM(RESOURCES::Resource &resource) {
 		}
 		objects.addClass(std::move(cls));
 	}
+}
 
-	// Instantiate each class and run its message handlers via SEND dispatch.
+} // namespace
+
+// Drive the SOP bytecode of each code object through the VM: run every exported
+// message handler and report where each ends. Useful for small resources like
+// SAMPLE.RES; for a full game use bootObject() instead.
+void THIRDEYE::Engine::runResourceVM(RESOURCES::Resource &resource) {
+	std::vector<std::string> codeNames = resource.getCodeResourceNames();
+	if (codeNames.empty()) {
+		std::cout << "\nNo SOP code objects in this resource file." << std::endl;
+		return;
+	}
+
+	std::cout << "\nRunning SOP bytecode (" << codeNames.size()
+	          << " code object(s))..." << std::endl;
+
+	VM::ObjectSystem objects;
+	objects.setTrace(mDebug);
+	objects.setRuntimeCall(defaultRuntimeCall);
+	objects.setMaxSteps(2000000); // bring-up safety: stop runaway loops
+	registerClasses(resource, objects);
+
 	for (const std::string &name : codeNames) {
 		uint16_t classNumber = 0;
 		objects.findClassByName(name, classNumber);
@@ -199,6 +207,36 @@ void THIRDEYE::Engine::runResourceVM(RESOURCES::Resource &resource) {
 	}
 }
 
+// Boot a single object the way the original interpreter does (create instance +
+// send MSG_CREATE). This runs the real boot path and stops at the first runtime
+// function / opcode we haven't built yet -- our data-driven bring-up to-do list.
+void THIRDEYE::Engine::bootObject(RESOURCES::Resource &resource,
+                                  const std::string &objectName) {
+	VM::ObjectSystem objects;
+	objects.setTrace(mDebug);
+	objects.setRuntimeCall(defaultRuntimeCall);
+	objects.setMaxSteps(2000000); // bring-up safety: stop runaway loops
+	registerClasses(resource, objects);
+
+	uint16_t classNumber = 0;
+	if (!objects.findClassByName(objectName, classNumber)) {
+		std::cout << "Boot object \"" << objectName
+		          << "\" not found in this resource file." << std::endl;
+		return;
+	}
+
+	std::cout << "\nBooting object \"" << objectName
+	          << "\" (sending MSG_CREATE)..." << std::endl;
+	int objIndex = objects.createInstance(classNumber);
+	try {
+		VM::Value result = objects.send(objIndex, MSG_CREATE, {});
+		std::cout << "Boot handler returned " << result << "." << std::endl;
+	} catch (const VM::VmError &e) {
+		std::cout << "\nBoot stopped at the first unimplemented piece:\n  "
+		          << e.what() << std::endl;
+	}
+}
+
 // Initialise and enter main loop.
 void THIRDEYE::Engine::go() {
 	std::filesystem::path resFile = resolveResourceFile();
@@ -208,6 +246,13 @@ void THIRDEYE::Engine::go() {
 	}
 
 	RESOURCES::Resource resource(resFile);	// get our game resources ready
+
+	// --vm: boot the SOP bytecode VM (the 'start' object) instead of the intro.
+	// This is the data-driven bring-up path.
+	if (mForceVM) {
+		bootObject(resource, "start");
+		return;
+	}
 
 	// The intro/menu flow below is EOB3-specific and needs the cinematic that
 	// ships beside the game's .RES. If we were handed some other resource file

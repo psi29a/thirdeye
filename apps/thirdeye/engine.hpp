@@ -38,6 +38,7 @@ class Engine
 	bool mNewGame;
 	bool mUseSound;
 	bool mDebug;
+	bool mForceVM = false;
 	bool mRenderer;
 	uint8_t mGame;
 	uint16_t mScale;
@@ -65,6 +66,7 @@ public:
 
 	void setGame(std::string game);
 	void setGameData(std::string gameData);
+	void setForceVM(bool forceVM);
 	void setDebugMode(bool debug);
 	void setSoundUsage(bool nosound);
 	void setRenderer(bool renderer);
@@ -79,6 +81,12 @@ private:
 	/// reporting where each one ends (END, or the first unimplemented opcode).
 	/// With debug mode on, prints a per-instruction trace.
 	void runResourceVM(RESOURCES::Resource &resource);
+
+	/// Boot a single object the way the original interpreter does: create an
+	/// instance of `objectName` and send it MSG_CREATE (0). This is the data-
+	/// driven bring-up path -- it runs the real boot handler and stops at the
+	/// first runtime function / opcode we haven't implemented.
+	void bootObject(RESOURCES::Resource &resource, const std::string &objectName);
 
 	Files::ConfigurationManager& mCfgMgr;
 	std::string mResource;

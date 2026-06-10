@@ -4,6 +4,9 @@
 
 #include "bitmap.hpp"
 
+#include <stdexcept>
+#include <string>
+
 GRAPHICS::Bitmap::Bitmap(const std::vector<uint8_t> &vec) {
 	mBitmapData = vec;
 	nextBitmapPos = 0;
@@ -50,9 +53,9 @@ std::vector<uint8_t> GRAPHICS::Bitmap::operator[](uint16_t index) {
 			break;
 
 		if ((y < 0) || (y >= getHeight(index))) {
-			std::cout << "Probably out of sync. Reported y-coord: " << y
-					<< std::endl;
-			throw;
+			throw std::runtime_error(
+					"Bitmap RLE decode out of sync: y-coord " + std::to_string(y) +
+					" outside height " + std::to_string(getHeight(index)));
 		}
 		pos++;
 
@@ -84,9 +87,9 @@ std::vector<uint8_t> GRAPHICS::Bitmap::operator[](uint16_t index) {
 			}
 
 			if (rle_width != 0) {
-				std::cout << "Out of sync while unpacking RLE: ( rle_width = "
-						<< rle_width << " )." << std::endl;
-				throw;
+				throw std::runtime_error(
+						"Bitmap RLE decode out of sync (rle_width = " +
+						std::to_string(rle_width) + ")");
 			}
 
 			if (islast == 0x80)

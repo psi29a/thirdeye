@@ -53,6 +53,7 @@ public:
 	// Runtime-function dispatch hook shared by every handler we run.
 	void setRuntimeCall(Interpreter::RuntimeCall fn) { mRuntimeCall = std::move(fn); }
 	void setTrace(bool trace) { mTrace = trace; }
+	void setMaxSteps(uint64_t maxSteps) { mMaxSteps = maxSteps; }
 
 	// Dispatch `message` to object `objIndex`. Returns the handler's result, or
 	// -1 if no handler exists anywhere in the object's class hierarchy.
@@ -78,8 +79,11 @@ private:
 	std::vector<std::vector<uint8_t>> mStatics;  // object index -> static storage
 	Interpreter::RuntimeCall mRuntimeCall;
 	bool mTrace = false;
+	uint64_t mMaxSteps = 0;
+	int mDepth = 0; // current SEND/PASS recursion depth
 
 	static constexpr uint32_t kNoParent = 0xFFFFFFFFu;
+	static constexpr int kMaxDepth = 256; // max SEND/PASS recursion depth
 };
 
 } // namespace VM
