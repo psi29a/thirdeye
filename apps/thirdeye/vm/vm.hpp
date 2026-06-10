@@ -219,6 +219,11 @@ private:
 	ObjectLookup mObjectLookup;               // SOLE: index -> handle or -1
 
 	static constexpr uint32_t kStackBytes = 16384; // matches RT.ASM STK_SIZE
+	// Slack above the logical top (mSp starts at kStackBytes). Absorbs AESOP's
+	// dword-read of the word-sized THIS slot at fptr-2 and similar 1-3 byte
+	// boundary straddles, the way the original's malloc slack did. A genuine
+	// runaway (mSp marching far past the ends) still trips boundsCheck.
+	static constexpr uint32_t kStackGuard = 256;
 	static constexpr int kValueSize = 4;
 	static constexpr int kOffThis = 2; // THIS lives at fptr-2
 
@@ -227,7 +232,8 @@ private:
 	uint16_t fetch16();
 	uint32_t fetch32();
 
-	// little-endian access into the byte stack
+	// little-endian access into the byte stack (bounds-checked)
+	void  boundsCheck(uint32_t off, uint32_t size) const;
 	Value readStk(uint32_t off) const;
 	void  writeStk(uint32_t off, Value v);
 
