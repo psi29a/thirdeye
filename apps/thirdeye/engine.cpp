@@ -96,7 +96,8 @@ constexpr int MSG_CREATE = 0;
 // Runtime-function library. Most functions are still stubs (log + return 0),
 // but where we can do the real thing, we do. Each call is logged with its
 // arguments, resolving address arguments to inline strings when possible.
-VM::Value defaultRuntimeCall(VM::Interpreter &vm, const std::string &fn,
+VM::Value defaultRuntimeCall(VM::ObjectSystem &objects, VM::Interpreter &vm,
+                             const std::string &fn,
                              const std::vector<VM::Value> &args) {
 	std::cout << "    CALL " << fn << "(";
 	for (size_t i = 0; i < args.size(); ++i) {
@@ -108,6 +109,25 @@ VM::Value defaultRuntimeCall(VM::Interpreter &vm, const std::string &fn,
 			std::cout << args[i];
 	}
 	std::cout << ")";
+
+	// --- object management (RTOBJECT.C) -- real, backed by the ObjectSystem ---
+	if (fn == "create_program" && args.size() >= 2) {
+		int index = static_cast<int>(args[0]);
+		int rtn = objects.createProgram(index,
+		                                static_cast<uint16_t>(args[1]));
+		std::cout << "  [-> obj " << rtn << "]" << std::endl;
+		return rtn;
+	}
+	if (fn == "create_object" && args.size() >= 1) {
+		int rtn = objects.createObject(static_cast<uint16_t>(args[0]));
+		std::cout << "  [-> obj " << rtn << "]" << std::endl;
+		return rtn;
+	}
+	if (fn == "destroy_object" && args.size() >= 1) {
+		VM::Value rtn = objects.destroyObject(static_cast<int>(args[0]));
+		std::cout << "  [destroyed]" << std::endl;
+		return rtn;
+	}
 
 	// launch(mode, program, arg1, arg2): spawn a secondary program. In AESOP
 	// this is how EOB3 hands off to its sub-programs (e.g. CHARGEN).
@@ -144,14 +164,29 @@ void registerClasses(RESOURCES::Resource &resource, VM::ObjectSystem &objects) {
 		cls.number = static_cast<uint16_t>(resource.getResourceNumber(name));
 		cls.code = resource.getAsset(name);
 		cls.header = VM::Interpreter(cls.code).header();
+		auto isVarTag = [](const std::string &tag) { // "B:/W:/L:<name>" entries
+			return tag.size() > 2 && tag[1] == ':' &&
+			       (tag[0] == 'B' || tag[0] == 'W' || tag[0] == 'L');
+		};
 		for (const auto &exp : resource.getExports(name)) {
 			if (exp.first.rfind("M:", 0) == 0) // "M:<n>" -> handler entry offset
 				cls.handlers[std::stoi(exp.first.substr(2))] =
 					static_cast<uint32_t>(std::stoul(exp.second));
+			else if (isVarTag(exp.first)) // public static -> offset in this class
+				cls.exportedVars[exp.first] =
+					static_cast<uint16_t>(std::stoul(exp.second));
 		}
 		for (const auto &imp : resource.getImports(name)) {
-			if (imp.first.rfind("C:", 0) == 0) // "C:<name>" -> runtime-fn number
+			if (imp.first.rfind("C:", 0) == 0) { // "C:<name>" -> runtime-fn number
 				cls.imports[std::stoi(imp.second)] = imp.first.substr(2);
+			} else if (isVarTag(imp.first)) {
+				// extern variable: def is "<XR-offset>,<source-class>" (RTLINK.C)
+				size_t comma = imp.second.find(',');
+				if (comma != std::string::npos)
+					cls.externs[std::stoul(imp.second.substr(0, comma))] = {
+						imp.first, static_cast<uint32_t>(
+							std::stoul(imp.second.substr(comma + 1)))};
+			}
 		}
 		objects.addClass(std::move(cls));
 	}
@@ -174,7 +209,11 @@ void THIRDEYE::Engine::runResourceVM(RESOURCES::Resource &resource) {
 
 	VM::ObjectSystem objects;
 	objects.setTrace(mDebug);
-	objects.setRuntimeCall(defaultRuntimeCall);
+	objects.setRuntimeCall(
+		[&objects](VM::Interpreter &vm, const std::string &fn,
+		           const std::vector<VM::Value> &args) {
+			return defaultRuntimeCall(objects, vm, fn, args);
+		});
 	objects.setMaxSteps(2000000); // bring-up safety: stop runaway loops
 	registerClasses(resource, objects);
 
@@ -214,7 +253,11 @@ void THIRDEYE::Engine::bootObject(RESOURCES::Resource &resource,
                                   const std::string &objectName) {
 	VM::ObjectSystem objects;
 	objects.setTrace(mDebug);
-	objects.setRuntimeCall(defaultRuntimeCall);
+	objects.setRuntimeCall(
+		[&objects](VM::Interpreter &vm, const std::string &fn,
+		           const std::vector<VM::Value> &args) {
+			return defaultRuntimeCall(objects, vm, fn, args);
+		});
 	objects.setMaxSteps(2000000); // bring-up safety: stop runaway loops
 	registerClasses(resource, objects);
 
