@@ -55,7 +55,9 @@ VM::SopClass makeClassMulti(uint16_t number, uint32_t parent, uint16_t staticSiz
 // Opcode bytes used by the fixtures below.
 enum : uint8_t {
 	PUSH = 0x04, SHTC = 0x1D, AIM = 0x26, LTBA = 0x28, PASS = 0x23, LAW = 0x2D,
-	LSW = 0x3A, SSW = 0x3D, LSBA = 0x3F, SSBA = 0x42, END = 0x56
+	LABA = 0x32, SABA = 0x35,
+	LSW = 0x3A, SSW = 0x3D, LSBA = 0x3F, SSBA = 0x42,
+	LXW = 0x47, SXW = 0x4A, LXBA = 0x4C, SXAS = 0x53, SOLE = 0x55, END = 0x56
 };
 }
 
@@ -134,6 +136,21 @@ TEST (VM_Test, StopsAtUnimplementedRuntimeCall) {
 	RESOURCES::Resource res{sampleRes()};
 	VM::Interpreter vm{res.getAsset((uint16_t)7)};
 	EXPECT_THROW(vm.execute(14), VM::VmError);
+}
+
+// --- Tagged address model: encode/decode round-trips per space ---
+TEST (VM_Test, AddressEncodeDecode) {
+	VM::Addr code = VM::decodeAddr(VM::makeAddr(VM::AddrSpace::Code, 543));
+	EXPECT_EQ(VM::AddrSpace::Code, code.space);
+	EXPECT_EQ(543u, code.offset);
+
+	VM::Addr stat = VM::decodeAddr(VM::makeAddr(VM::AddrSpace::Static, 12, 2002));
+	EXPECT_EQ(VM::AddrSpace::Static, stat.space);
+	EXPECT_EQ(12u, stat.offset);
+	EXPECT_EQ(2002u, stat.obj);          // object index survives the encoding
+
+	// A plain small integer (e.g. a resource number) is not an address.
+	EXPECT_EQ(VM::AddrSpace::None, VM::decodeAddr(1382).space);
 }
 
 // --- The .IMPT export resolves the runtime function referenced by RCRS ---
@@ -279,6 +296,100 @@ TEST (Object_Test, ArrayIndexMultiply) {
 	                       {PUSH, SHTC, 3, PUSH, SHTC, 4, AIM, 2, 0, END}));
 	int obj = os.createInstance(1);
 	EXPECT_EQ(11, os.send(obj, 0, {}));
+}
+
+// --- Auto arrays: store/load via fptr-relative byte indexing (LABA/SABA) ---
+TEST (VM_Test, AutoArrayStoreLoad) {
+	std::vector<uint8_t> code(14, 0);
+	code.push_back(0x08); code.push_back(0x00); // MHDR auto_size = 8
+	// auto_bytes[3] = 7; return auto_bytes[3]   (array base at fptr-8)
+	std::vector<uint8_t> body = {PUSH, SHTC, 3, PUSH, SHTC, 7, SABA, 8, 0,
+	                             PUSH, SHTC, 3, LABA, 8, 0, END};
+	code.insert(code.end(), body.begin(), body.end());
+	VM::Interpreter vm{code};
+	EXPECT_EQ(7, vm.execute(14));
+}
+
+// --- Inherited statics: parent and child each get their own block ---
+// The instance allocates the whole chain's statics (base-class-first), and a
+// handler's static offsets are relative to its DEFINING class's block.
+TEST (Object_Test, InheritedStaticsHaveSeparateBlocks) {
+	VM::ObjectSystem os;
+	os.addClass(makeClassMulti(1, 0xFFFFFFFFu, /*static_size*/ 4, { // parent
+		{2, {PUSH, SHTC, 5, SSW, 0, 0, END}}, // msg2: parent word[0] = 5
+		{3, {PUSH, LSW, 0, 0, END}},          // msg3: return parent word[0]
+	}));
+	os.addClass(makeClassMulti(2, /*parent*/ 1, /*static_size*/ 4, {  // child
+		{0, {PUSH, SHTC, 9, SSW, 0, 0, END}}, // msg0: child word[0] = 9
+		{1, {PUSH, LSW, 0, 0, END}},          // msg1: return child word[0]
+	}));
+	int obj = os.createInstance(2);
+	EXPECT_EQ(5, os.send(obj, 2, {})); // parent handler writes parent block
+	EXPECT_EQ(9, os.send(obj, 0, {})); // child handler writes child block
+	EXPECT_EQ(5, os.send(obj, 3, {})); // both survive: separate offsets
+	EXPECT_EQ(9, os.send(obj, 1, {}));
+}
+
+// Two classes for the extern fixtures: class 1 ("provider") exports a static
+// word "W:foo" at offset 0 and a byte array "B:arr" at offset 0; class 2
+// ("consumer") imports them at XR offsets 0/2. The consumer handlers take the
+// provider's OBJECT INDEX as a message parameter (LAW 0,0 = arg1).
+namespace {
+VM::ObjectSystem makeExternPair() {
+	VM::ObjectSystem os;
+	VM::SopClass provider = makeClassMulti(1, 0xFFFFFFFFu, /*static_size*/ 4, {
+		{0, {PUSH, SHTC, 42, SSW, 0, 0, END}},            // msg0: word[0] = 42
+		{1, {PUSH, LSW, 0, 0, END}},                      // msg1: return word[0]
+		{2, {PUSH, SHTC, 2, PUSH, SHTC, 7, SSBA, 0, 0, END}}, // msg2: bytes[2] = 7
+	});
+	provider.exportedVars["W:foo"] = 0;
+	provider.exportedVars["B:arr"] = 0;
+	os.addClass(provider);
+
+	VM::SopClass consumer = makeClassMulti(2, 0xFFFFFFFFu, 0, {
+		// msg0(obj): return obj's W:foo        (extern scalar load)
+		{0, {PUSH, LAW, 0, 0, LXW, 0, 0, END}},
+		// msg1(obj): obj's W:foo = 77          (extern scalar store, leaves 77)
+		{1, {PUSH, LAW, 0, 0, PUSH, SHTC, 77, SXW, 0, 0, END}},
+		// msg2(obj): return obj's B:arr[2]     (SXAS merges the array index)
+		{2, {PUSH, LAW, 0, 0, PUSH, SHTC, 2, SXAS, LXBA, 2, 0, END}},
+		// msg3(n): SOLE -- handle if a live object exists at index n, else -1
+		{3, {PUSH, LAW, 0, 0, SOLE, END}},
+	});
+	consumer.externs[0] = {"W:foo", /*sourceClass*/ 1};
+	consumer.externs[2] = {"B:arr", /*sourceClass*/ 1};
+	os.addClass(consumer);
+	return os;
+}
+}
+
+// --- Extern scalar: one object reads another object's public static ---
+TEST (Object_Test, ExternScalarLoadAndStore) {
+	VM::ObjectSystem os = makeExternPair();
+	int prov = os.createInstance(1);
+	int cons = os.createInstance(2);
+	EXPECT_EQ(42, os.send(prov, 0, {}));     // provider sets its own word to 42
+	EXPECT_EQ(42, os.send(cons, 0, {prov})); // consumer reads it via LXW
+	EXPECT_EQ(77, os.send(cons, 1, {prov})); // consumer writes it via SXW
+	EXPECT_EQ(77, os.send(prov, 1, {}));     // provider sees the new value
+}
+
+// --- Extern array: SXAS merges the index, LXBA reads across objects ---
+TEST (Object_Test, ExternArrayWithSXAS) {
+	VM::ObjectSystem os = makeExternPair();
+	int prov = os.createInstance(1);
+	int cons = os.createInstance(2);
+	EXPECT_EQ(7, os.send(prov, 2, {}));     // provider: bytes[2] = 7
+	EXPECT_EQ(7, os.send(cons, 2, {prov})); // consumer reads bytes[2] via extern
+}
+
+// --- SOLE: live object -> its handle (index); empty slot -> -1 ---
+TEST (Object_Test, SoleChecksObjectList) {
+	VM::ObjectSystem os = makeExternPair();
+	int prov = os.createInstance(1);
+	int cons = os.createInstance(2);
+	EXPECT_EQ(prov, os.send(cons, 3, {prov}));
+	EXPECT_EQ(-1, os.send(cons, 3, {99}));  // no object at index 99
 }
 
 int main(int argc, char **argv) {

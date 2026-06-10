@@ -202,10 +202,10 @@ Value Interpreter::run() {
 		case Op::SAD: { uint32_t p = autoAddr(static_cast<int16_t>(fetch16()));
 			writeStk(p, topVal()); break; }                                // no pop
 		case Op::LEAA: { uint32_t p = autoAddr(static_cast<int16_t>(fetch16()));
-			setTop(static_cast<Value>(p)); break; }                        // effective addr
+			setTop(makeAddr(AddrSpace::Stack, p)); break; }                // effective addr
 
 		// --- inline code address (e.g. address of an inline string) ---
-		case Op::LECA: setTop(static_cast<Value>(fetch16())); break;
+		case Op::LECA: setTop(makeAddr(AddrSpace::Code, fetch16())); break;
 
 		// --- procedures ---
 		case Op::JSR: {
@@ -295,6 +295,8 @@ Value Interpreter::run() {
 		case Op::LTDA: { uint16_t off = fetch16();
 			int32_t d; std::memcpy(&d, codePtr(off + topVal(), 4), 4);
 			setTop(d); break; }
+		// effective address of a constant table (lives in code space)
+		case Op::LETA: setTop(makeAddr(AddrSpace::Code, fetch16())); break;
 
 		// --- static (object-state) scalars; per-instance storage ---
 		case Op::LSB: { uint16_t off = fetch16();
@@ -310,6 +312,12 @@ Value Interpreter::run() {
 			std::memcpy(staticPtr(off, 2), &w, 2); break; }                // no pop
 		case Op::SSD: { uint16_t off = fetch16();
 			int32_t d = topVal(); std::memcpy(staticPtr(off, 4), &d, 4); break; } // no pop
+		// effective address of a static variable (this instance's object state);
+		// the encoded offset is absolute within the instance's static storage
+		case Op::LESA:
+			setTop(makeAddr(AddrSpace::Static, mStaticBase + fetch16(),
+			                currentThis()));
+			break;
 
 		// --- static arrays (index from top; index is byte-scaled via AIM/AIS) ---
 		case Op::LSBA: { uint16_t off = fetch16();
@@ -331,15 +339,112 @@ Value Interpreter::run() {
 			std::memcpy(staticPtr(off + topVal(), 4), &data, 4);
 			setTop(data); break; }
 
-		// --- not yet implemented (need the cross-object address/link model) ---
-		case Op::LETA: case Op::LESA:
-		case Op::LABA: case Op::LAWA: case Op::LADA:
-		case Op::SABA: case Op::SAWA: case Op::SADA:
-		case Op::LXB:  case Op::LXW:  case Op::LXD:
-		case Op::SXB:  case Op::SXW:  case Op::SXD:
-		case Op::LXBA: case Op::LXWA: case Op::LXDA:
-		case Op::SXBA: case Op::SXWA: case Op::SXDA:
-		case Op::LEXA: case Op::SXAS: case Op::SOLE: case Op::BRK:
+		// --- auto (local/param) arrays: addr = fptr - offset + index(top) ---
+		case Op::LABA: { uint32_t p = autoAddr(static_cast<int16_t>(fetch16()))
+			                          + topVal();
+			setTop(static_cast<int8_t>(mStk[p])); break; }                 // sign-extend
+		case Op::LAWA: { uint32_t p = autoAddr(static_cast<int16_t>(fetch16()))
+			                          + topVal();
+			int16_t w; std::memcpy(&w, &mStk[p], 2); setTop(w); break; }   // sign-extend
+		case Op::LADA: { uint32_t p = autoAddr(static_cast<int16_t>(fetch16()))
+			                          + topVal();
+			setTop(readStk(p)); break; }
+		case Op::SABA: { uint16_t off = fetch16(); Value data = popVal();
+			uint32_t p = autoAddr(static_cast<int16_t>(off)) + topVal();
+			mStk[p] = static_cast<uint8_t>(data);
+			setTop(data); break; }                                         // leaves data
+		case Op::SAWA: { uint16_t off = fetch16(); Value data = popVal();
+			uint32_t p = autoAddr(static_cast<int16_t>(off)) + topVal();
+			uint16_t w = static_cast<uint16_t>(data);
+			std::memcpy(&mStk[p], &w, 2); setTop(data); break; }
+		case Op::SADA: { uint16_t off = fetch16(); Value data = popVal();
+			uint32_t p = autoAddr(static_cast<int16_t>(off)) + topVal();
+			writeStk(p, data); setTop(data); break; }
+
+		// --- extern (cross-object) scalars. The operand is a byte offset into
+		// the executing class's XR list (resolved by the link layer to an offset
+		// in the TARGET object's statics); the target object index is the low
+		// word of the top slot, which the result then replaces. ---
+		case Op::LXB: { uint16_t xr = fetch16();
+			uint16_t obj = static_cast<uint16_t>(topVal());
+			setTop(static_cast<int8_t>(*externPtr(obj, xr, 0, 1))); break; }
+		case Op::LXW: { uint16_t xr = fetch16();
+			uint16_t obj = static_cast<uint16_t>(topVal());
+			int16_t w; std::memcpy(&w, externPtr(obj, xr, 0, 2), 2);
+			setTop(w); break; }
+		case Op::LXD: { uint16_t xr = fetch16();
+			uint16_t obj = static_cast<uint16_t>(topVal());
+			int32_t d; std::memcpy(&d, externPtr(obj, xr, 0, 4), 4);
+			setTop(d); break; }
+		case Op::SXB: { uint16_t xr = fetch16(); Value data = popVal();
+			uint16_t obj = static_cast<uint16_t>(topVal());
+			*externPtr(obj, xr, 0, 1) = static_cast<uint8_t>(data);
+			setTop(data); break; }                                         // leaves data
+		case Op::SXW: { uint16_t xr = fetch16(); Value data = popVal();
+			uint16_t obj = static_cast<uint16_t>(topVal());
+			uint16_t w = static_cast<uint16_t>(data);
+			std::memcpy(externPtr(obj, xr, 0, 2), &w, 2);
+			setTop(data); break; }
+		case Op::SXD: { uint16_t xr = fetch16(); Value data = popVal();
+			uint16_t obj = static_cast<uint16_t>(topVal());
+			std::memcpy(externPtr(obj, xr, 0, 4), &data, 4);
+			setTop(data); break; }
+
+		// --- extern arrays: top slot = object index (low word) merged with the
+		// byte-scaled array index (high word) by SXAS below ---
+		case Op::LXBA: { uint16_t xr = fetch16();
+			uint32_t u = static_cast<uint32_t>(topVal());
+			setTop(static_cast<int8_t>(
+				*externPtr(static_cast<uint16_t>(u), xr, u >> 16, 1))); break; }
+		case Op::LXWA: { uint16_t xr = fetch16();
+			uint32_t u = static_cast<uint32_t>(topVal());
+			int16_t w;
+			std::memcpy(&w, externPtr(static_cast<uint16_t>(u), xr, u >> 16, 2), 2);
+			setTop(w); break; }
+		case Op::LXDA: { uint16_t xr = fetch16();
+			uint32_t u = static_cast<uint32_t>(topVal());
+			int32_t d;
+			std::memcpy(&d, externPtr(static_cast<uint16_t>(u), xr, u >> 16, 4), 4);
+			setTop(d); break; }
+		case Op::SXBA: { uint16_t xr = fetch16(); Value data = popVal();
+			uint32_t u = static_cast<uint32_t>(topVal());
+			*externPtr(static_cast<uint16_t>(u), xr, u >> 16, 1) =
+				static_cast<uint8_t>(data);
+			setTop(data); break; }
+		case Op::SXWA: { uint16_t xr = fetch16(); Value data = popVal();
+			uint32_t u = static_cast<uint32_t>(topVal());
+			uint16_t w = static_cast<uint16_t>(data);
+			std::memcpy(externPtr(static_cast<uint16_t>(u), xr, u >> 16, 2), &w, 2);
+			setTop(data); break; }
+		case Op::SXDA: { uint16_t xr = fetch16(); Value data = popVal();
+			uint32_t u = static_cast<uint32_t>(topVal());
+			std::memcpy(externPtr(static_cast<uint16_t>(u), xr, u >> 16, 4), &data, 4);
+			setTop(data); break; }
+
+		// effective address of an extern variable (in the target's statics)
+		case Op::LEXA: { uint16_t xr = fetch16();
+			uint16_t obj = static_cast<uint16_t>(topVal());
+			if (!mExternResolve)
+				throw VmError("LEXA but no extern link layer is wired in");
+			setTop(makeAddr(AddrSpace::Extern, mExternResolve(xr), obj)); break; }
+
+		// SXAS merges a popped (byte-scaled) array index into the high word of
+		// the slot below, whose low word holds the source object index -- the
+		// combined form the extern array opcodes above consume.
+		case Op::SXAS: { Value idx = popVal();
+			uint32_t u = static_cast<uint32_t>(topVal());
+			setTop(static_cast<Value>((u & 0xFFFFu) |
+			       (static_cast<uint32_t>(idx & 0xFFFF) << 16))); break; }
+
+		// SOLE: object-list lookup -- the object handle (index) if a live object
+		// exists at the index on top of stack, else -1.
+		case Op::SOLE:
+			if (!mObjectLookup)
+				throw VmError("SOLE but no object system is wired in");
+			setTop(mObjectLookup(static_cast<uint16_t>(topVal())));
+			break;
+
+		case Op::BRK: // the original's int-3 debugger hook
 			unimplemented(op);
 		}
 	}
@@ -389,11 +494,17 @@ std::string Interpreter::describe(uint32_t pc) const {
 			operand << " (" << it->second << ')';
 		break;
 	}
-	// import-indexed extern ops
+	// import-indexed extern ops (resolve the XR offset to the extern's name)
 	case Op::LXB: case Op::LXW: case Op::LXD: case Op::SXB: case Op::SXW: case Op::SXD:
 	case Op::LXBA: case Op::LXWA: case Op::LXDA: case Op::SXBA: case Op::SXWA: case Op::SXDA:
-	case Op::LEXA:
-		operand << '#' << pk16(a); break;
+	case Op::LEXA: {
+		uint32_t n = pk16(a);
+		operand << '#' << n;
+		auto it = mExternNames.find(n);
+		if (it != mExternNames.end())
+			operand << " (" << it->second << ')';
+		break;
+	}
 	// word-offset auto/static/table ops
 	case Op::LAB: case Op::LAW: case Op::LAD: case Op::SAB: case Op::SAW: case Op::SAD:
 	case Op::LABA: case Op::LAWA: case Op::LADA: case Op::SABA: case Op::SAWA: case Op::SADA:
@@ -428,10 +539,18 @@ Value Interpreter::callRuntime(Value handle, const std::vector<Value>& args) {
 uint8_t* Interpreter::staticPtr(uint32_t off, uint32_t size) {
 	if (mStatics == nullptr)
 		throw VmError("static variable access but no instance storage is set");
+	off += mStaticBase; // statics are relative to the defining class's block
 	if (static_cast<uint64_t>(off) + size > mStatics->size())
 		throw VmError("static variable access out of range (offset " +
 		              std::to_string(off) + ", size " + std::to_string(size) + ")");
 	return mStatics->data() + off;
+}
+
+uint8_t* Interpreter::externPtr(uint16_t obj, uint32_t xrOffset, uint32_t extra,
+                                uint32_t size) {
+	if (!mExternResolve || !mExternStatics)
+		throw VmError("extern variable access but no link layer is wired in");
+	return mExternStatics(obj, mExternResolve(xrOffset) + extra, size);
 }
 
 const uint8_t* Interpreter::codePtr(uint32_t off, uint32_t size) {
@@ -441,13 +560,17 @@ const uint8_t* Interpreter::codePtr(uint32_t off, uint32_t size) {
 	return mCode.data() + off;
 }
 
-std::string Interpreter::readCodeString(uint32_t addr) const {
-	// Inline strings live in the code resource past the 14-byte header. Treat
-	// anything else (NULL, header, OOB) as "not a string".
-	if (addr < 14 || addr >= mCode.size())
+std::string Interpreter::readCodeString(Value addr) const {
+	// Only Code-space addresses point at inline strings; anything else (a plain
+	// integer arg, a stack/static address, ...) is "not a string".
+	Addr a = decodeAddr(addr);
+	if (a.space != AddrSpace::Code)
+		return "";
+	uint32_t off = a.offset;
+	if (off < 14 || off >= mCode.size()) // before/at header or OOB
 		return "";
 	std::string s;
-	for (uint32_t i = addr; i < mCode.size() && mCode[i] != 0; ++i) {
+	for (uint32_t i = off; i < mCode.size() && mCode[i] != 0; ++i) {
 		char c = static_cast<char>(mCode[i]);
 		if (c < 0x20 || static_cast<unsigned char>(c) > 0x7e)
 			return ""; // not a printable string -- probably a real numeric arg
@@ -458,8 +581,8 @@ std::string Interpreter::readCodeString(uint32_t addr) const {
 
 void Interpreter::unimplemented(Op op) {
 	throw VmError(std::string("opcode ") + opName(op) + " (" +
-	              hexByte(static_cast<uint8_t>(op)) + ") not implemented yet "
-	              "(needs object system / runtime-function library / extern link layer)");
+	              hexByte(static_cast<uint8_t>(op)) + ") not implemented "
+	              "(BRK is the original's int-3 debugger hook)");
 }
 
 // --- self test --------------------------------------------------------------
