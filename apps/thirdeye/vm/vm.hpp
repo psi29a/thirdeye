@@ -83,6 +83,11 @@ public:
 	// When enabled, each executed instruction is printed (PC + mnemonic).
 	void setTrace(bool trace) { mTrace = trace; }
 
+	// Safety budget for a single execute(): throw VmError after this many
+	// instructions (0 = unlimited). Guards against infinite loops during
+	// bring-up when stubbed runtime functions don't advance real state.
+	void setMaxSteps(uint64_t maxSteps) { mMaxSteps = maxSteps; }
+
 	// Runtime-function dispatch hook. CALL resolves the RCRS handle to a name
 	// via the import map, then invokes this. The Interpreter& lets the function
 	// dereference address arguments (e.g. readCodeString for string pointers).
@@ -133,6 +138,7 @@ private:
 	uint32_t mFptr = 0;  // current frame base (== fptr)
 	uint32_t mPC = 0;    // byte offset into mCode
 	bool mTrace = false; // print each executed instruction
+	uint64_t mMaxSteps = 0; // instruction budget for one execute() (0 = unlimited)
 
 	std::map<int32_t, std::string> mImports; // runtime-fn number -> name
 	RuntimeCall mRuntimeCall;                 // dispatch hook for CALL

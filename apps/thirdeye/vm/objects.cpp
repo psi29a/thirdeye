@@ -81,11 +81,26 @@ Value ObjectSystem::pass(int objIndex, int message, uint32_t parentClass,
 
 Value ObjectSystem::runHandler(uint16_t defClass, uint32_t offset, int objIndex,
                                int message, std::vector<Value>& args) {
+	// Guard against runaway SEND/PASS recursion (each level also allocates a VM
+	// stack, so an unbounded chain segfaults). During bring-up this typically
+	// means a stubbed runtime function isn't advancing state, so a handler keeps
+	// re-sending the same message. Fail gracefully instead.
+	if (mDepth >= kMaxDepth)
+		throw VmError("object message recursion too deep (>" +
+		              std::to_string(kMaxDepth) +
+		              ") -- likely a stubbed runtime function not advancing state");
+	++mDepth;
+	struct DepthPop {
+		int& d;
+		~DepthPop() { --d; }
+	} depthPop{mDepth};
+
 	const SopClass& cls = mClasses[defClass];
 
 	Interpreter vm(cls.code);
 	vm.setImports(cls.imports);
 	vm.setTrace(mTrace);
+	vm.setMaxSteps(mMaxSteps);
 	if (objIndex >= 0 && static_cast<size_t>(objIndex) < mStatics.size())
 		vm.setStatics(&mStatics[objIndex]); // object state persists across SENDs
 	if (mRuntimeCall)
