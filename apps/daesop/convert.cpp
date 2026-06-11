@@ -132,11 +132,15 @@ int testOneOldBitmap(FILE *aResFile, DIRPOINTER *aDirectoryPointers,
 				int loRLE_width;
 				//int loRLE_bytes;
 
-				loX = loBuffer[loPos];
-				loPos++;
-
-				loIsLast = loBuffer[loPos];
-				loPos++;
+				// X is a 16-bit little-endian value; bit 15 flags the last span
+				// of the line. Reading it as a single byte breaks for spans that
+				// start at x >= 256 -- the high bit of X then lands in the same
+				// byte as the flag, so the "== 0x80" line-end test fails and the
+				// decoder runs off the rails (issue #18: localized bitmap 189).
+				loX = loBuffer[loPos] | (loBuffer[loPos + 1] << 8);
+				loPos += 2;
+				loIsLast = loX & 0x8000;
+				loX &= 0x7fff;
 
 				loRLE_width = loBuffer[loPos];
 				loPos++;
@@ -178,7 +182,7 @@ int testOneOldBitmap(FILE *aResFile, DIRPOINTER *aDirectoryPointers,
 					return (false);
 				}
 
-				if (loIsLast == 0x80) {
+				if (loIsLast) {
 					break;
 				}
 			}
@@ -664,16 +668,20 @@ int convertOneOldSubpicture(unsigned char *aOldResourceBuffer,
 			int loRLE_width;
 			//int loRLE_bytes;
 
-			loX = aOldResourceBuffer[loPos];
+			// X is a 16-bit little-endian value; bit 15 flags the last span of
+			// the line. Reading it as a single byte breaks for spans starting at
+			// x >= 256 -- the high bit of X shares the byte with the flag, so the
+			// "== 0x80" line-end test fails and the decoder desyncs (issue #18:
+			// the localized bitmap 189 reflowed text into a span at x = 283).
+			loX = aOldResourceBuffer[loPos] | (aOldResourceBuffer[loPos + 1] << 8);
+			loPos += 2;
+
+			loIsLast = loX & 0x8000;
+			loX &= 0x7fff;
 
 #ifdef BITMAP_CONVERSION_DEBUG
 			printf("        X value: %d\n", loX);
 #endif
-
-			loPos++;
-
-			loIsLast = aOldResourceBuffer[loPos];
-			loPos++;
 
 			loRLE_width = aOldResourceBuffer[loPos];
 			loPos++;
@@ -725,7 +733,7 @@ int convertOneOldSubpicture(unsigned char *aOldResourceBuffer,
 				return (false);
 			}
 
-			if (loIsLast == 0x80) {
+			if (loIsLast) {
 				// end of line
 				break;
 			}
