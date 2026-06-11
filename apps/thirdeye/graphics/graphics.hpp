@@ -102,6 +102,9 @@ public:
 
 	uint32_t getSleep();
 	void update();
+
+	// Save the current screen surface to a BMP (debug / headless verification).
+	void saveScreenshot(const std::string &path);
 };
 
 }
