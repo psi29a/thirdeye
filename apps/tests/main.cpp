@@ -108,6 +108,43 @@ TEST (Palette_Test, ProperlyShifted_GFFI){
 	EXPECT_EQ(1, pal.getNumOfColours());
 }
 
+// --- AESOP/16 "1.10" VFX shape decoder ---
+// Hand-build a one-shape 4x2 shape table and check the decoded pixels:
+//   row 0: a string token of 4 literal pixels {10,11,12,13}
+//   row 1: skip 1 transparent, then a run of 3 pixels of value 5 -> {0,5,5,5}
+TEST (Bitmap_Test, DecodesVFXShape1_10) {
+	std::vector<uint8_t> b = {
+		'1', '.', '1', '0',          // version magic
+		1, 0, 0, 0,                  // number_of_shapes = 1
+		16, 0, 0, 0, 0, 0, 0, 0,     // dir entry 0: {offset=16, color=0}
+		// subpicture header @16 (boundsy=h-1, boundsx=w-1, originy, originx,
+		// xmin, ymin, xmax, ymax) for a 4x2 image:
+		1, 0,                        // boundsy = 1 -> height 2
+		3, 0,                        // boundsx = 3 -> width 4
+		0, 0,                        // originy
+		0, 0,                        // originx
+		0, 0, 0, 0,                  // xmin
+		0, 0, 0, 0,                  // ymin
+		3, 0, 0, 0,                  // xmax
+		1, 0, 0, 0,                  // ymax
+		// row 0: string of 4 (marker = 2*4+1 = 9), then 4 literal pixels
+		9, 10, 11, 12, 13,
+		0,                           // end of row 0
+		// row 1: skip 1 (marker 1, len 1), run of 3 value 5 (marker 2*3=6, val 5)
+		1, 1,
+		6, 5,
+		0,                           // end of row 1
+	};
+	GRAPHICS::Bitmap bmp(b);
+	EXPECT_EQ(1u, bmp.getNumberOfBitmaps());
+	EXPECT_EQ(4u, bmp.getWidth(0));
+	EXPECT_EQ(2u, bmp.getHeight(0));
+	std::vector<uint8_t> px = bmp[0];
+	ASSERT_EQ(8u, px.size());
+	std::vector<uint8_t> expect = {10, 11, 12, 13, 0, 5, 5, 5};
+	EXPECT_EQ(expect, px);
+}
+
 // --- VM self-test (hand-assembled programs: arithmetic / stack / auto vars) ---
 TEST (VM_Test, SelfTest) {
 	EXPECT_TRUE(VM::Interpreter::selfTest());

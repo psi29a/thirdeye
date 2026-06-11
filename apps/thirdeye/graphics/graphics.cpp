@@ -706,6 +706,11 @@ void GRAPHICS::Graphics::setPaletteRange(std::vector<uint8_t> &palRes,
 		mPalette->colors[firstColor + i] = pal[i];
 }
 
+void GRAPHICS::Graphics::saveScreenshot(const std::string &path) {
+	if (SDL_SaveBMP(mScreen, path.c_str()) != 0)
+		std::cerr << "saveScreenshot failed: " << SDL_GetError() << std::endl;
+}
+
 /*!
  \brief Stripped down SDL2_gfx zoom function, if we need more we'll
  just use the library instead.
