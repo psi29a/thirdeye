@@ -9,7 +9,10 @@
 #include "bitmap.hpp"
 
 #include "SDL.h"
-#include "SDL_syswm.h"
+// NB: SDL_syswm.h is intentionally NOT included here. On Linux it pulls in
+// X11's <X.h>, which #defines None/Status/Bool/... into the global namespace and
+// breaks any downstream identifier with those names (e.g. VM::AddrSpace). It's
+// only needed by graphics.cpp, which includes it directly.
 
 #include <map>
 #include <vector>
@@ -93,10 +96,18 @@ public:
 	void loadPalette(std::vector<uint8_t> &basePal,
 			std::vector<uint8_t> &subPal, std::string index);
 
+	// Write a palette resource's colours into the live palette starting at
+	// `firstColor`, leaving the rest intact (AESOP set_palette writes a region:
+	// PAL_FIXED at 0x00, PAL_WALLS at 0xB0, ...). Used by the SOP runtime.
+	void setPaletteRange(std::vector<uint8_t> &palRes, uint16_t firstColor);
+
 	void loadMouse(std::vector<uint8_t> &bitmap, uint16_t index);
 
 	uint32_t getSleep();
 	void update();
+
+	// Save the current screen surface to a BMP (debug / headless verification).
+	void saveScreenshot(const std::string &path);
 };
 
 }

@@ -1,5 +1,7 @@
 #include "graphics.hpp"
 
+#include "SDL_syswm.h" // SDL_GetWindowWMInfo (kept out of headers: drags in X11)
+
 #include <iostream>
 #include <stdexcept>
 #include <random>
@@ -406,8 +408,9 @@ void GRAPHICS::Graphics::update() {
 			materializeImage(std::get<2>(scene));
 			break;
 		default:
-			std::cerr << "Case not yet implemented." << std::endl;
-			throw;
+			throw std::runtime_error(
+					"Video scene type not yet implemented: " +
+					std::to_string(static_cast<int>(std::get<0>(scene))));
 		}
 		mVideo.erase(index);
 	}
@@ -696,6 +699,18 @@ void GRAPHICS::Graphics::loadPalette(std::vector<uint8_t> &basePal,
 	for (uint16_t i = 0; i < basePalette.getNumOfColours(); i++) {
 		mPalette->colors[i] = basePalette[i];
 	}
+}
+
+void GRAPHICS::Graphics::setPaletteRange(std::vector<uint8_t> &palRes,
+		uint16_t firstColor) {
+	Palette pal(palRes);
+	for (uint16_t i = 0; i < pal.getNumOfColours() && (firstColor + i) < 256; i++)
+		mPalette->colors[firstColor + i] = pal[i];
+}
+
+void GRAPHICS::Graphics::saveScreenshot(const std::string &path) {
+	if (SDL_SaveBMP(mScreen, path.c_str()) != 0)
+		std::cerr << "saveScreenshot failed: " << SDL_GetError() << std::endl;
 }
 
 /*!

@@ -29,6 +29,8 @@
 #define STATE_SUMMON	4
 #define STATE_ABANDON	5
 
+namespace RESOURCES { class Resource; }
+
 namespace THIRDEYE {
 // Main engine class, that brings together all the components of Thirdeye
 class Engine
@@ -36,6 +38,7 @@ class Engine
 	bool mNewGame;
 	bool mUseSound;
 	bool mDebug;
+	bool mForceVM = false;
 	bool mRenderer;
 	uint8_t mGame;
 	uint16_t mScale;
@@ -63,11 +66,28 @@ public:
 
 	void setGame(std::string game);
 	void setGameData(std::string gameData);
+	void setForceVM(bool forceVM);
 	void setDebugMode(bool debug);
 	void setSoundUsage(bool nosound);
 	void setRenderer(bool renderer);
 	void setScale(uint16_t);
 private:
+	/// Resolve the game-data path (which may be a directory or a direct .RES
+	/// file) into the actual resource file to open, auto-detecting the game
+	/// from the filename when a file is given.
+	std::filesystem::path resolveResourceFile();
+
+	/// Drive each SOP code object's message handlers through the bytecode VM,
+	/// reporting where each one ends (END, or the first unimplemented opcode).
+	/// With debug mode on, prints a per-instruction trace.
+	void runResourceVM(RESOURCES::Resource &resource);
+
+	/// Boot a single object the way the original interpreter does: create an
+	/// instance of `objectName` and send it MSG_CREATE (0). This is the data-
+	/// driven bring-up path -- it runs the real boot handler and stops at the
+	/// first runtime function / opcode we haven't implemented.
+	void bootObject(RESOURCES::Resource &resource, const std::string &objectName);
+
 	Files::ConfigurationManager& mCfgMgr;
 	std::string mResource;
 };
