@@ -2,7 +2,6 @@
 #define FONT_HPP
 
 #include "SDL.h"
-#include "SDL_syswm.h"
 
 #include <map>
 #include <vector>

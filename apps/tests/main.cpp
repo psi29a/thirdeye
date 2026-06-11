@@ -189,7 +189,7 @@ TEST (VM_Test, AddressEncodeDecode) {
 	EXPECT_EQ(2002u, stat.obj);          // object index survives the encoding
 
 	// A plain small integer (e.g. a resource number) is not an address.
-	EXPECT_EQ(VM::AddrSpace::None, VM::decodeAddr(1382).space);
+	EXPECT_EQ(VM::AddrSpace::Invalid, VM::decodeAddr(1382).space);
 }
 
 // --- The .IMPT export resolves the runtime function referenced by RCRS ---

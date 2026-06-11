@@ -9,7 +9,10 @@
 #include "bitmap.hpp"
 
 #include "SDL.h"
-#include "SDL_syswm.h"
+// NB: SDL_syswm.h is intentionally NOT included here. On Linux it pulls in
+// X11's <X.h>, which #defines None/Status/Bool/... into the global namespace and
+// breaks any downstream identifier with those names (e.g. VM::AddrSpace). It's
+// only needed by graphics.cpp, which includes it directly.
 
 #include <map>
 #include <vector>

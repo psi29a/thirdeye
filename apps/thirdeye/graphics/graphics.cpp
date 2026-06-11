@@ -1,5 +1,7 @@
 #include "graphics.hpp"
 
+#include "SDL_syswm.h" // SDL_GetWindowWMInfo (kept out of headers: drags in X11)
+
 #include <iostream>
 #include <stdexcept>
 #include <random>

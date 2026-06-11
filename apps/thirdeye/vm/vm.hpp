@@ -62,7 +62,11 @@ public:
 // (and, for static/extern, the owning object). The tag sits in bits the engine's
 // small integer values never use, and index arithmetic (AIM/AIS) only touches the
 // low offset bits, so a tagged address survives being indexed.
-enum class AddrSpace : uint32_t { None = 0, Code = 0x8, Stack = 0x9, Static = 0xA, Extern = 0xB };
+//
+// NB: the "no space" value is named Invalid, not None -- on Linux, SDL_syswm.h
+// pulls in X11's <X.h>, which #defines None as 0L and would textually mangle the
+// enumerator (the preprocessor runs before the scoped-enum scope applies).
+enum class AddrSpace : uint32_t { Invalid = 0, Code = 0x8, Stack = 0x9, Static = 0xA, Extern = 0xB };
 
 struct Addr { AddrSpace space; uint32_t offset; uint16_t obj; };
 
@@ -91,7 +95,7 @@ inline Addr decodeAddr(Value v) {
 	case AddrSpace::Extern:
 		return { s, u & 0x3FFFu, static_cast<uint16_t>((u >> 14) & 0x3FFFu) };
 	default:
-		return { AddrSpace::None, 0, 0 };
+		return { AddrSpace::Invalid, 0, 0 };
 	}
 }
 
