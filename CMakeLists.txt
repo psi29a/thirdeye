@@ -50,10 +50,10 @@ set (THIRDEYE_VERSION "${THIRDEYE_VERSION_MAJOR}.${THIRDEYE_VERSION_MINOR}.${THI
 configure_file ("${Thirdeye_SOURCE_DIR}/docs/mainpage.hpp.cmake" "${Thirdeye_SOURCE_DIR}/docs/mainpage.hpp")
 
 # Are we building a debug build?
-option(DEBUG "Use debug build options" FALSE)
+option(DEBUG "Use debug build options" OFF)
 
 # Are we running unit tests?
-option(UNIT_TESTS "Run unit tests" FALSE)
+option(UNIT_TESTS "Run unit tests" ON)
 
 # Are we building statically?
 option(SDL2_STATIC "Link static build of SDL into the binaries" FALSE)
@@ -120,11 +120,66 @@ include_directories("."
     ${LIBDIR}
 )
 
+# Treat a dependency's headers as SYSTEM headers so its warnings don't pollute
+# our build (e.g. CLI11's MSVC C4866/C4868). Header-only INTERFACE libraries
+# can't use target_compile_options -- the warnings are emitted when OUR code
+# compiles their headers -- so downgrading to system includes is the right
+# lever. Works for GCC/Clang (-isystem) and MSVC (/external:I, paired with the
+# /external:W0 added in the compiler settings below).
+function(thirdeye_mark_system_includes target)
+    if (TARGET ${target})
+        get_target_property(_inc ${target} INTERFACE_INCLUDE_DIRECTORIES)
+        if (_inc)
+            set_target_properties(${target} PROPERTIES
+                INTERFACE_SYSTEM_INCLUDE_DIRECTORIES "${_inc}")
+        endif()
+    endif()
+endfunction()
+
 if (UNIT_TESTS)
-    # Locate GTest
-    find_package(GTest REQUIRED)
-    include_directories(${GTEST_INCLUDE_DIRS})
+    # Fetch and build GoogleTest automatically (no system install required).
+    include(FetchContent)
+    FetchContent_Declare(
+        googletest
+        GIT_REPOSITORY https://github.com/google/googletest.git
+        GIT_TAG        v1.15.2   # last release supporting CMake 3.15 / C++14+
+    )
+    # Don't override the parent project's compiler/linker settings on Windows.
+    set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
+    # We only need the test framework, not GoogleMock or its install rules.
+    set(BUILD_GMOCK OFF CACHE BOOL "" FORCE)
+    set(INSTALL_GTEST OFF CACHE BOOL "" FORCE)
+    FetchContent_MakeAvailable(googletest)
+
+    # GoogleTest headers are third-party: treat them as system headers so their
+    # warnings don't show up when our test code includes <gtest/gtest.h>.
+    foreach(gtest_tgt gtest gtest_main)
+        thirdeye_mark_system_includes(${gtest_tgt})
+    endforeach()
+
+    # GoogleTest's own headers trip -Wcharacter-conversion (char8_t->char32_t)
+    # under C++20 on recent Clang. It's third-party code we don't control, so
+    # silence that single warning on the fetched targets only (not our code).
+    if (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+        foreach(gtest_tgt gtest gtest_main)
+            if (TARGET ${gtest_tgt})
+                target_compile_options(${gtest_tgt} PRIVATE -Wno-character-conversion)
+            endif()
+        endforeach()
+    endif()
 endif()
+
+# CLI argument parsing: CLI11 (header-only), fetched automatically.
+include(FetchContent)
+FetchContent_Declare(
+    cli11
+    GIT_REPOSITORY https://github.com/CLIUtils/CLI11.git
+    GIT_TAG        v2.4.2
+)
+FetchContent_MakeAvailable(cli11)
+# CLI11 is header-only; mark its headers SYSTEM so its warnings (MSVC C4866/
+# C4868, etc.) don't surface when we compile main.cpp.
+thirdeye_mark_system_includes(CLI11)
 
 # Find SDL2
 Find_package(SDL2 REQUIRED)
@@ -194,6 +249,13 @@ if (CMAKE_COMPILER_IS_GNUCCXX)
         add_definitions (-Wno-unused-but-set-parameter)
     endif("${GCC_VERSION}" VERSION_GREATER 4.6 OR "${GCC_VERSION}" VERSION_EQUAL 4.6)
 endif (CMAKE_COMPILER_IS_GNUCCXX)
+
+if (MSVC)
+    # Set warning level 0 for SYSTEM (/external:I) headers -- this is what makes
+    # thirdeye_mark_system_includes() actually silence third-party header
+    # warnings (CLI11, GoogleTest, ...) while keeping warnings for our own code.
+    add_compile_options(/external:W0)
+endif()
 
 if(DPKG_PROGRAM)
     SET(CMAKE_INSTALL_PREFIX "/usr")
@@ -311,6 +373,7 @@ if (BUILD_ARC)
    add_subdirectory( apps/arc )
 endif()
 if (UNIT_TESTS)
+   enable_testing()
    add_subdirectory( apps/tests )
 endif()
 

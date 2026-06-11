@@ -26,6 +26,10 @@ add_thirdeye_dir (graphics
     graphics font palette bitmap
     )
 
+add_thirdeye_dir (vm
+    vm opcodes objects events
+    )
+
 # Main executable
 add_executable(thirdeye
     ${THIRDEYE_LIBS} ${THIRDEYE_LIBS_HEADER}
@@ -39,6 +43,7 @@ target_link_libraries(thirdeye
     ${SDL2MAIN_LIBRARY}
     ${WILDMIDI_LIBRARY}
     ${OPENAL_LIBRARY}
+    CLI11::CLI11
     components
 )
 
