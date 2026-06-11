@@ -99,6 +99,38 @@ constexpr int MSG_CREATE = 0;
 // (GRAPHICS.C). PAL_FIXED=0x00, PAL_WALLS=0xB0, PAL_M1=0xC0, PAL_M2=0xE0, PAL_OUT=0xB0.
 constexpr uint16_t kFirstColor[5] = {0x00, 0xB0, 0xC0, 0xE0, 0xB0};
 
+// Thrown by the host pump to unwind out of the SOP main loop when the user
+// closes the window / presses ESC. Caught in bootObject for a clean exit.
+struct QuitRequested {};
+
+// The host seam (see the design note in CLAUDE.md). The kernel's main loop is a
+// busy-wait -- `while (!quit) dispatch_event();` -- so each time the bytecode
+// polls dispatch_event/peek_event we do the work DOS did with interrupts +
+// vblank: pump SDL input into AESOP events, present the frame, and yield the CPU
+// when the queue is idle. That turns the 100% spin into an event-driven,
+// frame-paced loop and makes the window render live (instead of only after the
+// loop ends). Throws QuitRequested on window-close / ESC.
+void pumpHost(GRAPHICS::Graphics &gfx, VM::EventSystem &events) {
+	SDL_Event ev;
+	while (SDL_PollEvent(&ev)) {
+		switch (ev.type) {
+		case SDL_QUIT:
+			throw QuitRequested{};
+		case SDL_KEYDOWN:
+			if (ev.key.keysym.sym == SDLK_ESCAPE)
+				throw QuitRequested{};
+			// Feed the keystroke to the game as a SYS_KEYDOWN event.
+			events.postEvent(0, VM::SYS_KEYDOWN, ev.key.keysym.sym);
+			break;
+		default:
+			break;
+		}
+	}
+	gfx.update();                 // present whatever the bytecode has drawn
+	if (!events.peekEvent())
+		SDL_Delay(10);            // idle: yield (~100 Hz) instead of spinning
+}
+
 // Runtime-function library. Most functions are still stubs (log + return 0),
 // but where we can do the real thing, we do. Each call is logged with its
 // arguments, resolving address arguments to inline strings when possible.
@@ -127,9 +159,16 @@ VM::Value defaultRuntimeCall(VM::ObjectSystem &objects, VM::EventSystem &events,
 		events.sendEvent(args[0], args[1], args[2]);
 		return 0;
 	}
-	if (fn == "dispatch_event") { events.dispatchEvent(); return 0; }
+	if (fn == "dispatch_event") {
+		if (gfx) pumpHost(*gfx, events); // present + input + yield (host seam)
+		events.dispatchEvent();
+		return 0;
+	}
 	if (fn == "drain_event_queue") { events.drainEventQueue(); return 0; }
-	if (fn == "peek_event") return events.peekEvent() ? 1 : 0;
+	if (fn == "peek_event") {
+		if (gfx) pumpHost(*gfx, events);
+		return events.peekEvent() ? 1 : 0;
+	}
 	if (fn == "flush_event_queue" && args.size() >= 3) {
 		events.flushEventQueue(args[0], args[1], args[2]);
 		return 0;
@@ -369,7 +408,11 @@ void THIRDEYE::Engine::bootObject(RESOURCES::Resource &resource,
 			return defaultRuntimeCall(objects, events, gfx.get(), resource, vm, fn,
 			                          args);
 		});
-	objects.setMaxSteps(2000000); // bring-up safety: stop runaway loops
+	// With graphics, the host pump (in dispatch_event) presents + yields + handles
+	// quit, so the SOP main loop is frame-paced and the whole game session runs
+	// inside send(MSG_CREATE) until the user quits -- the instruction budget would
+	// fight that, so drop it. Headless keeps the budget as a runaway guard.
+	objects.setMaxSteps(gfx ? 0 : 2000000);
 	registerClasses(resource, objects);
 
 	uint16_t classNumber = 0;
@@ -385,32 +428,33 @@ void THIRDEYE::Engine::bootObject(RESOURCES::Resource &resource,
 	try {
 		VM::Value result = objects.send(objIndex, MSG_CREATE, {});
 		std::cout << "Boot handler returned " << result << "." << std::endl;
+	} catch (const QuitRequested &) {
+		std::cout << "\nWindow closed -- quitting." << std::endl;
 	} catch (const VM::VmError &e) {
 		std::cout << "\nBoot stopped at the first unimplemented piece:\n  "
 		          << e.what() << std::endl;
-	}
-
-	// The SOP main loop spins on dispatch_event() with no input to break it, so
-	// the budget trips with the menu already drawn. Hold the rendered frame on
-	// screen until the user quits, so the result is actually visible. (Temporary:
-	// the real fix is to drive the engine off the event queue -- feed SDL input +
-	// a timer heartbeat into dispatch_event so the loop is event-driven.)
-	if (gfx) {
-		std::cout << "\nRendered frame is up -- press ESC or close the window to quit."
-		          << std::endl;
-		bool done = false;
-		SDL_Event event;
-		while (!done) {
-			while (SDL_PollEvent(&event)) {
-				if (event.type == SDL_QUIT ||
-				    (event.type == SDL_KEYDOWN &&
-				     event.key.keysym.sym == SDLK_ESCAPE))
-					done = true;
-			}
+		// Bring-up wall: hold the partially-rendered frame on screen so it's
+		// visible (the live host pump never got a chance to run the main loop).
+		if (gfx) {
 			gfx->update();
-			SDL_Delay(16);
+			std::cout << "\nRendered frame is up -- press ESC or close the window "
+			             "to quit." << std::endl;
+			bool done = false;
+			SDL_Event event;
+			while (!done) {
+				while (SDL_PollEvent(&event))
+					if (event.type == SDL_QUIT ||
+					    (event.type == SDL_KEYDOWN &&
+					     event.key.keysym.sym == SDLK_ESCAPE))
+						done = true;
+				gfx->update();
+				SDL_Delay(16);
+			}
 		}
 	}
+
+	if (gfx)
+		gfx->saveScreenshot("/tmp/thirdeye_boot.bmp"); // last frame, for inspection
 }
 
 // Initialise and enter main loop.
