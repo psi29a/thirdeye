@@ -120,6 +120,22 @@ include_directories("."
     ${LIBDIR}
 )
 
+# Treat a dependency's headers as SYSTEM headers so its warnings don't pollute
+# our build (e.g. CLI11's MSVC C4866/C4868). Header-only INTERFACE libraries
+# can't use target_compile_options -- the warnings are emitted when OUR code
+# compiles their headers -- so downgrading to system includes is the right
+# lever. Works for GCC/Clang (-isystem) and MSVC (/external:I, paired with the
+# /external:W0 added in the compiler settings below).
+function(thirdeye_mark_system_includes target)
+    if (TARGET ${target})
+        get_target_property(_inc ${target} INTERFACE_INCLUDE_DIRECTORIES)
+        if (_inc)
+            set_target_properties(${target} PROPERTIES
+                INTERFACE_SYSTEM_INCLUDE_DIRECTORIES "${_inc}")
+        endif()
+    endif()
+endfunction()
+
 if (UNIT_TESTS)
     # Fetch and build GoogleTest automatically (no system install required).
     include(FetchContent)
@@ -134,6 +150,12 @@ if (UNIT_TESTS)
     set(BUILD_GMOCK OFF CACHE BOOL "" FORCE)
     set(INSTALL_GTEST OFF CACHE BOOL "" FORCE)
     FetchContent_MakeAvailable(googletest)
+
+    # GoogleTest headers are third-party: treat them as system headers so their
+    # warnings don't show up when our test code includes <gtest/gtest.h>.
+    foreach(gtest_tgt gtest gtest_main)
+        thirdeye_mark_system_includes(${gtest_tgt})
+    endforeach()
 
     # GoogleTest's own headers trip -Wcharacter-conversion (char8_t->char32_t)
     # under C++20 on recent Clang. It's third-party code we don't control, so
@@ -155,6 +177,9 @@ FetchContent_Declare(
     GIT_TAG        v2.4.2
 )
 FetchContent_MakeAvailable(cli11)
+# CLI11 is header-only; mark its headers SYSTEM so its warnings (MSVC C4866/
+# C4868, etc.) don't surface when we compile main.cpp.
+thirdeye_mark_system_includes(CLI11)
 
 # Find SDL2
 Find_package(SDL2 REQUIRED)
@@ -224,6 +249,13 @@ if (CMAKE_COMPILER_IS_GNUCCXX)
         add_definitions (-Wno-unused-but-set-parameter)
     endif("${GCC_VERSION}" VERSION_GREATER 4.6 OR "${GCC_VERSION}" VERSION_EQUAL 4.6)
 endif (CMAKE_COMPILER_IS_GNUCCXX)
+
+if (MSVC)
+    # Set warning level 0 for SYSTEM (/external:I) headers -- this is what makes
+    # thirdeye_mark_system_includes() actually silence third-party header
+    # warnings (CLI11, GoogleTest, ...) while keeping warnings for our own code.
+    add_compile_options(/external:W0)
+endif()
 
 if(DPKG_PROGRAM)
     SET(CMAKE_INSTALL_PREFIX "/usr")
