@@ -1,11 +1,9 @@
 #include <algorithm>
 #include <cctype>
-#include <filesystem>
 #include <iostream>
-#include <map>
 #include <string>
-#include <cstdlib>
-#include <sstream>
+
+#include <CLI/CLI.hpp>
 
 #include "engine.hpp"
 
@@ -13,19 +11,8 @@
 
 #include "config.hpp"
 
-/**
- * \brief Parses application command line and calls \ref Cfg::ConfigurationManager
- * to parse configuration files.
- *
- * Results are directly written to \ref Engine class.
- *
- * \retval true - Everything goes OK
- * \retval false - Error
- */
 namespace
 {
-
-typedef Files::ConfigurationManager::VariablesMap VariablesMap;
 
 static std::string toLower(std::string s)
 {
@@ -39,141 +26,75 @@ static bool toBool(const std::string& value)
     return normalized == "true" || normalized == "1" || normalized == "yes" || normalized == "on";
 }
 
-static VariablesMap getDefaultOptions()
-{
-    return {
-        {"help", "false"},
-        {"version", "false"},
-        {"game", "eob3"},
-        {"game-data", "/opt/eob3"},
-        {"start", "LEVEL4"},
-        {"scale", "1"},
-        {"renderer", "false"},
-        {"debug", "false"},
-        {"nosound", "false"},
-        {"new-game", "false"},
-        {"fs-strict", "false"}
-    };
-}
-
-static bool startsWith(const std::string& str, const std::string& prefix)
-{
-    return str.size() >= prefix.size() && str.compare(0, prefix.size(), prefix) == 0;
-}
-
-static std::string stripLeadingDashes(const std::string& arg)
-{
-    if (startsWith(arg, "--"))
-        return arg.substr(2);
-    if (startsWith(arg, "-"))
-        return arg.substr(1);
-    return arg;
-}
-
 } // namespace
 
-bool parseOptions(int argc, char** argv, THIRDEYE::Engine& engine,
-        Files::ConfigurationManager& cfgMgr) {
-    VariablesMap variables = getDefaultOptions();
+int main(int argc, char** argv) {
+    try {
+        Files::ConfigurationManager cfgMgr;
 
-    for (int i = 1; i < argc; ++i)
-    {
-        std::string arg = argv[i];
-        if (arg == "--help" || arg == "-h")
-        {
-            variables["help"] = "true";
-            continue;
-        }
+        CLI::App app{"Thirdeye - a reimplementation of the AESOP engine "
+                     "(Eye of the Beholder 3 / Dungeon Hack)"};
+        app.set_version_flag("--version", std::string{THIRDEYE_VERSION});
 
-        if (arg == "--version")
-        {
-            variables["version"] = "true";
-            continue;
-        }
+        // Option values (with their defaults). These feed the VariablesMap below
+        // so that config files (thirdeye.cfg) can still override them, preserving
+        // the original precedence: defaults < command line < config file.
+        std::string gameData = "/opt/eob3";
+        std::string game     = "eob3";
+        std::string start    = "LEVEL4";
+        uint16_t    scale     = 1;
+        bool        renderer  = false;
+        bool        forceVM   = false;
+        bool        debug     = false;
+        bool        nosound   = false;
+        bool        newGame   = false;
+        bool        fsStrict  = false;
 
-        if (startsWith(arg, "--"))
-        {
-            auto pos = arg.find('=');
-            std::string key;
-            std::string value;
-            if (pos != std::string::npos)
-            {
-                key = stripLeadingDashes(arg.substr(0, pos));
-                value = arg.substr(pos + 1);
-            }
-            else
-            {
-                key = stripLeadingDashes(arg);
-                if (i + 1 < argc && !startsWith(argv[i + 1], "-"))
-                {
-                    value = argv[++i];
-                }
-                else
-                {
-                    value = "true";
-                }
-            }
+        // Positional arg OR --game-data: a game-data directory or a .RES file.
+        app.add_option("game-data,--game-data", gameData,
+                       "Path to a game-data directory or a .RES file");
+        app.add_option("--game", game, "Which game to play (eob3, hack)");
+        app.add_option("--start", start, "Starting location");
+        app.add_option("--scale", scale, "Resolution scale");
+        app.add_flag("--renderer", renderer, "Enable hardware renderer");
+        app.add_flag("--vm", forceVM,
+                     "Boot the SOP bytecode VM (run the 'start' object) instead of the intro");
+        app.add_flag("--debug", debug, "Enable debug mode");
+        app.add_flag("--nosound", nosound, "Disable all sounds");
+        app.add_flag("--new-game", newGame, "Activate new game mechanics");
+        app.add_flag("--fs-strict", fsStrict, "Use strict file system handling");
 
-            if (!key.empty())
-            {
-                variables[key] = value;
-            }
-            continue;
-        }
+        CLI11_PARSE(app, argc, argv); // handles --help/--version (exits cleanly)
+
+        // Bridge into the config system: stuff the parsed values into the map,
+        // then let config files override (matching prior behaviour).
+        Files::ConfigurationManager::VariablesMap variables = {
+            {"game-data", gameData},
+            {"game",      game},
+            {"start",     start},
+            {"scale",     std::to_string(scale)},
+            {"renderer",  renderer ? "true" : "false"},
+            {"vm",        forceVM  ? "true" : "false"},
+            {"debug",     debug    ? "true" : "false"},
+            {"nosound",   nosound  ? "true" : "false"},
+            {"new-game",  newGame  ? "true" : "false"},
+            {"fs-strict", fsStrict ? "true" : "false"},
+        };
+        cfgMgr.readConfiguration(variables);
+
+        THIRDEYE::Engine engine(cfgMgr);
+        engine.setGameData(variables["game-data"]);
+        engine.setGame(variables["game"]);
+        engine.setForceVM(toBool(variables["vm"]));
+        engine.setDebugMode(toBool(variables["debug"]));
+        engine.setSoundUsage(toBool(variables["nosound"]));
+        engine.setScale(static_cast<uint16_t>(std::stoi(variables["scale"])));
+
+        engine.go();
+    } catch (std::exception &e) {
+        std::cout << "\nERROR: " << e.what() << std::endl;
+        return (1);
     }
 
-    cfgMgr.readConfiguration(variables);
-
-    bool run = true;
-
-    if (toBool(variables["help"])) {
-        std::cout << "Syntax: thirdeye <options>\nAllowed options" << std::endl;
-        std::cout << "  --help                 print help message" << std::endl;
-        std::cout << "  --version              print version information and quit" << std::endl;
-        std::cout << "  --game <name>          set which game we want to play" << std::endl;
-        std::cout << "  --game-data <path>     set game data directory" << std::endl;
-        std::cout << "  --start <location>     set starting location" << std::endl;
-        std::cout << "  --scale <n>            set resolution scale" << std::endl;
-        std::cout << "  --renderer             enable hardware renderer" << std::endl;
-        std::cout << "  --debug                enable debug mode" << std::endl;
-        std::cout << "  --nosound              disable all sounds" << std::endl;
-        std::cout << "  --new-game             activate new game mechanics" << std::endl;
-        std::cout << "  --fs-strict            use strict file system handling" << std::endl;
-        run = false;
-    }
-
-    if (toBool(variables["version"])) {
-        std::cout << "Thirdeye version " << THIRDEYE_VERSION << std::endl;
-        run = false;
-    }
-
-    if (!run)
-        return false;
-
-    engine.setGameData(variables["game-data"]);
-    engine.setGame(variables["game"]);
-    engine.setDebugMode(toBool(variables["debug"]));
-    engine.setSoundUsage(toBool(variables["nosound"]));
-    engine.setScale(static_cast<uint16_t>(std::stoi(variables["scale"])));
-
-    return true;
+    return (0);
 }
-
-int main(int argc, char**argv) {
-	try {
-
-		Files::ConfigurationManager cfgMgr;
-		THIRDEYE::Engine engine(cfgMgr);
-
-		if (parseOptions(argc, argv, engine, cfgMgr)) {
-			engine.go();
-
-		}
-	} catch (std::exception &e) {
-		std::cout << "\nERROR: " << e.what() << std::endl;
-		return (1);
-	}
-
-	return (0);
-}
-

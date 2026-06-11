@@ -6,4 +6,7 @@
 #define THIRDEYE_VERSION_RELEASE @THIRDEYE_VERSION_RELEASE@
 #define THIRDEYE_VERSION "@THIRDEYE_VERSION@"
 
+// Absolute path to the repo's files/ dir (holds SAMPLE.RES, bytecode.def, ...).
+#define TESTS_DATA_DIR "@TESTS_DATA_DIR@"
+
 #endif

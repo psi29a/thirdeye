@@ -113,6 +113,8 @@ private:
 	uint16_t getEntries(std::ifstream &resourceFile);
 	uint16_t getTable(std::ifstream &resourceFile, uint16_t table,
 			std::map<std::string, Dictionary> &dictionary);
+	static std::map<std::string, std::string> parseDictionary(
+			const std::vector<uint8_t> &bytes);
 	uint16_t getAssets(std::ifstream &resourceFile);
 	std::string getDate(uint32_t uiDate);
 	std::string searchDictionary(std::map<std::string, Dictionary> &dictionary,
@@ -126,6 +128,21 @@ public:
 	std::vector<uint8_t> &getAsset(uint16_t number);
 	std::string getTableEntry(std::string name, uint8_t table);
 	std::string getTableEntry(uint16_t number, uint8_t table);
+
+	/// Names of SOP code resources (those with the code attribute set).
+	std::vector<std::string> getCodeResourceNames();
+
+	/// Resource number for a given name, or -1 if not found.
+	int getResourceNumber(const std::string &name);
+
+	/// Parse a code object's <name>.EXPT export dictionary into key->value
+	/// pairs (e.g. "N:OBJECT"->object name, "M:0"->handler entry offset).
+	/// Returns an empty map if the export resource is missing.
+	std::map<std::string, std::string> getExports(const std::string &codeName);
+
+	/// Parse a code object's <name>.IMPT import dictionary into key->value
+	/// pairs (e.g. "C:launch"->runtime-function number). Empty if missing.
+	std::map<std::string, std::string> getImports(const std::string &codeName);
 
 	void showFileHeader(GlobalHeader fileHeader);
 	void showResources();
