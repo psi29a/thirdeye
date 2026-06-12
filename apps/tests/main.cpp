@@ -627,6 +627,23 @@ TEST (Event_Test, ReleasedWindowProducesNoRegionEvent) {
 	EXPECT_EQ(0, os.send(obj, 8, {}));
 }
 
+// --- get_x1/get_y1/get_x2/get_y2: a window's rectangle (the menu reads get_y1
+// of a hovered option to compute which option it is). ---
+TEST (Event_Test, WindowRectReturnsAssignedRectangle) {
+	VM::ObjectSystem os;
+	VM::EventSystem ev(os);
+	int32_t w = ev.assignWindow(/*owner*/ 5, /*x1*/ 10, /*y1*/ 107,
+	                            /*x2*/ 175, /*y2*/ 114);
+	int32_t x1 = 0, y1 = 0, x2 = 0, y2 = 0;
+	ASSERT_TRUE(ev.windowRect(w, x1, y1, x2, y2));
+	EXPECT_EQ(10, x1);
+	EXPECT_EQ(107, y1);
+	EXPECT_EQ(175, x2);
+	EXPECT_EQ(114, y2);
+	ev.releaseWindow(w);
+	EXPECT_FALSE(ev.windowRect(w, x1, y1, x2, y2)); // released -> no rect
+}
+
 int main(int argc, char **argv) {
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();

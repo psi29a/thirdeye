@@ -99,11 +99,21 @@ public:
 	                     int32_t y2);
 	// release_window: free a window handle.
 	void releaseWindow(int32_t handle);
+	// get_x1/get_y1/get_x2/get_y2: a window's rectangle (left/top/right/bottom).
+	// Returns false if the handle isn't a live window. The menu uses get_y1 of a
+	// hovered option's window to work out which option it is.
+	bool windowRect(int32_t handle, int32_t &x1, int32_t &y1, int32_t &x2,
+	                int32_t &y2) const;
 	// Feed host input. mouseMove posts SYS_MOUSEMOVE (coalesced) and the
 	// ENTER/LEAVE region events; mouseButton posts CLICK/RELEASE plus the
 	// *_CLICK_REGION events for whichever registered region holds the mouse.
 	void mouseMove(int32_t x, int32_t y);
 	void mouseButton(bool left, bool right);
+	// Heartbeat: keep a single SYS_TIMER event live, updating its parameter to
+	// the monotonic `heartbeat` (INTRFACE.C timer_callback). SYS_TIMER notify
+	// requests match when the heartbeat >= their threshold, so this drives timed
+	// behaviour (menu fade-in, cursor blink, animation).
+	void postTimer(int32_t heartbeat);
 
 	// Diagnostics / tests: number of live (non-tombstone) events in the queue.
 	size_t pendingEvents() const;
