@@ -12,6 +12,8 @@
 #include <algorithm>
 #include <cctype>
 #include <cstdlib>
+#include <fstream>
+#include <iterator>
 #include <map>
 #include <memory>
 
@@ -120,6 +122,39 @@ struct Relaunch {
 	std::string program;
 };
 
+// State for the char-gen party transfer (the `xfer` object's "convert created
+// party"/"transfer" handlers). open_transfer_file buffers CHARGEN\CREATE.SAV (the
+// party CHGEN.EXE wrote); player_attrib/item_attrib read fields back out of it.
+//
+// CREATE.SAV layout (reverse-engineered from the default party Bob/Carol/Ted/
+// Alice): a short header, then four fixed 345-byte PC records starting at 0x16.
+// player_attrib(pc, attr, size) reads `size` little-endian bytes at file offset
+// kPcBase + pc*kPcStride + attr (attr is the byte offset within the record's
+// attribute area, which begins just past the 11-byte name -- so e.g. attr 2 is
+// the first ability score). The bytecode just copies these bytes into the PC
+// object's statics, so returning the right bytes reconstructs the real party.
+struct TransferState {
+	std::vector<uint8_t> data; // CREATE.SAV contents (empty => not open)
+	// player_attrib(pc, attr, size) reads `size` LE bytes at file offset
+	// kPcBase + pc*kPcStride + attr. The record starts at 0x16 and `attr` is a
+	// direct byte offset into it biased by +2 (attr 2 = the first byte = name[0]):
+	// the name-copy loop reads attr 2..12 -> name[0..10] ("Bob\0..."), confirming
+	// the bias. So kPcBase = 0x16 - 2 = 20.
+	static constexpr int kPcBase = 0x16 - 2;
+	static constexpr int kPcStride = 345;
+
+	// Read `size` (1/2/4) little-endian bytes for player `pc`, attribute `attr`.
+	int32_t playerAttrib(int pc, int attr, int size) const {
+		size_t off = static_cast<size_t>(kPcBase + pc * kPcStride + attr);
+		uint32_t v = 0;
+		for (int i = 0; i < size; ++i) {
+			if (off + i >= data.size()) break;
+			v |= static_cast<uint32_t>(data[off + i]) << (8 * i);
+		}
+		return static_cast<int32_t>(v);
+	}
+};
+
 // The host seam (see the design note in CLAUDE.md). The kernel's main loop is a
 // busy-wait -- `while (!quit) dispatch_event();` -- so each time the bytecode
 // polls dispatch_event/peek_event we do the work DOS did with interrupts +
@@ -193,7 +228,7 @@ void pumpHost(GRAPHICS::Graphics &gfx, VM::EventSystem &events) {
 // fall through to the stub.
 VM::Value defaultRuntimeCall(VM::ObjectSystem &objects, VM::EventSystem &events,
                              GRAPHICS::Graphics *gfx, RESOURCES::Resource &res,
-                             std::map<int32_t, int32_t> &mem,
+                             std::map<int32_t, int32_t> &mem, TransferState &xfer,
                              VM::Interpreter &vm, const std::string &fn,
                              const std::vector<VM::Value> &args) {
 	// peekmem/pokemem model the original's raw memory cells. The boot object's
@@ -322,6 +357,108 @@ VM::Value defaultRuntimeCall(VM::ObjectSystem &objects, VM::EventSystem &events,
 		throw Relaunch{program};
 	}
 
+	// --- char-gen party transfer (EYE.C transfer-file API) ---
+	// open_transfer_file(name): buffer the CHGEN.EXE output (CHARGEN\CREATE.SAV)
+	// so player_attrib/item_attrib can read the created party out of it. The DOS
+	// path uses a backslash and is relative to the game dir; map it to the real
+	// sibling file beside the .RES.
+	if (fn == "open_transfer_file" && args.size() >= 1) {
+		std::string name = vm.readCodeString(static_cast<uint32_t>(args[0]));
+		// Map the DOS path (e.g. "CHARGEN\CREATE.SAV") to a real sibling of the
+		// .RES: split on '\\' and rebuild with the host separator.
+		std::filesystem::path full = res.resourcePath().parent_path();
+		std::string part;
+		for (size_t i = 0; i <= name.size(); ++i) {
+			if (i == name.size() || name[i] == '\\') {
+				if (!part.empty()) full /= part;
+				part.clear();
+			} else part.push_back(name[i]);
+		}
+		xfer.data.clear();
+		std::ifstream in(full, std::ios::binary);
+		if (in) {
+			xfer.data.assign(std::istreambuf_iterator<char>(in),
+			                 std::istreambuf_iterator<char>());
+		}
+		std::cout << "  [open_transfer_file \"" << name << "\" -> " << full.string()
+		          << " (" << xfer.data.size() << " bytes)]" << std::endl;
+		return xfer.data.empty() ? -1 : 0;
+	}
+	if (fn == "close_transfer_file") {
+		xfer.data.clear();
+		std::cout << "  [close_transfer_file]" << std::endl;
+		return 0;
+	}
+	// player_attrib(pc, attr, size): read `size` bytes for player `pc`'s attribute
+	// `attr` from the buffered CREATE.SAV (see TransferState). The xfer bytecode
+	// copies these straight into the PC object's statics, rebuilding the party.
+	if (fn == "player_attrib" && args.size() >= 3) {
+		int32_t v = xfer.playerAttrib(static_cast<int>(args[0]),
+		                              static_cast<int>(args[1]),
+		                              static_cast<int>(args[2]));
+		return v;
+	}
+	// item_attrib(pc, slot, attr): a created PC's inventory slot. The per-slot
+	// layout in CREATE.SAV isn't reverse-engineered yet; for now report every slot
+	// empty (attr 1 = item id -> -1), which the transfer loop reads as "no item"
+	// and skips, so the party transfers with correct stats but no starting items.
+	// TODO: parse the inventory words (e.g. Bob holds item ids ~0x01b2..0x01b7).
+	if (fn == "item_attrib" && args.size() >= 3)
+		return args[2] == 1 ? -1 : 0;
+	// read_initial_items / arrow_count / write_initial_tempfiles: the rest of the
+	// transfer. Reading items + writing the game's initial save files is still to
+	// do (the savegame format); stubbed so "convert created party" runs through.
+	if (fn == "read_initial_items" || fn == "arrow_count")
+		return 0;
+	if (fn == "write_initial_tempfiles") {
+		std::cout << "  [write_initial_tempfiles: stub -- party not persisted yet]"
+		          << std::endl;
+		return 0;
+	}
+	// resume_level(level): the real one reconstructs the dungeon level + party from
+	// the savegame (.TMP). Until that format is implemented, do the one piece the
+	// HUD needs to show the party: register the live PC objects in the kernel's
+	// `player[]` array (the list "draw players" walks). Each PC's PC_num is its
+	// slot; player[] is the kernel's public static word array (6 slots).
+	if (fn == "resume_level") {
+		constexpr uint16_t kKernelClass = 1382, kPcClass = 1369;
+		constexpr uint16_t kEntitiesClass = 1370;
+		constexpr uint32_t kPlayerOff = 229, kPlayerSlots = 6, kPcNumOff = 0;
+		// The dungeon "entities" manager is a singleton the draw/move code addresses
+		// at the fixed object index 15 (e.g. SXW place@1370 to obj 15). The real
+		// resume_level rebuilds it from the level state; create an empty one so the
+		// party-draw's extern writes land somewhere live instead of crashing.
+		constexpr int kEntitiesIndex = 15;
+		if (objects.firstObjectOfClass(kEntitiesClass) < 0)
+			objects.createProgram(kEntitiesIndex, kEntitiesClass);
+		int kernel = objects.firstObjectOfClass(kKernelClass);
+		if (kernel >= 0) {
+			auto setSlot = [&](uint32_t slot, int16_t val) {
+				if (slot >= kPlayerSlots) return;
+				if (uint8_t *p = objects.classStaticPtr(kernel, kKernelClass,
+				                                        kPlayerOff + slot * 2, 2)) {
+					p[0] = val & 0xFF;
+					p[1] = (val >> 8) & 0xFF;
+				}
+			};
+			for (uint32_t s = 0; s < kPlayerSlots; ++s)
+				setSlot(s, -1); // empty all slots first
+			int placed = 0;
+			for (int pc : objects.objectsOfClass(kPcClass)) {
+				uint8_t *num = objects.classStaticPtr(pc, kPcClass, kPcNumOff, 1);
+				int slot = num ? *num : -1;
+				if (slot >= 0 && static_cast<uint32_t>(slot) < kPlayerSlots) {
+					setSlot(static_cast<uint32_t>(slot), static_cast<int16_t>(pc));
+					++placed;
+				}
+			}
+			std::cout << "  [resume_level: registered " << placed
+			          << " party members in player[] (stand-in for savegame load)]"
+			          << std::endl;
+		}
+		return 0;
+	}
+
 	// --- graphics (GRAPHICS.C / INTRFACE.C) wired to thirdeye's Graphics ---
 	// A first, deliberately-crude pass: we ignore the AESOP page/window/clip and
 	// fade model and just blit onto one screen surface, presenting on refresh.
@@ -405,6 +542,29 @@ VM::Value defaultRuntimeCall(VM::ObjectSystem &objects, VM::EventSystem &events,
 			               static_cast<int>(args[2]));
 			return 0;
 		}
+		// sprint(wndnum, format_addr, args...) -- printf-style print to a text
+		// window. The format string lives at a tagged address (e.g. a PC's "name"
+		// in static space, or an inline code string like "%d of %d"); %d/%s are
+		// filled from the trailing args. Used for character names + HP readouts.
+		if (fn == "sprint" && args.size() >= 2) {
+			std::string fmt = vm.readString(args[1]);
+			std::string out;
+			size_t ai = 2;
+			for (size_t i = 0; i < fmt.size(); ++i) {
+				if (fmt[i] != '%' || i + 1 >= fmt.size()) { out += fmt[i]; continue; }
+				char conv = fmt[++i];
+				if (conv == '%') { out += '%'; continue; }
+				VM::Value a = ai < args.size() ? args[ai++] : 0;
+				if (conv == 'd' || conv == 'u' || conv == 'i')
+					out += std::to_string(a);
+				else if (conv == 's')
+					out += vm.readString(a);
+				else { out += '%'; out += conv; }
+			}
+			gfx->printText(static_cast<int>(args[0]), out);
+			std::cout << "  [sprint \"" << out << "\"]" << std::endl;
+			return 0;
+		}
 		// print(wndnum, string_resource) -- string resources are "S:" + text.
 		if (fn == "print" && args.size() >= 2) {
 			try {
@@ -479,6 +639,7 @@ void THIRDEYE::Engine::runResourceVM(RESOURCES::Resource &resource) {
 	VM::ObjectSystem objects;
 	VM::EventSystem events(objects);
 	std::map<int32_t, int32_t> mem; // peekmem/pokemem cells
+	TransferState xfer;             // char-gen party transfer file (unused here)
 	events.setVerbose(mDebug);
 	objects.setTrace(mDebug);
 	objects.setRuntimeCall(
@@ -486,8 +647,8 @@ void THIRDEYE::Engine::runResourceVM(RESOURCES::Resource &resource) {
 		           const std::vector<VM::Value> &args) {
 			// runResourceVM stays headless (gfx = nullptr) -- it's for small
 			// resources like SAMPLE.RES, not the full game.
-			return defaultRuntimeCall(objects, events, nullptr, resource, mem, vm,
-			                          fn, args);
+			return defaultRuntimeCall(objects, events, nullptr, resource, mem, xfer,
+			                          vm, fn, args);
 		});
 	objects.setMaxSteps(2000000); // bring-up safety: stop runaway loops
 	registerClasses(resource, objects);
@@ -544,19 +705,24 @@ void THIRDEYE::Engine::bootObject(RESOURCES::Resource &resource,
 
 	// Seed the boot "mode" that start.MSG_CREATE reads via peekmem(1264) and
 	// CASEs on (see the start disassembly). The 4-char modes are stored
-	// little-endian: "INTR" routes to the title menu, "CINE" straight into the
-	// game. --skip-menu picks CINE; otherwise we show the menu. (The intro is a
-	// separate launch() we still stub; --skip-intro is honored once it's hooked.)
+	// little-endian: "INTR" -> title menu, "CINE" -> straight to the game (but the
+	// party comes from a savegame via resume_*, still stubbed -> empty party),
+	// "CHGN" -> run the char-gen party transfer first, then enter the game.
+	// --skip-menu picks CHGN so it enters with the real default party (Bob/Carol/
+	// Ted/Alice from CHARGEN\CREATE.SAV) instead of an empty one; otherwise we show
+	// the menu. (Loading the actual "Quick Start Party" savegame is the resume_*
+	// work -- see the Phase 3 save/load note in CLAUDE.md.)
 	constexpr int32_t MODE_INTR = 0x494e5452; // 'I''N''T''R' LE -> title menu
-	constexpr int32_t MODE_CINE = 0x43494e45; // 'C''I''N''E' LE -> enter game
+	constexpr int32_t MODE_CHGN = 0x4348474e; // 'C''H''G''N' LE -> char-gen + game
 	std::map<int32_t, int32_t> mem;
-	mem[1264] = mSkipMenu ? MODE_CINE : MODE_INTR;
+	mem[1264] = mSkipMenu ? MODE_CHGN : MODE_INTR;
+	TransferState xfer; // char-gen party transfer file (CHARGEN\CREATE.SAV)
 
 	objects.setRuntimeCall(
 		[&](VM::Interpreter &vm, const std::string &fn,
 		           const std::vector<VM::Value> &args) {
-			return defaultRuntimeCall(objects, events, gfx.get(), resource, mem, vm,
-			                          fn, args);
+			return defaultRuntimeCall(objects, events, gfx.get(), resource, mem, xfer,
+			                          vm, fn, args);
 		});
 	// With graphics, the host pump (in dispatch_event) presents + yields + handles
 	// quit, so the SOP main loop is frame-paced and the whole game session runs
@@ -583,6 +749,7 @@ void THIRDEYE::Engine::bootObject(RESOURCES::Resource &resource,
 	bool quit = false;
 	while (!quit) {
 		int objIndex = objects.createInstance(classNumber);
+		std::string relaunch; // non-empty => a sub-program to run, then re-boot
 		try {
 			VM::Value result = objects.send(objIndex, MSG_CREATE, {});
 			std::cout << "Boot handler returned " << result << " -- quitting."
@@ -592,11 +759,21 @@ void THIRDEYE::Engine::bootObject(RESOURCES::Resource &resource,
 			std::cout << "\nWindow closed -- quitting." << std::endl;
 			quit = true;
 		} catch (const Relaunch &r) {
-			runExternalProgram(r.program, gfx.get(), resource);
-			// loop: re-boot start, which routes on the poked mode in cell 1264.
+			relaunch = r.program.empty() ? " " : r.program; // mark for handling
 		} catch (const VM::VmError &e) {
 			handleBootWall(e, gfx.get());
 			quit = true;
+		}
+		// Run the sub-program OUTSIDE the catch above (a throw from within a catch
+		// handler escapes its own try): it may itself QuitRequested (window closed
+		// during the intro), which must be caught here. Then loop to re-boot start.
+		if (!relaunch.empty()) {
+			try {
+				runExternalProgram(relaunch, gfx.get(), resource);
+			} catch (const QuitRequested &) {
+				std::cout << "\nWindow closed -- quitting." << std::endl;
+				quit = true;
+			}
 		}
 	}
 
@@ -605,36 +782,86 @@ void THIRDEYE::Engine::bootObject(RESOURCES::Resource &resource,
 }
 
 // A menu choice handed off to an external DOS sub-program via launch(). We can't
-// run those binaries; instead we play thirdeye's own equivalent. For now these
-// are logged stubs -- the chain (re-boot start on the poked mode) is what makes
-// the menu selection do the right thing; the rich behaviour (real intro player,
-// char-gen UI) hooks in here later.
+// run those binaries; instead we play thirdeye's own equivalent. The chain
+// (re-boot start on the poked mode) is what makes the selection do the right
+// thing; here we drive the rich behaviour for the programs we can.
 void THIRDEYE::Engine::runExternalProgram(const std::string &program,
                                           GRAPHICS::Graphics *gfx,
                                           RESOURCES::Resource &resource) {
-	(void)gfx;
-	(void)resource;
 	std::string p = program;
 	std::transform(p.begin(), p.end(), p.begin(),
 	               [](unsigned char c) { return std::tolower(c); });
 	if (p.find("cine") != std::string::npos) {
 		// "Introduction": the original launches CINE.EXE to play INTRO.GFF, then
-		// returns to the title menu. TODO: drive thirdeye's own GFF intro player.
-		std::cout << "  [program chain: \"" << program
-		          << "\" -> would play the intro cinematic; returning to menu]"
-		          << std::endl;
+		// chain-launches back to the title menu. Drive thirdeye's own GFF player.
+		playCinematic(gfx, resource, "INTRO.GFF");
 	} else if (p.find("chgen") != std::string::npos ||
 	           p.find("chargen") != std::string::npos ||
 	           p.find("charge") != std::string::npos) {
-		// "Gather a New Party": CHARGEN builds a party, then chains back with mode
-		// "CHGN" so start enters the game with it. TODO: thirdeye char-gen UI.
+		// "Gather a New Party": CHGEN.EXE builds a party and writes CHARGEN\CREATE.SAV,
+		// then chains back with mode "CHGN" so start's xfer object reads it and enters
+		// the game. We have no char-gen UI yet, so we reuse the existing CREATE.SAV
+		// (the default party Bob/Carol/Ted/Alice) -- the transfer (player_attrib etc.)
+		// then runs for real. TODO: an actual character-creation UI to author it.
 		std::cout << "  [program chain: \"" << program
-		          << "\" -> would run character generation; entering game]"
+		          << "\" -> no char-gen UI yet; using the existing CHARGEN\\CREATE.SAV "
+		             "(default party) and entering the game]"
 		          << std::endl;
 	} else {
 		std::cout << "  [program chain: \"" << program
 		          << "\" -> no thirdeye equivalent yet; re-booting start]"
 		          << std::endl;
+	}
+}
+
+// Play a GFF cinematic (INTRO.GFF/FINALE.GFF/...) that lives beside the game's
+// .RES, reusing thirdeye's existing GFF player. Returns when the cinematic ends,
+// is skipped (ESC/Enter), or --skip-intro is set; closing the window throws
+// QuitRequested to unwind the whole session. The boot then re-enters start, which
+// draws the menu over the final frame.
+void THIRDEYE::Engine::playCinematic(GRAPHICS::Graphics *gfx,
+                                     RESOURCES::Resource &resource,
+                                     const std::string &gffName) {
+	if (mSkipIntro) {
+		std::cout << "  [program chain: --skip-intro set; skipping " << gffName
+		          << "]" << std::endl;
+		return;
+	}
+	std::filesystem::path gffPath =
+		resource.resourcePath().parent_path() / gffName;
+	if (!gfx || !std::filesystem::exists(gffPath)) {
+		std::cout << "  [program chain: " << gffName
+		          << (gfx ? " not found" : " -- headless")
+		          << "; skipping cinematic]" << std::endl;
+		return;
+	}
+
+	std::cout << "  [program chain: playing " << gffName
+	          << " (ESC/Enter to skip)]" << std::endl;
+	MIXER::Mixer mixer;
+	RESOURCES::GFFI video(gffPath);
+	mixer.playMusic(video.getMusic());
+	gfx->playVideo(video.getSequence());
+
+	SDL_Event event;
+	while (gfx->isVideoPlaying()) {
+		while (SDL_PollEvent(&event)) {
+			if (event.type == SDL_QUIT) {
+				gfx->stopVideo();
+				mixer.stopMusic();
+				throw QuitRequested{};
+			}
+			if (event.type == SDL_KEYDOWN &&
+			    (event.key.keysym.sym == SDLK_ESCAPE ||
+			     event.key.keysym.sym == SDLK_RETURN)) {
+				gfx->stopVideo();
+				mixer.stopMusic();
+			}
+		}
+		gfx->update();
+		mixer.update();
+		uint32_t sleep = gfx->getSleep();
+		SDL_Delay(sleep > 0 ? sleep : 16);
 	}
 }
 

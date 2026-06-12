@@ -70,6 +70,7 @@ private:
 		int htab = 0, vtab = 0;
 		uint8_t fg = 15;
 		int winX0 = 0, winX1 = WIDTH - 1; // bound window's horizontal extent
+		int winY0 = 0, winY1 = HEIGHT - 1; // bound window's vertical extent
 		int justify = 0;                  // 0=left, 1=right, 2=center (GIL2VFX)
 	};
 	std::map<int, TextWin> mTextWin;

@@ -56,7 +56,7 @@ VM::SopClass makeClassMulti(uint16_t number, uint32_t parent, uint16_t staticSiz
 // Opcode bytes used by the fixtures below.
 enum : uint8_t {
 	PUSH = 0x04, ADD = 0x09, MUL = 0x0B, SHTC = 0x1D, AIM = 0x26, LTBA = 0x28,
-	PASS = 0x23, LAW = 0x2D,
+	PASS = 0x23, JSR = 0x24, RTS = 0x25, LAW = 0x2D, SAW = 0x30,
 	LABA = 0x32, SABA = 0x35,
 	LSW = 0x3A, SSW = 0x3D, LSBA = 0x3F, SSBA = 0x42,
 	LXW = 0x47, SXW = 0x4A, LXBA = 0x4C, SXAS = 0x53, SOLE = 0x55, END = 0x56
@@ -347,6 +347,26 @@ TEST (VM_Test, AutoArrayStoreLoad) {
 	code.insert(code.end(), body.begin(), body.end());
 	VM::Interpreter vm{code};
 	EXPECT_EQ(7, vm.execute(14));
+}
+
+// --- JSR/RTS: a procedure with its own (non-trivial) auto frame returns a
+// value to the caller. RTS must read the saved PC/SP/Fptr from the frame base
+// (where JSR put them), not from the procedure's drifted operand top -- the bug
+// that left the in-game `kernel` (PROCEDURE_727) returning to PC 0. ---
+TEST (VM_Test, JsrRtsReturnsValueAcrossAutoFrame) {
+	std::vector<uint8_t> code(14, 0);
+	// handler @14: JSR proc(@20); END  -> returns the procedure's result
+	code.push_back(0x02); code.push_back(0x00);          // 14-15 MHDR auto_size=2
+	code.push_back(JSR); code.push_back(20); code.push_back(0); // 16-18 JSR @20
+	code.push_back(END);                                 // 19
+	// procedure @20 with a real local (auto_size=4): local = 42; return local
+	code.push_back(0x04); code.push_back(0x00);          // 20-21 MHDR auto_size=4
+	code.push_back(PUSH); code.push_back(SHTC); code.push_back(42); // 22-24
+	code.push_back(SAW); code.push_back(4); code.push_back(0);      // 25-27 local@fptr-4 = 42
+	code.push_back(PUSH); code.push_back(LAW); code.push_back(4); code.push_back(0); // 28-31 load local
+	code.push_back(RTS);                                 // 32
+	VM::Interpreter vm{code};
+	EXPECT_EQ(42, vm.execute(14));
 }
 
 // --- Inherited statics: parent and child each get their own block ---
