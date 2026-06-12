@@ -12,6 +12,7 @@
 #include <algorithm>
 #include <cctype>
 #include <cstdlib>
+#include <map>
 #include <memory>
 
 THIRDEYE::Engine::Engine(Files::ConfigurationManager& configurationManager) :
@@ -47,6 +48,12 @@ void THIRDEYE::Engine::setGameData(std::string gameData) {
 
 void THIRDEYE::Engine::setForceVM(bool forceVM) {
 	mForceVM = forceVM;
+}
+void THIRDEYE::Engine::setSkipMenu(bool skipMenu) {
+	mSkipMenu = skipMenu;
+}
+void THIRDEYE::Engine::setSkipIntro(bool skipIntro) {
+	mSkipIntro = skipIntro;
 }
 
 // The game-data path may be either a directory (in which case we append the
@@ -122,6 +129,23 @@ void pumpHost(GRAPHICS::Graphics &gfx, VM::EventSystem &events) {
 			// Feed the keystroke to the game as a SYS_KEYDOWN event.
 			events.postEvent(0, VM::SYS_KEYDOWN, ev.key.keysym.sym);
 			break;
+		case SDL_MOUSEMOTION: {
+			int lx, ly;
+			gfx.mouseToLogical(ev.motion.x, ev.motion.y, lx, ly);
+			events.mouseMove(lx, ly);
+			break;
+		}
+		case SDL_MOUSEBUTTONDOWN:
+		case SDL_MOUSEBUTTONUP: {
+			// Keep the mouse position current, then raise the button edge.
+			int lx, ly;
+			gfx.mouseToLogical(ev.button.x, ev.button.y, lx, ly);
+			events.mouseMove(lx, ly);
+			uint32_t b = SDL_GetMouseState(nullptr, nullptr);
+			events.mouseButton(b & SDL_BUTTON(SDL_BUTTON_LEFT),
+			                   b & SDL_BUTTON(SDL_BUTTON_RIGHT));
+			break;
+		}
 		default:
 			break;
 		}
@@ -138,8 +162,22 @@ void pumpHost(GRAPHICS::Graphics &gfx, VM::EventSystem &events) {
 // fall through to the stub.
 VM::Value defaultRuntimeCall(VM::ObjectSystem &objects, VM::EventSystem &events,
                              GRAPHICS::Graphics *gfx, RESOURCES::Resource &res,
+                             std::map<int32_t, int32_t> &mem,
                              VM::Interpreter &vm, const std::string &fn,
                              const std::vector<VM::Value> &args) {
+	// peekmem/pokemem model the original's raw memory cells. The boot object's
+	// MSG_CREATE reads peekmem(1264) -- a 4-char "mode" -- and CASEs on it to
+	// decide what to do (INTR -> title menu, CINE -> straight to game, ...). We
+	// back them with a real map so that the boot state machine works and we can
+	// seed the mode (see bootObject). Quiet: called in tight spots.
+	if (fn == "peekmem" && args.size() >= 1) {
+		auto it = mem.find(args[0]);
+		return it == mem.end() ? 0 : it->second;
+	}
+	if (fn == "pokemem" && args.size() >= 2) {
+		mem[args[0]] = args[1];
+		return 0;
+	}
 	// --- event system (EVENT.C) -- real, and intentionally quiet: the kernel's
 	// main loop calls these in a tight spin, so logging each would bury the
 	// trace. dispatchEvent itself logs the messages it delivers when verbose.
@@ -174,6 +212,20 @@ VM::Value defaultRuntimeCall(VM::ObjectSystem &objects, VM::EventSystem &events,
 		return 0;
 	}
 	if (fn == "flush_input_events") { events.flushInputEvents(); return 0; }
+
+	// --- windowing (GRAPHICS.C assign_subwindow/release_window) ---
+	// Backed by the event layer's window table so region (click/hover) events
+	// can hit-test against these rectangles. assign_subwindow(owner, parent, x1,
+	// y1, x2, y2) returns the handle the SOP code passes to notify(); we ignore
+	// `parent` since subwindow coords are absolute (matches GIL2VFX).
+	if (fn == "assign_subwindow" && args.size() >= 6)
+		return events.assignWindow(args[0], args[2], args[3], args[4], args[5]);
+	if (fn == "assign_window" && args.size() >= 5)
+		return events.assignWindow(args[0], args[1], args[2], args[3], args[4]);
+	if (fn == "release_window" && args.size() >= 1) {
+		events.releaseWindow(args[0]);
+		return 0;
+	}
 
 	std::cout << "    CALL " << fn << "(";
 	for (size_t i = 0; i < args.size(); ++i) {
@@ -340,15 +392,16 @@ void THIRDEYE::Engine::runResourceVM(RESOURCES::Resource &resource) {
 
 	VM::ObjectSystem objects;
 	VM::EventSystem events(objects);
+	std::map<int32_t, int32_t> mem; // peekmem/pokemem cells
 	events.setVerbose(mDebug);
 	objects.setTrace(mDebug);
 	objects.setRuntimeCall(
-		[&objects, &events, &resource](VM::Interpreter &vm, const std::string &fn,
+		[&](VM::Interpreter &vm, const std::string &fn,
 		           const std::vector<VM::Value> &args) {
 			// runResourceVM stays headless (gfx = nullptr) -- it's for small
 			// resources like SAMPLE.RES, not the full game.
-			return defaultRuntimeCall(objects, events, nullptr, resource, vm, fn,
-			                          args);
+			return defaultRuntimeCall(objects, events, nullptr, resource, mem, vm,
+			                          fn, args);
 		});
 	objects.setMaxSteps(2000000); // bring-up safety: stop runaway loops
 	registerClasses(resource, objects);
@@ -402,11 +455,22 @@ void THIRDEYE::Engine::bootObject(RESOURCES::Resource &resource,
 	VM::EventSystem events(objects);
 	events.setVerbose(mDebug);
 	objects.setTrace(mDebug);
+
+	// Seed the boot "mode" that start.MSG_CREATE reads via peekmem(1264) and
+	// CASEs on (see the start disassembly). The 4-char modes are stored
+	// little-endian: "INTR" routes to the title menu, "CINE" straight into the
+	// game. --skip-menu picks CINE; otherwise we show the menu. (The intro is a
+	// separate launch() we still stub; --skip-intro is honored once it's hooked.)
+	constexpr int32_t MODE_INTR = 0x494e5452; // 'I''N''T''R' LE -> title menu
+	constexpr int32_t MODE_CINE = 0x43494e45; // 'C''I''N''E' LE -> enter game
+	std::map<int32_t, int32_t> mem;
+	mem[1264] = mSkipMenu ? MODE_CINE : MODE_INTR;
+
 	objects.setRuntimeCall(
-		[&objects, &events, &gfx, &resource](VM::Interpreter &vm,
-		           const std::string &fn, const std::vector<VM::Value> &args) {
-			return defaultRuntimeCall(objects, events, gfx.get(), resource, vm, fn,
-			                          args);
+		[&](VM::Interpreter &vm, const std::string &fn,
+		           const std::vector<VM::Value> &args) {
+			return defaultRuntimeCall(objects, events, gfx.get(), resource, mem, vm,
+			                          fn, args);
 		});
 	// With graphics, the host pump (in dispatch_event) presents + yields + handles
 	// quit, so the SOP main loop is frame-paced and the whole game session runs
@@ -467,9 +531,10 @@ void THIRDEYE::Engine::go() {
 
 	RESOURCES::Resource resource(resFile);	// get our game resources ready
 
-	// --vm: boot the SOP bytecode VM (the 'start' object) instead of the intro.
-	// This is the data-driven bring-up path.
-	if (mForceVM) {
+	// --vm (or the --skip-* flags, which only make sense here): boot the SOP
+	// bytecode VM (the 'start' object). This is the real, data-driven game path:
+	// start.MSG_CREATE shows the title menu (or, with --skip-menu, the game).
+	if (mForceVM || mSkipMenu || mSkipIntro) {
 		bootObject(resource, "start");
 		return;
 	}

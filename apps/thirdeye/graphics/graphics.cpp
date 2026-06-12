@@ -713,6 +713,17 @@ void GRAPHICS::Graphics::saveScreenshot(const std::string &path) {
 		std::cerr << "saveScreenshot failed: " << SDL_GetError() << std::endl;
 }
 
+void GRAPHICS::Graphics::mouseToLogical(int wx, int wy, int &lx, int &ly) const {
+	// The renderer uses a logical size of WIDTHxHEIGHT scaled up by mScale with
+	// matching aspect (no letterbox), so window pixels map back by dividing out
+	// the scale. Clamp into range so edge clicks stay on-screen.
+	int s = mScale > 0 ? mScale : 1;
+	lx = wx / s;
+	ly = wy / s;
+	if (lx < 0) lx = 0; else if (lx >= WIDTH) lx = WIDTH - 1;
+	if (ly < 0) ly = 0; else if (ly >= HEIGHT) ly = HEIGHT - 1;
+}
+
 /*!
  \brief Stripped down SDL2_gfx zoom function, if we need more we'll
  just use the library instead.

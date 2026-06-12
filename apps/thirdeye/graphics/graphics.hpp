@@ -108,6 +108,10 @@ public:
 
 	// Save the current screen surface to a BMP (debug / headless verification).
 	void saveScreenshot(const std::string &path);
+
+	// Map a window-pixel coordinate (from an SDL mouse event) to the 320x200
+	// logical space the game's windows use. Accounts for the integer scale.
+	void mouseToLogical(int wx, int wy, int &lx, int &ly) const;
 };
 
 }
