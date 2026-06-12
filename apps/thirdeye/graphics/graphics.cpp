@@ -708,18 +708,99 @@ void GRAPHICS::Graphics::setPaletteRange(std::vector<uint8_t> &palRes,
 		mPalette->colors[firstColor + i] = pal[i];
 }
 
+void GRAPHICS::Graphics::setTextFont(int wndnum, int fontId,
+		std::vector<uint8_t> &fontRes) {
+	// Build the glyph set once per font and cache it: text_style is called on
+	// every menu redraw, and rebuilding 128 glyphs each frame would be wasteful.
+	auto &cached = mFontCache[fontId];
+	if (!cached)
+		cached = std::make_shared<Font>(fontRes);
+	mTextWin[wndnum].font = cached;
+}
+
+void GRAPHICS::Graphics::setTextColor(int wndnum, uint8_t color) {
+	mTextWin[wndnum].fg = color;
+}
+
+void GRAPHICS::Graphics::setTextXY(int wndnum, int x, int y) {
+	mTextWin[wndnum].htab = x;
+	mTextWin[wndnum].vtab = y;
+}
+
+void GRAPHICS::Graphics::setTextWindow(int wndnum, int x0, int y0, int x1,
+		int y1) {
+	mTextWin[wndnum].winX0 = x0;
+	mTextWin[wndnum].winX1 = x1;
+	// Erase the interior to its background so baked/previous text doesn't ghost
+	// under the freshly drawn dynamic text. Sample the background from just
+	// inside the top-left corner (above the first line of text).
+	if (x0 < 0 || y0 < 0 || x1 >= WIDTH || y1 >= HEIGHT || x1 < x0 || y1 < y0)
+		return;
+	Uint32 *pixels = static_cast<Uint32 *>(mScreen->pixels);
+	int pitch = mScreen->pitch / 4;
+	Uint32 bg = pixels[(y0 + 1) * pitch + (x0 + 1)];
+	SDL_Rect r = { x0, y0, x1 - x0 + 1, y1 - y0 + 1 };
+	SDL_FillRect(mScreen, &r, bg);
+}
+
+void GRAPHICS::Graphics::setTextJustify(int wndnum, int justify) {
+	mTextWin[wndnum].justify = justify;
+}
+
+void GRAPHICS::Graphics::printText(int wndnum, const std::string &text) {
+	auto it = mTextWin.find(wndnum);
+	if (it == mTextWin.end() || !it->second.font)
+		return; // no font set for this window yet
+	TextWin &tw = it->second;
+	SDL_Color c = mPalette->colors[tw.fg];
+
+	int y = tw.vtab;
+	int x = tw.htab;
+	if (tw.justify != 0) { // J_RIGHT / J_CENTER: position by the text's width
+		int textWidth = 0;
+		for (unsigned char ch : text)
+			if (SDL_Surface *g = tw.font->getCharacter(ch))
+				textWidth += g->w;
+		int winW = tw.winX1 - tw.winX0 + 1;
+		if (tw.justify == 2)      // center
+			x = tw.winX0 + (winW - textWidth) / 2;
+		else                      // right
+			x = tw.winX1 - textWidth;
+	}
+	for (unsigned char ch : text) {
+		SDL_Surface *glyph = tw.font->getCharacter(ch);
+		if (glyph == nullptr)
+			continue;
+		// Glyphs are white masks (black = transparent via colour key); tint to
+		// the text colour with a colour-mod multiply (white * colour = colour).
+		SDL_SetSurfaceColorMod(glyph, c.r, c.g, c.b);
+		SDL_Rect dst = { x, y, glyph->w, glyph->h };
+		SDL_BlitSurface(glyph, NULL, mScreen, &dst);
+		x += glyph->w;
+	}
+	tw.htab = x; // advance the cursor past the printed text
+}
+
 void GRAPHICS::Graphics::saveScreenshot(const std::string &path) {
 	if (SDL_SaveBMP(mScreen, path.c_str()) != 0)
 		std::cerr << "saveScreenshot failed: " << SDL_GetError() << std::endl;
 }
 
 void GRAPHICS::Graphics::mouseToLogical(int wx, int wy, int &lx, int &ly) const {
-	// The renderer uses a logical size of WIDTHxHEIGHT scaled up by mScale with
-	// matching aspect (no letterbox), so window pixels map back by dividing out
-	// the scale. Clamp into range so edge clicks stay on-screen.
+	// Map window-pixel mouse coords to the 320x200 logical space. Let SDL do it
+	// via the renderer's logical-size mapping -- this stays correct under --scale
+	// AND high-DPI/Retina (where window pixels differ from the logical size),
+	// which a plain divide-by-scale would get wrong.
+#if SDL_VERSION_ATLEAST(2, 0, 18)
+	float fx = 0.0f, fy = 0.0f;
+	SDL_RenderWindowToLogical(mRenderer, wx, wy, &fx, &fy);
+	lx = static_cast<int>(fx);
+	ly = static_cast<int>(fy);
+#else
 	int s = mScale > 0 ? mScale : 1;
 	lx = wx / s;
 	ly = wy / s;
+#endif
 	if (lx < 0) lx = 0; else if (lx >= WIDTH) lx = WIDTH - 1;
 	if (ly < 0) ly = 0; else if (ly >= HEIGHT) ly = HEIGHT - 1;
 }

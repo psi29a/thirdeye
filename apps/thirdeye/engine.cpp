@@ -123,12 +123,28 @@ void pumpHost(GRAPHICS::Graphics &gfx, VM::EventSystem &events) {
 		switch (ev.type) {
 		case SDL_QUIT:
 			throw QuitRequested{};
-		case SDL_KEYDOWN:
+		case SDL_KEYDOWN: {
 			if (ev.key.keysym.sym == SDLK_ESCAPE)
 				throw QuitRequested{};
-			// Feed the keystroke to the game as a SYS_KEYDOWN event.
-			events.postEvent(0, VM::SYS_KEYDOWN, ev.key.keysym.sym);
+			// The SOP code expects DOS/BIOS key codes: printable keys are ASCII
+			// (SDL keysyms already are), but the arrow keys are (scancode << 8)
+			// with a zero ASCII byte. SDL's own arrow keysyms (0x4000_00xx) match
+			// nothing, so translate them.
+			SDL_Keycode k = ev.key.keysym.sym;
+			int32_t key;
+			switch (k) {
+			case SDLK_UP:    key = 0x4800; break;
+			case SDLK_DOWN:  key = 0x5000; break;
+			case SDLK_LEFT:  key = 0x4b00; break;
+			case SDLK_RIGHT: key = 0x4d00; break;
+			default:
+				key = (k > 0 && k < 0x80) ? k : 0; // ASCII (Enter=0x0d, etc.)
+				break;
+			}
+			if (key != 0)
+				events.postEvent(0, VM::SYS_KEYDOWN, key);
 			break;
+		}
 		case SDL_MOUSEMOTION: {
 			int lx, ly;
 			gfx.mouseToLogical(ev.motion.x, ev.motion.y, lx, ly);
@@ -150,6 +166,11 @@ void pumpHost(GRAPHICS::Graphics &gfx, VM::EventSystem &events) {
 			break;
 		}
 	}
+	// Heartbeat: a ~30 Hz monotonic timer that drives the bytecode's timed
+	// behaviour (menu fade-in, cursor blink, animation). Coalesced into a single
+	// SYS_TIMER event (see EventSystem::postTimer / INTRFACE.C timer_callback).
+	events.postTimer(static_cast<int32_t>(SDL_GetTicks() >> 5));
+
 	gfx.update();                 // present whatever the bytecode has drawn
 	if (!events.peekEvent())
 		SDL_Delay(10);            // idle: yield (~100 Hz) instead of spinning
@@ -178,6 +199,10 @@ VM::Value defaultRuntimeCall(VM::ObjectSystem &objects, VM::EventSystem &events,
 		mem[args[0]] = args[1];
 		return 0;
 	}
+	// absv: absolute value (RTCODE.C). The menu colours each option
+	// 136 + absv(option - selected), so a stub (->0) flattens the highlight.
+	if (fn == "absv" && args.size() >= 1)
+		return args[0] < 0 ? -args[0] : args[0];
 	// --- event system (EVENT.C) -- real, and intentionally quiet: the kernel's
 	// main loop calls these in a tight spin, so logging each would bury the
 	// trace. dispatchEvent itself logs the messages it delivers when verbose.
@@ -225,6 +250,17 @@ VM::Value defaultRuntimeCall(VM::ObjectSystem &objects, VM::EventSystem &events,
 	if (fn == "release_window" && args.size() >= 1) {
 		events.releaseWindow(args[0]);
 		return 0;
+	}
+	// get_x1/get_y1/get_x2/get_y2: a window's rectangle edges.
+	if ((fn == "get_x1" || fn == "get_y1" || fn == "get_x2" || fn == "get_y2") &&
+	    args.size() >= 1) {
+		int32_t x1, y1, x2, y2;
+		if (!events.windowRect(args[0], x1, y1, x2, y2))
+			return 0;
+		if (fn == "get_x1") return x1;
+		if (fn == "get_y1") return y1;
+		if (fn == "get_x2") return x2;
+		return y2; // get_y2
 	}
 
 	std::cout << "    CALL " << fn << "(";
@@ -330,6 +366,52 @@ VM::Value defaultRuntimeCall(VM::ObjectSystem &objects, VM::EventSystem &events,
 			} catch (const std::exception &e) {
 				std::cout << "  [cursor failed: " << e.what() << "]" << std::endl;
 			}
+			return 0;
+		}
+
+		// --- text output (GRAPHICS.C): numbered text windows + print ---
+		// text_window(wndnum, wnd) -- bind the text window to a graphics window;
+		// we record its horizontal extent so centered/right text can be placed.
+		if (fn == "text_window" && args.size() >= 2) {
+			int32_t x0, y0, x1, y1;
+			if (events.windowRect(args[1], x0, y0, x1, y1))
+				gfx->setTextWindow(static_cast<int>(args[0]), x0, y0, x1, y1);
+			return 0;
+		}
+		// text_style(wndnum, font, justify) -- font + justification (0/1/2).
+		if (fn == "text_style" && args.size() >= 2) {
+			try {
+				gfx->setTextFont(static_cast<int>(args[0]),
+				                 static_cast<int>(args[1]), fetch(args[1]));
+			} catch (const std::exception &) {}
+			if (args.size() >= 3)
+				gfx->setTextJustify(static_cast<int>(args[0]),
+				                    static_cast<int>(args[2]));
+			return 0;
+		}
+		// text_color(wndnum, current, new) -- the remap target colour.
+		if (fn == "text_color" && args.size() >= 3) {
+			gfx->setTextColor(static_cast<int>(args[0]),
+			                  static_cast<uint8_t>(args[2]));
+			return 0;
+		}
+		// text_xy(wndnum, htab, vtab) -- move the text cursor.
+		if (fn == "text_xy" && args.size() >= 3) {
+			gfx->setTextXY(static_cast<int>(args[0]), static_cast<int>(args[1]),
+			               static_cast<int>(args[2]));
+			return 0;
+		}
+		// print(wndnum, string_resource) -- string resources are "S:" + text.
+		if (fn == "print" && args.size() >= 2) {
+			try {
+				std::vector<uint8_t> &s = fetch(args[1]);
+				size_t off = (s.size() >= 2 && s[0] == 'S' && s[1] == ':') ? 2 : 0;
+				std::string text;
+				for (size_t i = off; i < s.size() && s[i] != 0; ++i)
+					text.push_back(static_cast<char>(s[i]));
+				gfx->printText(static_cast<int>(args[0]), text);
+				std::cout << "  [text \"" << text << "\"]" << std::endl;
+			} catch (const std::exception &) {}
 			return 0;
 		}
 	}
