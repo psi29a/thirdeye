@@ -570,6 +570,63 @@ TEST (Event_Test, FlushInputEvents) {
 	EXPECT_EQ(1u, ev.pendingEvents());   // only the app event survives
 }
 
+// --- region (windowed mouse) events: a click inside a registered window fires
+// the handler with the window handle as the parameter; a click outside does not.
+TEST (Event_Test, RegionClickInsideFiresHandler) {
+	VM::ObjectSystem os;
+	os.addClass(makeEventClass(1));
+	VM::EventSystem ev(os);
+	int obj = os.createInstance(1);
+
+	// Register a window and ask to be told (msg 9 = "record parameter") on a
+	// click in it. The notify parameter is the window handle.
+	int32_t win = ev.assignWindow(/*owner*/ obj, /*x1*/ 10, /*y1*/ 10,
+	                              /*x2*/ 50, /*y2*/ 50);
+	EXPECT_GE(win, 2); // 0/1 are the pages
+	ev.notify(obj, /*message*/ 9, VM::SYS_CLICK_REGION, /*parameter*/ win);
+
+	ev.mouseMove(20, 20);                 // inside the window
+	ev.mouseButton(/*left*/ true, false); // press
+	ev.drainEventQueue();
+
+	// The handler ran with the event parameter = the window handle.
+	EXPECT_EQ(win, os.send(obj, 8, {}));
+}
+
+TEST (Event_Test, RegionClickOutsideIgnored) {
+	VM::ObjectSystem os;
+	os.addClass(makeEventClass(1));
+	VM::EventSystem ev(os);
+	int obj = os.createInstance(1);
+
+	int32_t win = ev.assignWindow(obj, 10, 10, 50, 50);
+	ev.notify(obj, 9, VM::SYS_CLICK_REGION, win);
+
+	ev.mouseMove(200, 200);               // outside the window
+	ev.mouseButton(true, false);
+	ev.drainEventQueue();
+
+	EXPECT_EQ(0, os.send(obj, 8, {}));    // handler never fired
+}
+
+// A released window no longer produces region events for clicks over it.
+TEST (Event_Test, ReleasedWindowProducesNoRegionEvent) {
+	VM::ObjectSystem os;
+	os.addClass(makeEventClass(1));
+	VM::EventSystem ev(os);
+	int obj = os.createInstance(1);
+
+	int32_t win = ev.assignWindow(obj, 10, 10, 50, 50);
+	ev.notify(obj, 9, VM::SYS_CLICK_REGION, win);
+	ev.releaseWindow(win);
+
+	ev.mouseMove(20, 20);                 // inside the (now released) rect
+	ev.mouseButton(true, false);
+	ev.drainEventQueue();
+
+	EXPECT_EQ(0, os.send(obj, 8, {}));
+}
+
 int main(int argc, char **argv) {
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
