@@ -124,6 +124,10 @@ public:
 	Resource(std::filesystem::path resourcePath);
 	virtual ~Resource();
 
+	/// The .RES file this resource was opened from (used to locate sibling
+	/// files like the INTRO.GFF cinematic that live beside it).
+	const std::filesystem::path &resourcePath() const { return mResFile; }
+
 	std::vector<uint8_t> &getAsset(std::string name);
 	std::vector<uint8_t> &getAsset(uint16_t number);
 	std::string getTableEntry(std::string name, uint8_t table);

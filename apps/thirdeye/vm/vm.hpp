@@ -188,6 +188,9 @@ public:
 	// address or doesn't point at a plausible string -- so it's safe to probe
 	// arbitrary integer arguments.
 	std::string readCodeString(Value addr) const;
+	// Read a NUL-terminated string from a Code, Static, or Extern address (the
+	// latter two via the extern-statics hook). Used by sprint() for PC name etc.
+	std::string readString(Value addr) const;
 
 	// Map of runtime-function number (as referenced by RCRS) -> function name,
 	// built from the code object's .IMPT dictionary.

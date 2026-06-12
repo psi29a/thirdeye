@@ -731,6 +731,8 @@ void GRAPHICS::Graphics::setTextWindow(int wndnum, int x0, int y0, int x1,
 		int y1) {
 	mTextWin[wndnum].winX0 = x0;
 	mTextWin[wndnum].winX1 = x1;
+	mTextWin[wndnum].winY0 = y0;
+	mTextWin[wndnum].winY1 = y1;
 	// Erase the interior to its background so baked/previous text doesn't ghost
 	// under the freshly drawn dynamic text. Sample the background from just
 	// inside the top-left corner (above the first line of text).
@@ -753,32 +755,82 @@ void GRAPHICS::Graphics::printText(int wndnum, const std::string &text) {
 		return; // no font set for this window yet
 	TextWin &tw = it->second;
 	SDL_Color c = mPalette->colors[tw.fg];
+	Font *font = tw.font.get();
+
+	auto glyphW = [&](unsigned char ch) -> int {
+		SDL_Surface *g = font->getCharacter(ch);
+		return g ? g->w : 0;
+	};
+	auto runWidth = [&](const std::string &s) -> int {
+		int w = 0;
+		for (unsigned char ch : s) w += glyphW(ch);
+		return w;
+	};
+	int lineH = 8; // these fonts are fixed-height; sample a glyph
+	if (SDL_Surface *g = font->getCharacter('A')) lineH = g->h;
+
+	const int winW = tw.winX1 - tw.winX0 + 1;
+
+	// Greedy word-wrap into lines that fit the window width. The original AESOP
+	// `print` flows text inside the bound window; we wrap on whitespace (and clip
+	// to the box below). Single short strings (menu options) stay one line.
+	std::vector<std::string> lines;
+	{
+		std::string cur, word;
+		auto flushWord = [&]() {
+			if (word.empty()) return;
+			int wW = runWidth(word);
+			int spW = cur.empty() ? 0 : glyphW(' ');
+			if (!cur.empty() && runWidth(cur) + spW + wW > winW) {
+				lines.push_back(cur);
+				cur.clear();
+			}
+			if (!cur.empty()) cur += ' ';
+			cur += word;
+			word.clear();
+		};
+		for (char ch : text) {
+			if (ch == ' ' || ch == '\n') {
+				flushWord();
+				if (ch == '\n') { lines.push_back(cur); cur.clear(); }
+			} else {
+				word.push_back(ch);
+			}
+		}
+		flushWord();
+		if (!cur.empty() || lines.empty()) lines.push_back(cur);
+	}
 
 	int y = tw.vtab;
-	int x = tw.htab;
-	if (tw.justify != 0) { // J_RIGHT / J_CENTER: position by the text's width
-		int textWidth = 0;
-		for (unsigned char ch : text)
-			if (SDL_Surface *g = tw.font->getCharacter(ch))
-				textWidth += g->w;
-		int winW = tw.winX1 - tw.winX0 + 1;
-		if (tw.justify == 2)      // center
-			x = tw.winX0 + (winW - textWidth) / 2;
-		else                      // right
-			x = tw.winX1 - textWidth;
+	int lastX = tw.htab;
+	for (size_t li = 0; li < lines.size(); ++li) {
+		const std::string &line = lines[li];
+		int lineW = runWidth(line);
+		int x;
+		if (tw.justify == 2)      // center each line in the window
+			x = tw.winX0 + (winW - lineW) / 2;
+		else if (tw.justify == 1) // right-align
+			x = tw.winX1 - lineW;
+		else                      // left: first line honours the cursor, wraps to winX0
+			x = (li == 0 ? tw.htab : tw.winX0);
+
+		if (y + lineH - 1 > tw.winY1) break; // clip below the window: stop drawing
+		for (unsigned char ch : line) {
+			SDL_Surface *glyph = font->getCharacter(ch);
+			if (glyph == nullptr) continue;
+			if (x + glyph->w - 1 > tw.winX1) break; // clip past the right edge
+			// Glyphs are white masks (black = transparent via colour key); tint to
+			// the text colour with a colour-mod multiply (white * colour = colour).
+			SDL_SetSurfaceColorMod(glyph, c.r, c.g, c.b);
+			SDL_Rect dst = { x, y, glyph->w, glyph->h };
+			SDL_BlitSurface(glyph, NULL, mScreen, &dst);
+			x += glyph->w;
+		}
+		lastX = x;
+		y += lineH;
 	}
-	for (unsigned char ch : text) {
-		SDL_Surface *glyph = tw.font->getCharacter(ch);
-		if (glyph == nullptr)
-			continue;
-		// Glyphs are white masks (black = transparent via colour key); tint to
-		// the text colour with a colour-mod multiply (white * colour = colour).
-		SDL_SetSurfaceColorMod(glyph, c.r, c.g, c.b);
-		SDL_Rect dst = { x, y, glyph->w, glyph->h };
-		SDL_BlitSurface(glyph, NULL, mScreen, &dst);
-		x += glyph->w;
-	}
-	tw.htab = x; // advance the cursor past the printed text
+	tw.htab = lastX;                       // cursor past the last line's text
+	tw.vtab = y > tw.vtab ? y - lineH : y; // cursor on the last drawn line
 }
 
 void GRAPHICS::Graphics::saveScreenshot(const std::string &path) {

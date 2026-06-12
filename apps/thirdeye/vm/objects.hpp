@@ -105,6 +105,16 @@ public:
 	// Bounds-checked pointer into object `objIndex`'s static storage; throws on
 	// a dead slot or out-of-range access.
 	uint8_t* staticsPtr(int objIndex, uint32_t offset, uint32_t size);
+	// Pointer to a static variable declared at `offset` within `definingClass`'s
+	// own block (accounts for the base-class-first layout), in object `objIndex`.
+	uint8_t* classStaticPtr(int objIndex, uint16_t definingClass, uint32_t offset,
+	                        uint32_t size) {
+		return staticsPtr(objIndex, staticBase(definingClass) + offset, size);
+	}
+	// Live object indices whose (exact) class is `classNumber`.
+	std::vector<int> objectsOfClass(uint16_t classNumber) const;
+	// First live object of `classNumber`, or -1.
+	int firstObjectOfClass(uint16_t classNumber) const;
 	// SOLE: the object handle (its index) if a live object exists, else -1.
 	Value objectLookup(int index) const;
 
@@ -143,6 +153,7 @@ private:
 	static constexpr uint16_t kFreeSlot = 0xFFFF; // empty object-list entry
 	static constexpr int kMsgCreate = 0;        // MSG_CREATE (DEFS.H)
 	static constexpr int kMsgDestroy = 1;       // MSG_DESTROY (DEFS.H)
+	static constexpr int kMsgRestore = 2;       // MSG_RESTORE (DEFS.H)
 };
 
 } // namespace VM
