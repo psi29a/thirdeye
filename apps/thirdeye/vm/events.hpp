@@ -30,10 +30,26 @@
 namespace VM {
 
 // Event types (SHARED.H). Types 0..31 are system/input events the engine raises;
-// 32..255 are application events the SOP code defines for itself.
+// 32..255 are application events the SOP code defines for itself. The *_REGION
+// events carry a window handle as their parameter (see add_region_event).
 enum : int32_t {
 	SYS_FREE = 0,       // an empty / invalidated slot (matches no notify request)
 	SYS_TIMER = 1,      // heartbeat; matches when event param >= request param
+	SYS_MOUSEMOVE = 2,
+	SYS_ENTER_REGION = 3,
+	SYS_LEAVE_REGION = 4,
+	SYS_LEFT_CLICK = 5,
+	SYS_LEFT_RELEASE = 6,
+	SYS_RIGHT_CLICK = 7,
+	SYS_RIGHT_RELEASE = 8,
+	SYS_CLICK = 9,
+	SYS_RELEASE = 10,
+	SYS_LEFT_CLICK_REGION = 11,
+	SYS_LEFT_RELEASE_REGION = 12,
+	SYS_RIGHT_CLICK_REGION = 13,
+	SYS_RIGHT_RELEASE_REGION = 14,
+	SYS_CLICK_REGION = 15,
+	SYS_RELEASE_REGION = 16,
 	SYS_KEYDOWN = 17,
 	FIRST_INPUT_EVENT = 2, LAST_INPUT_EVENT = 17,
 	FIRST_SYS_EVENT = 0, LAST_SYS_EVENT = 31,
@@ -75,6 +91,20 @@ public:
 	// (called when it is destroyed); client == -1 drops all entity clients'.
 	void cancelEntityRequests(int32_t client);
 
+	// --- interface / input layer (port of INTRFACE.C) ---
+	// assign_subwindow: register a rectangular window (in 320x200 screen coords)
+	// owned by `owner`; returns the handle the SOP code passes to notify() for
+	// region events. Handles 0/1 (PAGE1/PAGE2) are pre-created full-screen.
+	int32_t assignWindow(int32_t owner, int32_t x1, int32_t y1, int32_t x2,
+	                     int32_t y2);
+	// release_window: free a window handle.
+	void releaseWindow(int32_t handle);
+	// Feed host input. mouseMove posts SYS_MOUSEMOVE (coalesced) and the
+	// ENTER/LEAVE region events; mouseButton posts CLICK/RELEASE plus the
+	// *_CLICK_REGION events for whichever registered region holds the mouse.
+	void mouseMove(int32_t x, int32_t y);
+	void mouseButton(bool left, bool right);
+
 	// Diagnostics / tests: number of live (non-tombstone) events in the queue.
 	size_t pendingEvents() const;
 
@@ -100,7 +130,17 @@ private:
 
 	static constexpr int NR_LSIZE = 768;   // max notify requests
 	static constexpr int EV_QSIZE = 128;   // circular event-queue capacity
-	static constexpr int32_t NSX_TYPE = 0x00FF; // event-type mask in status
+	static constexpr int32_t NSX_TYPE = 0x00FF;       // event-type mask in status
+	static constexpr int32_t NSX_IN_REGION = 0x100;   // mouse currently in region
+	static constexpr int32_t NSX_OUT_REGION = 0x200;  // mouse currently out of region
+	static constexpr int MAX_WINDOWS = 256;           // window-handle table size
+
+	// A registered window/region: an inclusive rectangle in screen coords.
+	struct Win {
+		int32_t x0 = 0, y0 = 0, x1 = 0, y1 = 0;
+		int32_t owner = -1;
+		bool used = false;
+	};
 
 	// A request matches an event when the parameters agree: -1 is a wildcard,
 	// SYS_TIMER matches >= (heartbeat), everything else matches ==. SYS_FREE
@@ -116,8 +156,14 @@ private:
 	void addEvent(int32_t type, int32_t parameter, int32_t owner);
 	int32_t fetchEvent();                                   // index or -1
 	int32_t nextEvent() const;                              // index or -1
+	int32_t findEvent(int32_t type, int32_t parameter) const; // index or -1
 	void removeEvent(int32_t type, int32_t parameter, int32_t owner);
 	int32_t scanEventRange(int32_t firstType, int32_t lastType) const;
+
+	// Region helpers (INTRFACE.C): is the mouse inside window `wnd`? and post a
+	// region event to every listener whose window currently holds the mouse.
+	bool mouseInWindow(int32_t wnd) const;
+	void addRegionEvent(int32_t type, int32_t owner);
 
 	ObjectSystem& mObjects;
 
@@ -127,6 +173,10 @@ private:
 	std::array<Event, EV_QSIZE> mQueue{};
 	uint32_t mHead = 0;
 	uint32_t mTail = 0;
+
+	std::array<Win, MAX_WINDOWS> mWindows{}; // window-handle table (0/1 = pages)
+	int32_t mPointX = 0, mPointY = 0;        // current mouse position (screen)
+	bool mLastLeft = false, mLastRight = false; // last button state (edge detect)
 
 	int32_t mCurrentEventType = SYS_FREE; // event being dispatched (cancel guard)
 	bool mVerbose = false;

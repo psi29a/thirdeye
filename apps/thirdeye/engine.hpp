@@ -39,6 +39,8 @@ class Engine
 	bool mUseSound;
 	bool mDebug;
 	bool mForceVM = false;
+	bool mSkipMenu = false;  // boot straight into the game (skip the title menu)
+	bool mSkipIntro = false; // skip the intro cinematic
 	bool mRenderer;
 	uint8_t mGame;
 	uint16_t mScale;
@@ -67,6 +69,8 @@ public:
 	void setGame(std::string game);
 	void setGameData(std::string gameData);
 	void setForceVM(bool forceVM);
+	void setSkipMenu(bool skipMenu);
+	void setSkipIntro(bool skipIntro);
 	void setDebugMode(bool debug);
 	void setSoundUsage(bool nosound);
 	void setRenderer(bool renderer);

@@ -21,9 +21,18 @@ BYTECODEPOINTER *readBytecodeDefinition(void) {
 	char loLine[256];
 	int loBytecodeTableSize;
 
-	//strcpy(loDefinitionFilePath, myHomeDirectory); #TODO: set to local directory, and eventually check in other locations
+	// Locate the bytecode definition. The path buffer was previously left
+	// uninitialized (the strcpy below was commented out), so this always failed
+	// -- disassembly was effectively broken. Try the current directory first,
+	// then a "files/" subdirectory (the repo layout).
+	loDefinitionFilePath[0] = '\0';
 	strcat(loDefinitionFilePath, BYTECODE_DEFINITION_FILE);
 	loDefinitionFile = fopen(loDefinitionFilePath, "r");
+	if (loDefinitionFile == NULL) {
+		strcpy(loDefinitionFilePath, "files/");
+		strcat(loDefinitionFilePath, BYTECODE_DEFINITION_FILE);
+		loDefinitionFile = fopen(loDefinitionFilePath, "r");
+	}
 	if (loDefinitionFile == NULL) {
 		printf("The attempt to open the bytecode definion file %s failed!\n",
 				loDefinitionFilePath);
