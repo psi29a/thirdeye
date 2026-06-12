@@ -38,6 +38,13 @@ void EventSystem::reset() {
 	}
 	mNR[NR_LSIZE - 1].next = -1;
 	mCurrentEventType = SYS_FREE;
+
+	// Window table: handles 0/1 are PAGE1/PAGE2, the full 320x200 screen.
+	mWindows.fill(Win{});
+	for (int i = 0; i < 2; ++i)
+		mWindows[i] = Win{0, 0, 319, 199, -1, true};
+	mPointX = mPointY = 0;
+	mLastLeft = mLastRight = false;
 }
 
 // add_notify_request(): pop a slot off the free chain and append it to the end
@@ -195,6 +202,20 @@ int32_t EventSystem::fetchEvent() {
 	return t;
 }
 
+// find_event(): index of the first queued event matching type + parameter, else
+// -1. Used to coalesce mouse-move/timer events instead of flooding the queue.
+int32_t EventSystem::findEvent(int32_t type, int32_t parameter) const {
+	for (uint32_t t = mTail; t != mHead; t = (t + 1) % EV_QSIZE) {
+		const Event& EV = mQueue[t];
+		if (EV.type != type)
+			continue;
+		if (!matchParameter(EV.type, EV.parameter, parameter))
+			continue;
+		return static_cast<int32_t>(t);
+	}
+	return -1;
+}
+
 // remove_event(): tombstone (set SYS_FREE) every queued event matching the
 // (type, parameter, owner) filter; -1 is a wildcard for type and owner.
 void EventSystem::removeEvent(int32_t type, int32_t parameter, int32_t owner) {
@@ -310,6 +331,131 @@ void EventSystem::flushInputEvents() {
 	if (mCurrentEventType >= FIRST_INPUT_EVENT &&
 	    mCurrentEventType <= LAST_INPUT_EVENT)
 		mCurrentEventType = SYS_FREE;
+}
+
+// --- interface / input layer (port of INTRFACE.C) ---------------------------
+
+int32_t EventSystem::assignWindow(int32_t owner, int32_t x1, int32_t y1,
+                                  int32_t x2, int32_t y2) {
+	// Subwindow coordinates are absolute in the page's buffer space (GIL2VFX
+	// stores them verbatim), so we keep the rectangle as-is. Handles 0/1 are the
+	// pages; allocate the first free slot at/after 2.
+	for (int32_t i = 2; i < MAX_WINDOWS; ++i) {
+		if (!mWindows[i].used) {
+			mWindows[i] = Win{x1, y1, x2, y2, owner, true};
+			return i;
+		}
+	}
+	std::cerr << "[events] window table full (" << MAX_WINDOWS << ")" << std::endl;
+	return -1;
+}
+
+void EventSystem::releaseWindow(int32_t handle) {
+	if (handle >= 2 && handle < MAX_WINDOWS)
+		mWindows[handle].used = false;
+}
+
+bool EventSystem::windowRect(int32_t handle, int32_t &x1, int32_t &y1,
+                             int32_t &x2, int32_t &y2) const {
+	if (handle < 0 || handle >= MAX_WINDOWS || !mWindows[handle].used)
+		return false;
+	const Win &w = mWindows[handle];
+	x1 = w.x0; y1 = w.y0; x2 = w.x1; y2 = w.y1;
+	return true;
+}
+
+// mouse_in_window(): inclusive rectangle test against window `wnd`.
+bool EventSystem::mouseInWindow(int32_t wnd) const {
+	if (wnd < 0 || wnd >= MAX_WINDOWS || !mWindows[wnd].used)
+		return false;
+	const Win& w = mWindows[wnd];
+	return mPointX >= w.x0 && mPointX <= w.x1 && mPointY >= w.y0 &&
+	       mPointY <= w.y1;
+}
+
+// add_region_event(): for each listener on `type`, if the mouse is inside that
+// listener's window (NR->parameter), post an event carrying the window handle.
+void EventSystem::addRegionEvent(int32_t type, int32_t owner) {
+	int32_t nxt = mNRfirst[type];
+	while (nxt != -1) {
+		NReq& NR = mNR[nxt];
+		nxt = NR.next;
+		int32_t r = NR.parameter;
+		if (mouseInWindow(r))
+			addEvent(type, r, owner);
+	}
+}
+
+// mouse_event_handler(): record the position, post a (coalesced) SYS_MOUSEMOVE,
+// and raise ENTER/LEAVE region events as the mouse crosses registered windows.
+void EventSystem::mouseMove(int32_t x, int32_t y) {
+	mPointX = x;
+	mPointY = y;
+
+	int32_t param = (static_cast<int32_t>(static_cast<uint32_t>(y) << 16)) |
+	                (x & 0xFFFF);
+	int32_t ev = findEvent(SYS_MOUSEMOVE, -1);
+	if (ev == -1)
+		addEvent(SYS_MOUSEMOVE, param, -1);
+	else
+		mQueue[ev].parameter = param; // coalesce: update the pending move
+
+	// ENTER_REGION: fire once on entry (latched via NSX_IN_REGION).
+	for (int32_t nxt = mNRfirst[SYS_ENTER_REGION]; nxt != -1;) {
+		NReq& NR = mNR[nxt];
+		nxt = NR.next;
+		if (mouseInWindow(NR.parameter)) {
+			if (NR.status & NSX_IN_REGION)
+				continue;
+			NR.status |= NSX_IN_REGION;
+			addEvent(SYS_ENTER_REGION, NR.parameter, -1);
+		} else {
+			NR.status &= ~NSX_IN_REGION;
+		}
+	}
+
+	// LEAVE_REGION: fire once on exit (latched via NSX_OUT_REGION).
+	for (int32_t nxt = mNRfirst[SYS_LEAVE_REGION]; nxt != -1;) {
+		NReq& NR = mNR[nxt];
+		nxt = NR.next;
+		if (!mouseInWindow(NR.parameter)) {
+			if (!(NR.status & NSX_OUT_REGION))
+				continue;
+			NR.status &= ~NSX_OUT_REGION;
+			addEvent(SYS_LEAVE_REGION, NR.parameter, -1);
+		} else {
+			NR.status |= NSX_OUT_REGION;
+		}
+	}
+}
+
+// timer_callback(): keep one SYS_TIMER event in the queue, updating its
+// heartbeat parameter rather than flooding the queue with new events.
+void EventSystem::postTimer(int32_t heartbeat) {
+	int32_t ev = findEvent(SYS_TIMER, -1);
+	if (ev == -1)
+		addEvent(SYS_TIMER, heartbeat, -1);
+	else
+		mQueue[ev].parameter = heartbeat;
+}
+
+// mouse_button_event_handler(): on each button edge, post the plain click /
+// release events plus the region variants for the window under the mouse.
+void EventSystem::mouseButton(bool left, bool right) {
+	if (left != mLastLeft) {
+		addEvent(left ? SYS_CLICK : SYS_RELEASE, 0, -1);
+		addEvent(left ? SYS_LEFT_CLICK : SYS_LEFT_RELEASE, 0, -1);
+		addRegionEvent(left ? SYS_LEFT_CLICK_REGION : SYS_LEFT_RELEASE_REGION, -1);
+		addRegionEvent(left ? SYS_CLICK_REGION : SYS_RELEASE_REGION, -1);
+		mLastLeft = left;
+	}
+	if (right != mLastRight) {
+		addEvent(right ? SYS_CLICK : SYS_RELEASE, 0, -1);
+		addEvent(right ? SYS_RIGHT_CLICK : SYS_RIGHT_RELEASE, 0, -1);
+		addRegionEvent(right ? SYS_RIGHT_CLICK_REGION : SYS_RIGHT_RELEASE_REGION, -1);
+		addRegionEvent(right ? SYS_CLICK_REGION : SYS_RELEASE_REGION, -1);
+		mLastRight = right;
+	}
 }
 
 size_t EventSystem::pendingEvents() const {

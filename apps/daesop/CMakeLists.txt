@@ -31,6 +31,15 @@ target_link_libraries(daesop
 #    components
 )
 
+# daesop's disassembler reads files/bytecode.def; copy it next to the executable
+# so it can be found relative to the binary (not the current directory).
+add_custom_command(TARGET daesop POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${CMAKE_SOURCE_DIR}/files/bytecode.def"
+        "$<TARGET_FILE_DIR:daesop>/bytecode.def"
+    COMMENT "Copying bytecode.def next to daesop"
+)
+
 if(DPKG_PROGRAM)
     INSTALL(TARGETS daesop RUNTIME DESTINATION games COMPONENT daesop)
 endif()
