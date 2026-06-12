@@ -49,6 +49,8 @@ int main(int argc, char** argv) {
         bool        nosound   = false;
         bool        newGame   = false;
         bool        fsStrict  = false;
+        bool        skipMenu  = false;
+        bool        skipIntro = false;
 
         // Positional arg OR --game-data: a game-data directory or a .RES file.
         app.add_option("game-data,--game-data", gameData,
@@ -59,6 +61,10 @@ int main(int argc, char** argv) {
         app.add_flag("--renderer", renderer, "Enable hardware renderer");
         app.add_flag("--vm", forceVM,
                      "Boot the SOP bytecode VM (run the 'start' object) instead of the intro");
+        app.add_flag("--skip-menu", skipMenu,
+                     "Boot straight into the game, skipping the title menu");
+        app.add_flag("--skip-intro", skipIntro,
+                     "Skip the intro cinematic");
         app.add_flag("--debug", debug, "Enable debug mode");
         app.add_flag("--nosound", nosound, "Disable all sounds");
         app.add_flag("--new-game", newGame, "Activate new game mechanics");
@@ -79,6 +85,8 @@ int main(int argc, char** argv) {
             {"nosound",   nosound  ? "true" : "false"},
             {"new-game",  newGame  ? "true" : "false"},
             {"fs-strict", fsStrict ? "true" : "false"},
+            {"skip-menu",  skipMenu  ? "true" : "false"},
+            {"skip-intro", skipIntro ? "true" : "false"},
         };
         cfgMgr.readConfiguration(variables);
 
@@ -86,6 +94,8 @@ int main(int argc, char** argv) {
         engine.setGameData(variables["game-data"]);
         engine.setGame(variables["game"]);
         engine.setForceVM(toBool(variables["vm"]));
+        engine.setSkipMenu(toBool(variables["skip-menu"]));
+        engine.setSkipIntro(toBool(variables["skip-intro"]));
         engine.setDebugMode(toBool(variables["debug"]));
         engine.setSoundUsage(toBool(variables["nosound"]));
         engine.setScale(static_cast<uint16_t>(std::stoi(variables["scale"])));

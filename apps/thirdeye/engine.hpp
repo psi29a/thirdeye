@@ -30,6 +30,8 @@
 #define STATE_ABANDON	5
 
 namespace RESOURCES { class Resource; }
+namespace GRAPHICS { class Graphics; }
+namespace VM { class VmError; }
 
 namespace THIRDEYE {
 // Main engine class, that brings together all the components of Thirdeye
@@ -39,6 +41,8 @@ class Engine
 	bool mUseSound;
 	bool mDebug;
 	bool mForceVM = false;
+	bool mSkipMenu = false;  // boot straight into the game (skip the title menu)
+	bool mSkipIntro = false; // skip the intro cinematic
 	bool mRenderer;
 	uint8_t mGame;
 	uint16_t mScale;
@@ -67,6 +71,8 @@ public:
 	void setGame(std::string game);
 	void setGameData(std::string gameData);
 	void setForceVM(bool forceVM);
+	void setSkipMenu(bool skipMenu);
+	void setSkipIntro(bool skipIntro);
 	void setDebugMode(bool debug);
 	void setSoundUsage(bool nosound);
 	void setRenderer(bool renderer);
@@ -87,6 +93,18 @@ private:
 	/// driven bring-up path -- it runs the real boot handler and stops at the
 	/// first runtime function / opcode we haven't implemented.
 	void bootObject(RESOURCES::Resource &resource, const std::string &objectName);
+
+	/// Play thirdeye's internal stand-in for a launched DOS sub-program (the
+	/// intro cinematic, character generation, ...). Called when a menu choice
+	/// hands off via launch(); after it returns, bootObject re-boots `start` on
+	/// the mode the bytecode poked into cell 1264 (AESOP's program chain).
+	void runExternalProgram(const std::string &program, GRAPHICS::Graphics *gfx,
+	                        RESOURCES::Resource &resource);
+
+	/// Hold a partially-rendered frame on screen after the VM hits an
+	/// unimplemented runtime function/opcode (a bring-up wall), until the user
+	/// closes the window or presses ESC.
+	void handleBootWall(const VM::VmError &e, GRAPHICS::Graphics *gfx);
 
 	Files::ConfigurationManager& mCfgMgr;
 	std::string mResource;

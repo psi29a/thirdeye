@@ -12,6 +12,7 @@
 #include <algorithm>
 #include <cctype>
 #include <cstdlib>
+#include <map>
 #include <memory>
 
 THIRDEYE::Engine::Engine(Files::ConfigurationManager& configurationManager) :
@@ -47,6 +48,12 @@ void THIRDEYE::Engine::setGameData(std::string gameData) {
 
 void THIRDEYE::Engine::setForceVM(bool forceVM) {
 	mForceVM = forceVM;
+}
+void THIRDEYE::Engine::setSkipMenu(bool skipMenu) {
+	mSkipMenu = skipMenu;
+}
+void THIRDEYE::Engine::setSkipIntro(bool skipIntro) {
+	mSkipIntro = skipIntro;
 }
 
 // The game-data path may be either a directory (in which case we append the
@@ -103,6 +110,16 @@ constexpr uint16_t kFirstColor[5] = {0x00, 0xB0, 0xC0, 0xE0, 0xB0};
 // closes the window / presses ESC. Caught in bootObject for a clean exit.
 struct QuitRequested {};
 
+// Thrown by launch() to model AESOP's program chain. In the original, launch()
+// exec-replaces the process with a sub-program (cine.exe/chgen.exe); when that
+// finishes it chain-launches "aesop eye start" again, which re-reads the mode
+// the bytecode just pokemem'd into cell 1264 and routes on it. We can't exec, so
+// launch() unwinds the VM back to bootObject, which runs our internal equivalent
+// of the named program and then re-enters start.MSG_CREATE -- same effect.
+struct Relaunch {
+	std::string program;
+};
+
 // The host seam (see the design note in CLAUDE.md). The kernel's main loop is a
 // busy-wait -- `while (!quit) dispatch_event();` -- so each time the bytecode
 // polls dispatch_event/peek_event we do the work DOS did with interrupts +
@@ -116,16 +133,54 @@ void pumpHost(GRAPHICS::Graphics &gfx, VM::EventSystem &events) {
 		switch (ev.type) {
 		case SDL_QUIT:
 			throw QuitRequested{};
-		case SDL_KEYDOWN:
+		case SDL_KEYDOWN: {
 			if (ev.key.keysym.sym == SDLK_ESCAPE)
 				throw QuitRequested{};
-			// Feed the keystroke to the game as a SYS_KEYDOWN event.
-			events.postEvent(0, VM::SYS_KEYDOWN, ev.key.keysym.sym);
+			// The SOP code expects DOS/BIOS key codes: printable keys are ASCII
+			// (SDL keysyms already are), but the arrow keys are (scancode << 8)
+			// with a zero ASCII byte. SDL's own arrow keysyms (0x4000_00xx) match
+			// nothing, so translate them.
+			SDL_Keycode k = ev.key.keysym.sym;
+			int32_t key;
+			switch (k) {
+			case SDLK_UP:    key = 0x4800; break;
+			case SDLK_DOWN:  key = 0x5000; break;
+			case SDLK_LEFT:  key = 0x4b00; break;
+			case SDLK_RIGHT: key = 0x4d00; break;
+			default:
+				key = (k > 0 && k < 0x80) ? k : 0; // ASCII (Enter=0x0d, etc.)
+				break;
+			}
+			if (key != 0)
+				events.postEvent(0, VM::SYS_KEYDOWN, key);
 			break;
+		}
+		case SDL_MOUSEMOTION: {
+			int lx, ly;
+			gfx.mouseToLogical(ev.motion.x, ev.motion.y, lx, ly);
+			events.mouseMove(lx, ly);
+			break;
+		}
+		case SDL_MOUSEBUTTONDOWN:
+		case SDL_MOUSEBUTTONUP: {
+			// Keep the mouse position current, then raise the button edge.
+			int lx, ly;
+			gfx.mouseToLogical(ev.button.x, ev.button.y, lx, ly);
+			events.mouseMove(lx, ly);
+			uint32_t b = SDL_GetMouseState(nullptr, nullptr);
+			events.mouseButton(b & SDL_BUTTON(SDL_BUTTON_LEFT),
+			                   b & SDL_BUTTON(SDL_BUTTON_RIGHT));
+			break;
+		}
 		default:
 			break;
 		}
 	}
+	// Heartbeat: a ~30 Hz monotonic timer that drives the bytecode's timed
+	// behaviour (menu fade-in, cursor blink, animation). Coalesced into a single
+	// SYS_TIMER event (see EventSystem::postTimer / INTRFACE.C timer_callback).
+	events.postTimer(static_cast<int32_t>(SDL_GetTicks() >> 5));
+
 	gfx.update();                 // present whatever the bytecode has drawn
 	if (!events.peekEvent())
 		SDL_Delay(10);            // idle: yield (~100 Hz) instead of spinning
@@ -138,8 +193,26 @@ void pumpHost(GRAPHICS::Graphics &gfx, VM::EventSystem &events) {
 // fall through to the stub.
 VM::Value defaultRuntimeCall(VM::ObjectSystem &objects, VM::EventSystem &events,
                              GRAPHICS::Graphics *gfx, RESOURCES::Resource &res,
+                             std::map<int32_t, int32_t> &mem,
                              VM::Interpreter &vm, const std::string &fn,
                              const std::vector<VM::Value> &args) {
+	// peekmem/pokemem model the original's raw memory cells. The boot object's
+	// MSG_CREATE reads peekmem(1264) -- a 4-char "mode" -- and CASEs on it to
+	// decide what to do (INTR -> title menu, CINE -> straight to game, ...). We
+	// back them with a real map so that the boot state machine works and we can
+	// seed the mode (see bootObject). Quiet: called in tight spots.
+	if (fn == "peekmem" && args.size() >= 1) {
+		auto it = mem.find(args[0]);
+		return it == mem.end() ? 0 : it->second;
+	}
+	if (fn == "pokemem" && args.size() >= 2) {
+		mem[args[0]] = args[1];
+		return 0;
+	}
+	// absv: absolute value (RTCODE.C). The menu colours each option
+	// 136 + absv(option - selected), so a stub (->0) flattens the highlight.
+	if (fn == "absv" && args.size() >= 1)
+		return args[0] < 0 ? -args[0] : args[0];
 	// --- event system (EVENT.C) -- real, and intentionally quiet: the kernel's
 	// main loop calls these in a tight spin, so logging each would bury the
 	// trace. dispatchEvent itself logs the messages it delivers when verbose.
@@ -175,6 +248,31 @@ VM::Value defaultRuntimeCall(VM::ObjectSystem &objects, VM::EventSystem &events,
 	}
 	if (fn == "flush_input_events") { events.flushInputEvents(); return 0; }
 
+	// --- windowing (GRAPHICS.C assign_subwindow/release_window) ---
+	// Backed by the event layer's window table so region (click/hover) events
+	// can hit-test against these rectangles. assign_subwindow(owner, parent, x1,
+	// y1, x2, y2) returns the handle the SOP code passes to notify(); we ignore
+	// `parent` since subwindow coords are absolute (matches GIL2VFX).
+	if (fn == "assign_subwindow" && args.size() >= 6)
+		return events.assignWindow(args[0], args[2], args[3], args[4], args[5]);
+	if (fn == "assign_window" && args.size() >= 5)
+		return events.assignWindow(args[0], args[1], args[2], args[3], args[4]);
+	if (fn == "release_window" && args.size() >= 1) {
+		events.releaseWindow(args[0]);
+		return 0;
+	}
+	// get_x1/get_y1/get_x2/get_y2: a window's rectangle edges.
+	if ((fn == "get_x1" || fn == "get_y1" || fn == "get_x2" || fn == "get_y2") &&
+	    args.size() >= 1) {
+		int32_t x1, y1, x2, y2;
+		if (!events.windowRect(args[0], x1, y1, x2, y2))
+			return 0;
+		if (fn == "get_x1") return x1;
+		if (fn == "get_y1") return y1;
+		if (fn == "get_x2") return x2;
+		return y2; // get_y2
+	}
+
 	std::cout << "    CALL " << fn << "(";
 	for (size_t i = 0; i < args.size(); ++i) {
 		std::cout << (i ? ", " : "");
@@ -208,26 +306,20 @@ VM::Value defaultRuntimeCall(VM::ObjectSystem &objects, VM::EventSystem &events,
 		return rtn;
 	}
 
-	// launch(mode, program, arg1, arg2): spawn a secondary program. In AESOP
-	// this is how EOB3 hands off to its sub-programs (e.g. CHARGEN).
+	// launch(mode, program, arg1, arg2): hand off to a secondary program. In
+	// AESOP this exec-replaces the process (CHARGEN, the CINE intro player, ...);
+	// the sub-program chain-launches back into "start", which re-reads cell 1264
+	// (the bytecode pokemem'd the next mode just before launching). We model that
+	// by unwinding to bootObject, which plays our internal equivalent and re-boots
+	// start -- so a menu choice's poke+launch routes to the right next mode
+	// instead of falling through to the following CASE branch.
 	if (fn == "launch") {
 		std::string program;
 		for (VM::Value a : args) {
 			std::string s = vm.readCodeString(static_cast<uint32_t>(a));
 			if (!s.empty()) { program = s; break; }
 		}
-		if (program.empty()) {
-			std::cout << "  [launch: no program name]" << std::endl;
-			return 0;
-		}
-		if (std::filesystem::exists(program)) {
-			std::string path = std::filesystem::absolute(program).string();
-			std::cout << "  [launch: running \"" << path << "\"]" << std::endl;
-			return std::system(path.c_str());
-		}
-		std::cout << "  [launch: \"" << program << "\" not found, nothing to run]"
-		          << std::endl;
-		return 0;
+		throw Relaunch{program};
 	}
 
 	// --- graphics (GRAPHICS.C / INTRFACE.C) wired to thirdeye's Graphics ---
@@ -278,6 +370,52 @@ VM::Value defaultRuntimeCall(VM::ObjectSystem &objects, VM::EventSystem &events,
 			} catch (const std::exception &e) {
 				std::cout << "  [cursor failed: " << e.what() << "]" << std::endl;
 			}
+			return 0;
+		}
+
+		// --- text output (GRAPHICS.C): numbered text windows + print ---
+		// text_window(wndnum, wnd) -- bind the text window to a graphics window;
+		// we record its horizontal extent so centered/right text can be placed.
+		if (fn == "text_window" && args.size() >= 2) {
+			int32_t x0, y0, x1, y1;
+			if (events.windowRect(args[1], x0, y0, x1, y1))
+				gfx->setTextWindow(static_cast<int>(args[0]), x0, y0, x1, y1);
+			return 0;
+		}
+		// text_style(wndnum, font, justify) -- font + justification (0/1/2).
+		if (fn == "text_style" && args.size() >= 2) {
+			try {
+				gfx->setTextFont(static_cast<int>(args[0]),
+				                 static_cast<int>(args[1]), fetch(args[1]));
+			} catch (const std::exception &) {}
+			if (args.size() >= 3)
+				gfx->setTextJustify(static_cast<int>(args[0]),
+				                    static_cast<int>(args[2]));
+			return 0;
+		}
+		// text_color(wndnum, current, new) -- the remap target colour.
+		if (fn == "text_color" && args.size() >= 3) {
+			gfx->setTextColor(static_cast<int>(args[0]),
+			                  static_cast<uint8_t>(args[2]));
+			return 0;
+		}
+		// text_xy(wndnum, htab, vtab) -- move the text cursor.
+		if (fn == "text_xy" && args.size() >= 3) {
+			gfx->setTextXY(static_cast<int>(args[0]), static_cast<int>(args[1]),
+			               static_cast<int>(args[2]));
+			return 0;
+		}
+		// print(wndnum, string_resource) -- string resources are "S:" + text.
+		if (fn == "print" && args.size() >= 2) {
+			try {
+				std::vector<uint8_t> &s = fetch(args[1]);
+				size_t off = (s.size() >= 2 && s[0] == 'S' && s[1] == ':') ? 2 : 0;
+				std::string text;
+				for (size_t i = off; i < s.size() && s[i] != 0; ++i)
+					text.push_back(static_cast<char>(s[i]));
+				gfx->printText(static_cast<int>(args[0]), text);
+				std::cout << "  [text \"" << text << "\"]" << std::endl;
+			} catch (const std::exception &) {}
 			return 0;
 		}
 	}
@@ -340,15 +478,16 @@ void THIRDEYE::Engine::runResourceVM(RESOURCES::Resource &resource) {
 
 	VM::ObjectSystem objects;
 	VM::EventSystem events(objects);
+	std::map<int32_t, int32_t> mem; // peekmem/pokemem cells
 	events.setVerbose(mDebug);
 	objects.setTrace(mDebug);
 	objects.setRuntimeCall(
-		[&objects, &events, &resource](VM::Interpreter &vm, const std::string &fn,
+		[&](VM::Interpreter &vm, const std::string &fn,
 		           const std::vector<VM::Value> &args) {
 			// runResourceVM stays headless (gfx = nullptr) -- it's for small
 			// resources like SAMPLE.RES, not the full game.
-			return defaultRuntimeCall(objects, events, nullptr, resource, vm, fn,
-			                          args);
+			return defaultRuntimeCall(objects, events, nullptr, resource, mem, vm,
+			                          fn, args);
 		});
 	objects.setMaxSteps(2000000); // bring-up safety: stop runaway loops
 	registerClasses(resource, objects);
@@ -402,11 +541,22 @@ void THIRDEYE::Engine::bootObject(RESOURCES::Resource &resource,
 	VM::EventSystem events(objects);
 	events.setVerbose(mDebug);
 	objects.setTrace(mDebug);
+
+	// Seed the boot "mode" that start.MSG_CREATE reads via peekmem(1264) and
+	// CASEs on (see the start disassembly). The 4-char modes are stored
+	// little-endian: "INTR" routes to the title menu, "CINE" straight into the
+	// game. --skip-menu picks CINE; otherwise we show the menu. (The intro is a
+	// separate launch() we still stub; --skip-intro is honored once it's hooked.)
+	constexpr int32_t MODE_INTR = 0x494e5452; // 'I''N''T''R' LE -> title menu
+	constexpr int32_t MODE_CINE = 0x43494e45; // 'C''I''N''E' LE -> enter game
+	std::map<int32_t, int32_t> mem;
+	mem[1264] = mSkipMenu ? MODE_CINE : MODE_INTR;
+
 	objects.setRuntimeCall(
-		[&objects, &events, &gfx, &resource](VM::Interpreter &vm,
-		           const std::string &fn, const std::vector<VM::Value> &args) {
-			return defaultRuntimeCall(objects, events, gfx.get(), resource, vm, fn,
-			                          args);
+		[&](VM::Interpreter &vm, const std::string &fn,
+		           const std::vector<VM::Value> &args) {
+			return defaultRuntimeCall(objects, events, gfx.get(), resource, mem, vm,
+			                          fn, args);
 		});
 	// With graphics, the host pump (in dispatch_event) presents + yields + handles
 	// quit, so the SOP main loop is frame-paced and the whole game session runs
@@ -424,37 +574,92 @@ void THIRDEYE::Engine::bootObject(RESOURCES::Resource &resource,
 
 	std::cout << "\nBooting object \"" << objectName
 	          << "\" (sending MSG_CREATE)..." << std::endl;
-	int objIndex = objects.createInstance(classNumber);
-	try {
-		VM::Value result = objects.send(objIndex, MSG_CREATE, {});
-		std::cout << "Boot handler returned " << result << "." << std::endl;
-	} catch (const QuitRequested &) {
-		std::cout << "\nWindow closed -- quitting." << std::endl;
-	} catch (const VM::VmError &e) {
-		std::cout << "\nBoot stopped at the first unimplemented piece:\n  "
-		          << e.what() << std::endl;
-		// Bring-up wall: hold the partially-rendered frame on screen so it's
-		// visible (the live host pump never got a chance to run the main loop).
-		if (gfx) {
-			gfx->update();
-			std::cout << "\nRendered frame is up -- press ESC or close the window "
-			             "to quit." << std::endl;
-			bool done = false;
-			SDL_Event event;
-			while (!done) {
-				while (SDL_PollEvent(&event))
-					if (event.type == SDL_QUIT ||
-					    (event.type == SDL_KEYDOWN &&
-					     event.key.keysym.sym == SDLK_ESCAPE))
-						done = true;
-				gfx->update();
-				SDL_Delay(16);
-			}
+	// Program-chain loop: start.MSG_CREATE runs the whole session and normally
+	// returns only at quit (Abandon, or window-close via QuitRequested). A menu
+	// choice that hands off to a sub-program (Introduction->cine, Gather->chgen)
+	// unwinds here as Relaunch; we play our internal stand-in for that program and
+	// re-enter start, which re-reads the mode the bytecode left in cell 1264. This
+	// mirrors the DOS program chain (each program ends by launching the next).
+	bool quit = false;
+	while (!quit) {
+		int objIndex = objects.createInstance(classNumber);
+		try {
+			VM::Value result = objects.send(objIndex, MSG_CREATE, {});
+			std::cout << "Boot handler returned " << result << " -- quitting."
+			          << std::endl;
+			quit = true; // start returned normally (e.g. "Abandon the Quest")
+		} catch (const QuitRequested &) {
+			std::cout << "\nWindow closed -- quitting." << std::endl;
+			quit = true;
+		} catch (const Relaunch &r) {
+			runExternalProgram(r.program, gfx.get(), resource);
+			// loop: re-boot start, which routes on the poked mode in cell 1264.
+		} catch (const VM::VmError &e) {
+			handleBootWall(e, gfx.get());
+			quit = true;
 		}
 	}
 
 	if (gfx)
 		gfx->saveScreenshot("/tmp/thirdeye_boot.bmp"); // last frame, for inspection
+}
+
+// A menu choice handed off to an external DOS sub-program via launch(). We can't
+// run those binaries; instead we play thirdeye's own equivalent. For now these
+// are logged stubs -- the chain (re-boot start on the poked mode) is what makes
+// the menu selection do the right thing; the rich behaviour (real intro player,
+// char-gen UI) hooks in here later.
+void THIRDEYE::Engine::runExternalProgram(const std::string &program,
+                                          GRAPHICS::Graphics *gfx,
+                                          RESOURCES::Resource &resource) {
+	(void)gfx;
+	(void)resource;
+	std::string p = program;
+	std::transform(p.begin(), p.end(), p.begin(),
+	               [](unsigned char c) { return std::tolower(c); });
+	if (p.find("cine") != std::string::npos) {
+		// "Introduction": the original launches CINE.EXE to play INTRO.GFF, then
+		// returns to the title menu. TODO: drive thirdeye's own GFF intro player.
+		std::cout << "  [program chain: \"" << program
+		          << "\" -> would play the intro cinematic; returning to menu]"
+		          << std::endl;
+	} else if (p.find("chgen") != std::string::npos ||
+	           p.find("chargen") != std::string::npos ||
+	           p.find("charge") != std::string::npos) {
+		// "Gather a New Party": CHARGEN builds a party, then chains back with mode
+		// "CHGN" so start enters the game with it. TODO: thirdeye char-gen UI.
+		std::cout << "  [program chain: \"" << program
+		          << "\" -> would run character generation; entering game]"
+		          << std::endl;
+	} else {
+		std::cout << "  [program chain: \"" << program
+		          << "\" -> no thirdeye equivalent yet; re-booting start]"
+		          << std::endl;
+	}
+}
+
+void THIRDEYE::Engine::handleBootWall(const VM::VmError &e,
+                                      GRAPHICS::Graphics *gfx) {
+	std::cout << "\nBoot stopped at the first unimplemented piece:\n  "
+	          << e.what() << std::endl;
+	// Bring-up wall: hold the partially-rendered frame on screen so it's
+	// visible (the live host pump never got a chance to run the main loop).
+	if (gfx) {
+		gfx->update();
+		std::cout << "\nRendered frame is up -- press ESC or close the window "
+		             "to quit." << std::endl;
+		bool done = false;
+		SDL_Event event;
+		while (!done) {
+			while (SDL_PollEvent(&event))
+				if (event.type == SDL_QUIT ||
+				    (event.type == SDL_KEYDOWN &&
+				     event.key.keysym.sym == SDLK_ESCAPE))
+					done = true;
+			gfx->update();
+			SDL_Delay(16);
+		}
+	}
 }
 
 // Initialise and enter main loop.
@@ -467,9 +672,10 @@ void THIRDEYE::Engine::go() {
 
 	RESOURCES::Resource resource(resFile);	// get our game resources ready
 
-	// --vm: boot the SOP bytecode VM (the 'start' object) instead of the intro.
-	// This is the data-driven bring-up path.
-	if (mForceVM) {
+	// --vm (or the --skip-* flags, which only make sense here): boot the SOP
+	// bytecode VM (the 'start' object). This is the real, data-driven game path:
+	// start.MSG_CREATE shows the title menu (or, with --skip-menu, the game).
+	if (mForceVM || mSkipMenu || mSkipIntro) {
 		bootObject(resource, "start");
 		return;
 	}
