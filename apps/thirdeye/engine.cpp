@@ -110,6 +110,16 @@ constexpr uint16_t kFirstColor[5] = {0x00, 0xB0, 0xC0, 0xE0, 0xB0};
 // closes the window / presses ESC. Caught in bootObject for a clean exit.
 struct QuitRequested {};
 
+// Thrown by launch() to model AESOP's program chain. In the original, launch()
+// exec-replaces the process with a sub-program (cine.exe/chgen.exe); when that
+// finishes it chain-launches "aesop eye start" again, which re-reads the mode
+// the bytecode just pokemem'd into cell 1264 and routes on it. We can't exec, so
+// launch() unwinds the VM back to bootObject, which runs our internal equivalent
+// of the named program and then re-enters start.MSG_CREATE -- same effect.
+struct Relaunch {
+	std::string program;
+};
+
 // The host seam (see the design note in CLAUDE.md). The kernel's main loop is a
 // busy-wait -- `while (!quit) dispatch_event();` -- so each time the bytecode
 // polls dispatch_event/peek_event we do the work DOS did with interrupts +
@@ -296,26 +306,20 @@ VM::Value defaultRuntimeCall(VM::ObjectSystem &objects, VM::EventSystem &events,
 		return rtn;
 	}
 
-	// launch(mode, program, arg1, arg2): spawn a secondary program. In AESOP
-	// this is how EOB3 hands off to its sub-programs (e.g. CHARGEN).
+	// launch(mode, program, arg1, arg2): hand off to a secondary program. In
+	// AESOP this exec-replaces the process (CHARGEN, the CINE intro player, ...);
+	// the sub-program chain-launches back into "start", which re-reads cell 1264
+	// (the bytecode pokemem'd the next mode just before launching). We model that
+	// by unwinding to bootObject, which plays our internal equivalent and re-boots
+	// start -- so a menu choice's poke+launch routes to the right next mode
+	// instead of falling through to the following CASE branch.
 	if (fn == "launch") {
 		std::string program;
 		for (VM::Value a : args) {
 			std::string s = vm.readCodeString(static_cast<uint32_t>(a));
 			if (!s.empty()) { program = s; break; }
 		}
-		if (program.empty()) {
-			std::cout << "  [launch: no program name]" << std::endl;
-			return 0;
-		}
-		if (std::filesystem::exists(program)) {
-			std::string path = std::filesystem::absolute(program).string();
-			std::cout << "  [launch: running \"" << path << "\"]" << std::endl;
-			return std::system(path.c_str());
-		}
-		std::cout << "  [launch: \"" << program << "\" not found, nothing to run]"
-		          << std::endl;
-		return 0;
+		throw Relaunch{program};
 	}
 
 	// --- graphics (GRAPHICS.C / INTRFACE.C) wired to thirdeye's Graphics ---
@@ -570,37 +574,92 @@ void THIRDEYE::Engine::bootObject(RESOURCES::Resource &resource,
 
 	std::cout << "\nBooting object \"" << objectName
 	          << "\" (sending MSG_CREATE)..." << std::endl;
-	int objIndex = objects.createInstance(classNumber);
-	try {
-		VM::Value result = objects.send(objIndex, MSG_CREATE, {});
-		std::cout << "Boot handler returned " << result << "." << std::endl;
-	} catch (const QuitRequested &) {
-		std::cout << "\nWindow closed -- quitting." << std::endl;
-	} catch (const VM::VmError &e) {
-		std::cout << "\nBoot stopped at the first unimplemented piece:\n  "
-		          << e.what() << std::endl;
-		// Bring-up wall: hold the partially-rendered frame on screen so it's
-		// visible (the live host pump never got a chance to run the main loop).
-		if (gfx) {
-			gfx->update();
-			std::cout << "\nRendered frame is up -- press ESC or close the window "
-			             "to quit." << std::endl;
-			bool done = false;
-			SDL_Event event;
-			while (!done) {
-				while (SDL_PollEvent(&event))
-					if (event.type == SDL_QUIT ||
-					    (event.type == SDL_KEYDOWN &&
-					     event.key.keysym.sym == SDLK_ESCAPE))
-						done = true;
-				gfx->update();
-				SDL_Delay(16);
-			}
+	// Program-chain loop: start.MSG_CREATE runs the whole session and normally
+	// returns only at quit (Abandon, or window-close via QuitRequested). A menu
+	// choice that hands off to a sub-program (Introduction->cine, Gather->chgen)
+	// unwinds here as Relaunch; we play our internal stand-in for that program and
+	// re-enter start, which re-reads the mode the bytecode left in cell 1264. This
+	// mirrors the DOS program chain (each program ends by launching the next).
+	bool quit = false;
+	while (!quit) {
+		int objIndex = objects.createInstance(classNumber);
+		try {
+			VM::Value result = objects.send(objIndex, MSG_CREATE, {});
+			std::cout << "Boot handler returned " << result << " -- quitting."
+			          << std::endl;
+			quit = true; // start returned normally (e.g. "Abandon the Quest")
+		} catch (const QuitRequested &) {
+			std::cout << "\nWindow closed -- quitting." << std::endl;
+			quit = true;
+		} catch (const Relaunch &r) {
+			runExternalProgram(r.program, gfx.get(), resource);
+			// loop: re-boot start, which routes on the poked mode in cell 1264.
+		} catch (const VM::VmError &e) {
+			handleBootWall(e, gfx.get());
+			quit = true;
 		}
 	}
 
 	if (gfx)
 		gfx->saveScreenshot("/tmp/thirdeye_boot.bmp"); // last frame, for inspection
+}
+
+// A menu choice handed off to an external DOS sub-program via launch(). We can't
+// run those binaries; instead we play thirdeye's own equivalent. For now these
+// are logged stubs -- the chain (re-boot start on the poked mode) is what makes
+// the menu selection do the right thing; the rich behaviour (real intro player,
+// char-gen UI) hooks in here later.
+void THIRDEYE::Engine::runExternalProgram(const std::string &program,
+                                          GRAPHICS::Graphics *gfx,
+                                          RESOURCES::Resource &resource) {
+	(void)gfx;
+	(void)resource;
+	std::string p = program;
+	std::transform(p.begin(), p.end(), p.begin(),
+	               [](unsigned char c) { return std::tolower(c); });
+	if (p.find("cine") != std::string::npos) {
+		// "Introduction": the original launches CINE.EXE to play INTRO.GFF, then
+		// returns to the title menu. TODO: drive thirdeye's own GFF intro player.
+		std::cout << "  [program chain: \"" << program
+		          << "\" -> would play the intro cinematic; returning to menu]"
+		          << std::endl;
+	} else if (p.find("chgen") != std::string::npos ||
+	           p.find("chargen") != std::string::npos ||
+	           p.find("charge") != std::string::npos) {
+		// "Gather a New Party": CHARGEN builds a party, then chains back with mode
+		// "CHGN" so start enters the game with it. TODO: thirdeye char-gen UI.
+		std::cout << "  [program chain: \"" << program
+		          << "\" -> would run character generation; entering game]"
+		          << std::endl;
+	} else {
+		std::cout << "  [program chain: \"" << program
+		          << "\" -> no thirdeye equivalent yet; re-booting start]"
+		          << std::endl;
+	}
+}
+
+void THIRDEYE::Engine::handleBootWall(const VM::VmError &e,
+                                      GRAPHICS::Graphics *gfx) {
+	std::cout << "\nBoot stopped at the first unimplemented piece:\n  "
+	          << e.what() << std::endl;
+	// Bring-up wall: hold the partially-rendered frame on screen so it's
+	// visible (the live host pump never got a chance to run the main loop).
+	if (gfx) {
+		gfx->update();
+		std::cout << "\nRendered frame is up -- press ESC or close the window "
+		             "to quit." << std::endl;
+		bool done = false;
+		SDL_Event event;
+		while (!done) {
+			while (SDL_PollEvent(&event))
+				if (event.type == SDL_QUIT ||
+				    (event.type == SDL_KEYDOWN &&
+				     event.key.keysym.sym == SDLK_ESCAPE))
+					done = true;
+			gfx->update();
+			SDL_Delay(16);
+		}
+	}
 }
 
 // Initialise and enter main loop.
