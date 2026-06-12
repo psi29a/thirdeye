@@ -20,6 +20,8 @@
 #include <iostream>
 #include <tuple>
 #include <random>
+#include <memory>
+#include <string>
 
 using std::tuple;
 using RNGType = std::mt19937;
@@ -61,6 +63,19 @@ private:
 	std::map<uint8_t, tuple<uint8_t, uint8_t, std::vector<uint8_t> > > mVideo;
 	std::map<uint16_t, uint16_t> mBitmap;
 	RNGType rng;
+
+	// Per-text-window state (font/cursor/colour), keyed by AESOP window number.
+	struct TextWin {
+		std::shared_ptr<Font> font;
+		int htab = 0, vtab = 0;
+		uint8_t fg = 15;
+		int winX0 = 0, winX1 = WIDTH - 1; // bound window's horizontal extent
+		int justify = 0;                  // 0=left, 1=right, 2=center (GIL2VFX)
+	};
+	std::map<int, TextWin> mTextWin;
+	// Built glyph sets, cached by font resource id (text_style is called every
+	// menu redraw -- we must not rebuild the font each frame).
+	std::map<int, std::shared_ptr<Font>> mFontCache;
 
 	int zoomSurfaceRGBA(SDL_Surface * src, SDL_Surface * dst);
 
@@ -112,6 +127,22 @@ public:
 	// Map a window-pixel coordinate (from an SDL mouse event) to the 320x200
 	// logical space the game's windows use. Accounts for the integer scale.
 	void mouseToLogical(int wx, int wy, int &lx, int &ly) const;
+
+	// --- AESOP text output (GRAPHICS.C text_window/style/color/xy + print) ---
+	// AESOP addresses text into numbered "text windows", each with a font,
+	// colour and cursor. The runtime feeds the font/string bytes (they're
+	// resources); we hold the per-window state and render.
+	void setTextFont(int wndnum, int fontId, std::vector<uint8_t> &fontRes);
+	void setTextColor(int wndnum, uint8_t color);   // text_color's remap target
+	void setTextXY(int wndnum, int x, int y);
+	// Bind a text window to a graphics-window rectangle: records the extent (for
+	// centering) and clears the interior to its background, so previously-drawn
+	// (or bitmap-baked) text there doesn't ghost under the fresh text.
+	void setTextWindow(int wndnum, int x0, int y0, int x1, int y1);
+	void setTextJustify(int wndnum, int justify);    // text_style's justify mode
+	// Draw `text` at the window's cursor in its colour/font (glyphs are masks,
+	// tinted to the colour), advancing the cursor.
+	void printText(int wndnum, const std::string &text);
 };
 
 }

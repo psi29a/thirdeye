@@ -4,6 +4,17 @@
 #include <string.h>
 #include <ctype.h>
 
+#include <filesystem>
+
+#if defined(_WIN32)
+#include <windows.h>
+#elif defined(__APPLE__)
+#include <mach-o/dyld.h>
+#else
+#include <climits>
+#include <unistd.h>
+#endif
+
 #include "utils.hpp"
 #include "damap.hpp"
 #include "dvar.hpp"
@@ -11,6 +22,33 @@
 #include "dasm.hpp"
 
 BYTECODEPOINTER *bytecodeTable = NULL;
+
+// Directory containing the running executable. bytecode.def is copied next to
+// the executable at build time (see apps/daesop/CMakeLists.txt), so we resolve
+// it relative to the executable rather than the (fragile) current directory.
+static std::filesystem::path getExecutableDir() {
+#if defined(_WIN32)
+	wchar_t buf[MAX_PATH];
+	DWORD n = GetModuleFileNameW(NULL, buf, MAX_PATH);
+	if (n == 0 || n == MAX_PATH)
+		return {};
+	return std::filesystem::path(buf, buf + n).parent_path();
+#elif defined(__APPLE__)
+	char buf[PATH_MAX];
+	uint32_t size = sizeof(buf);
+	if (_NSGetExecutablePath(buf, &size) != 0)
+		return {};
+	return std::filesystem::weakly_canonical(std::filesystem::path(buf))
+	    .parent_path();
+#else
+	char buf[PATH_MAX];
+	ssize_t n = readlink("/proc/self/exe", buf, sizeof(buf) - 1);
+	if (n <= 0)
+		return {};
+	buf[n] = '\0';
+	return std::filesystem::path(buf).parent_path();
+#endif
+}
 
 /*
  Read bytecode definition file
@@ -21,18 +59,17 @@ BYTECODEPOINTER *readBytecodeDefinition(void) {
 	char loLine[256];
 	int loBytecodeTableSize;
 
-	// Locate the bytecode definition. The path buffer was previously left
-	// uninitialized (the strcpy below was commented out), so this always failed
-	// -- disassembly was effectively broken. Try the current directory first,
-	// then a "files/" subdirectory (the repo layout).
-	loDefinitionFilePath[0] = '\0';
-	strcat(loDefinitionFilePath, BYTECODE_DEFINITION_FILE);
+	// Locate the bytecode definition next to the executable (CMake copies it
+	// there at build time), falling back to the current directory for in-tree
+	// dev runs. (Previously this used an uninitialized path buffer and always
+	// failed, so disassembly was effectively broken.)
+	std::filesystem::path defPath = getExecutableDir() / BYTECODE_DEFINITION_FILE;
+	strncpy(loDefinitionFilePath, defPath.string().c_str(),
+			sizeof(loDefinitionFilePath) - 1);
+	loDefinitionFilePath[sizeof(loDefinitionFilePath) - 1] = '\0';
 	loDefinitionFile = fopen(loDefinitionFilePath, "r");
-	if (loDefinitionFile == NULL) {
-		strcpy(loDefinitionFilePath, "files/");
-		strcat(loDefinitionFilePath, BYTECODE_DEFINITION_FILE);
-		loDefinitionFile = fopen(loDefinitionFilePath, "r");
-	}
+	if (loDefinitionFile == NULL) // dev fallback: current directory
+		loDefinitionFile = fopen(BYTECODE_DEFINITION_FILE, "r");
 	if (loDefinitionFile == NULL) {
 		printf("The attempt to open the bytecode definion file %s failed!\n",
 				loDefinitionFilePath);

@@ -355,6 +355,15 @@ void EventSystem::releaseWindow(int32_t handle) {
 		mWindows[handle].used = false;
 }
 
+bool EventSystem::windowRect(int32_t handle, int32_t &x1, int32_t &y1,
+                             int32_t &x2, int32_t &y2) const {
+	if (handle < 0 || handle >= MAX_WINDOWS || !mWindows[handle].used)
+		return false;
+	const Win &w = mWindows[handle];
+	x1 = w.x0; y1 = w.y0; x2 = w.x1; y2 = w.y1;
+	return true;
+}
+
 // mouse_in_window(): inclusive rectangle test against window `wnd`.
 bool EventSystem::mouseInWindow(int32_t wnd) const {
 	if (wnd < 0 || wnd >= MAX_WINDOWS || !mWindows[wnd].used)
@@ -418,6 +427,16 @@ void EventSystem::mouseMove(int32_t x, int32_t y) {
 			NR.status |= NSX_OUT_REGION;
 		}
 	}
+}
+
+// timer_callback(): keep one SYS_TIMER event in the queue, updating its
+// heartbeat parameter rather than flooding the queue with new events.
+void EventSystem::postTimer(int32_t heartbeat) {
+	int32_t ev = findEvent(SYS_TIMER, -1);
+	if (ev == -1)
+		addEvent(SYS_TIMER, heartbeat, -1);
+	else
+		mQueue[ev].parameter = heartbeat;
 }
 
 // mouse_button_event_handler(): on each button edge, post the plain click /
