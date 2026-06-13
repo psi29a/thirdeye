@@ -153,6 +153,41 @@ struct TransferState {
 		}
 		return static_cast<int32_t>(v);
 	}
+
+	// --- inventory / starting gear (CREATE.SAV item array) ---
+	// A PC's inventory is a row of 26 word slots at record offset 219 holding item
+	// ids (0 = empty). The party's items live in an EOB1-format item array near the
+	// end of CREATE.SAV: 14-byte records (unid,id,bits,pic,type,subpos,pos,next,
+	// prev,level,value), the char-gen's ids running from 434 (= ITEM.DAT's item
+	// count) at file 0x894. item_attrib(pc, slot, attr) resolves slot->id->record:
+	// attr 1 = type (+4, matched against the xfer's table123 type->object map),
+	// attr 0 = bits/flags (+2, -> itmflags), attr 2 = value (+13, signed -> bonus).
+	static constexpr int kInvRecOff = 219;     // PC inventory slots (words)
+	static constexpr int kInvSlots = 26;
+	static constexpr int kItemArrayBase = 0x894; // party item records in CREATE.SAV
+	static constexpr int kItemIdBase = 434;       // first party item id (ITEM.DAT count)
+	static constexpr int kItemRecSize = 14;
+
+	int32_t itemAttrib(int pc, int slot, int attr) const {
+		size_t slotOff = static_cast<size_t>(kPcBase + 2 + pc * kPcStride +
+		                                     kInvRecOff + slot * 2);
+		if (slot < 0 || slot >= kInvSlots || slotOff + 1 >= data.size())
+			return attr == 1 ? -1 : 0;
+		int id = data[slotOff] | (data[slotOff + 1] << 8);
+		if (id < kItemIdBase) // 0 = empty slot (party items all start at 434)
+			return attr == 1 ? -1 : 0;
+		size_t rec = static_cast<size_t>(kItemArrayBase +
+		                                 (id - kItemIdBase) * kItemRecSize);
+		auto rb = [&](int off) -> int {
+			return rec + off < data.size() ? data[rec + off] : 0;
+		};
+		switch (attr) {
+		case 0: return rb(2);                                 // bits  -> itmflags
+		case 1: return rb(4);                                 // type  (table123 key)
+		case 2: return static_cast<int8_t>(rb(13));           // value -> bonus
+		default: return 0;
+		}
+	}
 };
 
 // The host seam (see the design note in CLAUDE.md). The kernel's main loop is a
@@ -225,6 +260,26 @@ void pumpHost(GRAPHICS::Graphics &gfx, VM::EventSystem &events) {
 // but where we can do the real thing, we do. Each call is logged with its
 // arguments, resolving address arguments to inline strings when possible.
 // `gfx` is null when running headless (no display); the graphics functions then
+// printf-style substitution shared by print()/sprint(): fill %d/%u/%i, %s and
+// %% in `fmt` from `args[start..]`. %s args are addresses (read via the VM).
+std::string formatSop(const std::string &fmt, const std::vector<VM::Value> &args,
+                      size_t start, VM::Interpreter &vm) {
+	std::string out;
+	size_t ai = start;
+	for (size_t i = 0; i < fmt.size(); ++i) {
+		if (fmt[i] != '%' || i + 1 >= fmt.size()) { out += fmt[i]; continue; }
+		char conv = fmt[++i];
+		if (conv == '%') { out += '%'; continue; }
+		VM::Value a = ai < args.size() ? args[ai++] : 0;
+		if (conv == 'd' || conv == 'u' || conv == 'i')
+			out += std::to_string(a);
+		else if (conv == 's')
+			out += vm.readString(a);
+		else { out += '%'; out += conv; }
+	}
+	return out;
+}
+
 // fall through to the stub.
 VM::Value defaultRuntimeCall(VM::ObjectSystem &objects, VM::EventSystem &events,
                              GRAPHICS::Graphics *gfx, RESOURCES::Resource &res,
@@ -398,13 +453,12 @@ VM::Value defaultRuntimeCall(VM::ObjectSystem &objects, VM::EventSystem &events,
 		                              static_cast<int>(args[2]));
 		return v;
 	}
-	// item_attrib(pc, slot, attr): a created PC's inventory slot. The per-slot
-	// layout in CREATE.SAV isn't reverse-engineered yet; for now report every slot
-	// empty (attr 1 = item id -> -1), which the transfer loop reads as "no item"
-	// and skips, so the party transfers with correct stats but no starting items.
-	// TODO: parse the inventory words (e.g. Bob holds item ids ~0x01b2..0x01b7).
+	// item_attrib(pc, slot, attr): a created PC's inventory slot -> item field
+	// (see TransferState::itemAttrib). attr 1 = type (the transfer maps it to an
+	// EOB3 item object via table123), 0 = flags, 2 = bonus.
 	if (fn == "item_attrib" && args.size() >= 3)
-		return args[2] == 1 ? -1 : 0;
+		return xfer.itemAttrib(static_cast<int>(args[0]), static_cast<int>(args[1]),
+		                       static_cast<int>(args[2]));
 	// read_initial_items / arrow_count / write_initial_tempfiles: the rest of the
 	// transfer. Reading items + writing the game's initial save files is still to
 	// do (the savegame format); stubbed so "convert created party" runs through.
@@ -547,32 +601,21 @@ VM::Value defaultRuntimeCall(VM::ObjectSystem &objects, VM::EventSystem &events,
 		// in static space, or an inline code string like "%d of %d"); %d/%s are
 		// filled from the trailing args. Used for character names + HP readouts.
 		if (fn == "sprint" && args.size() >= 2) {
-			std::string fmt = vm.readString(args[1]);
-			std::string out;
-			size_t ai = 2;
-			for (size_t i = 0; i < fmt.size(); ++i) {
-				if (fmt[i] != '%' || i + 1 >= fmt.size()) { out += fmt[i]; continue; }
-				char conv = fmt[++i];
-				if (conv == '%') { out += '%'; continue; }
-				VM::Value a = ai < args.size() ? args[ai++] : 0;
-				if (conv == 'd' || conv == 'u' || conv == 'i')
-					out += std::to_string(a);
-				else if (conv == 's')
-					out += vm.readString(a);
-				else { out += '%'; out += conv; }
-			}
+			std::string out = formatSop(vm.readString(args[1]), args, 2, vm);
 			gfx->printText(static_cast<int>(args[0]), out);
 			std::cout << "  [sprint \"" << out << "\"]" << std::endl;
 			return 0;
 		}
-		// print(wndnum, string_resource) -- string resources are "S:" + text.
+		// print(wndnum, string_resource, args...) -- the resource is a "S:"+text
+		// format string; trailing args fill %d/%s (e.g. the HP "%d of %d" readout).
 		if (fn == "print" && args.size() >= 2) {
 			try {
 				std::vector<uint8_t> &s = fetch(args[1]);
 				size_t off = (s.size() >= 2 && s[0] == 'S' && s[1] == ':') ? 2 : 0;
-				std::string text;
+				std::string fmt;
 				for (size_t i = off; i < s.size() && s[i] != 0; ++i)
-					text.push_back(static_cast<char>(s[i]));
+					fmt.push_back(static_cast<char>(s[i]));
+				std::string text = formatSop(fmt, args, 2, vm);
 				gfx->printText(static_cast<int>(args[0]), text);
 				std::cout << "  [text \"" << text << "\"]" << std::endl;
 			} catch (const std::exception &) {}
