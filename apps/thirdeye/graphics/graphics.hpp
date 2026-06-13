@@ -106,6 +106,12 @@ public:
 
 	void drawImage(std::vector<uint8_t> &bmp, uint16_t index, uint16_t posX,
 			uint16_t posY, bool transparency = false);
+
+	// Constrain subsequent blits to a rectangle on the screen surface (used to
+	// clip the dungeon 3D view to its window so wide wall shapes don't bleed into
+	// the character panels). clearClip() removes the constraint.
+	void setClip(int x, int y, int w, int h);
+	void clearClip();
 	void drawText(std::vector<uint8_t> &fnt, std::string text, uint16_t posX,
 			uint16_t posY);
 
@@ -122,7 +128,8 @@ public:
 	// Write a palette resource's colours into the live palette starting at
 	// `firstColor`, leaving the rest intact (AESOP set_palette writes a region:
 	// PAL_FIXED at 0x00, PAL_WALLS at 0xB0, ...). Used by the SOP runtime.
-	void setPaletteRange(std::vector<uint8_t> &palRes, uint16_t firstColor);
+	void setPaletteRange(std::vector<uint8_t> &palRes, uint16_t firstColor,
+			bool skipMarker = false);
 
 	void loadMouse(std::vector<uint8_t> &bitmap, uint16_t index);
 

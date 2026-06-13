@@ -144,6 +144,15 @@ void GRAPHICS::Graphics::drawImage(std::vector<uint8_t> &bmp, uint16_t index,
 	SDL_BlitSurface(mScreen, NULL, mBackdrop, NULL);
 }
 
+void GRAPHICS::Graphics::setClip(int x, int y, int w, int h) {
+	SDL_Rect r = { x, y, w, h };
+	SDL_SetClipRect(mScreen, &r);
+}
+
+void GRAPHICS::Graphics::clearClip() {
+	SDL_SetClipRect(mScreen, nullptr);
+}
+
 void GRAPHICS::Graphics::zoomIntoImage(std::vector<uint8_t> &bmp) {
 	mState = ZOOM_INTO;
 	mCounter = 0;
@@ -711,10 +720,17 @@ void GRAPHICS::Graphics::loadPalette(std::vector<uint8_t> &basePal,
 }
 
 void GRAPHICS::Graphics::setPaletteRange(std::vector<uint8_t> &palRes,
-		uint16_t firstColor) {
+		uint16_t firstColor, bool skipMarker) {
 	Palette pal(palRes);
-	for (uint16_t i = 0; i < pal.getNumOfColours() && (firstColor + i) < 256; i++)
-		mPalette->colors[firstColor + i] = pal[i];
+	for (uint16_t i = 0; i < pal.getNumOfColours() && (firstColor + i) < 256; i++) {
+		SDL_Color c = pal[i];
+		// Dungeon view palettes reserve their leading entries with a pure-red
+		// (252,0,0) sentinel meaning "leave the existing colour" -- writing it
+		// would paint those indices red. Skip it when asked.
+		if (skipMarker && c.r == 252 && c.g == 0 && c.b == 0)
+			continue;
+		mPalette->colors[firstColor + i] = c;
+	}
 }
 
 void GRAPHICS::Graphics::setTextFont(int wndnum, int fontId,

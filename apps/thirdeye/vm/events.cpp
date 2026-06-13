@@ -266,6 +266,11 @@ void EventSystem::dispatchEvent() {
 
 	if (typ >= FIRST_SYS_EVENT && typ <= LAST_SYS_EVENT &&
 	    scanEventRange(FIRST_APP_EVENT, LAST_APP_EVENT) != -1) {
+		if (mVerbose)
+			std::cout << "    [event " << typ << " p" << par
+			          << " DEFERRED behind app event "
+			          << mQueue[scanEventRange(FIRST_APP_EVENT, LAST_APP_EVENT)].type
+			          << "]" << std::endl;
 		addEvent(typ, par, own); // defer behind the pending application events
 		return;
 	}

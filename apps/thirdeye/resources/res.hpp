@@ -139,6 +139,9 @@ public:
 	/// Resource number for a given name, or -1 if not found.
 	int getResourceNumber(const std::string &name);
 
+	/// Resource name for a given number, or "" if not found.
+	std::string getResourceName(uint16_t number);
+
 	/// Parse a code object's <name>.EXPT export dictionary into key->value
 	/// pairs (e.g. "N:OBJECT"->object name, "M:0"->handler entry offset).
 	/// Returns an empty map if the export resource is missing.
