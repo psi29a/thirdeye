@@ -204,12 +204,13 @@ void pumpHost(GRAPHICS::Graphics &gfx, VM::EventSystem &events) {
 		case SDL_QUIT:
 			throw QuitRequested{};
 		case SDL_KEYDOWN: {
-			if (ev.key.keysym.sym == SDLK_ESCAPE)
-				throw QuitRequested{};
 			// The SOP code expects DOS/BIOS key codes: printable keys are ASCII
-			// (SDL keysyms already are), but the arrow keys are (scancode << 8)
-			// with a zero ASCII byte. SDL's own arrow keysyms (0x4000_00xx) match
-			// nothing, so translate them.
+			// (SDL keysyms already are, incl. ESC=0x1b/Enter=0x0d), but the arrow
+			// keys are (scancode << 8) with a zero ASCII byte. SDL's own arrow
+			// keysyms (0x4000_00xx) match nothing, so translate them. ESC is *not*
+			// special-cased to quit: the bytecode handles it (in-game it opens the
+			// camp menu via notify msg 272; in the title menu it's "Abandon the
+			// Quest"). Forced quit is the window close button (SDL_QUIT above).
 			SDL_Keycode k = ev.key.keysym.sym;
 			int32_t key;
 			switch (k) {
@@ -218,7 +219,7 @@ void pumpHost(GRAPHICS::Graphics &gfx, VM::EventSystem &events) {
 			case SDLK_LEFT:  key = 0x4b00; break;
 			case SDLK_RIGHT: key = 0x4d00; break;
 			default:
-				key = (k > 0 && k < 0x80) ? k : 0; // ASCII (Enter=0x0d, etc.)
+				key = (k > 0 && k < 0x80) ? k : 0; // ASCII (ESC=0x1b, Enter=0x0d, ...)
 				break;
 			}
 			if (key != 0)
@@ -303,6 +304,12 @@ VM::Value defaultRuntimeCall(VM::ObjectSystem &objects, VM::EventSystem &events,
 	// 136 + absv(option - selected), so a stub (->0) flattens the highlight.
 	if (fn == "absv" && args.size() >= 1)
 		return args[0] < 0 ? -args[0] : args[0];
+	// minv/maxv: min/max of two values (RTCODE.C math helpers). Stubbed -> 0 they
+	// flatten clamped values (HP/AC/colour computations in the HUD).
+	if (fn == "minv" && args.size() >= 2)
+		return args[0] < args[1] ? args[0] : args[1];
+	if (fn == "maxv" && args.size() >= 2)
+		return args[0] > args[1] ? args[0] : args[1];
 	// --- event system (EVENT.C) -- real, and intentionally quiet: the kernel's
 	// main loop calls these in a tight spin, so logging each would bury the
 	// trace. dispatchEvent itself logs the messages it delivers when verbose.
@@ -647,6 +654,16 @@ void registerClasses(RESOURCES::Resource &resource, VM::ObjectSystem &objects) {
 			else if (isVarTag(exp.first)) // public static -> offset in this class
 				cls.exportedVars[exp.first] =
 					static_cast<uint16_t>(std::stoul(exp.second));
+			else if (exp.first == "N:PARENT") {
+				// The real superclass is the ".EXPT" N:PARENT resource number (a
+				// clean class number, e.g. axe -> 1688 "weapons"), NOT the code
+				// header's `parent` field (an unrelated encoded value daesop can't
+				// resolve either). This is how a subclass inherits its base's
+				// handlers/statics (e.g. items get "draw"/"usable hand" from
+				// weapons/armor). Top-level objects have no N:PARENT and keep the
+				// header value (which doesn't resolve -> treated as no parent).
+				cls.header.parent = static_cast<uint32_t>(std::stoul(exp.second));
+			}
 		}
 		for (const auto &imp : resource.getImports(name)) {
 			if (imp.first.rfind("C:", 0) == 0) { // "C:<name>" -> runtime-fn number
@@ -791,6 +808,12 @@ void THIRDEYE::Engine::bootObject(RESOURCES::Resource &resource,
 	// mirrors the DOS program chain (each program ends by launching the next).
 	bool quit = false;
 	while (!quit) {
+		// Text-box clear style depends on the screen we're booting into: the title
+		// menu (INTR) bakes its options into the backdrop bitmap, so its text boxes
+		// flat-fill to erase them; the in-game HUD draws text over detailed panel
+		// art, so its boxes restore the backdrop snapshot (true overlay, no blob).
+		if (gfx)
+			gfx->setTextRestoreBackground(mem[1264] != MODE_INTR);
 		int objIndex = objects.createInstance(classNumber);
 		std::string relaunch; // non-empty => a sub-program to run, then re-boot
 		try {

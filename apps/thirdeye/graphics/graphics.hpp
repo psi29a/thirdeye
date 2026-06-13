@@ -48,6 +48,13 @@ private:
 	SDL_Window *mWindow;
 	SDL_Renderer *mRenderer;
 	SDL_Surface *mScreen;
+	// A snapshot of the screen holding only the bitmap art (no dynamic text --
+	// text is drawn via printText, never drawImage). setTextWindow restores a
+	// text box from this so text overlays the real background (panel art) instead
+	// of a flat fill. mTextRestoreBg selects that behaviour (in-game HUD) vs the
+	// flat-fill clear (the title menu, whose "Menu shapes" bakes the options in).
+	SDL_Surface *mBackdrop = nullptr;
+	bool mTextRestoreBg = false;
 	SDL_Cursor *mCursor;
 	SDL_Palette *mPalette;
 	uint8_t mState;
@@ -140,6 +147,10 @@ public:
 	// centering) and clears the interior to its background, so previously-drawn
 	// (or bitmap-baked) text there doesn't ghost under the fresh text.
 	void setTextWindow(int wndnum, int x0, int y0, int x1, int y1);
+	// Choose how setTextWindow clears a box before (re)drawing text: true =
+	// restore the bitmap backdrop (text overlays panel art, in-game); false =
+	// flat-fill the sampled background (the title menu, which bakes its options).
+	void setTextRestoreBackground(bool restore) { mTextRestoreBg = restore; }
 	void setTextJustify(int wndnum, int justify);    // text_style's justify mode
 	// Draw `text` at the window's cursor in its colour/font (glyphs are masks,
 	// tinted to the colour), advancing the cursor.
