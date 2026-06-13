@@ -108,6 +108,12 @@ constexpr int MSG_CREATE = 0;
 // (GRAPHICS.C). PAL_FIXED=0x00, PAL_WALLS=0xB0, PAL_M1=0xC0, PAL_M2=0xE0, PAL_OUT=0xB0.
 constexpr uint16_t kFirstColor[5] = {0x00, 0xB0, 0xC0, 0xE0, 0xB0};
 
+// The dungeon 3D view renders into off-screen page 94, blitted to its view window
+// (the dungeon's assign_subwindow 0,0-175,119 = 176x120). We composite onto one
+// screen surface, so page-94 draws are clipped to this window (see draw_bitmap).
+constexpr uint16_t kViewPage = 94;
+constexpr int kViewW = 176, kViewH = 120;
+
 // Thrown by the host pump to unwind out of the SOP main loop when the user
 // closes the window / presses ESC. Caught in bootObject for a clean exit.
 struct QuitRequested {};
@@ -252,6 +258,18 @@ void pumpHost(GRAPHICS::Graphics &gfx, VM::EventSystem &events) {
 	// SYS_TIMER event (see EventSystem::postTimer / INTRFACE.C timer_callback).
 	events.postTimer(static_cast<int32_t>(SDL_GetTicks() >> 5));
 
+	// Debug: THIRDEYE_AUTOWALK posts a scripted move (the same SYS_KEYDOWN the
+	// arrow keys post) every ~40 pumps, so a headless run can be verified to walk
+	// the dungeon (the kernel notify()s 0x4800=up->move forward, etc.). Value is a
+	// hex scan code (default 0x4800 = forward).
+	if (const char *aw = std::getenv("THIRDEYE_AUTOWALK")) {
+		static int tick = 0;
+		int32_t code = static_cast<int32_t>(std::strtol(aw, nullptr, 16));
+		if (code == 0) code = 0x4800;
+		if (++tick % 40 == 0)
+			events.postEvent(0, VM::SYS_KEYDOWN, code);
+	}
+
 	gfx.update();                 // present whatever the bytecode has drawn
 	if (!events.peekEvent())
 		SDL_Delay(10);            // idle: yield (~100 Hz) instead of spinning
@@ -315,6 +333,10 @@ VM::Value defaultRuntimeCall(VM::ObjectSystem &objects, VM::EventSystem &events,
 	// trace. dispatchEvent itself logs the messages it delivers when verbose.
 	if (fn == "notify" && args.size() >= 4) {
 		events.notify(args[0], static_cast<uint32_t>(args[1]), args[2], args[3]);
+		if (std::getenv("THIRDEYE_AUTOWALK"))
+			std::cout << "  [notify obj " << args[0] << " msg " << args[1]
+			          << " event " << args[2] << " param 0x" << std::hex << args[3]
+			          << std::dec << "]" << std::endl;
 		return 0;
 	}
 	if (fn == "cancel" && args.size() >= 4) {
@@ -332,6 +354,21 @@ VM::Value defaultRuntimeCall(VM::ObjectSystem &objects, VM::EventSystem &events,
 	if (fn == "dispatch_event") {
 		if (gfx) pumpHost(*gfx, events); // present + input + yield (host seam)
 		events.dispatchEvent();
+		// Debug: log the party position when it changes (verifies movement).
+		if (std::getenv("THIRDEYE_AUTOWALK")) {
+			int kn = objects.firstObjectOfClass(1382);
+			if (kn >= 0) {
+				uint8_t *xp = objects.classStaticPtr(kn, 1382, 243, 1);
+				uint8_t *yp = objects.classStaticPtr(kn, 1382, 244, 1);
+				uint8_t *fp = objects.classStaticPtr(kn, 1382, 245, 1);
+				static int lx = -1, ly = -1, lf = -1;
+				if (xp && yp && fp && (*xp != lx || *yp != ly || *fp != lf)) {
+					lx = *xp; ly = *yp; lf = *fp;
+					std::cout << "  [party @ (" << lx << "," << ly << ") facing "
+					          << lf << "]" << std::endl;
+				}
+			}
+		}
 		return 0;
 	}
 	if (fn == "drain_event_queue") { events.drainEventQueue(); return 0; }
@@ -466,6 +503,37 @@ VM::Value defaultRuntimeCall(VM::ObjectSystem &objects, VM::EventSystem &events,
 	if (fn == "item_attrib" && args.size() >= 3)
 		return xfer.itemAttrib(static_cast<int>(args[0]), static_cast<int>(args[1]),
 		                       static_cast<int>(args[2]));
+	// --- party movement math (EYE.C step_X/step_Y/step_FDIR) ---
+	// The kernel's "step" handler asks these for the party's new coordinate/facing
+	// given its current position+facing and a move-request direction. Direction
+	// codes (from the kernel's move handlers): 1=turn left, 2=forward, 3=turn right,
+	// 4=strafe left, 5=backward, 6=strafe right. Facing fdir: 0=N,1=E,2=S,3=W, with
+	// N=-y, E=+x, S=+y, W=-x. The bytecode then collision-checks (impedance) and
+	// commits, so these are pure geometry.
+	if (fn == "step_FDIR" && args.size() >= 2) {
+		int fdir = static_cast<int>(args[0]) & 3;
+		int dir = static_cast<int>(args[1]);
+		if (dir == 1) fdir = (fdir + 3) & 3;      // turn left
+		else if (dir == 3) fdir = (fdir + 1) & 3; // turn right
+		return fdir;
+	}
+	if ((fn == "step_X" || fn == "step_Y") && args.size() >= 4) {
+		int coord = static_cast<int>(args[0]);
+		int fdir = static_cast<int>(args[1]) & 3;
+		int dir = static_cast<int>(args[2]);
+		int dist = static_cast<int>(args[3]);
+		int eff; // effective compass direction of the step (-1 = no move, a turn)
+		switch (dir) {
+		case 2: eff = fdir; break;            // forward
+		case 5: eff = (fdir + 2) & 3; break;  // backward
+		case 4: eff = (fdir + 3) & 3; break;  // strafe left
+		case 6: eff = (fdir + 1) & 3; break;  // strafe right
+		default: return coord;                // turns: position unchanged
+		}
+		static const int dx[4] = {0, 1, 0, -1}; // N,E,S,W
+		static const int dy[4] = {-1, 0, 1, 0};
+		return coord + (fn == "step_X" ? dx[eff] : dy[eff]) * dist;
+	}
 	// read_initial_items / arrow_count / write_initial_tempfiles: the rest of the
 	// transfer. Reading items + writing the game's initial save files is still to
 	// do (the savegame format); stubbed so "convert created party" runs through.
@@ -474,6 +542,29 @@ VM::Value defaultRuntimeCall(VM::ObjectSystem &objects, VM::EventSystem &events,
 	if (fn == "write_initial_tempfiles") {
 		std::cout << "  [write_initial_tempfiles: stub -- party not persisted yet]"
 		          << std::endl;
+		return 0;
+	}
+	// load_resource(dest, resource): read a resource's bytes into an object's static
+	// buffer (e.g. the dungeon's `lvlmap` = the 32x32 level maze). One arg is a
+	// Static/Extern address (the destination), the other the resource number.
+	if (fn == "load_resource" && args.size() >= 2) {
+		VM::Addr da = VM::decodeAddr(args[0]);
+		bool aIsAddr = da.space == VM::AddrSpace::Static ||
+		               da.space == VM::AddrSpace::Extern;
+		VM::Addr dest = aIsAddr ? da : VM::decodeAddr(args[1]);
+		int resNum = static_cast<int>(aIsAddr ? args[1] : args[0]);
+		try {
+			std::vector<uint8_t> &bytes = res.getAsset(static_cast<uint16_t>(resNum));
+			uint8_t *p = objects.staticsPtr(dest.obj, dest.offset,
+			                                static_cast<uint32_t>(bytes.size()));
+			std::memcpy(p, bytes.data(), bytes.size());
+			std::cout << "  [load_resource " << resNum << " -> obj " << dest.obj
+			          << " @" << dest.offset << " (" << bytes.size() << " B)]"
+			          << std::endl;
+		} catch (const std::exception &e) {
+			std::cout << "  [load_resource " << resNum << " failed: " << e.what()
+			          << "]" << std::endl;
+		}
 		return 0;
 	}
 	// resume_level(level): the real one reconstructs the dungeon level + party from
@@ -513,9 +604,90 @@ VM::Value defaultRuntimeCall(VM::ObjectSystem &objects, VM::EventSystem &events,
 					++placed;
 				}
 			}
+			// Seed the party's dungeon position. The real resume_level reads it from
+			// the savegame; for the new-game party there's none, so without this
+			// party_lvl stays 0 and the dungeon's "init level" CASE picks no map ->
+			// blank view (wallset 0). Default to level 1 (Mausoleum 1), a start cell.
+			constexpr uint32_t kPartyX = 243, kPartyY = 244, kPartyFdir = 245,
+			                   kPartyLvl = 246;
+			auto setKByte = [&](uint32_t off, uint8_t val) {
+				if (uint8_t *p = objects.classStaticPtr(kernel, kKernelClass, off, 1))
+					*p = val;
+			};
+			uint8_t *lvlP = objects.classStaticPtr(kernel, kKernelClass, kPartyLvl, 1);
+			if (lvlP && *lvlP == 0) { // don't clobber a level a real save provided
+				setKByte(kPartyX, 15);
+				setKByte(kPartyY, 15);
+				setKByte(kPartyFdir, 0); // facing north
+				setKByte(kPartyLvl, 1);  // Mausoleum 1
+				std::cout << "  [resume_level: seeded party at level 1 (15,15) "
+				          << "(stand-in start position)]" << std::endl;
+			}
 			std::cout << "  [resume_level: registered " << placed
 			          << " party members in player[] (stand-in for savegame load)]"
 			          << std::endl;
+		}
+		// Load the level's maze into the dungeon's `lvlmap` + set its wall set. The
+		// real resume_level reads these from LVLnn.TMP; as a stand-in we load the
+		// static map resource (Mausoleum 1) + its wall graphics, so the dungeon's
+		// "init level"/"draw walls" (which read lvlmap + wallset) have real data
+		// instead of an empty level (the previous blank view / bitmap-0 tile draws).
+		constexpr uint16_t kDungeonClass = 1381;
+		constexpr uint32_t kLvlmapOff = 0, kWallsetOff = 7168;
+		int dungeon = objects.firstObjectOfClass(kDungeonClass);
+		// Resolve the level's {map, wall set, palette} from the resource directory
+		// rather than hard-coding numbers. The authoritative per-level table lives
+		// inside the native change_level runtime function (EYE.C, no source): the SOP
+		// bytecode never loads the wall set or palette (it only *reads* them), and
+		// change_level(level) takes just the level number, so there's nothing in the
+		// bytecode or maze data to read. What we *can* derive: the maps are sequential
+		// resources, so level N is the (N-1)th after the first; the wall set + palette
+		// then follow from the map's area name ("Mausoleum 1" -> "Mausoleum walls" /
+		// "Mausoleum palette"). Areas whose resources aren't named to match (Graveyard/
+		// Guild/Temple share sets) resolve to -1 here -> handled when change_level/
+		// LVLnn.TMP is implemented. For the new-game start this is Mausoleum 1.
+		uint8_t lvl = 1;
+		if (kernel >= 0)
+			if (uint8_t *p = objects.classStaticPtr(kernel, kKernelClass, 246, 1))
+				lvl = *p ? *p : 1;
+		int firstMap = res.getResourceNumber("Mausoleum 1"); // level 1's map
+		int map = firstMap >= 0 ? firstMap + (lvl - 1) : -1;
+		std::string mapName = map >= 0 ? res.getResourceName(map) : "";
+		// Area = the map name with a trailing " <number>" stripped ("Mausoleum 1" ->
+		// "Mausoleum"); names without a number (e.g. "Forest Trail") stay whole.
+		std::string area = mapName;
+		auto sp = area.find_last_of(' ');
+		if (sp != std::string::npos &&
+		    area.find_first_not_of("0123456789", sp + 1) == std::string::npos)
+			area = area.substr(0, sp);
+		int walls = res.getResourceNumber(area + " walls");
+		int pal = res.getResourceNumber(area + " palette");
+		if (dungeon >= 0 && map >= 0) {
+			try {
+				std::vector<uint8_t> &maze = res.getAsset(static_cast<uint16_t>(map));
+				if (uint8_t *p = objects.classStaticPtr(
+				        dungeon, kDungeonClass, kLvlmapOff,
+				        static_cast<uint32_t>(maze.size())))
+					std::memcpy(p, maze.data(), maze.size());
+				if (walls >= 0)
+					if (uint8_t *w = objects.classStaticPtr(dungeon, kDungeonClass,
+					                                        kWallsetOff, 4)) {
+						w[0] = walls & 0xFF;
+						w[1] = (walls >> 8) & 0xFF;
+						w[2] = w[3] = 0;
+					}
+				// The wall shapes use palette indices 176-190 (0xB0-0xBE), which the
+				// fixed palette leaves white as level placeholders; the area palette
+				// is the 16-colour stone gradient (near->far wall shading) for 176-191.
+				if (gfx && pal >= 0)
+					gfx->setPaletteRange(res.getAsset(static_cast<uint16_t>(pal)), 0xB0);
+				std::cout << "  [resume_level: level " << int(lvl) << " = \"" << mapName
+				          << "\" (map " << map << ", walls " << walls << ", palette "
+				          << pal << ")]" << std::endl;
+			} catch (const std::exception &e) {
+				std::cout << "  [resume_level: maze load failed: " << e.what() << "]"
+				          << std::endl;
+			}
 		}
 		return 0;
 	}
@@ -542,9 +714,17 @@ VM::Value defaultRuntimeCall(VM::ObjectSystem &objects, VM::EventSystem &events,
 		}
 		// draw_bitmap(page, table, number, x, y, scale, flip, fade_table, fade_level)
 		if (fn == "draw_bitmap" && args.size() >= 5) {
+			uint16_t page = static_cast<uint16_t>(args[0]);
 			uint16_t table = static_cast<uint16_t>(args[1]);
 			uint16_t number = static_cast<uint16_t>(args[2]);
 			int x = static_cast<int>(args[3]), y = static_cast<int>(args[4]);
+			// The dungeon 3D view renders into off-screen page 94; we composite onto
+			// the one screen surface, so without the page model the wide wall shapes
+			// would bleed out of the view into the character panels. Clip page-94
+			// draws to the dungeon's view window (assign_subwindow 0,0-175,119).
+			bool viewPage = page == kViewPage;
+			if (viewPage)
+				gfx->setClip(0, 0, kViewW, kViewH);
 			try {
 				gfx->drawImage(fetch(table), number, x, y, true);
 				std::cout << "  [drew " << table << ":" << number << " @ " << x
@@ -552,11 +732,17 @@ VM::Value defaultRuntimeCall(VM::ObjectSystem &objects, VM::EventSystem &events,
 			} catch (const std::exception &e) {
 				std::cout << "  [draw failed: " << e.what() << "]" << std::endl;
 			}
+			if (viewPage)
+				gfx->clearClip();
 			return 0;
 		}
 		// refresh_window / color_fade / light_fade: present the screen.
 		if (fn == "refresh_window" || fn == "color_fade" || fn == "light_fade") {
 			gfx->update();
+			// Debug aid: with THIRDEYE_DUMP set, snapshot every presented frame so a
+			// headless run (no window) can still be inspected as a BMP.
+			if (const char *d = std::getenv("THIRDEYE_DUMP"))
+				gfx->saveScreenshot(d);
 			std::cout << "  [present]" << std::endl;
 			return 0;
 		}
@@ -700,7 +886,7 @@ void THIRDEYE::Engine::runResourceVM(RESOURCES::Resource &resource) {
 	VM::EventSystem events(objects);
 	std::map<int32_t, int32_t> mem; // peekmem/pokemem cells
 	TransferState xfer;             // char-gen party transfer file (unused here)
-	events.setVerbose(mDebug);
+	events.setVerbose(mDebug || std::getenv("THIRDEYE_AUTOWALK"));
 	objects.setTrace(mDebug);
 	objects.setRuntimeCall(
 		[&](VM::Interpreter &vm, const std::string &fn,
@@ -760,7 +946,7 @@ void THIRDEYE::Engine::bootObject(RESOURCES::Resource &resource,
 
 	VM::ObjectSystem objects;
 	VM::EventSystem events(objects);
-	events.setVerbose(mDebug);
+	events.setVerbose(mDebug || std::getenv("THIRDEYE_AUTOWALK"));
 	objects.setTrace(mDebug);
 
 	// Seed the boot "mode" that start.MSG_CREATE reads via peekmem(1264) and
