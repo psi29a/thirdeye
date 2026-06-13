@@ -133,6 +133,15 @@ void GRAPHICS::Graphics::drawImage(std::vector<uint8_t> &bmp, uint16_t index,
 	}
 	SDL_BlitSurface(surface, NULL, mScreen, &dest);
 	SDL_FreeSurface(surface);
+
+	// Keep the backdrop snapshot in sync with the bitmap art (used to restore a
+	// text box's background so in-game text overlays the panel art). Text never
+	// touches mBackdrop (it's drawn straight to mScreen by printText), so this
+	// snapshot stays text-free regardless of draw order.
+	if (mBackdrop == nullptr)
+		mBackdrop = SDL_CreateRGBSurface(0, WIDTH, HEIGHT, 32, 0, 0, 0, 0);
+	SDL_SetSurfaceBlendMode(mScreen, SDL_BLENDMODE_NONE);
+	SDL_BlitSurface(mScreen, NULL, mBackdrop, NULL);
 }
 
 void GRAPHICS::Graphics::zoomIntoImage(std::vector<uint8_t> &bmp) {
@@ -733,16 +742,23 @@ void GRAPHICS::Graphics::setTextWindow(int wndnum, int x0, int y0, int x1,
 	mTextWin[wndnum].winX1 = x1;
 	mTextWin[wndnum].winY0 = y0;
 	mTextWin[wndnum].winY1 = y1;
-	// Erase the interior to its background so baked/previous text doesn't ghost
-	// under the freshly drawn dynamic text. Sample the background from just
-	// inside the top-left corner (above the first line of text).
+	// Clear the box before text (re)draws, so old/baked text doesn't ghost.
 	if (x0 < 0 || y0 < 0 || x1 >= WIDTH || y1 >= HEIGHT || x1 < x0 || y1 < y0)
 		return;
-	Uint32 *pixels = static_cast<Uint32 *>(mScreen->pixels);
-	int pitch = mScreen->pitch / 4;
-	Uint32 bg = pixels[(y0 + 1) * pitch + (x0 + 1)];
 	SDL_Rect r = { x0, y0, x1 - x0 + 1, y1 - y0 + 1 };
-	SDL_FillRect(mScreen, &r, bg);
+	if (mTextRestoreBg && mBackdrop != nullptr) {
+		// In-game: restore the real bitmap backdrop (panel art) for this box so
+		// the text overlays it -- no flat rectangle.
+		SDL_SetSurfaceBlendMode(mBackdrop, SDL_BLENDMODE_NONE);
+		SDL_BlitSurface(mBackdrop, &r, mScreen, &r);
+	} else {
+		// Title menu (flat box bg, options baked into the backdrop bitmap): erase
+		// to the sampled background colour so the baked text doesn't show through.
+		Uint32 *pixels = static_cast<Uint32 *>(mScreen->pixels);
+		int pitch = mScreen->pitch / 4;
+		Uint32 bg = pixels[(y0 + 1) * pitch + (x0 + 1)];
+		SDL_FillRect(mScreen, &r, bg);
+	}
 }
 
 void GRAPHICS::Graphics::setTextJustify(int wndnum, int justify) {
