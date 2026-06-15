@@ -189,6 +189,7 @@ private:
 	bool mLastLeft = false, mLastRight = false; // last button state (edge detect)
 
 	int32_t mCurrentEventType = SYS_FREE; // event being dispatched (cancel guard)
+	int32_t mLastTimerBeat = INT32_MIN;   // last heartbeat we posted a timer for
 	bool mVerbose = false;
 };
 
