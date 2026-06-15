@@ -1,4 +1,5 @@
 #include "graphics.hpp"
+#include <algorithm>
 #include <cstdlib>
 
 #include "SDL_syswm.h" // SDL_GetWindowWMInfo (kept out of headers: drags in X11)
@@ -112,17 +113,31 @@ GRAPHICS::Graphics::~Graphics() {
 }
 
 void GRAPHICS::Graphics::drawImage(std::vector<uint8_t> &bmp, uint16_t index,
-		uint16_t posX, uint16_t posY, bool transparency) {
+		int posX, int posY, bool transparency, int mirror) {
 
 	Bitmap image(bmp);
 	std::vector<uint8_t> imageData = image[index];
+	int iw = image.getWidth(index), ih = image.getHeight(index);
+
+	// Apply the AESOP draw_bitmap mirror flag by flipping the indexed pixels in
+	// place (the shape stays at posX/posY; only its content reflects). 1=X flips
+	// each row left-to-right (right-hand dungeon walls), 2=Y flips the row order.
+	if ((mirror & 1) && iw > 0) {
+		for (int row = 0; row < ih; ++row)
+			std::reverse(imageData.begin() + row * iw,
+			             imageData.begin() + (row + 1) * iw);
+	}
+	if ((mirror & 2) && ih > 0) {
+		for (int row = 0; row < ih / 2; ++row)
+			std::swap_ranges(imageData.begin() + row * iw,
+			                 imageData.begin() + (row + 1) * iw,
+			                 imageData.begin() + (ih - 1 - row) * iw);
+	}
 
 	SDL_Surface *surface = SDL_CreateRGBSurfaceFrom((void*) &imageData[0],
-			image.getWidth(index), image.getHeight(index), 8,
-			image.getWidth(index), 0, 0, 0, 0);
+			iw, ih, 8, iw, 0, 0, 0, 0);
 
-	SDL_Rect dest =
-			{ posX, posY, image.getWidth(index), image.getHeight(index) };
+	SDL_Rect dest = { posX, posY, iw, ih };
 
 	//std::cout << "width: " << surface->w << " height: " << surface->h << std::endl;
 
@@ -152,6 +167,41 @@ void GRAPHICS::Graphics::setClip(int x, int y, int w, int h) {
 
 void GRAPHICS::Graphics::clearClip() {
 	SDL_SetClipRect(mScreen, nullptr);
+}
+
+// The compass occupies the bottom-left of the HUD, left of the movement arrows
+// (which start at x=117); the disc spans y~120-168. Capture/restore that rect.
+static const SDL_Rect kCompassRect = { 0, 120, 116, 49 };
+
+void GRAPHICS::Graphics::snapshotCompass() {
+	if (mCompassSnap == nullptr)
+		mCompassSnap = SDL_CreateRGBSurface(0, kCompassRect.w, kCompassRect.h, 32,
+		                                    0, 0, 0, 0);
+	SDL_SetSurfaceBlendMode(mScreen, SDL_BLENDMODE_NONE);
+	SDL_BlitSurface(mScreen, &kCompassRect, mCompassSnap, nullptr);
+}
+
+void GRAPHICS::Graphics::restoreCompass() {
+	// Only in-game (mTextRestoreBg marks the HUD; the title menu uses flat-fill and
+	// has no compass), and only once a snapshot exists.
+	if (mCompassSnap == nullptr || !mTextRestoreBg)
+		return;
+	SDL_Rect dst = kCompassRect;
+	SDL_SetSurfaceBlendMode(mCompassSnap, SDL_BLENDMODE_NONE);
+	SDL_BlitSurface(mCompassSnap, nullptr, mScreen, &dst);
+}
+
+void GRAPHICS::Graphics::fillRect(int x0, int y0, int x1, int y1, uint8_t color) {
+	if (x1 < x0) std::swap(x0, x1);
+	if (y1 < y0) std::swap(y0, y1);
+	SDL_Rect r = { x0, y0, x1 - x0 + 1, y1 - y0 + 1 };
+	SDL_Color c = mPalette->colors[color];
+	Uint32 px = SDL_MapRGB(mScreen->format, c.r, c.g, c.b);
+	SDL_FillRect(mScreen, &r, px);
+	// Keep the text-free backdrop snapshot in sync so a later text_window restore of
+	// this box shows the cleared colour, not the art the clear replaced.
+	if (mBackdrop != nullptr)
+		SDL_FillRect(mBackdrop, &r, px);
 }
 
 void GRAPHICS::Graphics::zoomIntoImage(std::vector<uint8_t> &bmp) {
@@ -577,6 +627,10 @@ void GRAPHICS::Graphics::update() {
 		mSleep = 10;
 	}
 
+	// Re-apply the persistent compass (in-game) so HUD/inventory redraws can't erase
+	// the facing indicator the bytecode only redraws on a turn.
+	restoreCompass();
+
 	// generate texture from our screen surface
 	SDL_Texture *texture = SDL_CreateTextureFromSurface(mRenderer, mScreen);
 
@@ -789,6 +843,11 @@ void GRAPHICS::Graphics::printText(int wndnum, const std::string &text) {
 	TextWin &tw = it->second;
 	SDL_Color c = mPalette->colors[tw.fg];
 	Font *font = tw.font.get();
+	if (std::getenv("THIRDEYE_TEXTDBG"))
+		std::cerr << "[txt] wnd " << wndnum << " win(" << tw.winX0 << ","
+		          << tw.winY0 << ")-(" << tw.winX1 << "," << tw.winY1
+		          << ") xy(" << tw.htab << "," << tw.vtab << ") just"
+		          << tw.justify << " \"" << text << "\"" << std::endl;
 
 	auto glyphW = [&](unsigned char ch) -> int {
 		SDL_Surface *g = font->getCharacter(ch);
@@ -848,10 +907,16 @@ void GRAPHICS::Graphics::printText(int wndnum, const std::string &text) {
 			x = (li == 0 ? tw.htab : tw.winX0);
 
 		if (y + lineH - 1 > tw.winY1) break; // clip below the window: stop drawing
+		if (y < tw.winY0) { y += lineH; continue; } // clip above: skip this line
 		for (unsigned char ch : line) {
 			SDL_Surface *glyph = font->getCharacter(ch);
 			if (glyph == nullptr) continue;
 			if (x + glyph->w - 1 > tw.winX1) break; // clip past the right edge
+			// Clip past the left edge: the original draws glyphs at (htab - x0)
+			// relative to the window and VFX clips negatives, so text whose cursor
+			// sits left of the window (e.g. an equipment-screen print with a
+			// page-local htab) is clipped, not bled onto the screen at that x.
+			if (x < tw.winX0) { x += glyph->w; continue; }
 			// Glyphs are white masks (black = transparent via colour key); tint to
 			// the text colour with a colour-mod multiply (white * colour = colour).
 			SDL_SetSurfaceColorMod(glyph, c.r, c.g, c.b);

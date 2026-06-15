@@ -329,8 +329,11 @@ void pumpHost(GRAPHICS::Graphics &gfx, VM::EventSystem &events) {
 				p = e + 1;
 			}
 		}
+		// THIRDEYE_CLICK1: play the sequence once and then STOP (don't re-click), so
+		// a toggle screen (equipment/camp) stays open for a screenshot.
+		static bool clickOnce = std::getenv("THIRDEYE_CLICK1") != nullptr;
 		int phase = (++ctick) % 50;
-		if (phase == 0 && !pts.empty()) {
+		if (phase == 0 && !pts.empty() && !(clickOnce && idx >= pts.size())) {
 			// Play the sequence once, then hold on the last point (so e.g.
 			// "openInv;clickItem" opens once, then repeatedly clicks the item).
 			size_t i = idx < pts.size() ? idx : pts.size() - 1;
@@ -343,6 +346,20 @@ void pumpHost(GRAPHICS::Graphics &gfx, VM::EventSystem &events) {
 			events.mouseButton(true, false);
 		} else if (phase == 3) {
 			events.mouseButton(false, false);
+		}
+	}
+	// Debug: THIRDEYE_HOVER="x,y" parks the mouse there (move only, no click) so a
+	// headless run can verify hover behaviour (e.g. the menu highlight tracking the
+	// cursor). Re-asserted each pump with a 1px wobble so the region machinery sees a
+	// move and fires ENTER once the bytecode has registered its regions (a single
+	// early move would land before the menu's option regions exist).
+	if (const char *hv = std::getenv("THIRDEYE_HOVER")) {
+		static int wob = 0;
+		int x = 0, y = 0;
+		if (std::sscanf(hv, "%d,%d", &x, &y) == 2) {
+			int lx, ly;
+			gfx.mouseToLogical(x, y, lx, ly);
+			events.mouseMove(lx + (wob ^= 1), ly);
 		}
 	}
 
@@ -409,6 +426,20 @@ bool loadDungeonLevel(int level, VM::ObjectSystem &objects,
 		if (uint8_t *p = objects.classStaticPtr(dungeon, kDungeonClass, kLvlmapOff,
 		                                        static_cast<uint32_t>(maze.size())))
 			std::memcpy(p, maze.data(), maze.size());
+		// Debug: dump the maze cells around (15,15) (the new-game start) to inspect
+		// wall layout. lvlmap is 32x32, 1 byte/cell (0x00=wall, 0xff=floor).
+		if (std::getenv("THIRDEYE_MAZE")) {
+			std::cerr << "[maze] cells x=11..19, y=11..19 (row=y):\n";
+			for (int y = 11; y <= 19; ++y) {
+				std::cerr << "  y" << y << ":";
+				for (int x = 11; x <= 19; ++x) {
+					int idx = y * 32 + x;
+					std::cerr << " " << (idx < (int)maze.size()
+					    ? (int)maze[idx] : -1);
+				}
+				std::cerr << "\n";
+			}
+		}
 		if (walls >= 0)
 			if (uint8_t *w = objects.classStaticPtr(dungeon, kDungeonClass,
 			                                        kWallsetOff, 4)) {
@@ -530,6 +561,12 @@ int loadLevelObjects(int level, VM::ObjectSystem &objects,
 // prefix entirely -- that decode is the trace's real CPU cost). `rt()` is the gated
 // stream; `gRtTrace` is set from mDebug before the VM runs.
 bool gRtTrace = false;
+// Set when the bytecode redraws the compass facing indicator (draw_bitmap to page
+// 104, resource 187, on a turn); consumed by the next compass-page refresh to
+// re-snapshot. Gating on this keeps incidental page-104 refreshes (e.g. during
+// inventory interaction, when the compass isn't fully redrawn) from snapshotting a
+// partial compass over the good one.
+bool gCompassDirty = false;
 std::chrono::steady_clock::time_point gBootStart; // set at go(); for timing prints
 bool gFirstPresentLogged = false;
 inline std::ostream &rt() {
@@ -1039,10 +1076,17 @@ VM::Value defaultRuntimeCall(VM::ObjectSystem &objects, VM::EventSystem &events,
 			bool viewPage = page == kViewPage;
 			if (viewPage)
 				gfx->setClip(0, 0, kViewW, kViewH);
+			// arg[6] = flip/mirror (GIL2VFX: 1=X, 2=Y, 3=both); the view draws
+			// right-hand walls as the X-mirror of the left-hand shape.
+			int mirror = args.size() > 6 ? static_cast<int>(args[6]) : 0;
+			// The compass facing indicator (page 104, resource 187) is only drawn on
+			// a turn; mark it so the next compass refresh re-snapshots (see below).
+			if (page == 104 && table == 187)
+				gCompassDirty = true;
 			try {
-				gfx->drawImage(fetch(table), number, x, y, true);
+				gfx->drawImage(fetch(table), number, x, y, true, mirror);
 				rt() << "  [drew " << table << ":" << number << " @ " << x
-				          << "," << y << "]" << std::endl;
+				          << "," << y << (mirror ? " M" : "") << "]" << std::endl;
 			} catch (const std::exception &e) {
 				rt() << "  [draw failed: " << e.what() << "]" << std::endl;
 			}
@@ -1050,8 +1094,30 @@ VM::Value defaultRuntimeCall(VM::ObjectSystem &objects, VM::EventSystem &events,
 				gfx->clearClip();
 			return 0;
 		}
+		// fill_rectangle(page, x1, y1, x2, y2, color): clear an inclusive rect to a
+		// palette colour. The SOP screens call this to erase a panel before redrawing
+		// (e.g. the character-stats screen clears the equipment area first). Stubbed,
+		// it left the old screen showing through the new one. (We ignore the page arg,
+		// as with draw_bitmap -- everything composites onto the one screen surface.)
+		if (fn == "fill_rectangle" && args.size() >= 6) {
+			gfx->fillRect(static_cast<int>(args[1]), static_cast<int>(args[2]),
+			              static_cast<int>(args[3]), static_cast<int>(args[4]),
+			              static_cast<uint8_t>(args[5]));
+			rt() << "  [fill " << args[1] << "," << args[2] << "-" << args[3] << ","
+			     << args[4] << " c" << args[5] << "]" << std::endl;
+			return 0;
+		}
 		// refresh_window / color_fade / light_fade: present the screen.
 		if (fn == "refresh_window" || fn == "color_fade" || fn == "light_fade") {
+			// The compass widget is on AESOP page 104; when its page is refreshed the
+			// freshly-drawn compass (disc + facing indicator) is on screen -- snapshot
+			// it so later HUD redraws can't erase the indicator (it's only redrawn by
+			// the bytecode on a turn). See Graphics::snapshotCompass/restoreCompass.
+			if (fn == "refresh_window" && !args.empty() && args[0] == 104 &&
+			    gCompassDirty) {
+				gfx->snapshotCompass();
+				gCompassDirty = false;
+			}
 			gfx->update();
 			if (!gFirstPresentLogged) {
 				gFirstPresentLogged = true;
@@ -1277,6 +1343,12 @@ void THIRDEYE::Engine::bootObject(RESOURCES::Resource &resource,
 	VM::EventSystem events(objects);
 	events.setVerbose(mDebug || std::getenv("THIRDEYE_AUTOWALK"));
 	objects.setTrace(mDebug);
+	// Gate the runtime-call trace ([drew]/[text]/CALL lines): on with --debug, or
+	// when a debug env var wants it (AUTOWALK/TESTOBJ/CLICK/AUTOKEY). Without this
+	// the in-game trace was silently off (it was only set in runResourceVM).
+	gRtTrace = mDebug || std::getenv("THIRDEYE_AUTOWALK") ||
+	           std::getenv("THIRDEYE_TESTOBJ") || std::getenv("THIRDEYE_CLICK") ||
+	           std::getenv("THIRDEYE_AUTOKEY");
 
 	// Seed the boot "mode" that start.MSG_CREATE reads via peekmem(1264) and
 	// CASEs on (see the start disassembly). The 4-char modes are stored
