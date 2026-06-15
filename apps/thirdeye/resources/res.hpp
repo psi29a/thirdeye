@@ -124,6 +124,10 @@ public:
 	Resource(std::filesystem::path resourcePath);
 	virtual ~Resource();
 
+	/// The .RES file this resource was opened from (used to locate sibling
+	/// files like the INTRO.GFF cinematic that live beside it).
+	const std::filesystem::path &resourcePath() const { return mResFile; }
+
 	std::vector<uint8_t> &getAsset(std::string name);
 	std::vector<uint8_t> &getAsset(uint16_t number);
 	std::string getTableEntry(std::string name, uint8_t table);
@@ -134,6 +138,9 @@ public:
 
 	/// Resource number for a given name, or -1 if not found.
 	int getResourceNumber(const std::string &name);
+
+	/// Resource name for a given number, or "" if not found.
+	std::string getResourceName(uint16_t number);
 
 	/// Parse a code object's <name>.EXPT export dictionary into key->value
 	/// pairs (e.g. "N:OBJECT"->object name, "M:0"->handler entry offset).

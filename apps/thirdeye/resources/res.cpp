@@ -404,6 +404,11 @@ int RESOURCES::Resource::getResourceNumber(const std::string &name) {
 	return num.empty() ? -1 : std::stoi(num);
 }
 
+std::string RESOURCES::Resource::getResourceName(uint16_t number) {
+	auto it = mAssets.find(number);
+	return it == mAssets.end() ? std::string() : it->second.name;
+}
+
 std::map<std::string, std::string> RESOURCES::Resource::getImports(
 		const std::string &codeName) {
 	std::string num = searchDictionary(mTable0, codeName + ".IMPT");

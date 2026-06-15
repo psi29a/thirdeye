@@ -61,6 +61,14 @@ class EventSystem {
 public:
 	explicit EventSystem(ObjectSystem& objects) : mObjects(objects) { reset(); }
 
+	// Holds an ObjectSystem& (a reference member), so it is inherently non-copyable
+	// and non-movable; spell that out to silence MSVC C5027 (move-assign implicitly
+	// deleted). EventSystem is a long-lived singleton in practice -- never reassigned.
+	EventSystem(const EventSystem&) = delete;
+	EventSystem& operator=(const EventSystem&) = delete;
+	EventSystem(EventSystem&&) = delete;
+	EventSystem& operator=(EventSystem&&) = delete;
+
 	// Clear the queue and rebuild the notify free-list (init_event_queue +
 	// init_notify_list).
 	void reset();
@@ -189,6 +197,7 @@ private:
 	bool mLastLeft = false, mLastRight = false; // last button state (edge detect)
 
 	int32_t mCurrentEventType = SYS_FREE; // event being dispatched (cancel guard)
+	int32_t mLastTimerBeat = INT32_MIN;   // last heartbeat we posted a timer for
 	bool mVerbose = false;
 };
 

@@ -125,6 +125,21 @@ uint8_t* ObjectSystem::staticsPtr(int objIndex, uint32_t offset, uint32_t size) 
 	return s.data() + offset;
 }
 
+std::vector<int> ObjectSystem::objectsOfClass(uint16_t classNumber) const {
+	std::vector<int> r;
+	for (size_t i = 0; i < mObjList.size(); ++i)
+		if (mObjList[i] == classNumber)
+			r.push_back(static_cast<int>(i));
+	return r;
+}
+
+int ObjectSystem::firstObjectOfClass(uint16_t classNumber) const {
+	for (size_t i = 0; i < mObjList.size(); ++i)
+		if (mObjList[i] == classNumber)
+			return static_cast<int>(i);
+	return -1;
+}
+
 Value ObjectSystem::objectLookup(int index) const {
 	if (index < 0 || static_cast<size_t>(index) >= mObjList.size() ||
 	    mObjList[index] == kFreeSlot)
@@ -157,7 +172,19 @@ int ObjectSystem::createProgram(int index, uint16_t classNumber) {
 	int i = allocAt(index, classNumber);
 	// The system sends MSG_CREATE to a freshly created instance (RTOBJECT.C
 	// create_SOP_instance). A class with no MSG_CREATE handler is fine (-> -1).
-	send(i, kMsgCreate, {});
+	// The system sends a started program its entry message: MSG_CREATE if it has
+	// one, else MSG_RESTORE (DEFS.H: both are "sent by system"). EOB3's `kernel`
+	// has *no* MSG_CREATE handler and instead wires up its whole event loop (timer
+	// -> "draw players", region clicks, ...) in MSG_RESTORE (M:2 -> PROCEDURE_727);
+	// without this the in-game HUD never receives events and the party never draws.
+	// Programs that *do* have MSG_CREATE (the menu, the PC objects, ...) get only
+	// that -- their MSG_RESTORE is restore-from-save logic, not a creation entry.
+	uint16_t defClass;
+	uint32_t offset;
+	if (resolve(classNumber, kMsgCreate, defClass, offset))
+		send(i, kMsgCreate, {});
+	else if (resolve(classNumber, kMsgRestore, defClass, offset))
+		send(i, kMsgRestore, {});
 	return i;
 }
 
