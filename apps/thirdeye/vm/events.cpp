@@ -437,6 +437,15 @@ void EventSystem::mouseMove(int32_t x, int32_t y) {
 // timer_callback(): keep one SYS_TIMER event in the queue, updating its
 // heartbeat parameter rather than flooding the queue with new events.
 void EventSystem::postTimer(int32_t heartbeat) {
+	// Only inject a tick when the heartbeat actually advances. pumpHost calls this
+	// every poll of the kernel's tight dispatch loop; if we re-posted every call the
+	// SYS_TIMER event would be perpetually pending, so timer-tick (and the full
+	// dungeon redraw it drives) would fire on *every* iteration -- pegging a core and
+	// running animations ~3x too fast. Gating to the ~30 Hz heartbeat (SDL ticks >> 5)
+	// makes the loop idle (SDL_Delay) between ticks: correct rate, low CPU.
+	if (heartbeat == mLastTimerBeat)
+		return;
+	mLastTimerBeat = heartbeat;
 	int32_t ev = findEvent(SYS_TIMER, -1);
 	if (ev == -1)
 		addEvent(SYS_TIMER, heartbeat, -1);
