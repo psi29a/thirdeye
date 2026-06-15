@@ -319,7 +319,8 @@ void pumpHost(GRAPHICS::Graphics &gfx, VM::EventSystem &events) {
 		// per ~50 pumps (so e.g. "200,26;188,75" = open Bob's inventory, then click an
 		// item). Coords are logical (320x200) -- the space SDL auto-scales events to.
 		static std::vector<std::pair<int, int>> pts;
-		static int idx = 0, ctick = 0;
+		static size_t idx = 0; // index into pts (compared against pts.size())
+		static int ctick = 0;
 		if (pts.empty()) {
 			std::string s = cl;
 			size_t p = 0;
