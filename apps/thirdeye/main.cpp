@@ -62,7 +62,8 @@ int main(int argc, char** argv) {
         app.add_flag("--vm", forceVM,
                      "Boot the SOP bytecode VM (run the 'start' object) instead of the intro");
         app.add_flag("--skip-menu", skipMenu,
-                     "Boot straight into the game, skipping the title menu");
+                     "Boot straight into the game with the default party (Bob/Carol/"
+                     "Ted/Alice), skipping the title menu");
         app.add_flag("--skip-intro", skipIntro,
                      "Skip the intro cinematic");
         app.add_flag("--debug", debug, "Enable debug mode");

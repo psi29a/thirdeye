@@ -264,8 +264,12 @@ void EventSystem::dispatchEvent() {
 	if (typ == SYS_FREE)
 		return;
 
-	if (typ >= FIRST_SYS_EVENT && typ <= LAST_SYS_EVENT &&
-	    scanEventRange(FIRST_APP_EVENT, LAST_APP_EVENT) != -1) {
+	int32_t pendingApp = scanEventRange(FIRST_APP_EVENT, LAST_APP_EVENT);
+	if (typ >= FIRST_SYS_EVENT && typ <= LAST_SYS_EVENT && pendingApp != -1) {
+		if (mVerbose)
+			std::cout << "    [event " << typ << " p" << par
+			          << " DEFERRED behind app event " << mQueue[pendingApp].type
+			          << "]" << std::endl;
 		addEvent(typ, par, own); // defer behind the pending application events
 		return;
 	}
@@ -432,6 +436,15 @@ void EventSystem::mouseMove(int32_t x, int32_t y) {
 // timer_callback(): keep one SYS_TIMER event in the queue, updating its
 // heartbeat parameter rather than flooding the queue with new events.
 void EventSystem::postTimer(int32_t heartbeat) {
+	// Only inject a tick when the heartbeat actually advances. pumpHost calls this
+	// every poll of the kernel's tight dispatch loop; if we re-posted every call the
+	// SYS_TIMER event would be perpetually pending, so timer-tick (and the full
+	// dungeon redraw it drives) would fire on *every* iteration -- pegging a core and
+	// running animations ~3x too fast. Gating to the ~30 Hz heartbeat (SDL ticks >> 5)
+	// makes the loop idle (SDL_Delay) between ticks: correct rate, low CPU.
+	if (heartbeat == mLastTimerBeat)
+		return;
+	mLastTimerBeat = heartbeat;
 	int32_t ev = findEvent(SYS_TIMER, -1);
 	if (ev == -1)
 		addEvent(SYS_TIMER, heartbeat, -1);

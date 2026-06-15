@@ -250,12 +250,22 @@ Value Interpreter::run() {
 			break;
 		}
 		case Op::RTS: {
+			// JSR saved (PC, SP, Fptr) just *above* the procedure's frame base, so
+			// after enterFrame `mFptr` points straight at the saved Fptr and the
+			// other two sit one/two slots higher. Read them there -- NOT from the
+			// procedure's current operand top (mSp), which is deep below the auto
+			// frame + temporaries. (The old code popped from mSp and also clobbered
+			// its own read pointer via `mSp = popVal()`, so it only worked for
+			// trivial zero-local procedures.) JSR is net +1: leave the procedure's
+			// return value on the caller's operand stack, like CALL.
 			Value ret = topVal();
-			// restore frame saved by JSR
-			mFptr = static_cast<uint32_t>(popVal());
-			mSp   = static_cast<uint32_t>(popVal());
-			mPC   = static_cast<uint32_t>(popVal());
-			setTop(ret);
+			uint32_t savedFptr = static_cast<uint32_t>(readStk(mFptr));
+			uint32_t savedSp   = static_cast<uint32_t>(readStk(mFptr + kValueSize));
+			uint32_t savedPc   = static_cast<uint32_t>(readStk(mFptr + 2 * kValueSize));
+			mFptr = savedFptr;
+			mPC   = savedPc;
+			mSp   = savedSp;
+			pushVal(ret);
 			break;
 		}
 
@@ -610,6 +620,28 @@ std::string Interpreter::readCodeString(Value addr) const {
 		s.push_back(c);
 	}
 	return s;
+}
+
+std::string Interpreter::readString(Value addr) const {
+	// Like readCodeString but also follows Static/Extern addresses (e.g. a PC's
+	// "name" field, reached via LESA) -- used by sprint(). Reads a NUL-terminated
+	// string from whichever space the tagged address points at.
+	Addr a = decodeAddr(addr);
+	if (a.space == AddrSpace::Code)
+		return readCodeString(addr);
+	if (a.space == AddrSpace::Static || a.space == AddrSpace::Extern) {
+		if (!mExternStatics)
+			return "";
+		std::string s;
+		for (uint32_t i = 0; i < 256; ++i) { // sane cap on a static string field
+			const uint8_t* p = mExternStatics(a.obj, a.offset + i, 1);
+			if (p == nullptr || *p == 0)
+				break;
+			s.push_back(static_cast<char>(*p));
+		}
+		return s;
+	}
+	return "";
 }
 
 void Interpreter::unimplemented(Op op) {
