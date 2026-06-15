@@ -55,6 +55,12 @@ private:
 	// flat-fill clear (the title menu, whose "Menu shapes" bakes the options in).
 	SDL_Surface *mBackdrop = nullptr;
 	bool mTextRestoreBg = false;
+	// The compass widget lives on its own AESOP page (104) that the original
+	// re-composites every frame, so it survives HUD redraws. We flatten pages onto
+	// one surface, so we instead snapshot the compass region when it refreshes and
+	// re-apply it each present -- otherwise the cardinal/facing indicator (only
+	// redrawn by the bytecode on a turn) gets erased by an inventory-close redraw.
+	SDL_Surface *mCompassSnap = nullptr;
 	SDL_Cursor *mCursor;
 	SDL_Palette *mPalette;
 	uint8_t mState;
@@ -104,14 +110,31 @@ public:
 	Graphics(uint16_t scale = 1, bool renderer = false);
 	virtual ~Graphics();
 
-	void drawImage(std::vector<uint8_t> &bmp, uint16_t index, uint16_t posX,
-			uint16_t posY, bool transparency = false);
+	// mirror: AESOP draw_bitmap mirror flag (GIL2VFX) -- 1=X (horizontal flip),
+	// 2=Y (vertical), 3=both. The dungeon view draws right-hand walls as the
+	// X-mirror of the same shape used on the left.
+	// posX/posY are signed: the dungeon view legitimately draws shapes at negative
+	// coordinates (a left-edge wall at x=-32 that SDL then clips), so they must NOT
+	// be unsigned -- a uint16_t wraps -32 to 65504 and the shape vanishes off-screen.
+	void drawImage(std::vector<uint8_t> &bmp, uint16_t index, int posX,
+			int posY, bool transparency = false, int mirror = 0);
 
 	// Constrain subsequent blits to a rectangle on the screen surface (used to
 	// clip the dungeon 3D view to its window so wide wall shapes don't bleed into
 	// the character panels). clearClip() removes the constraint.
 	void setClip(int x, int y, int w, int h);
 	void clearClip();
+	// Compass persistence (see mCompassSnap): snapshotCompass() captures the compass
+	// region from the screen (called when AESOP refreshes the compass page);
+	// restoreCompass() re-applies it (called each present while in-game) so the
+	// facing indicator isn't erased by other redraws.
+	void snapshotCompass();
+	void restoreCompass();
+	// fill_rectangle(x0,y0,x1,y1,color): flood an inclusive screen rectangle with a
+	// palette colour. The SOP screens use it to clear a panel before redrawing (e.g.
+	// the character-stats screen clears the equipment area first); also refreshes the
+	// text-free backdrop snapshot so later text overlays the cleared box, not stale art.
+	void fillRect(int x0, int y0, int x1, int y1, uint8_t color);
 	void drawText(std::vector<uint8_t> &fnt, std::string text, uint16_t posX,
 			uint16_t posY);
 
