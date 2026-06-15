@@ -61,6 +61,14 @@ class EventSystem {
 public:
 	explicit EventSystem(ObjectSystem& objects) : mObjects(objects) { reset(); }
 
+	// Holds an ObjectSystem& (a reference member), so it is inherently non-copyable
+	// and non-movable; spell that out to silence MSVC C5027 (move-assign implicitly
+	// deleted). EventSystem is a long-lived singleton in practice -- never reassigned.
+	EventSystem(const EventSystem&) = delete;
+	EventSystem& operator=(const EventSystem&) = delete;
+	EventSystem(EventSystem&&) = delete;
+	EventSystem& operator=(EventSystem&&) = delete;
+
 	// Clear the queue and rebuild the notify free-list (init_event_queue +
 	// init_notify_list).
 	void reset();
