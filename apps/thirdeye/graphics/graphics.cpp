@@ -106,6 +106,8 @@ GRAPHICS::Graphics::Graphics(uint16_t scale, bool renderer) {
 GRAPHICS::Graphics::~Graphics() {
 	SDL_FreeCursor(mCursor);
 	SDL_FreeSurface(mScreen);
+	SDL_FreeSurface(mBackdrop);   // lazily created in drawImage (nullptr-safe free)
+	SDL_FreeSurface(mCompassSnap); // lazily created in snapshotCompass
 	SDL_FreePalette(mPalette);
 	SDL_DestroyRenderer(mRenderer);
 	SDL_DestroyWindow(mWindow);
@@ -825,9 +827,13 @@ void GRAPHICS::Graphics::setTextWindow(int wndnum, int x0, int y0, int x1,
 	} else {
 		// Title menu (flat box bg, options baked into the backdrop bitmap): erase
 		// to the sampled background colour so the baked text doesn't show through.
+		// Sample just inside the box, clamped to the surface so a window flush
+		// against the right/bottom edge can't read past the buffer.
 		Uint32 *pixels = static_cast<Uint32 *>(mScreen->pixels);
 		int pitch = mScreen->pitch / 4;
-		Uint32 bg = pixels[(y0 + 1) * pitch + (x0 + 1)];
+		int sx = (x0 + 1 < WIDTH) ? x0 + 1 : x0;
+		int sy = (y0 + 1 < HEIGHT) ? y0 + 1 : y0;
+		Uint32 bg = pixels[sy * pitch + sx];
 		SDL_FillRect(mScreen, &r, bg);
 	}
 }
