@@ -1,4 +1,5 @@
 #include "graphics.hpp"
+#include <cstdlib>
 
 #include "SDL_syswm.h" // SDL_GetWindowWMInfo (kept out of headers: drags in X11)
 
@@ -871,22 +872,22 @@ void GRAPHICS::Graphics::saveScreenshot(const std::string &path) {
 }
 
 void GRAPHICS::Graphics::mouseToLogical(int wx, int wy, int &lx, int &ly) const {
-	// Map window-pixel mouse coords to the 320x200 logical space. Let SDL do it
-	// via the renderer's logical-size mapping -- this stays correct under --scale
-	// AND high-DPI/Retina (where window pixels differ from the logical size),
-	// which a plain divide-by-scale would get wrong.
-#if SDL_VERSION_ATLEAST(2, 0, 18)
-	float fx = 0.0f, fy = 0.0f;
-	SDL_RenderWindowToLogical(mRenderer, wx, wy, &fx, &fy);
-	lx = static_cast<int>(fx);
-	ly = static_cast<int>(fy);
-#else
-	int s = mScale > 0 ? mScale : 1;
-	lx = wx / s;
-	ly = wy / s;
-#endif
+	// The coords we get here come from SDL mouse *events*, and SDL's renderer
+	// event-watch ALREADY scales event coordinates into the logical (320x200) space
+	// whenever SDL_RenderSetLogicalSize is set -- verified: at --scale 2, a warp to
+	// window (292,266) arrives as event (146,133). So the input is already logical;
+	// we just clamp it. Do NOT re-scale by the window/--scale here: that double-
+	// converts and makes every click land at the wrong spot for --scale > 1 (the
+	// clicks-miss-when-scaled bug), while looking fine at --scale 1 (identity).
+	// (NB: SDL_GetMouseState, unlike events, returns RAW window coords -- so it must
+	// NOT be used for position here; we only use it for the button-state bits.)
+	lx = wx;
+	ly = wy;
 	if (lx < 0) lx = 0; else if (lx >= WIDTH) lx = WIDTH - 1;
 	if (ly < 0) ly = 0; else if (ly >= HEIGHT) ly = HEIGHT - 1;
+	if (std::getenv("THIRDEYE_MOUSE"))
+		std::cout << "[mouse] event(" << wx << "," << wy << ") -> logical(" << lx
+		          << "," << ly << ")" << std::endl;
 }
 
 /*!
