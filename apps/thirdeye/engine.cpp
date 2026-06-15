@@ -153,6 +153,10 @@ struct TransferState {
 
 	// Read `size` (1/2/4) little-endian bytes for player `pc`, attribute `attr`.
 	int32_t playerAttrib(int pc, int attr, int size) const {
+		// `pc`/`size` come from VM args: reject a bad size (the `8*i` shift would be
+		// >= 32 -- UB) and a negative pc before computing the offset.
+		if (pc < 0 || (size != 1 && size != 2 && size != 4))
+			return 0;
 		size_t off = static_cast<size_t>(kPcBase + pc * kPcStride + attr);
 		uint32_t v = 0;
 		for (int i = 0; i < size; ++i) {
@@ -179,7 +183,7 @@ struct TransferState {
 	int32_t itemAttrib(int pc, int slot, int attr) const {
 		size_t slotOff = static_cast<size_t>(kPcBase + 2 + pc * kPcStride +
 		                                     kInvRecOff + slot * 2);
-		if (slot < 0 || slot >= kInvSlots || slotOff + 1 >= data.size())
+		if (pc < 0 || slot < 0 || slot >= kInvSlots || slotOff + 1 >= data.size())
 			return attr == 1 ? -1 : 0;
 		int id = data[slotOff] | (data[slotOff + 1] << 8);
 		if (id < kItemIdBase) // 0 = empty slot (party items all start at 434)
@@ -1498,30 +1502,39 @@ void THIRDEYE::Engine::playCinematic(GRAPHICS::Graphics *gfx,
 
 	std::cout << "  [program chain: playing " << gffName
 	          << " (ESC/Enter to skip)]" << std::endl;
-	MIXER::Mixer mixer;
-	RESOURCES::GFFI video(gffPath);
-	mixer.playMusic(video.getMusic());
-	gfx->playVideo(video.getSequence());
+	// GFFI load / music decode / video setup can throw; a failure here must not
+	// abort the boot (we're on the relaunch path), so skip the cinematic instead.
+	// QuitRequested (below) is not a std::exception, so window-close still unwinds.
+	try {
+		MIXER::Mixer mixer;
+		RESOURCES::GFFI video(gffPath);
+		mixer.playMusic(video.getMusic());
+		gfx->playVideo(video.getSequence());
 
-	SDL_Event event;
-	while (gfx->isVideoPlaying()) {
-		while (SDL_PollEvent(&event)) {
-			if (event.type == SDL_QUIT) {
-				gfx->stopVideo();
-				mixer.stopMusic();
-				throw QuitRequested{};
+		SDL_Event event;
+		while (gfx->isVideoPlaying()) {
+			while (SDL_PollEvent(&event)) {
+				if (event.type == SDL_QUIT) {
+					gfx->stopVideo();
+					mixer.stopMusic();
+					throw QuitRequested{};
+				}
+				if (event.type == SDL_KEYDOWN &&
+				    (event.key.keysym.sym == SDLK_ESCAPE ||
+				     event.key.keysym.sym == SDLK_RETURN)) {
+					gfx->stopVideo();
+					mixer.stopMusic();
+				}
 			}
-			if (event.type == SDL_KEYDOWN &&
-			    (event.key.keysym.sym == SDLK_ESCAPE ||
-			     event.key.keysym.sym == SDLK_RETURN)) {
-				gfx->stopVideo();
-				mixer.stopMusic();
-			}
+			gfx->update();
+			mixer.update();
+			uint32_t sleep = gfx->getSleep();
+			SDL_Delay(sleep > 0 ? sleep : 16);
 		}
-		gfx->update();
-		mixer.update();
-		uint32_t sleep = gfx->getSleep();
-		SDL_Delay(sleep > 0 ? sleep : 16);
+	} catch (const std::exception &e) {
+		gfx->stopVideo();
+		std::cout << "  [program chain: failed to play " << gffName << " ("
+		          << e.what() << "); skipping cinematic]" << std::endl;
 	}
 }
 
