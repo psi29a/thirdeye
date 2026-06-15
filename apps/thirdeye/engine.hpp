@@ -101,6 +101,12 @@ private:
 	void runExternalProgram(const std::string &program, GRAPHICS::Graphics *gfx,
 	                        RESOURCES::Resource &resource);
 
+	/// Play a GFF cinematic (e.g. INTRO.GFF) that sits beside the game's .RES,
+	/// reusing thirdeye's GFF player. Honors --skip-intro; ESC/Enter skips;
+	/// closing the window throws QuitRequested to end the session.
+	void playCinematic(GRAPHICS::Graphics *gfx, RESOURCES::Resource &resource,
+	                   const std::string &gffName);
+
 	/// Hold a partially-rendered frame on screen after the VM hits an
 	/// unimplemented runtime function/opcode (a bring-up wall), until the user
 	/// closes the window or presses ESC.
