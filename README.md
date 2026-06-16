@@ -1,8 +1,10 @@
 Thirdeye: A reimplementation of the AESOP engine
 
+![Thirdeye 0.87.0](https://github.com/psi29a/thirdeye/releases/download/thirdeye-0.87.0/Screenshot.2026-06-15.at.16.48.39.png "Thirdeye")
+
 Thirdeye is an attempt at recreating the AESOP engine for the popular role-playing games Eye of the Beholder 3 and Dungeon Hack. You need to own and install the original games for Thirdeye to work.
 
-Version: 0.86.0  
+Version: 0.87.0  
 License: GPL (see GPL3.txt for more information)  
 Website:  http://www.mindwerks.net/projects/thirdeye/  
 
@@ -91,6 +93,16 @@ OSX:
 TODO
 
 CHANGELOG
+
+0.87.0:
+* SOP VM — all 88 opcodes (except BRK), objects/SEND/PASS + N:PARENT inheritance, the full variable model (auto/static/table/extern, arrays, tagged effective addresses), the cross-object link layer.
+* Event system & host loop — EVENT.C/INTRFACE.C ports, region input, the event-driven SDL pump + coalesced timer.
+* Runtime library — the concrete CALL targets wired to graphics/text/dungeon (draw_bitmap with mirror, fill_rectangle, step_X/Y/FDIR, change_level, etc.).
+* Rendering — the "1.10" bitmap + "2." font decoders.
+* Boot/menu/gameplay — booting start through the peekmem state machine, the interactive title menu, char-gen party transfer (RE'd CREATE.SAV/ITEM.DAT), the walkable 14-level dungeon with level objects, the HUD/compass/equipment screens, layout-independent keys.
+* Spanish localization fix (issue #18) — spelled out concretely: the old-bitmap RLE decoder read each span's X as one byte and tested end-of-line as == 0x80, but X is 16-bit LE with bit 15 as that flag — so any span at x ≥ 256 (the translated "Reward" bitmap 189, text reflowed to x=283) desynced the decoder (rle_width=-21). Now reads X as u16 and masks bit 15.
+* Build/platform — C++20, de-Boosted, CMake, GitHub Actions CI on all three OSes, MSVC support, sound device enumeration, the CLI flags.
+
 
 0.86.0:
 * First official release of Thirdeye.
