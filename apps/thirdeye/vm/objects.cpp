@@ -6,6 +6,9 @@
 
 #include "objects.hpp"
 
+#include <cstdlib> // std::getenv (debug traces)
+#include <iostream>
+
 namespace VM {
 
 void ObjectSystem::addClass(SopClass cls) {
@@ -223,7 +226,29 @@ Value ObjectSystem::send(int objIndex, int message, std::vector<Value> args) {
 		return -1; // no live object at this index
 	uint16_t defClass;
 	uint32_t offset;
-	if (!resolve(startClass, message, defClass, offset))
+	bool found = resolve(startClass, message, defClass, offset);
+	// Debug (THIRDEYE_TESTMON): trace creature draw/report dispatch to monster-range
+	// objects -- which class handles it, with params. Gate cached so normal play pays
+	// nothing. (Used to find the plane-2 / NPCstat bring-up; kept for combat work.)
+	static const bool kMonTrace = std::getenv("THIRDEYE_TESTMON") != nullptr;
+	// Combat/AI trace. Attack chain (any object -- PCs too): use/attack request(163),
+	// acquire NPC/feature target(77/78), roll to hit(71), roll for damage(43), take
+	// damage(82). Plus monster AI: watch(91), my turn(85), LoS(107), advance(99).
+	bool atkMsg = (message == 163 || message == 77 || message == 78 ||
+	               message == 71 || message == 43 || message == 82 || message == 162);
+	bool aiMsg = (objIndex >= 1750 && objIndex <= 1900 &&
+	              (message == 91 || message == 85 || message == 107 || message == 99));
+	if (kMonTrace && (atkMsg || aiMsg)) {
+		static int n = 0;
+		if (n++ < 60) {
+			std::cerr << "[mon-msg] idx " << objIndex << " msg " << message
+			          << " handler " << (found ? defClass : -1);
+			for (size_t a = 0; a < args.size(); ++a)
+				std::cerr << " arg" << a << "=" << args[a];
+			std::cerr << "\n";
+		}
+	}
+	if (!found)
 		return -1; // no handler anywhere in the hierarchy (matches RT_execute)
 	return runHandler(defClass, offset, objIndex, message, args);
 }
