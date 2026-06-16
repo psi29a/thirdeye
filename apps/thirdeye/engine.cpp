@@ -181,9 +181,25 @@ struct TransferState {
 	static constexpr int kItemRecSize = 14;
 
 	int32_t itemAttrib(int pc, int slot, int attr) const {
+		// The bytecode asks for EOB3 W:inventory slot `slot` and places the item
+		// there; "show equipment screen" draws each slot at screen-cell slot+12, so
+		// EOB3 puts BACKPACK at 0-13 and WORN equipment at 14-25. CREATE.SAV (the
+		// EOB1/2 char-gen order) instead stores worn gear at slots 0-6 (+17). Without
+		// a remap the identity placement dumps everything in the backpack, so the
+		// party arrives unequipped. Map the EOB3 slot the bytecode wants to the
+		// CREATE.SAV slot that actually holds that piece of gear.
+		static const int eob3ToCreate[26] = {
+			// EOB3 backpack 0-13 <- CREATE.SAV backpack slots
+			7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 18, 19, 20, 21,
+			// EOB3 equipment 14-25 <- CREATE.SAV worn slots (0-6 = the equipped row)
+			0, 1, 2, 3, 4, 5, 6, 17, 22, 23, 24, 25,
+		};
+		if (pc < 0 || slot < 0 || slot >= kInvSlots)
+			return attr == 1 ? -1 : 0;
+		int csSlot = eob3ToCreate[slot];
 		size_t slotOff = static_cast<size_t>(kPcBase + 2 + pc * kPcStride +
-		                                     kInvRecOff + slot * 2);
-		if (pc < 0 || slot < 0 || slot >= kInvSlots || slotOff + 1 >= data.size())
+		                                     kInvRecOff + csSlot * 2);
+		if (slotOff + 1 >= data.size())
 			return attr == 1 ? -1 : 0;
 		int id = data[slotOff] | (data[slotOff + 1] << 8);
 		if (id < kItemIdBase) // 0 = empty slot (party items all start at 434)
@@ -433,13 +449,16 @@ bool loadDungeonLevel(int level, VM::ObjectSystem &objects,
 			std::memcpy(p, maze.data(), maze.size());
 		// Debug: dump the maze cells around (15,15) (the new-game start) to inspect
 		// wall layout. lvlmap is 32x32, 1 byte/cell (0x00=wall, 0xff=floor).
-		if (std::getenv("THIRDEYE_MAZE")) {
-			std::cerr << "[maze] cells x=11..19, y=11..19 (row=y):\n";
-			for (int y = 11; y <= 19; ++y) {
+		if (const char *mz = std::getenv("THIRDEYE_MAZE")) {
+			int x0 = 11, y0 = 11, x1 = 19, y1 = 19; // default: the (15,15) start area
+			std::sscanf(mz, "%d,%d,%d,%d", &x0, &y0, &x1, &y1);
+			std::cerr << "[maze] x=" << x0 << ".." << x1 << " y=" << y0 << ".." << y1
+			          << " (row=y; 0=wall 255=floor):\n";
+			for (int y = y0; y <= y1; ++y) {
 				std::cerr << "  y" << y << ":";
-				for (int x = 11; x <= 19; ++x) {
+				for (int x = x0; x <= x1; ++x) {
 					int idx = y * 32 + x;
-					std::cerr << " " << (idx < (int)maze.size()
+					std::cerr << "\t" << (idx < (int)maze.size()
 					    ? (int)maze[idx] : -1);
 				}
 				std::cerr << "\n";
@@ -457,6 +476,16 @@ bool loadDungeonLevel(int level, VM::ObjectSystem &objects,
 		// gradient (near->far wall shading) for 176-191, loaded at base 0xB0.
 		if (gfx && pal >= 0)
 			gfx->setPaletteRange(res.getAsset(static_cast<uint16_t>(pal)), 0xB0);
+		// Creature palettes (THIRDEYE_TESTMON bring-up): each monster sprite has its
+		// own palette loaded into a high range -- e.g. "Sword wraith palette" (337)
+		// at indices 192-223. The native change_level loads these per level; load the
+		// wraith's here so the rendered creature is coloured, not placeholder-white.
+		// (TODO: derive per-creature from the level's monster set instead of hard-coding.)
+		if (gfx && std::getenv("THIRDEYE_TESTMON")) {
+			int cp = res.getResourceNumber("Sword wraith palette");
+			if (cp >= 0)
+				gfx->setPaletteRange(res.getAsset(static_cast<uint16_t>(cp)), 0xC0);
+		}
 		std::cout << "  [loadDungeonLevel " << level << " = \"" << mapName << "\" ("
 		          << area << ": map " << map << ", walls " << walls << ", palette "
 		          << pal << ")]" << std::endl;
@@ -526,24 +555,75 @@ int loadLevelObjects(int level, VM::ObjectSystem &objects,
 			setS(kEntities, 3, y, 1);          // y
 			setS(kEntities, 4, level, 1);      // lvl
 			setS(kFeatures, 0, df, 2);         // decflags (doors/decorations)
-			// Monster? (NPC subclass) -- classStaticPtr(NPC) only resolves for those.
-			bool isMonster = false;
-			try {
-				isMonster = objects.classStaticPtr(id, kNPC, 0, 1) != nullptr;
-			} catch (const std::exception &) {}
+			// Monster? = the record's class has NPC (1622) in its parent chain. (The
+			// old test -- classStaticPtr(id, kNPC) != nullptr -- mis-fired: that returns
+			// a pointer regardless of whether NPC is actually an ancestor, so stairs/
+			// doors were flagged as monsters too.)
+			auto isNpcClass = [&](int c) {
+				for (int cur = c, guard = 0; cur > 0 && guard < 16; ++guard) {
+					if (cur == static_cast<int>(kNPC))
+						return true;
+					const VM::SopClass *sc = objects.classByNumber(
+					    static_cast<uint16_t>(cur));
+					if (sc == nullptr)
+						break;
+					cur = sc->header.parent;
+				}
+				return false;
+			};
+			bool isMonster = isNpcClass(cls);
+			// THIRDEYE_TESTMON: enable monster rendering (the creature-draw bring-up).
+			// Off by default -- the NPC draw needs full creature state and currently
+			// garbles, so monsters load (for combat) but don't render until ready.
+			static const bool kRenderMonsters =
+			    std::getenv("THIRDEYE_TESTMON") != nullptr;
 			if (isMonster) {
-				setS(kNPC, 3, hp, 2); // hitpts
-				setS(kNPC, 7, df, 1); // fdir (= the +14 sub-cell pos/facing)
-				setS(kNPC, 9, 0, 1);  // stage (idle frame)
+				setS(kNPC, 3, hp, 2);     // hitpts
+				setS(kNPC, 7, 0, 1);      // fdir (creature facing; default 0)
+				setS(kNPC, 9, 0, 1);      // stage (idle frame)
+				// mission@2 default 0: the monster renders + faces the party (its frame
+				// follows party facing via table482 -- visible "animation" as you move
+				// around it). Idle-bob ("bounce", M:86) only applies to non-bit-64
+				// creatures (the wraith skips it); action-frame animation is AI-driven
+				// (mission=1 -> watch-for-party -> my turn), wired with the attack flow.
+				// entities: B:region@5 = sub-cell quadrant (the +14 value, 0-3); the
+				// draw buckets by table546[party_fdir*5 + region]. W:next@6 links the
+				// cell's monster chain -- set at link time below (prepend to the head).
+				setS(kEntities, 5, df & 3, 1);
+				// Seed W:NPCstat (NPC@0) from the creature's own report(1) -- the stat
+				// flags the draw reads to choose the sprite size tier (the native
+				// monster-loader does this; our create_program doesn't). report(4) gives
+				// the sprite sheet at draw time (e.g. sword wraith -> bitmap 197).
+				int32_t npcstat = 0;
+				try { npcstat = objects.send(id, 18, { 1 }); } // report(1)
+				catch (const std::exception &) {}
+				setS(kNPC, 0, npcstat, 2);
+				if (kRenderMonsters)
+					std::cerr << "[mon] id " << id << " class " << cls << " @(" << x
+					          << "," << y << ") hp " << hp << " NPCstat 0x" << std::hex
+					          << npcstat << std::dec << " sub " << (df & 3) << "\n";
 			}
-			// Link into the cell grid so "draw objects" renders it -- EXCEPT monsters:
-			// their NPC draw needs more creature state than we set yet (sprite/anim/
-			// sub-cell), which garbles the view. Create them (for future combat) but
-			// don't render until the creature subsystem is done.
-			uint8_t *cellp = isMonster ? nullptr
-			                           : objects.classStaticPtr(
-			                                 dn, kDungeonClass, 1024 + (y * 64 + x * 2), 2);
+			// Link into the cell grid so "draw objects" renders it. lvlobj has 3
+			// planes (plane*2048 + y*64 + x*2): features/decorations (doors) go in
+			// PLANE 0, but MONSTERS go in PLANE 2 -- NPC.draw walks the cell's object
+			// chain in plane 2 (the disassembly reads `lvlobj[2<<11 + ...]`), so a
+			// monster linked in plane 0 gets a `draw` from "draw objects" but finds an
+			// empty chain and renders nothing. Monsters are skipped unless
+			// THIRDEYE_TESTMON (creature-draw bring-up, see above).
+			uint32_t plane = isMonster ? 4096u : 0u;
+			uint8_t *cellp = (isMonster && !kRenderMonsters)
+			                     ? nullptr
+			                     : objects.classStaticPtr(
+			                           dn, kDungeonClass,
+			                           1024 + plane + (y * 64 + x * 2), 2);
 			if (cellp) {
+				// Monsters: prepend to the cell's link-chain so up to 4-per-cell all
+				// render -- the new monster's W:next@6 points at the previous head, then
+				// it becomes the head. (Doors/features in plane 0 stay single per cell.)
+				if (isMonster) {
+					int head = cellp[0] | (cellp[1] << 8); // current head (0xFFFF = none)
+					setS(kEntities, 6, head == 0xFFFF ? -1 : head, 2);
+				}
 				cellp[0] = id & 0xFF;
 				cellp[1] = (id >> 8) & 0xFF;
 			}
@@ -609,6 +689,27 @@ VM::Value defaultRuntimeCall(VM::ObjectSystem &objects, VM::EventSystem &events,
 		return args[0] < args[1] ? args[0] : args[1];
 	if (fn == "maxv" && args.size() >= 2)
 		return args[0] > args[1] ? args[0] : args[1];
+	// dice(count, sides, bonus): roll `count` d`sides` + bonus (RTCODE.C). Used
+	// pervasively -- to-hit (1d20), damage, monster bounce/AI. Stubbed -> 0 it made
+	// every combat roll a 0, so attacks ALWAYS missed (the to-hit `roll >= target`
+	// could never pass). rnd(n): 0..n-1. Backed by a shared PRNG.
+	if (fn == "dice" && args.size() >= 2) {
+		static std::mt19937 rng(
+		    static_cast<uint32_t>(std::chrono::steady_clock::now()
+		                              .time_since_epoch().count()));
+		int count = static_cast<int>(args[0]);
+		int sides = static_cast<int>(args[1]);
+		int bonus = args.size() > 2 ? static_cast<int>(args[2]) : 0;
+		int sum = bonus;
+		for (int i = 0; i < count && sides > 0; ++i)
+			sum += 1 + static_cast<int>(rng() % static_cast<uint32_t>(sides));
+		return sum;
+	}
+	if (fn == "rnd" && args.size() >= 1) {
+		static std::mt19937 rng(0x9e3779b9u);
+		int n = static_cast<int>(args[0]);
+		return n > 0 ? static_cast<int>(rng() % static_cast<uint32_t>(n)) : 0;
+	}
 	// --- event system (EVENT.C) -- real, and intentionally quiet: the kernel's
 	// main loop calls these in a tight spin, so logging each would bury the
 	// trace. dispatchEvent itself logs the messages it delivers when verbose.
@@ -651,6 +752,61 @@ VM::Value defaultRuntimeCall(VM::ObjectSystem &objects, VM::EventSystem &events,
 					if (uint8_t *p = objects.classStaticPtr(kn, 1382, 246, 1))
 						lvl = *p ? *p : 1;
 				loadLevelObjects(lvl, objects, res);
+			}
+		}
+		// Creature notes: the 3D view redraws ~4 Hz even when idle (the kernel "timer
+		// tick" sends "draw view" gated on B:update@249), so monsters re-render live --
+		// the "0 redraws idle" seen earlier was just the runtime trace being off without
+		// --debug. The wraith re-faces the party as you move (relative facing); it has
+		// no idle bob (NPCstat bit 64 skips "bounce"); action-frame animation is part of
+		// the AI ("my turn"), exercised by the attack below.
+		// Debug (THIRDEYE_ATTACK): drive the party->monster attack. Enable the kernel's
+		// auto-attack (B:auto_button@260) and SEND "auto-attack" (M:208) periodically;
+		// it walks the front-row player[] and SENDs each PC "use/attack request" (hand
+		// 16=right/20=left, flag 7) -> acquire NPC target -> roll to hit -> roll for
+		// damage -> the monster's "take damage" -> "die". Logs the first live monster's
+		// HP so we can watch it drop. (Stand-in for the weapon-click/auto-attack UI.)
+		if (std::getenv("THIRDEYE_ATTACK")) {
+			static int af = 0;
+			if (++af % 4 == 0) {
+				// Each PC's own B:auto_attack@75 must be set, or use/attack request
+				// (flag 7) bails before sending "use"(M:41) to the weapon (the char-gen
+				// transfer leaves it 0). Then the kernel auto-attack drives the swing.
+				for (int pc : objects.objectsOfClass(1369))
+					try {
+						if (uint8_t *aa = objects.classStaticPtr(pc, 1369, 75, 1))
+							*aa = 1; // B:auto_attack -- else use/attack request bails
+						// Clear both hands' recovery status (B:h_stat@67, 2 bytes) so the
+						// PC swings each tick instead of one-and-done.
+						if (uint8_t *hs = objects.classStaticPtr(pc, 1369, 67, 2))
+							hs[0] = hs[1] = 0;
+					} catch (const std::exception &) {}
+				int kn = objects.firstObjectOfClass(1382);
+				if (kn >= 0) {
+					if (uint8_t *ab = objects.classStaticPtr(kn, 1382, 260, 1))
+						*ab = 1; // auto_button on
+					try { objects.send(kn, 208, {}); } // "auto-attack"
+					catch (const std::exception &) {}
+				}
+				// Log the front wraiths' HP (the (11,3) group = ids 1758-1760).
+				for (int mon = 1758; mon <= 1760; ++mon) {
+					try {
+						if (uint8_t *hp = objects.classStaticPtr(mon, 1622, 3, 2))
+							std::cerr << "[atk] mon " << mon << " hp "
+							          << (hp[0] | (hp[1] << 8)) << "  ";
+					} catch (const std::exception &) {}
+				}
+				std::cerr << "\n";
+				// PC hand contents: W:inventory[16]=right, [20]=left (PC@81, words).
+				for (int pc = 32; pc <= 35; ++pc)
+					try {
+						uint8_t *r = objects.classStaticPtr(pc, 1369, 81 + 16 * 2, 2);
+						uint8_t *l = objects.classStaticPtr(pc, 1369, 81 + 20 * 2, 2);
+						if (r && l)
+							std::cerr << "[hand] pc " << pc << " R="
+							          << static_cast<int16_t>(r[0] | (r[1] << 8)) << " L="
+							          << static_cast<int16_t>(l[0] | (l[1] << 8)) << "\n";
+					} catch (const std::exception &) {}
 			}
 		}
 		// Debug (THIRDEYE_TESTOBJ): once the game loop is running (so this is AFTER
