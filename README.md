@@ -95,14 +95,69 @@ TODO
 CHANGELOG
 
 0.87.0:
-* SOP VM - all 88 opcodes (except BRK), objects/SEND/PASS + N:PARENT inheritance, the full variable model (auto/static/table/extern, arrays, tagged effective addresses), the cross-object link layer.
-* Event system & host loop — EVENT.C/INTRFACE.C ports, region input, the event-driven SDL pump + coalesced timer.
-* Runtime library — the CALL targets wired to graphics/text/dungeon (draw_bitmap with mirror, fill_rectangle, step_X/Y/FDIR, change_level, etc.).
-* Rendering — the "1.10" bitmap + "2.x" font decoders.
-* Boot/menu/gameplay — booting start through the peekmem state machine, the interactive title menu, char-gen party transfer (RE'd CREATE.SAV/ITEM.DAT), the walkable 14-level dungeon with level objects, the HUD/compass/equipment screens, layout-independent keys.
-* Spanish localization fix (issue #18) — the old-bitmap RLE decoder read each span's X as one byte and tested end-of-line as == 0x80, but X is 16-bit LE with bit 15 as that flag — so any span at x ≥ 256 (the translated "Reward" bitmap 189, text reflowed to x=283) desynced the decoder (rle_width=-21). Now reads X as u16 and masks bit 15.
-* Build/platform — C++20, de-Boosted, CMake, GitHub Actions CI on all three OSes, MSVC support, sound device enumeration, and CLI flags.
+Thirdeye grows from "plays the intro" into a SOP bytecode engine that boots Eye of
+the Beholder III from the original game data, renders its interactive menu, and walks
+a populated 3D dungeon -- all driven by the game's own AESOP bytecode.
 
+* SOP virtual machine (new): a from-scratch port of the AESOP/32 bytecode dispatcher.
+  All 88 opcodes (0x00-0x57) except BRK -- branches (BRT/BRF/BRA/CASE), arithmetic/
+  logic/compare, constants, JSR/RTS procedures, RCRS/CALL runtime calls.
+* Object & message system: class hierarchy resolved from each code object's N:PARENT,
+  instances, SEND/PASS dispatch with THIS and parameter passing, per-instance static
+  storage with base-class-first layout for inherited statics.
+* Variable model: auto (local/param), static (object state), table (constant) and
+  extern (cross-object) scalars + arrays; AIM/AIS array indexing; a unified tagged
+  effective-address model (LECA/LEAA/LESA/LETA/LEXA across code/stack/static/extern).
+* Cross-object link layer (port of RTLINK.C construct_thunk), resolved lazily + cached.
+* Event system (port of EVENT.C): the FIFO event queue + notify list that are the
+  engine's main loop -- notify/post_event/dispatch_event/drain/flush, app-vs-system
+  event priority, destroy_object -> cancel_entity_requests.
+* Windowing & region input (port of INTRFACE.C): assign_subwindow regions, mouse
+  hit-testing, enter/leave/click region events, get_x1/y1/x2/y2.
+* Event-driven host loop: SDL mouse/keyboard -> AESOP events, a coalesced ~30 Hz
+  SYS_TIMER heartbeat, frame-paced presentation, yields when idle (~6% CPU).
+* Runtime-function library wired to thirdeye's subsystems: set_palette, draw_bitmap
+  (with the GIL2VFX X/Y mirror flag), refresh_window, color/light_fade,
+  set_mouse_pointer, fill_rectangle, load_resource; text_window/text_style/text_color/
+  text_xy/print/sprint (printf-style %d/%s with word-wrap + clipping); peekmem/pokemem;
+  absv/minv/maxv; launch; create_program/create_object/destroy_object; step_X/Y/FDIR
+  movement geometry; change_level.
+* AESOP/16 "1.10" VFX shape-table bitmap decoder and "2." VFX font decoder -- EYE.RES
+  art and fonts render natively (the formats daesop's -cob couldn't bridge).
+* Boot: drives EOB3's `start` object through its peekmem(1264) "mode" state machine and
+  renders the title menu ("Choose Your Destiny") entirely from SOP bytecode -- real art/
+  palette/text, hover highlight, mouse + keyboard. Menu choices act via the AESOP program
+  chain (Continue -> in-game; Abandon -> quit; Introduction -> cinematic; Gather a New
+  Party -> char-gen), with INTRO.GFF cinematic playback.
+* Char-gen party transfer: reverse-engineered CREATE.SAV (and the EOB1 14-byte ITEM.DAT
+  format), so "Gather a New Party"/--skip-menu enters the game with the real default
+  party (Bob/Carol/Ted/Alice) -- portraits, names, HP, ability scores and starting gear.
+* Playable dungeon: the 3D view renders across all 14 levels (four tilesets derived from
+  each map's area name -- Mausoleum/Forest/Ruins/Marble), with correct stone palettes and
+  view-window clipping. Movement works end to end -- WASD/QE and arrow keys plus the
+  on-screen compass arrows walk/turn/strafe with real maze collision; ESC/C open the camp
+  menu. The whole level (doors, levers, stairs, decorations, monsters -- 231 in LVL01)
+  loads from LVLnn.TMP and draws in the view.
+* In-game HUD: dungeon view, four character panels (portrait + name + HP), the compass
+  with a rotating N/E/S/W facing indicator, the movement compass-arrows, and CAMP.
+  Clicking a portrait opens that character's equipment screen (paper-doll + real gear)
+  and the character-stats screen.
+* Keyboard bindings use physical SDL scancodes, so movement lands on the same keys under
+  QWERTY/AZERTY/QWERTZ.
+* daesop: fixed conversion of localized (Spanish) EOB3 -- issue #18. The old-bitmap RLE
+  decoder read each span's X position as a single byte and tested the end-of-line flag as
+  "== 0x80"; but X is a 16-bit little-endian value whose bit 15 is that flag, so any span
+  starting at x >= 256 (e.g. the translated "Reward" bitmap 189, whose reflowed text
+  begins at x=283) desynced the decoder ("rle_width=-21"). Now reads X as u16 and masks
+  bit 15 as the flag. daesop also now finds bytecode.def beside its own binary; added
+  daesop unit tests.
+* Build & platform: ported to C++20, dropped the Boost dependency (std::ifstream/
+  filesystem), builds with CMake + Ninja on Linux, macOS and Windows (SDL2, OpenAL,
+  WildMIDI). GoogleTest + CLI11 are auto-fetched via FetchContent. GitHub Actions CI
+  (replacing Travis) builds and runs the VM/resource/daesop unit tests on all three
+  platforms; MSVC build + warning cleanups. Sound now enumerates devices and works on
+  Windows as well as Linux/macOS. CLI: positional <game-data|.RES> plus --vm/--skip-menu/
+  --skip-intro/--debug/--scale.
 
 0.86.0:
 * First official release of Thirdeye.
