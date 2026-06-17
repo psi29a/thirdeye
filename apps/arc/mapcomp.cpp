@@ -180,7 +180,7 @@ void MAP_compile(MAP_class *MAP) {
 	height = ((*(UBYTE *) (prop + 2)) * 256) + (*(UBYTE *) (prop + 3));
 
 	body = (UBYTE*) IFF_property("BODY", file, flen);
-	if (prop == NULL) {
+	if (body == NULL) {
 		MAP_error(MAP->IDR->RS, MSG_BFT, NULL);
 		mem_free(file);
 		return;

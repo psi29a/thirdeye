@@ -419,13 +419,14 @@ std::map<std::string, std::string> RESOURCES::Resource::getImports(
 
 void RESOURCES::Resource::showResources() {
 	std::cout << "NUMBER	START	OFFSET	SIZE	DATE			ATTRIB	NAME" << std::endl;
-	for (uint16_t i = 0; i < mEntryHeaders.size(); i++) {
-		std::cout << mAssets[i].id << "	" << mAssets[i].start << "	"
-				<< mAssets[i].offset << "	" << mAssets[i].size << "	"
-				<< getDate(mAssets[i].date) << "	" << mAssets[i].attributes
-				<< "	" << mAssets[i].name << "	" << mAssets[i].table1 << "	"
-				<< mAssets[i].table2
-				//<< "	" << mAssets[i].data.size()
+	for (size_t i = 0; i < mEntryHeaders.size(); i++) {
+		const auto &a = mAssets[static_cast<uint16_t>(i)];
+		std::cout << a.id << "	" << a.start << "	"
+				<< a.offset << "	" << a.size << "	"
+				<< getDate(a.date) << "	" << a.attributes
+				<< "	" << a.name << "	" << a.table1 << "	"
+				<< a.table2
+				//<< "	" << a.data.size()
 				<< std::endl;
 	}
 }

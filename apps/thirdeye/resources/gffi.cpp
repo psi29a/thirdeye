@@ -66,7 +66,7 @@ RESOURCES::GFFI::GFFI(std::filesystem::path gffiPath) {
 		//if (mGFFIBlockHeader.tag[3] == 0x20)
 		mGFFIBlockHeader.tag[3] = '\0';
 
-		for (uint16_t elements = 0;
+		for (uint32_t elements = 0;
 				elements < mGFFIBlockHeader.number_of_elements; elements++) {
 
 			GFFIBlock mGFFIBlock;

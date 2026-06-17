@@ -39,14 +39,12 @@ extern BYTE is_namechar[256];
 
 // Misc. macros
 #define arysize(x) (sizeof((x)) / sizeof((x)[0]))
-#define MIN(a,b) \
-({ __typeof__ (a) _a = (a); \
-   __typeof__ (b) _b = (b); \
- _a < _b ? _a : _b; })
-#define MAX(a,b) \
-({ __typeof__ (a) _a = (a); \
-   __typeof__ (b) _b = (b); \
- _a > _b ? _a : _b; })
+// Portable MIN/MAX. The original used GNU statement-expressions + __typeof__
+// to avoid double-evaluating side-effecting args; MSVC supports neither, and
+// the only caller in arc passes plain integer locals (no side effects), so the
+// classic ternary form is safe here.
+#define MIN(a,b) ((a) < (b) ? (a) : (b))
+#define MAX(a,b) ((a) > (b) ? (a) : (b))
 
 // Memory heap management
 
@@ -96,7 +94,7 @@ void * norm(void *farptr);
 void * add_ptr(void *farptr, LONG offset);
 LONG ptr_dif(void *sub2, void *sub1);
 
-WORD log2(ULONG value);
+WORD arc_log2(ULONG value);
 
 ULONG ascnum(BYTE *string, UWORD base);
 BYTE *str(ULONG value);
@@ -108,6 +106,7 @@ ULONG error_message_count(void);
 void report(UWORD errtype, BYTE *prefix, BYTE *msg, ...);
 void summary(void);
 void abend(void);
+void close_all_files(void);
 
 #ifdef __cplusplus
 }

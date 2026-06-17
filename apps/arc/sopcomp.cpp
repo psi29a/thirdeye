@@ -410,7 +410,7 @@ UWORD SOP_emit_byte(SOP_class *SOP, ULONG val) {
 void SOP_emit_array_index(SOP_class *SOP, ULONG dsize) {
 	WORD log;
 
-	if ((log = log2(dsize)) != -1)
+	if ((log = arc_log2(dsize)) != -1)
 		if (log == 0)
 			SOP_emit_opcode(SOP, OP_ADD);
 		else {
@@ -634,7 +634,7 @@ ULONG SOP_resource_name_entry(SOP_class *SOP) {
 
 	val = RS_current_ROED_entry(SOP->RS, LEX_lexeme(SOP->LEX, LEX_CUR));
 
-	if (val == -1L) {
+	if (val == (ULONG) -1L) {
 		val = RS_get_ROED_entry(SOP->RS, LEX_lexeme(SOP->LEX, LEX_CUR));
 
 		if (strcmp(LEX_lexeme(SOP->LEX, LEX_CUR), SOP->name))
@@ -679,7 +679,7 @@ WORD SOP_export_symbol(SOP_class *SOP, ULONG symbol, ULONG value, BYTE type,
 	if (type == 'M')
 		sym = str(symbol);
 	else
-		sym = (BYTE *) symbol;
+		sym = (BYTE *) (uintptr_t) symbol;
 
 	def = CSS_construct(NULL);
 
@@ -1115,7 +1115,7 @@ void SOP_compile_send(SOP_class *SOP, PVAL *PV) {
 	LEX_fetch(SOP->LEX);
 
 	if (LEX_type(SOP->LEX, LEX_CUR) != TTYP_STRLIT) {
-		msgnum = -1U;
+		msgnum = (UWORD) -1;
 		SOP_basic_error(SOP, MSG_BMN);
 	} else
 		msgnum = RS_get_MSGD_entry(SOP->RS, LEX_lexeme(SOP->LEX, LEX_CUR));
@@ -1333,7 +1333,7 @@ void SOP_compile_index(SOP_class *SOP, PVAL *PV) {
 
 	ndims = CSS_fetch_num(CSS);
 
-	if ((ndims == 0) || (ndims == -1L))
+	if ((ndims == 0) || (ndims == (ULONG) -1L))
 		SOP_basic_error(SOP, MSG_IUB);
 
 	if (ndims == 1) {
@@ -2102,7 +2102,7 @@ void SOP_expr_primary(SOP_class *SOP, PVAL *PV) {
 
 			str = LEX_lexeme(SOP->LEX, LEX_CUR);
 
-			for (i = 0; i < strlen(str); i++)
+			for (i = 0; i < (UWORD) strlen(str); i++)
 				SOP_emit_byte(SOP, str[i]);
 			SOP_emit_byte(SOP, 0);
 
@@ -2844,7 +2844,7 @@ void SOP_message_statement(SOP_class *SOP) {
 	LEX_fetch(SOP->LEX);
 
 	if (LEX_type(SOP->LEX, LEX_CUR) != TTYP_STRLIT) {
-		msgnum = -1U;
+		msgnum = (UWORD) -1;
 		SOP_basic_error(SOP, MSG_BMN);
 	} else
 		msgnum = RS_get_MSGD_entry(SOP->RS, LEX_lexeme(SOP->LEX, LEX_CUR));
