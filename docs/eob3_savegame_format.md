@@ -62,7 +62,7 @@ Mostly unmapped. Known:
 
 ### 2.2 Character records — 6 × 627 bytes, starting at offset 677
 
-```
+```text
 PC1 @677  PC2 @1304  PC3 @1931  PC4 @2558  NPC1 @3185  NPC2 @3812   (stride 627)
 ```
 Slots 0–3 are the player party, 4–5 are joined NPCs. The "Quick Start Party":
@@ -137,7 +137,7 @@ coincidence: `12514 = 500×25 + 14` happens to factor for LVL01 only.)
 
 The file is a back-to-back sequence of object records. Each record:
 
-```
+```c
 +0  u8   type/flag — object kind; influences record size (0x1a/0xff seen on actives)
 +1  u16  id        — per-level object id, sequential from 1000 (1000,1001,1002,…)
 +3  u16  CLASS     — the SOP object class number, stored DIRECTLY (the key find!)
@@ -171,7 +171,7 @@ those were really ~26-byte door records.)
 
 ### 3.2 The 8-byte object slot (the common case)
 
-```
+```c
 +0 u8  type        (0x00/0xff = an empty/inactive slot)
 +1 u16 id
 +3 u16 next/link   (0xffff = null)   ─┐ inactive slots read `…ff ff ff ff 00`
@@ -198,8 +198,8 @@ The id space (1000+) **is** the set of SOP object ids the native
 a live SOP object (a door / monster / item / decoration instance, class chosen by
 the type byte), linked into the dungeon's **`lvlobj`** spatial table (`W:lvlobj`,
 32×32×3 words — per cell: object-list head + links). The dungeon's *draw objects* /
-*impedance* / *collide* handlers then read `lvlobj`, so this is exactly the data that
-makes **doors, items on the floor, and monsters** appear + interact. thirdeye loads
+*impedance* / *collide* handlers then read `lvlobj` — this is what drives **doors,
+items on the floor, and monsters** to appear + interact. thirdeye loads
 `lvlmap` (walls) but not `lvlobj` yet, so the dungeon is currently object-empty.
 
 **Still to do for in-game objects:** (a) finish the per-type field map (door
