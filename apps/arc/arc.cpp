@@ -76,7 +76,7 @@ int main(int argc, BYTE *argv[]) {
 	WORD c_threshold;
 	LONG n;
 	UWORD flags;
-	UWORD i, j;
+	size_t i, j;
 
 	setbuf(stdout, NULL);
 
@@ -101,7 +101,7 @@ int main(int argc, BYTE *argv[]) {
 
 	atexit(summary);
 
-	for (i = 1; i < argc; i++)
+	for (i = 1; i < (size_t) argc; i++)
 		if ((argv[i][0] != '/') && (argv[i][0] != '-'))
 			if (strlen(SCR_filename))
 				report(E_FATAL, NULL, MSG_ICO);

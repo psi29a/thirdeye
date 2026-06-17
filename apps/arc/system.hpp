@@ -108,6 +108,7 @@ ULONG error_message_count(void);
 void report(UWORD errtype, BYTE *prefix, BYTE *msg, ...);
 void summary(void);
 void abend(void);
+void close_all_files(void);
 
 #ifdef __cplusplus
 }

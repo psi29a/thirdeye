@@ -29,7 +29,7 @@
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <sys/types.h>
-#include <unistd.h>
+#include "arc_compat.hpp"
 
 #include "defs.hpp"
 #include "system.hpp"

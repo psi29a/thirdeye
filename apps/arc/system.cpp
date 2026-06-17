@@ -33,10 +33,9 @@
 #include <stdlib.h>
 #include <ctype.h>
 #include <fcntl.h>
-#include <sys/io.h>
 #include <limits.h>
 #include <sys/stat.h>
-#include <unistd.h>
+#include "arc_compat.hpp"
 
 //#include "c:\tools\x32\include\x32.h"
 
@@ -159,7 +158,7 @@ void mem_init(void) {   //TODO: no longer necessary, let malloc handle it
 
 void mem_shutdown(void) {
 	if (checksum != 0L) {
-		report(E_FAULT, NULL, MSG_HER);
+		report(E_FAULT, NULL, (BYTE *) MSG_HER, (unsigned) checksum);
 		abend();
 	}
 }
@@ -257,7 +256,7 @@ LONG file_size(BYTE *filename) {
 	fseek(handle, 0, SEEK_END);
 	len = ftell(handle);
 
-	if (len == -1L)
+	if (len == (ULONG) -1L)
 		system_err = CANT_READ_FILE;
 
 	fclose(handle);
@@ -272,7 +271,7 @@ ULONG *read_file(BYTE *filename, void *dest) {
 	ULONG *buf, *mem;
 
 	len = file_size(filename);
-	if (len == -1L) {
+	if (len == (ULONG) -1L) {
 		system_err = FILE_NOT_FOUND;
 		return (NULL);
 	}
@@ -586,8 +585,8 @@ BYTE *ASCII_time(ULONG timestamp) {
 
 	yr = (timestamp & 0x7fL) + 1980L;
 
-	sprintf(text, "%.02du-%s-%.04lu %.02du:%.02du:%.02du", day,
-			months[(UWORD) mon], yr, hr, min, sec);
+	sprintf(text, "%.02u-%s-%.04u %.02u:%.02u:%.02u", (unsigned) day,
+			months[(UWORD) mon], (unsigned) yr, (unsigned) hr, (unsigned) min, (unsigned) sec);
 
 	return (text);
 }
@@ -690,7 +689,7 @@ ULONG ascnum(BYTE *string, UWORD base) {
 	UWORD i, j;
 	ULONG total = 0L;
 
-	for (i = 0; i < strlen(string); i++) {
+	for (i = 0; i < (UWORD) strlen(string); i++) {
 		for (j = 0; j < base; j++)
 			if (toupper(string[i]) == "0123456789ABCDEF"[j]) {
 				total = (total * (ULONG) base) + (ULONG) j;
@@ -742,8 +741,22 @@ void set_output_filename(BYTE *filename) {
 }
 
 /*************************************************************/
-void abend(void) {
+// Portable replacement for the GNU-extension fcloseall(): flush all open
+// streams so a follow-up unlink/exit sees no buffered writes. (MSVC has
+// _fcloseall; glibc has fcloseall; other libcs have neither.)
+void close_all_files(void) {
+#if defined(__GLIBC__)
 	fcloseall();
+#elif defined(_MSC_VER)
+	_fcloseall();
+#else
+	fflush(NULL);
+#endif
+}
+
+/*************************************************************/
+void abend(void) {
+	close_all_files();
 
 	if (output_fn != NULL)
 		unlink(output_fn);
@@ -764,7 +777,7 @@ void report(UWORD errtype, BYTE *prefix, BYTE *msg, ...) {
 	if (errtype < errorlevel)
 		return;
 
-	printf(errtypes[errtype]);
+	printf("%s", errtypes[errtype]);
 	if (prefix != NULL)
 		printf(" %s", prefix);
 	else

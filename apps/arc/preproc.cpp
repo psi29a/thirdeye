@@ -23,12 +23,11 @@
 //��                                                                        ��
 //����������������������������������������������������������������������������
 
-#include <sys/io.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/types.h>
-#include <unistd.h>
+#include "arc_compat.hpp"
 
 
 #include "defs.hpp"
@@ -68,11 +67,7 @@ enum {
 static BYTE *TF_line_info(TF_info *TF) {
 	static BYTE info[256];
 
-	sprintf(info, TF->name);
-	strcat(info, " ");
-	//ultoa(TF->line,&info[strlen(info)],10);
-	sprintf(&info[strlen(info)], "%d", TF->line);
-	strcat(info, ": ");
+	snprintf((char*)info, sizeof(info), "%s %d: ", TF->name, TF->line);
 
 	return (info);
 }
@@ -289,7 +284,7 @@ void PP_process(PP_class *PP) {
 	PP->cur.handle = read_text_file(PP->cur.name);
 	if (clear_system_error()) {
 		if (PP->depth == 1) {
-			fcloseall();
+			close_all_files();
 			unlink(PP->out.name);
 			report(E_FATAL, NULL, MSG_FNF, PP->cur.name);
 		} else {
@@ -462,7 +457,7 @@ void PP_process(PP_class *PP) {
 				strcat(outbuf, text);                // expanded macro)
 				out += strlen(text);
 
-				for (j = 0; j < strlen(text); j++)
+				for (j = 0; j < (WORD) strlen(text); j++)
 					chr_cnt += (!is_whitespace[text[j]]);
 				break;
 
@@ -623,7 +618,7 @@ void PP_process(PP_class *PP) {
 			if (j && (getenv(INC_NAME) != NULL))      // use inbuf for workspace
 					{
 				strcpy(inbuf, getenv(INC_NAME));
-				for (k = 0; k < strlen(inbuf); k++)
+				for (k = 0; k < (WORD) strlen(inbuf); k++)
 					if (inbuf[k] == ';')
 						inbuf[k] = 0;
 				strcat(inbuf, "\\");
