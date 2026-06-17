@@ -150,6 +150,26 @@ Value ObjectSystem::objectLookup(int index) const {
 	return index;
 }
 
+// The class number of the live object at `index`, or kFreeSlot if none.
+uint16_t ObjectSystem::classOf(int index) const {
+	if (index < 0 || static_cast<size_t>(index) >= mObjList.size())
+		return kFreeSlot;
+	return mObjList[index];
+}
+
+// True if `classNumber` is, or derives from, `baseClass` (walks N:PARENT).
+bool ObjectSystem::isSubclassOf(uint16_t classNumber, uint16_t baseClass) const {
+	for (int cur = classNumber, guard = 0; cur > 0 && guard < 32; ++guard) {
+		if (cur == static_cast<int>(baseClass))
+			return true;
+		const SopClass *sc = classByNumber(static_cast<uint16_t>(cur));
+		if (sc == nullptr)
+			break;
+		cur = sc->header.parent;
+	}
+	return false;
+}
+
 // Allocate (or replace) an instance at `index` (-1 = append). Does NOT send
 // MSG_CREATE -- that's the caller's choice (create_program/create_object do).
 int ObjectSystem::allocAt(int index, uint16_t classNumber) {
@@ -233,9 +253,12 @@ Value ObjectSystem::send(int objIndex, int message, std::vector<Value> args) {
 	static const bool kMonTrace = std::getenv("THIRDEYE_TESTMON") != nullptr;
 	// Combat/AI trace. Attack chain (any object -- PCs too): use/attack request(163),
 	// acquire NPC/feature target(77/78), roll to hit(71), roll for damage(43), take
-	// damage(82). Plus monster AI: watch(91), my turn(85), LoS(107), advance(99).
+	// damage(82), die(55), remove(22). Plus monster AI: watch(91), my turn(85),
+	// LoS(107), advance(99).
 	bool atkMsg = (message == 163 || message == 77 || message == 78 ||
-	               message == 71 || message == 43 || message == 82 || message == 162);
+	               message == 71 || message == 43 || message == 82 ||
+	               message == 162 || message == 55 || message == 22 ||
+	               message == 235); // 235 = All Attack button toggle
 	bool aiMsg = (objIndex >= 1750 && objIndex <= 1900 &&
 	              (message == 91 || message == 85 || message == 107 || message == 99));
 	if (kMonTrace && (atkMsg || aiMsg)) {

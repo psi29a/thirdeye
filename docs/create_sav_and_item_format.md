@@ -16,7 +16,7 @@ both use): https://moddingwiki.shikadi.net/wiki/Eye_of_the_Beholder_item.dat_For
 
 ## 1. CHARGEN/ITEM.DAT — base item table (EOB1 14-byte format, verified)
 
-```
+```c
 offset 0x00  u16  NumberOfItems            ( = 434 )
 offset 0x02  Item[NumberOfItems]           ( 14 bytes each )
 then         u16  NumberOfItemName          ( = 123 )
@@ -45,7 +45,7 @@ Item record (14 bytes):
 
 ## 2. CHARGEN/CREATE.SAV — the created party
 
-```
+```text
 0x000  header: "CHARGEN\0" "..\0" "aesop.exe\0" 0x00 0x01     (16 bytes)
 0x016  PC record [0]  (Bob)    345 bytes
 0x16f  PC record [1]  (Carol)  345 bytes
@@ -88,7 +88,7 @@ offset 11, so attr 14/16/18/… read the "current" byte of each pair.)
 26 word slots at record offset **219** (`attr ≈ 221..`): `inventory[slot]` =
 the item **id** (0 = empty). Default party:
 
-```
+```text
 Bob:   slot0=435 slot2=436 slot3=437 slot4=438 slot5=439 slot17=434
 Carol: slot0=441 slot2=442 slot3=443 slot4=444 slot17=440
 Ted:   slot0=446 slot1=450 slot2=447 slot3=448 slot4=449 slot5=451 slot6=452 slot17=445
@@ -103,7 +103,7 @@ The char-gen's items are stored as **EOB1 14-byte records** (same layout as
 ITEM.DAT §1) beginning at file **0x894**, with ids running from **434** (=
 ITEM.DAT's `NumberOfItems`). So:
 
-```
+```text
 item record for id N  =  file 0x894 + (N - 434) * 14
 ```
 
@@ -131,7 +131,7 @@ attr 1 returns **−1 for an empty slot** (id < 434), which the transfer treats 
 against column 0 and creates the column-1 object (a free slot from
 `PROCEDURE_1906`, ids 100..999). The map:
 
-```
+```text
 type:  0  1  2  5  7  9 10 11 12 13 14 15 16 18 19 20 21 22 24 25 27 28 29 30 31 32 34 35 39 41
 obj : 43 44 45 46 47 48 49 50 51 52 53 54 55 56 57 58 59 60 61 62 63 64 65 66 67 68  0  0  0 69
 ```
@@ -143,7 +143,7 @@ sword", 1349 "robe", …). Types 34/35/39 map to 0 (handled specially / no objec
 
 ## 5. The transfer flow (`xfer` SOP, classes 1380/1369)
 
-```
+```text
 start (CHGN) -> create xfer(1380) -> SEND "convert created party" (M:16)
   open_transfer_file("CHARGEN\CREATE.SAV")
   SEND "transfer" (M:15):
@@ -207,7 +207,7 @@ Despite the name this is the **main save file** (party, position, items). Offset
 below are from the goldbox.games thread (Ishad Nha, topic 3417), verified against
 `SAVEGAME/ITEMS.TMP` (the "Quick Start Party" save) and `ITEMS_00.BIN`:
 
-```
+```text
 header / game state (0..676)
   +252  u8   party X        (0..255)        \ verified: dungeon 3 @ (7,24)
   +253  u8   party Y        (0..255)        |  facing 1

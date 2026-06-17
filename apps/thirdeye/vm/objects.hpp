@@ -117,6 +117,10 @@ public:
 	int firstObjectOfClass(uint16_t classNumber) const;
 	// SOLE: the object handle (its index) if a live object exists, else -1.
 	Value objectLookup(int index) const;
+	// The class number of the live object at `index`, or kFreeSlot if none.
+	uint16_t classOf(int index) const;
+	// True if `classNumber` is, or derives from, `baseClass` (walks N:PARENT).
+	bool isSubclassOf(uint16_t classNumber, uint16_t baseClass) const;
 
 private:
 	// Find the lowest class at/above `startClass` that handles `message`.
