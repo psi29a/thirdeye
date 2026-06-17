@@ -97,14 +97,14 @@ int testOneOldBitmap(FILE *aResFile, DIRPOINTER *aDirectoryPointers,
 		loPos += 4;
 		fprintf(aOutputFile, "    Image size is %dx%d\n", loWidth, loHeight);
 
-		loIndexedBitmap = (unsigned char*) malloc(loWidth * loHeight);
+		loIndexedBitmap = (unsigned char*) malloc((size_t) loWidth * loHeight);
 		if (loIndexedBitmap == NULL) {
 			printf("Error: failure to allocate a field for a bitmap!\n");
 			free(loBuffer);
 			free(loStartOffsets);
 			return (false);
 		}
-		memset(loIndexedBitmap, 0, loWidth * loHeight); // Default bgcolor??? Probably defined in the header...
+		memset(loIndexedBitmap, 0, (size_t) loWidth * loHeight); // Default bgcolor??? Probably defined in the header...
 		for (;;) {
 			int loY;
 			loY = loBuffer[loPos];
