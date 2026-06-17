@@ -18,6 +18,7 @@
 #include <iterator>
 #include <map>
 #include <memory>
+#include <random>
 
 THIRDEYE::Engine::Engine(Files::ConfigurationManager& configurationManager) :
 		mNewGame(false), mUseSound(true), mDebug(false), mRenderer(false), mGame(
@@ -206,8 +207,10 @@ struct TransferState {
 			return attr == 1 ? -1 : 0;
 		size_t rec = static_cast<size_t>(kItemArrayBase +
 		                                 (id - kItemIdBase) * kItemRecSize);
+		if (rec + kItemRecSize > data.size())
+			return attr == 1 ? -1 : 0;
 		auto rb = [&](int off) -> int {
-			return rec + off < data.size() ? data[rec + off] : 0;
+			return data[rec + off];
 		};
 		switch (attr) {
 		case 0: return rb(2);                                 // bits  -> itmflags
@@ -458,7 +461,7 @@ bool loadDungeonLevel(int level, VM::ObjectSystem &objects,
 				std::cerr << "  y" << y << ":";
 				for (int x = x0; x <= x1; ++x) {
 					int idx = y * 32 + x;
-					std::cerr << "\t" << (idx < (int)maze.size()
+					std::cerr << "\t" << (idx >= 0 && idx < (int)maze.size()
 					    ? (int)maze[idx] : -1);
 				}
 				std::cerr << "\n";
@@ -754,6 +757,57 @@ VM::Value defaultRuntimeCall(VM::ObjectSystem &objects, VM::EventSystem &events,
 				loadLevelObjects(lvl, objects, res);
 			}
 		}
+		// Auto-wield (safety net): make sure each PC has *something* to fight with in
+		// the right hand (W:inventory slot 16). The char-gen transfer already arms the
+		// default party (Bob holds a staff, etc.), so this is normally inert -- but a
+		// PC whose hand ends up EMPTY (a save-loaded or hand-swapped party) would
+		// "swing" nothing and "roll for damage" (which reads the held weapon's dice)
+		// would deal zero. So: only when the hand is empty, move the first weapon (a
+		// subclass of 1688 "weapons") found elsewhere in the 26-slot inventory into it.
+		// Never displaces an item the PC is already holding. One-time, after the
+		// transfer. (The actual combat fix is the dice/rnd runtime functions; this just
+		// guarantees an unarmed PC can still attack.)
+		{
+			static bool wielded = false;
+			constexpr uint16_t kPC = 1369, kWeapons = 1688;
+			constexpr int kInvBase = 81, kRHand = 16;
+			if (!wielded && !objects.objectsOfClass(kPC).empty()) {
+				wielded = true;
+				auto slotItem = [&](int pc, int slot) -> int {
+					uint8_t *p =
+					    objects.classStaticPtr(pc, kPC, kInvBase + slot * 2, 2);
+					return p ? static_cast<int16_t>(p[0] | (p[1] << 8)) : 0;
+				};
+				auto setSlot = [&](int pc, int slot, int item) {
+					if (uint8_t *p =
+					        objects.classStaticPtr(pc, kPC, kInvBase + slot * 2, 2)) {
+						p[0] = item & 0xFF;
+						p[1] = (item >> 8) & 0xFF;
+					}
+				};
+				auto isWeapon = [&](int item) {
+					return item > 0 &&
+					       objects.isSubclassOf(objects.classOf(item), kWeapons);
+				};
+				for (int pc : objects.objectsOfClass(kPC)) {
+					if (slotItem(pc, kRHand) != 0)
+						continue; // hand not empty -- leave the PC's loadout alone
+					for (int slot = 0; slot < 26; ++slot) {
+						if (slot == kRHand)
+							continue;
+						int it = slotItem(pc, slot);
+						if (isWeapon(it)) {
+							setSlot(pc, slot, 0);     // remove from its old slot
+							setSlot(pc, kRHand, it);  // into the empty hand
+							if (gRtTrace)
+								rt() << "  [auto-wield] pc " << pc << " weapon " << it
+								     << " (slot " << slot << ") -> empty right hand\n";
+							break;
+						}
+					}
+				}
+			}
+		}
 		// Creature notes: the 3D view redraws ~4 Hz even when idle (the kernel "timer
 		// tick" sends "draw view" gated on B:update@249), so monsters re-render live --
 		// the "0 redraws idle" seen earlier was just the runtime trace being off without
@@ -768,6 +822,53 @@ VM::Value defaultRuntimeCall(VM::ObjectSystem &objects, VM::EventSystem &events,
 		// HP so we can watch it drop. (Stand-in for the weapon-click/auto-attack UI.)
 		if (std::getenv("THIRDEYE_ATTACK")) {
 			static int af = 0;
+			static int monIdx = -1;
+			int dn = objects.firstObjectOfClass(1381);
+			int kn = objects.firstObjectOfClass(1382);
+			// One-time: spawn a target monster in the cell directly in front of the
+			// party (so "acquire NPC target" finds it via lvlobj plane 2) with a known
+			// HP, so we can watch combat resolve. Class/HP overridable for testing
+			// against a non-bit-64 target (THIRDEYE_MONCLASS=1943 = warrior shade).
+			if (af == 0 && dn >= 0 && kn >= 0) {
+				auto kb = [&](int off) -> int {
+					uint8_t *p = objects.classStaticPtr(kn, 1382, off, 1);
+					return p ? *p : 0;
+				};
+				// Party position lives in the kernel's statics at 243/244/245
+				// (party_lvl@246 is read above) -- NOT the import XR offsets 6/8/10.
+				int px = kb(243), py = kb(244), pf = kb(245);
+				int fx = px, fy = py;
+				if (pf == 0) fy = py - 1;
+				else if (pf == 1) fx = px + 1;
+				else if (pf == 2) fy = py + 1;
+				else fx = px - 1;
+				int mc = 1904; // sword wraith
+				if (const char *e = std::getenv("THIRDEYE_MONCLASS")) mc = std::atoi(e);
+				int hp = 30;
+				if (const char *e = std::getenv("THIRDEYE_MONHP")) hp = std::atoi(e);
+				monIdx = 2600;
+				objects.createProgram(monIdx, static_cast<uint16_t>(mc));
+				auto setS = [&](uint16_t k, uint32_t o, int v, int n) {
+					if (uint8_t *p = objects.classStaticPtr(monIdx, k, o, n))
+						for (int i = 0; i < n; ++i) p[i] = (v >> (8 * i)) & 0xFF;
+				};
+				setS(1370, 0, fx + fy * 32, 2); // entities place
+				setS(1370, 2, fx, 1);           // x
+				setS(1370, 3, fy, 1);           // y
+				setS(1370, 4, 1, 1);            // lvl
+				setS(1622, 3, hp, 2);           // NPC hitpts
+				int32_t ns = 0;
+				try { ns = objects.send(monIdx, 18, {1}); } catch (...) {}
+				setS(1622, 0, ns, 2); // NPCstat (from report(1))
+				if (uint8_t *p = objects.classStaticPtr(
+				        dn, 1381, 1024 + 4096 + (fy * 64 + fx * 2), 2)) {
+					p[0] = monIdx & 0xFF; p[1] = (monIdx >> 8) & 0xFF;
+				}
+				std::cerr << "[atk] spawned mon " << monIdx << " class " << mc << " hp "
+				          << hp << " NPCstat 0x" << std::hex << ns << std::dec << " at ("
+				          << fx << "," << fy << ") party (" << px << "," << py
+				          << ") fdir " << pf << "\n";
+			}
 			if (++af % 4 == 0) {
 				// Each PC's own B:auto_attack@75 must be set, or use/attack request
 				// (flag 7) bails before sending "use"(M:41) to the weapon (the char-gen
@@ -781,24 +882,23 @@ VM::Value defaultRuntimeCall(VM::ObjectSystem &objects, VM::EventSystem &events,
 						if (uint8_t *hs = objects.classStaticPtr(pc, 1369, 67, 2))
 							hs[0] = hs[1] = 0;
 					} catch (const std::exception &) {}
-				int kn = objects.firstObjectOfClass(1382);
 				if (kn >= 0) {
 					if (uint8_t *ab = objects.classStaticPtr(kn, 1382, 260, 1))
 						*ab = 1; // auto_button on
 					try { objects.send(kn, 208, {}); } // "auto-attack"
 					catch (const std::exception &) {}
 				}
-				// Log the front wraiths' HP (the (11,3) group = ids 1758-1760).
-				for (int mon = 1758; mon <= 1760; ++mon) {
+				// Log the spawned target's HP so we can watch it drop.
+				if (monIdx >= 0) {
 					try {
-						if (uint8_t *hp = objects.classStaticPtr(mon, 1622, 3, 2))
-							std::cerr << "[atk] mon " << mon << " hp "
-							          << (hp[0] | (hp[1] << 8)) << "  ";
+						if (uint8_t *hp = objects.classStaticPtr(monIdx, 1622, 3, 2))
+							std::cerr << "[atk] mon " << monIdx << " hp "
+							          << static_cast<int16_t>(hp[0] | (hp[1] << 8))
+							          << " (live=" << objects.objectLookup(monIdx) << ")\n";
 					} catch (const std::exception &) {}
 				}
-				std::cerr << "\n";
 				// PC hand contents: W:inventory[16]=right, [20]=left (PC@81, words).
-				for (int pc = 32; pc <= 35; ++pc)
+				for (int pc : objects.objectsOfClass(1369))
 					try {
 						uint8_t *r = objects.classStaticPtr(pc, 1369, 81 + 16 * 2, 2);
 						uint8_t *l = objects.classStaticPtr(pc, 1369, 81 + 20 * 2, 2);
