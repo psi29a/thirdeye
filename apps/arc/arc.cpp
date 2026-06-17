@@ -31,6 +31,7 @@
 #include <ctype.h>
 
 #include "defs.hpp"
+#include "arc_compat.hpp"
 #include "system.hpp"
 #include "arcmsg.hpp"
 #include "dict.hpp"
