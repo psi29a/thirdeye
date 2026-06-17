@@ -354,8 +354,8 @@ void LEX_show(LEX_class *LEX, UWORD select) {
 		printf("   Text [%s]\n", LEX_lexeme(LEX, select));
 		break;
 	case TTYP_NUM:
-		printf(" Number %du (%lX)\n", LEX_value(LEX, select),
-				LEX_value(LEX, select));
+		printf(" Number %u (%X)\n", (unsigned) LEX_value(LEX, select),
+				(unsigned) LEX_value(LEX, select));
 		break;
 	case TTYP_EOF:
 		printf("*** EOF ***\n");

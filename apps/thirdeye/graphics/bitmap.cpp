@@ -125,8 +125,8 @@ std::vector<uint8_t> GRAPHICS::Bitmap::operator[](uint16_t index) {
 		return decodeVFXShape(index);
 
 	uint32_t pos = mBitmapOffets[index] + 4;	// skip over width and height
-	std::vector<uint8_t> bitmap(getWidth(index) * getHeight(index));
-	memset(&bitmap[0], 0, getWidth(index) * getHeight(index));
+	std::vector<uint8_t> bitmap(static_cast<size_t>(getWidth(index)) * getHeight(index));
+	memset(&bitmap[0], 0, static_cast<size_t>(getWidth(index)) * getHeight(index));
 
 	while (true) {
 		int32_t y = mBitmapData[pos];

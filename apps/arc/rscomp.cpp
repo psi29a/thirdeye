@@ -23,11 +23,10 @@
 //��                                                                        ��
 //����������������������������������������������������������������������������
 
-#include <sys/io.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <unistd.h>
+#include "arc_compat.hpp"
 
 #include "defs.hpp"
 #include "system.hpp"
@@ -433,7 +432,8 @@ static BYTE *RS_parse_constant_list_string(RS_class *RS) {
 				val = -val;
 
 			//DICT_enter(cl,atoi(val,buf,10),0);
-			DICT_enter(cl, (BYTE*) sprintf(buf, "%d", val), 0);
+			snprintf((char*) buf, sizeof(buf), "%d", (int) val);
+			DICT_enter(cl, buf, 0);
 			break;
 		}
 	} while (LEX_next_comma(RS->LEX));
@@ -657,7 +657,7 @@ void RS_show_contents(RS_class *RS, UWORD verbose) {
 	if (verbose) {
 		printf(MSG_RS_SIZ, RS->RF->hdr.file_size);
 		printf(MSG_RS_USE, RS->RF->hdr.file_size - RS->RF->hdr.lost_space,
-				((RS->RF->hdr.lost_space * 100L) / RS->RF->hdr.file_size));
+				(unsigned)((RS->RF->hdr.lost_space * 100UL) / RS->RF->hdr.file_size));
 		printf(MSG_RS_NEN, nentries);
 		printf(MSG_RS_CTS, ASCII_time(RS->RF->hdr.create_time));
 		printf(MSG_RS_MTS, ASCII_time(RS->RF->hdr.modify_time));
@@ -668,7 +668,7 @@ void RS_show_contents(RS_class *RS, UWORD verbose) {
 
 	for (entry = 0L; entry < nentries; entry++)
 		if (RF_flags(RS->RF, entry) & SA_DELETED)
-			printf(MSG_RS_DEL, entry);
+			printf(MSG_RS_DEL, (unsigned) entry);
 		else {
 			RHDR = RF_header(RS->RF, entry);
 			if (RHDR == NULL)
@@ -703,20 +703,20 @@ void RS_show_contents(RS_class *RS, UWORD verbose) {
 						name[29] = 0;
 
 					if (RHDR->data_attrib & DA_PLACEHOLDER)
-						printf(MSG_RS_PLA, entry,
-								RF_index(RS->RF, entry) + sizeof(RF_entry_hdr),
+						printf(MSG_RS_PLA, (unsigned) entry,
+								(unsigned) (RF_index(RS->RF, entry) + sizeof(RF_entry_hdr)),
 								ASCII_time(RHDR->timestamp), name);
 					else
-						printf(MSG_RS_VER, entry,
-								RF_index(RS->RF, entry) + sizeof(RF_entry_hdr),
-								movatr, mematr, RHDR->data_size,
+						printf(MSG_RS_VER, (unsigned) entry,
+								(unsigned) (RF_index(RS->RF, entry) + sizeof(RF_entry_hdr)),
+								movatr, mematr, (unsigned) RHDR->data_size,
 								ASCII_time(RHDR->timestamp), name);
 
 					mem_free(name);
 				} else
-					printf(MSG_RS_BRI, entry,
-							RF_index(RS->RF, entry) + sizeof(RF_entry_hdr),
-							movatr, mematr, RHDR->data_size);
+					printf(MSG_RS_BRI, (unsigned) entry,
+							(unsigned) (RF_index(RS->RF, entry) + sizeof(RF_entry_hdr)),
+							movatr, mematr, (unsigned) RHDR->data_size);
 			}
 		}
 }
@@ -779,7 +779,7 @@ IDR_class *IDR_construct(RS_class *RS) {
 		strcat(IDR->speclist, ":");
 		strcat(IDR->speclist, rspec);
 
-		for (i = 0; i < strlen(rspec); i++)
+		for (i = 0; i < (WORD) strlen(rspec); i++)
 			if (rspec[i] == ',')
 				rspec[i] = 0;
 
