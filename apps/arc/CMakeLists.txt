@@ -38,6 +38,12 @@ target_link_libraries(arc)
 # on the arc target only; substantive correctness warnings are left enabled.
 if (MSVC)
     target_compile_options(arc PRIVATE
+        # The 1992 source assigns string literals to BYTE*/char* hundreds of
+        # times. Under MSVC's default C++17/20 conformance that's a HARD ERROR
+        # (C2440), not a warning. /Zc:strictStrings- opts back into the old
+        # implicit-const-strip behavior so the port compiles without rewriting
+        # half the codebase.
+        /Zc:strictStrings-
         /wd4101  # unreferenced local variable
         /wd4244  # narrowing conversion
         /wd4267  # size_t -> smaller

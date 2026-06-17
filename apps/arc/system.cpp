@@ -670,7 +670,7 @@ WORD set_file_time(BYTE *filename, ULONG timestamp) {
 //
 // Misc. services
 //
-WORD log2(ULONG value) {
+WORD arc_log2(ULONG value) {
 	WORD n;
 	ULONG pwr;
 

@@ -410,7 +410,7 @@ UWORD SOP_emit_byte(SOP_class *SOP, ULONG val) {
 void SOP_emit_array_index(SOP_class *SOP, ULONG dsize) {
 	WORD log;
 
-	if ((log = log2(dsize)) != -1)
+	if ((log = arc_log2(dsize)) != -1)
 		if (log == 0)
 			SOP_emit_opcode(SOP, OP_ADD);
 		else {
