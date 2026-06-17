@@ -126,14 +126,14 @@ void GRAPHICS::Graphics::drawImage(std::vector<uint8_t> &bmp, uint16_t index,
 	// each row left-to-right (right-hand dungeon walls), 2=Y flips the row order.
 	if ((mirror & 1) && iw > 0) {
 		for (int row = 0; row < ih; ++row)
-			std::reverse(imageData.begin() + row * iw,
-			             imageData.begin() + (row + 1) * iw);
+			std::reverse(imageData.begin() + static_cast<ptrdiff_t>(row) * iw,
+			             imageData.begin() + static_cast<ptrdiff_t>(row + 1) * iw);
 	}
 	if ((mirror & 2) && ih > 0) {
 		for (int row = 0; row < ih / 2; ++row)
-			std::swap_ranges(imageData.begin() + row * iw,
-			                 imageData.begin() + (row + 1) * iw,
-			                 imageData.begin() + (ih - 1 - row) * iw);
+			std::swap_ranges(imageData.begin() + static_cast<ptrdiff_t>(row) * iw,
+			                 imageData.begin() + static_cast<ptrdiff_t>(row + 1) * iw,
+			                 imageData.begin() + static_cast<ptrdiff_t>(ih - 1 - row) * iw);
 	}
 
 	SDL_Surface *surface = SDL_CreateRGBSurfaceFrom((void*) &imageData[0],

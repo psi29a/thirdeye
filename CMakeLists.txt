@@ -61,7 +61,7 @@ option(SDL2_STATIC "Link static build of SDL into the binaries" FALSE)
 # Apps and tools
 option(BUILD_DAESOP "Build Daesop" ON)
 option(BUILD_LAUNCHER "Build Thirdeye Launcher" OFF)
-option(BUILD_ARC "Build ARC" OFF)
+option(BUILD_ARC "Build ARC" ON)
 
 # Source directory: libs
 set(LIBDIR ${CMAKE_SOURCE_DIR}/libs)
@@ -184,6 +184,15 @@ thirdeye_mark_system_includes(CLI11)
 # Find SDL2
 Find_package(SDL2 REQUIRED)
 include_directories(${SDL2_INCLUDE_DIR})
+
+# On some platforms (e.g. macOS Homebrew) FindSDL2 returns SDL2_LIBRARY with
+# libSDL2main.a already baked in; adding ${SDL2MAIN_LIBRARY} on top then
+# duplicates it at link time ("ld: warning: ignoring duplicate libraries").
+# Strip the duplicate so each app target can keep listing both variables for
+# portability (Windows/vcpkg needs SDL2MAIN_LIBRARY listed separately).
+if (SDL2MAIN_LIBRARY AND SDL2_LIBRARY)
+    list(REMOVE_ITEM SDL2_LIBRARY "${SDL2MAIN_LIBRARY}")
+endif()
 
 # Find OpenAL: use our FindOpenAL.cmake module to prefer Homebrew openal-soft and fall back to system OpenAL.
 find_package(OpenAL REQUIRED)
