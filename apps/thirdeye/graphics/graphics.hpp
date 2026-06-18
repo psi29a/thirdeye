@@ -84,25 +84,26 @@ private:
 	std::map<uint16_t, uint16_t> mBitmap;
 	RNGType rng;
 
-	// Decoded-shape cache (drawImage). Keyed by (source-vector-data-ptr, index).
-	// The vectors live in Resource::mAssets (an unordered_map of loaded resources)
-	// and aren't reallocated after load, so the pointer is stable across the run.
-	// Avoids redoing the RLE VFX decode on every draw: the in-game view re-runs
-	// the draw bytecode every frame (~50 draws), and many draws hit the same
-	// wall/floor/stair shape -- the per-frame cost was dominated by re-decoding
-	// the same shapes (keypress->render latency).
+	// Decoded-shape cache (drawImage). Keyed by (cacheId, index) where cacheId
+	// is the AESOP resource number of the bitmap table. The caller (engine.cpp
+	// runtime hook) supplies it; cinematic playback (graphics.cpp playVideo)
+	// works on transient by-value vectors whose addresses get recycled, so it
+	// passes 0 to bypass the cache. Avoids redoing the RLE VFX decode on every
+	// draw: the in-game view re-runs the draw bytecode every frame (~50 draws),
+	// and many draws hit the same wall/floor/stair shape -- the per-frame cost
+	// was dominated by re-decoding the same shapes (keypress->render latency).
 	struct DecodedShape {
 		int w, h;
 		std::vector<uint8_t> pixels; // indexed (w*h bytes, 0 = transparent)
 	};
 	struct ShapeKey {
-		const void *src;
+		uint32_t cacheId;
 		uint16_t index;
-		bool operator==(const ShapeKey &o) const { return src == o.src && index == o.index; }
+		bool operator==(const ShapeKey &o) const { return cacheId == o.cacheId && index == o.index; }
 	};
 	struct ShapeKeyHash {
 		size_t operator()(const ShapeKey &k) const noexcept {
-			return std::hash<const void*>{}(k.src) ^ (static_cast<size_t>(k.index) << 1);
+			return std::hash<uint32_t>{}(k.cacheId) ^ (static_cast<size_t>(k.index) << 1);
 		}
 	};
 	std::unordered_map<ShapeKey, DecodedShape, ShapeKeyHash> mShapeCache;
@@ -146,8 +147,12 @@ public:
 	// posX/posY are signed: the dungeon view legitimately draws shapes at negative
 	// coordinates (a left-edge wall at x=-32 that SDL then clips), so they must NOT
 	// be unsigned -- a uint16_t wraps -32 to 65504 and the shape vanishes off-screen.
+	// cacheId: a stable id for the bitmap source (use the AESOP resource number
+	// for asset-backed vectors). 0 disables caching for transient buffers whose
+	// storage address may be recycled (e.g. cinematic frames built by value).
 	void drawImage(std::vector<uint8_t> &bmp, uint16_t index, int posX,
-			int posY, bool transparency = false, int mirror = 0);
+			int posY, bool transparency = false, int mirror = 0,
+			uint32_t cacheId = 0);
 
 	// Constrain subsequent blits to a rectangle on the screen surface (used to
 	// clip the dungeon 3D view to its window so wide wall shapes don't bleed into
