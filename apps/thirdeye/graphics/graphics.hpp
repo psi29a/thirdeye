@@ -15,6 +15,7 @@
 // only needed by graphics.cpp, which includes it directly.
 
 #include <map>
+#include <unordered_map>
 #include <vector>
 #include <stdint.h>
 #include <iostream>
@@ -61,6 +62,12 @@ private:
 	// re-apply it each present -- otherwise the cardinal/facing indicator (only
 	// redrawn by the bytecode on a turn) gets erased by an inventory-close redraw.
 	SDL_Surface *mCompassSnap = nullptr;
+	// Persistent streaming GPU texture for present (see update()): created
+	// once, refreshed each frame via SDL_UpdateTexture. Avoids the
+	// CreateTextureFromSurface + DestroyTexture per call that the original
+	// loop did on every event pump (~30 Hz), the dominant per-present cost
+	// at 320x200.
+	SDL_Texture *mPresentTex = nullptr;
 	SDL_Cursor *mCursor;
 	SDL_Palette *mPalette;
 	uint8_t mState;
@@ -76,6 +83,30 @@ private:
 	std::map<uint8_t, tuple<uint8_t, uint8_t, std::vector<uint8_t> > > mVideo;
 	std::map<uint16_t, uint16_t> mBitmap;
 	RNGType rng;
+
+	// Decoded-shape cache (drawImage). Keyed by (cacheId, index) where cacheId
+	// is the AESOP resource number of the bitmap table. The caller (engine.cpp
+	// runtime hook) supplies it; cinematic playback (graphics.cpp playVideo)
+	// works on transient by-value vectors whose addresses get recycled, so it
+	// passes 0 to bypass the cache. Avoids redoing the RLE VFX decode on every
+	// draw: the in-game view re-runs the draw bytecode every frame (~50 draws),
+	// and many draws hit the same wall/floor/stair shape -- the per-frame cost
+	// was dominated by re-decoding the same shapes (keypress->render latency).
+	struct DecodedShape {
+		int w, h;
+		std::vector<uint8_t> pixels; // indexed (w*h bytes, 0 = transparent)
+	};
+	struct ShapeKey {
+		uint32_t cacheId;
+		uint16_t index;
+		bool operator==(const ShapeKey &o) const { return cacheId == o.cacheId && index == o.index; }
+	};
+	struct ShapeKeyHash {
+		size_t operator()(const ShapeKey &k) const noexcept {
+			return std::hash<uint32_t>{}(k.cacheId) ^ (static_cast<size_t>(k.index) << 1);
+		}
+	};
+	std::unordered_map<ShapeKey, DecodedShape, ShapeKeyHash> mShapeCache;
 
 	// Per-text-window state (font/cursor/colour), keyed by AESOP window number.
 	struct TextWin {
@@ -116,8 +147,12 @@ public:
 	// posX/posY are signed: the dungeon view legitimately draws shapes at negative
 	// coordinates (a left-edge wall at x=-32 that SDL then clips), so they must NOT
 	// be unsigned -- a uint16_t wraps -32 to 65504 and the shape vanishes off-screen.
+	// cacheId: a stable id for the bitmap source (use the AESOP resource number
+	// for asset-backed vectors). 0 disables caching for transient buffers whose
+	// storage address may be recycled (e.g. cinematic frames built by value).
 	void drawImage(std::vector<uint8_t> &bmp, uint16_t index, int posX,
-			int posY, bool transparency = false, int mirror = 0);
+			int posY, bool transparency = false, int mirror = 0,
+			uint32_t cacheId = 0);
 
 	// Constrain subsequent blits to a rectangle on the screen surface (used to
 	// clip the dungeon 3D view to its window so wide wall shapes don't bleed into

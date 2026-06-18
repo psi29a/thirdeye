@@ -55,7 +55,25 @@ uint16_t GRAPHICS::Bitmap::getNumberOfBitmaps() {
 	return (mNumSubBitmaps);
 }
 
+// Bounds-check the index against mNumSubBitmaps. mBitmapOffets is a std::map,
+// so an out-of-range `[index]` would default-construct an entry with value 0
+// (the start of the bitmap's header bytes). On a "1.10" VFX shape that header
+// reads as enormous bogus dimensions (boundsx/boundsy = "1." / "10" magic
+// bytes -> ~12000 each), so a downstream decode allocates ~155 MB of garbage
+// and burns 15+ seconds in the inner loop. The kernel hits this naturally:
+// `set_pointer` calls `set_mouse_pointer(186, kernel.report(2000), ...)` and
+// the default report(2000) returns 2000 -- an index Icons (~100 shapes) can't
+// satisfy. Throwing here turns a multi-second silent hang into an instant,
+// catchable error at the runtime-hook boundary.
+static bool inRange(uint16_t index, uint16_t num) {
+	return index < num;
+}
+
 uint16_t GRAPHICS::Bitmap::getWidth(uint16_t index) {
+	if (!inRange(index, mNumSubBitmaps))
+		throw std::out_of_range("Bitmap::getWidth: shape index " +
+		                        std::to_string(index) + " >= count " +
+		                        std::to_string(mNumSubBitmaps));
 	uint32_t off = mBitmapOffets[index];
 	// "1.10" subpicture header: boundsy (height-1) at +0, boundsx (width-1) at
 	// +2. Older format: width at +0. (Both little-endian u16.)
@@ -65,6 +83,10 @@ uint16_t GRAPHICS::Bitmap::getWidth(uint16_t index) {
 }
 
 uint16_t GRAPHICS::Bitmap::getHeight(uint16_t index) {
+	if (!inRange(index, mNumSubBitmaps))
+		throw std::out_of_range("Bitmap::getHeight: shape index " +
+		                        std::to_string(index) + " >= count " +
+		                        std::to_string(mNumSubBitmaps));
 	uint32_t off = mBitmapOffets[index];
 	if (mIsVFXShape)
 		return *reinterpret_cast<const uint16_t*>(&mBitmapData[off]) + 1;
@@ -121,6 +143,10 @@ std::vector<uint8_t> GRAPHICS::Bitmap::decodeVFXShape(uint16_t index) {
 }
 
 std::vector<uint8_t> GRAPHICS::Bitmap::operator[](uint16_t index) {
+	if (!inRange(index, mNumSubBitmaps))
+		throw std::out_of_range("Bitmap::operator[]: shape index " +
+		                        std::to_string(index) + " >= count " +
+		                        std::to_string(mNumSubBitmaps));
 	if (mIsVFXShape)
 		return decodeVFXShape(index);
 
