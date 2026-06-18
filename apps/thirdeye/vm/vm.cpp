@@ -161,7 +161,6 @@ Value Interpreter::run() {
 		static const bool kSlowOp = std::getenv("THIRDEYE_SLOWOP") != nullptr;
 		auto opT0 = kSlowOp ? std::chrono::steady_clock::now()
 		                    : std::chrono::steady_clock::time_point{};
-		uint32_t prevPC = mPC;
 		uint32_t opPC = mPC;
 		uint8_t raw = fetch8();
 		if (raw > kMaxOpcode)
@@ -530,7 +529,7 @@ Value Interpreter::run() {
 			                std::chrono::steady_clock::now() - opT0).count();
 			if (opMs >= 50) {
 				std::fprintf(stderr, "[slowop %lldms] op 0x%02X at PC=%u\n",
-				             (long long)opMs, (unsigned)raw, (unsigned)prevPC);
+				             (long long)opMs, (unsigned)raw, (unsigned)opPC);
 				std::fflush(stderr);
 			}
 		}
