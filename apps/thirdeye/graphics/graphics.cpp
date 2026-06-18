@@ -116,30 +116,43 @@ GRAPHICS::Graphics::~Graphics() {
 }
 
 void GRAPHICS::Graphics::drawImage(std::vector<uint8_t> &bmp, uint16_t index,
-		int posX, int posY, bool transparency, int mirror) {
+		int posX, int posY, bool transparency, int mirror, uint32_t cacheId) {
 
 	// Cache the decoded shape (un-mirrored): the RLE VFX decode is the per-frame
 	// hotspot for the in-game 3D view, which re-runs the draw bytecode every
-	// frame and hits the same wall/floor/stair shapes dozens of times. Pointer
-	// to the source vector's first element is a stable key (Resource::mAssets
-	// owns these vectors and never reallocates them after load).
-	ShapeKey key{bmp.data(), index};
-	auto it = mShapeCache.find(key);
-	if (it == mShapeCache.end()) {
+	// frame and hits the same wall/floor/stair shapes dozens of times. The
+	// caller's cacheId must be a stable identity for the source bytes (we use
+	// the AESOP resource number); 0 means "uncacheable" -- transient buffers
+	// (cinematic frames) whose allocator addresses can be recycled would alias
+	// each other under any pointer-keyed scheme.
+	DecodedShape transient;
+	const DecodedShape *shape = nullptr;
+	if (cacheId != 0) {
+		ShapeKey key{cacheId, index};
+		auto it = mShapeCache.find(key);
+		if (it == mShapeCache.end()) {
+			Bitmap image(bmp);
+			DecodedShape s;
+			s.w = image.getWidth(index);
+			s.h = image.getHeight(index);
+			s.pixels = image[index];
+			it = mShapeCache.emplace(key, std::move(s)).first;
+		}
+		shape = &it->second;
+	} else {
 		Bitmap image(bmp);
-		DecodedShape s;
-		s.w = image.getWidth(index);
-		s.h = image.getHeight(index);
-		s.pixels = image[index];
-		it = mShapeCache.emplace(key, std::move(s)).first;
+		transient.w = image.getWidth(index);
+		transient.h = image.getHeight(index);
+		transient.pixels = image[index];
+		shape = &transient;
 	}
-	int iw = it->second.w, ih = it->second.h;
+	int iw = shape->w, ih = shape->h;
 	// Mirror operates on a per-draw copy (the cached buffer stays canonical).
 	// Most draws have mirror=0 and skip the copy entirely.
 	std::vector<uint8_t> imageData;
-	const std::vector<uint8_t> *src = &it->second.pixels;
+	const std::vector<uint8_t> *src = &shape->pixels;
 	if (mirror) {
-		imageData = it->second.pixels;
+		imageData = shape->pixels;
 		src = &imageData;
 	}
 

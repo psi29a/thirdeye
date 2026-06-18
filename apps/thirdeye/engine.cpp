@@ -1433,7 +1433,10 @@ VM::Value defaultRuntimeCall(VM::ObjectSystem &objects, VM::EventSystem &events,
 			try {
 				auto t0 = gPerf ? std::chrono::steady_clock::now()
 				                : std::chrono::steady_clock::time_point{};
-				gfx->drawImage(fetch(table), number, x, y, true, mirror);
+				// table = the AESOP resource number; stable for the lifetime of
+				// the loaded asset, so it's a safe shape-cache identity.
+				gfx->drawImage(fetch(table), number, x, y, true, mirror,
+				               static_cast<uint32_t>(table));
 				if (gPerf) {
 					gDrawNanos += std::chrono::duration_cast<std::chrono::nanoseconds>(
 					                  std::chrono::steady_clock::now() - t0).count();
@@ -1502,15 +1505,17 @@ VM::Value defaultRuntimeCall(VM::ObjectSystem &objects, VM::EventSystem &events,
 			// Debug aid: with THIRDEYE_DUMP set, snapshot every presented frame so a
 			// headless run (no window) can still be inspected as a BMP. If the path
 			// contains "%d", write numbered frames (otherwise overwrite the same file).
+			// We substitute "%d" by hand rather than passing the env var to snprintf
+			// as a format string: env input is data, not a format spec, and stray
+			// conversions like "%s"/"%n" in the path would otherwise crash or worse.
 			if (const char *d = std::getenv("THIRDEYE_DUMP")) {
 				static int frameNo = 0;
-				if (std::strchr(d, '%') != nullptr) {
-					char buf[1024];
-					std::snprintf(buf, sizeof(buf), d, frameNo++);
-					gfx->saveScreenshot(buf);
-				} else {
-					gfx->saveScreenshot(d);
+				std::string path = d;
+				auto pos = path.find("%d");
+				if (pos != std::string::npos) {
+					path.replace(pos, 2, std::to_string(frameNo++));
 				}
+				gfx->saveScreenshot(path.c_str());
 			}
 			rt() << "  [present]" << std::endl;
 			return 0;
