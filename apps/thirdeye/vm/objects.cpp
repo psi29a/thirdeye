@@ -6,8 +6,14 @@
 
 #include "objects.hpp"
 
+#include <algorithm>
+#include <chrono>
+#include <cstdio>
 #include <cstdlib> // std::getenv (debug traces)
 #include <iostream>
+#include <map>
+#include <utility>
+#include <vector>
 
 namespace VM {
 
@@ -244,6 +250,35 @@ Value ObjectSystem::send(int objIndex, int message, std::vector<Value> args) {
 	uint16_t startClass = mObjList[objIndex];
 	if (startClass == kFreeSlot)
 		return -1; // no live object at this index
+
+	// THIRDEYE_SENDS: log SEND count every 100 ms of wall-clock, dumping the
+	// top message-id counts. Confirms what the bytecode is spinning on when
+	// wall-clock disagrees with runtime-call frequency (a SEND is an opcode,
+	// not a CALL -- a tight SEND loop is invisible to the runtime trace).
+	static const bool kCountSends = std::getenv("THIRDEYE_SENDS") != nullptr;
+	if (kCountSends) {
+		static std::map<int, long> counts;
+		static long total = 0;
+		++counts[message]; ++total;
+		static auto tPrev = std::chrono::steady_clock::now();
+		auto now = std::chrono::steady_clock::now();
+		auto sinceLog = std::chrono::duration_cast<std::chrono::milliseconds>(
+		                    now - tPrev).count();
+		if (sinceLog >= 100) {
+			std::fprintf(stderr, "[sends %lldms] %ld total; top:",
+			             (long long)sinceLog, total);
+			std::vector<std::pair<long,int>> v;
+			for (auto &kv : counts) v.emplace_back(kv.second, kv.first);
+			std::sort(v.rbegin(), v.rend());
+			for (size_t i = 0; i < std::min<size_t>(5, v.size()); ++i)
+				std::fprintf(stderr, " msg%d=%ld", v[i].second, v[i].first);
+			std::fprintf(stderr, "\n");
+			std::fflush(stderr);
+			tPrev = now;
+			counts.clear();
+			total = 0;
+		}
+	}
 	uint16_t defClass;
 	uint32_t offset;
 	bool found = resolve(startClass, message, defClass, offset);
@@ -344,7 +379,23 @@ Value ObjectSystem::runHandler(uint16_t defClass, uint32_t offset, int objIndex,
 		return pass(objIndex, message, parent, std::move(a));
 	});
 
-	return vm.execute(offset, static_cast<uint16_t>(objIndex), args);
+	// THIRDEYE_SLOWSEND: log any single SEND whose handler took >100 ms wall-
+	// clock. Tells you exactly which (class, message) is the boot-time hot
+	// loop (e.g. dungeon.init_level iterating 3000 objects).
+	static const bool kSlowSend = std::getenv("THIRDEYE_SLOWSEND") != nullptr;
+	auto t0 = kSlowSend ? std::chrono::steady_clock::now()
+	                    : std::chrono::steady_clock::time_point{};
+	auto rtn = vm.execute(offset, static_cast<uint16_t>(objIndex), args);
+	if (kSlowSend) {
+		auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+		              std::chrono::steady_clock::now() - t0).count();
+		if (ms >= 1) {
+			std::fprintf(stderr, "[slowsend %lldms] obj %d <- msg %d (handler in class %s, depth %d)\n",
+			             (long long)ms, objIndex, message, cls.name.c_str(), mDepth);
+			std::fflush(stderr);
+		}
+	}
+	return rtn;
 }
 
 } // namespace VM

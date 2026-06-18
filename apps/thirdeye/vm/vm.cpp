@@ -8,6 +8,7 @@
 #include "vm.hpp"
 
 #include <cstdio>
+#include <chrono>
 #include <cstring>
 #include <iomanip>
 #include <iostream>
@@ -121,12 +122,45 @@ Value Interpreter::execute(uint32_t handlerOffset, uint16_t thisIndex,
 
 Value Interpreter::run() {
 	uint64_t steps = 0;
+	// THIRDEYE_VMSTEPS: log cumulative VM step count every N opcodes so a
+	// silent bytecode hot-loop (no runtime calls, no SENDs visible) is still
+	// visible. Cheap-when-off via a single read of the static gate.
+	static const bool kCountSteps = std::getenv("THIRDEYE_VMSTEPS") != nullptr;
+	static uint64_t globalSteps = 0;
 	for (;;) {
 		if (mMaxSteps && ++steps > mMaxSteps)
 			throw VmError("instruction budget exceeded (" +
 			              std::to_string(mMaxSteps) +
 			              ") -- likely an infinite loop (a stubbed runtime "
 			              "function not advancing real state?)");
+		if (kCountSteps) {
+			++globalSteps;
+			static auto tPrev = std::chrono::steady_clock::now();
+			static auto tStart = tPrev;
+			static uint64_t prevSteps = 0;
+			// Sample: log when wall-clock advances by >= 100 ms since last log
+			// (catches any gap, however few steps it spanned).
+			auto now = std::chrono::steady_clock::now();
+			auto sinceLog = std::chrono::duration_cast<std::chrono::milliseconds>(
+			                    now - tPrev).count();
+			if (sinceLog >= 100) {
+				auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
+				                   now - tStart).count();
+				std::fprintf(stderr, "[vmsteps %lldms +%lldms] %lluK steps (+%llu in last gap, PC=%u)\n",
+				             (long long)elapsed, (long long)sinceLog,
+				             (unsigned long long)(globalSteps >> 10),
+				             (unsigned long long)(globalSteps - prevSteps),
+				             (unsigned)mPC);
+				std::fflush(stderr);
+				tPrev = now;
+				prevSteps = globalSteps;
+			}
+		}
+		// THIRDEYE_SLOWOP: log any single opcode that takes >50 ms wall-clock.
+		// Pinpoints a single slow runtime CALL / SEND / system op.
+		static const bool kSlowOp = std::getenv("THIRDEYE_SLOWOP") != nullptr;
+		auto opT0 = kSlowOp ? std::chrono::steady_clock::now()
+		                    : std::chrono::steady_clock::time_point{};
 		uint32_t opPC = mPC;
 		uint8_t raw = fetch8();
 		if (raw > kMaxOpcode)
@@ -489,6 +523,15 @@ Value Interpreter::run() {
 
 		case Op::BRK: // the original's int-3 debugger hook
 			unimplemented(op);
+		}
+		if (kSlowOp) {
+			auto opMs = std::chrono::duration_cast<std::chrono::milliseconds>(
+			                std::chrono::steady_clock::now() - opT0).count();
+			if (opMs >= 50) {
+				std::fprintf(stderr, "[slowop %lldms] op 0x%02X at PC=%u\n",
+				             (long long)opMs, (unsigned)raw, (unsigned)opPC);
+				std::fflush(stderr);
+			}
 		}
 	}
 }

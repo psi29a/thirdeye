@@ -15,6 +15,8 @@
 #include <cstring>
 #include <chrono>
 #include <fstream>
+#include <set>
+#include <string_view>
 #include <iterator>
 #include <map>
 #include <memory>
@@ -116,6 +118,23 @@ constexpr uint16_t kFirstColor[5] = {0x00, 0xB0, 0xC0, 0xE0, 0xB0};
 // screen surface, so page-94 draws are clipped to this window (see draw_bitmap).
 constexpr uint16_t kViewPage = 94;
 constexpr int kViewW = 176, kViewH = 120;
+
+// "draw objects" (M:225 in dungeon class) clips each view cell's draws to a
+// horizontal strip via set_x1/set_x2(view_window, x). Without honoring these,
+// wide shapes (stairs/doors) for an oblique cell bleed past their column into
+// adjacent cells -- the "stair shape inside the side wall" artifact when
+// strafing. We track the most recent set_x1/x2 per draw and apply them as the
+// page-94 clip rect. -1 means "no narrowing" (use the full view extent).
+int gViewClipX1 = -1, gViewClipX2 = -1;
+
+// THIRDEYE_PERF=1: per-present timing instrument. Counts draw_bitmap calls
+// since the last present, sums their wall-clock cost, and logs the gap from
+// the previous present, so a frame's draw cost is visible (the in-game view
+// re-runs the full draw bytecode every present). Off by default.
+bool gPerf = false;
+int gDrawCount = 0;
+long gDrawNanos = 0;
+std::chrono::steady_clock::time_point gLastPresent;
 
 // Thrown by the host pump to unwind out of the SOP main loop when the user
 // closes the window / presses ESC. Caught in bootObject for a clean exit.
@@ -557,6 +576,13 @@ int loadLevelObjects(int level, VM::ObjectSystem &objects,
 			setS(kEntities, 2, x, 1);          // x
 			setS(kEntities, 3, y, 1);          // y
 			setS(kEntities, 4, level, 1);      // lvl
+			// W:next@6 = -1 (chain terminator). createProgram zero-initializes statics,
+			// but features.draw walks the cell chain at its tail (LXW W:next; if != -1
+			// SEND "draw" recursively) -- an uninitialized 0 makes every feature draw
+			// recursively SEND "draw" to object 0, painting whatever it returns into
+			// the viewcell ("stairs in the wall" / green-line artifacts when strafing).
+			// Monsters re-set this below to prepend to the cell's link chain.
+			setS(kEntities, 6, -1, 2);
 			setS(kFeatures, 0, df, 2);         // decflags (doors/decorations)
 			// Monster? = the record's class has NPC (1622) in its parent chain. (The
 			// old test -- classStaticPtr(id, kNPC) != nullptr -- mis-fired: that returns
@@ -737,6 +763,20 @@ VM::Value defaultRuntimeCall(VM::ObjectSystem &objects, VM::EventSystem &events,
 		return 0;
 	}
 	if (fn == "dispatch_event") {
+		// THIRDEYE_TIMING: log the first dispatch_event arrival (= the bytecode
+		// finished its synchronous boot and the kernel main loop has begun).
+		// Anything between launch and this point is pure interpreter work --
+		// the boot path's cost goes here.
+		static bool firstDispatch = true;
+		if (firstDispatch) {
+			firstDispatch = false;
+			if (std::getenv("THIRDEYE_TIMING")) {
+				auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+				              std::chrono::steady_clock::now() - gBootStart).count();
+				std::cout << "[timing] first dispatch_event (boot bytecode done): "
+				          << ms << " ms\n";
+			}
+		}
 		if (gfx) pumpHost(*gfx, events); // present + input + yield (host seam)
 		events.dispatchEvent();
 		// Level objects (doors/levers/stairs/decorations/monsters): on the first
@@ -1039,6 +1079,26 @@ VM::Value defaultRuntimeCall(VM::ObjectSystem &objects, VM::EventSystem &events,
 		events.releaseWindow(args[0]);
 		return 0;
 	}
+	// set_x1/set_x2(window, x): set the active draw clip for `window` to a
+	// left/right pixel column. The dungeon's "draw objects" calls these per
+	// view-cell to narrow each cell's draws to a horizontal strip; at the end
+	// of the handler it restores set_x1(view, 0) / set_x2(view, 175). x = -1
+	// means "no clip" (use the window's natural edge). We track the most
+	// recent pair as a single global and apply it to the view-page clip in
+	// draw_bitmap (see kViewPage block). The `window` arg is ignored: the
+	// dungeon's view is the only consumer in the in-game render path, so a
+	// single global pair matches every observed call. Without honoring these,
+	// wide shapes (stairs/doors) for an oblique cell bleed past their column
+	// into adjacent cells -- the "stair shape inside the side wall" artifact
+	// when strafing past a stair cell.
+	if (fn == "set_x1" && args.size() >= 2) {
+		gViewClipX1 = static_cast<int>(args[1]);
+		return 0;
+	}
+	if (fn == "set_x2" && args.size() >= 2) {
+		gViewClipX2 = static_cast<int>(args[1]);
+		return 0;
+	}
 	// get_x1/get_y1/get_x2/get_y2: a window's rectangle edges.
 	if ((fn == "get_x1" || fn == "get_y1" || fn == "get_x2" || fn == "get_y2") &&
 	    args.size() >= 1) {
@@ -1049,6 +1109,26 @@ VM::Value defaultRuntimeCall(VM::ObjectSystem &objects, VM::EventSystem &events,
 		if (fn == "get_y1") return y1;
 		if (fn == "get_x2") return x2;
 		return y2; // get_y2
+	}
+
+	// THIRDEYE_TIMING: stamp every distinct runtime call with elapsed-ms-since-
+	// launch so the boot path's cost is visible. We log the FIRST call to each
+	// name (i.e. when it first becomes hot) AND every call that takes >50 ms.
+	// `THIRDEYE_TIMING=2` logs every call (noisy, but pinpoints exact spend).
+	// (The first dispatch_event timing above closes the loop: everything up to
+	// it is pure interpreter work driving these calls.)
+	if (const char *tv = std::getenv("THIRDEYE_TIMING")) {
+		bool verbose = std::string(tv) == "2";
+		static std::set<std::string> seen;
+		bool first = seen.insert(fn).second;
+		if (first || verbose) {
+			auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+			              std::chrono::steady_clock::now() - gBootStart).count();
+			std::cout << "[timing " << ms << " ms] " << fn;
+			if (fn == "create_program" && args.size() >= 2)
+				std::cout << "(" << args[0] << ", " << args[1] << ")";
+			std::cout << (first ? " (first)\n" : "\n");
+		}
 	}
 
 	if (gRtTrace) {
@@ -1335,8 +1415,14 @@ VM::Value defaultRuntimeCall(VM::ObjectSystem &objects, VM::EventSystem &events,
 			// would bleed out of the view into the character panels. Clip page-94
 			// draws to the dungeon's view window (assign_subwindow 0,0-175,119).
 			bool viewPage = page == kViewPage;
-			if (viewPage)
-				gfx->setClip(0, 0, kViewW, kViewH);
+			if (viewPage) {
+				// Honor the per-cell horizontal clip set by set_x1/set_x2 (see
+				// runtime-fn block). x = -1 means "use the view's natural edge".
+				int cx1 = gViewClipX1 < 0 ? 0 : std::max(0, gViewClipX1);
+				int cx2 = gViewClipX2 < 0 ? kViewW - 1 : std::min(kViewW - 1, gViewClipX2);
+				if (cx2 < cx1) cx2 = cx1; // empty clip = nothing draws
+				gfx->setClip(cx1, 0, cx2 - cx1 + 1, kViewH);
+			}
 			// arg[6] = flip/mirror (GIL2VFX: 1=X, 2=Y, 3=both); the view draws
 			// right-hand walls as the X-mirror of the left-hand shape.
 			int mirror = args.size() > 6 ? static_cast<int>(args[6]) : 0;
@@ -1345,7 +1431,17 @@ VM::Value defaultRuntimeCall(VM::ObjectSystem &objects, VM::EventSystem &events,
 			if (page == 104 && table == 187)
 				gCompassDirty = true;
 			try {
-				gfx->drawImage(fetch(table), number, x, y, true, mirror);
+				auto t0 = gPerf ? std::chrono::steady_clock::now()
+				                : std::chrono::steady_clock::time_point{};
+				// table = the AESOP resource number; stable for the lifetime of
+				// the loaded asset, so it's a safe shape-cache identity.
+				gfx->drawImage(fetch(table), number, x, y, true, mirror,
+				               static_cast<uint32_t>(table));
+				if (gPerf) {
+					gDrawNanos += std::chrono::duration_cast<std::chrono::nanoseconds>(
+					                  std::chrono::steady_clock::now() - t0).count();
+					++gDrawCount;
+				}
 				rt() << "  [drew " << table << ":" << number << " @ " << x
 				          << "," << y << (mirror ? " M" : "") << "]" << std::endl;
 			} catch (const std::exception &e) {
@@ -1379,7 +1475,21 @@ VM::Value defaultRuntimeCall(VM::ObjectSystem &objects, VM::EventSystem &events,
 				gfx->snapshotCompass();
 				gCompassDirty = false;
 			}
+			auto presentStart = std::chrono::steady_clock::now();
 			gfx->update();
+			if (gPerf) {
+				auto now = std::chrono::steady_clock::now();
+				auto sincePrev = std::chrono::duration_cast<std::chrono::microseconds>(
+				                    now - gLastPresent).count();
+				auto updateUs = std::chrono::duration_cast<std::chrono::microseconds>(
+				                    now - presentStart).count();
+				std::cerr << "[perf] " << gDrawCount << " draws (" << gDrawNanos/1000.0
+				          << " us total), present=" << updateUs/1000.0
+				          << " ms, gap=" << sincePrev/1000.0 << " ms\n";
+				gDrawCount = 0;
+				gDrawNanos = 0;
+				gLastPresent = now;
+			}
 			if (!gFirstPresentLogged) {
 				gFirstPresentLogged = true;
 				auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -1393,9 +1503,20 @@ VM::Value defaultRuntimeCall(VM::ObjectSystem &objects, VM::EventSystem &events,
 					throw QuitRequested{};
 			}
 			// Debug aid: with THIRDEYE_DUMP set, snapshot every presented frame so a
-			// headless run (no window) can still be inspected as a BMP.
-			if (const char *d = std::getenv("THIRDEYE_DUMP"))
-				gfx->saveScreenshot(d);
+			// headless run (no window) can still be inspected as a BMP. If the path
+			// contains "%d", write numbered frames (otherwise overwrite the same file).
+			// We substitute "%d" by hand rather than passing the env var to snprintf
+			// as a format string: env input is data, not a format spec, and stray
+			// conversions like "%s"/"%n" in the path would otherwise crash or worse.
+			if (const char *d = std::getenv("THIRDEYE_DUMP")) {
+				static int frameNo = 0;
+				std::string path = d;
+				auto pos = path.find("%d");
+				if (pos != std::string::npos) {
+					path.replace(pos, 2, std::to_string(frameNo++));
+				}
+				gfx->saveScreenshot(path.c_str());
+			}
 			rt() << "  [present]" << std::endl;
 			return 0;
 		}
@@ -1610,6 +1731,8 @@ void THIRDEYE::Engine::bootObject(RESOURCES::Resource &resource,
 	gRtTrace = mDebug || std::getenv("THIRDEYE_AUTOWALK") ||
 	           std::getenv("THIRDEYE_TESTOBJ") || std::getenv("THIRDEYE_CLICK") ||
 	           std::getenv("THIRDEYE_AUTOKEY");
+	gPerf = std::getenv("THIRDEYE_PERF") != nullptr;
+	gLastPresent = std::chrono::steady_clock::now();
 
 	// Seed the boot "mode" that start.MSG_CREATE reads via peekmem(1264) and
 	// CASEs on (see the start disassembly). The 4-char modes are stored
