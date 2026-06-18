@@ -7,26 +7,27 @@
  */
 #include "res.hpp"
 
-#include <iostream>
+#include "components/misc/endian.hpp"
+
+#include <cstring>
 #include <fstream>
 #include <iomanip>
+#include <iostream>
+#include <print>
 #include <sstream>
-#include <cstring>
 
 
 RESOURCES::Resource::Resource(std::filesystem::path resourcePath) {
 	mResFile = resourcePath;
 
-	std::cout << "Initializing Resources:" << std::endl;
+	std::println("Initializing Resources:");
 	// does resource exist
 	if (std::filesystem::exists(mResFile) == false)
 		throw std::runtime_error(mResFile.string() + " does not exist!");
-	else
-		std::cout << "  Loading: " << mResFile;
 
 	// how big is the file on disk?
 	resourceFileSize = std::filesystem::file_size(mResFile);
-	std::cout << " " << resourceFileSize << " bytes " << std::endl;
+	std::println("  Loading: \"{}\" {} bytes ", mResFile.string(), resourceFileSize);
 
 	// open our resource
 	std::ifstream fResource;
@@ -52,27 +53,14 @@ RESOURCES::Resource::Resource(std::filesystem::path resourcePath) {
 
 	showFileHeader(fileHeader);
 
-	std::cout << "    Number of blocks:	"
-			<< getDirBlocks(fResource, fileHeader.first_directory_block)
-			<< std::endl;
-
-	std::cout << "    Number of entries:	" << getEntries(fResource)
-			<< std::endl;
-
-	std::cout << "    Entries in Table0:	" << getTable(fResource, 0, mTable0)
-			<< std::endl;
-
-	std::cout << "    Entries in Table1:	" << getTable(fResource, 1, mTable1)
-			<< std::endl;
-
-	std::cout << "    Entries in Table2:	" << getTable(fResource, 2, mTable2)
-			<< std::endl;
-
-	std::cout << "    Entries in Table3:	" << getTable(fResource, 3, mTable3)
-			<< std::endl;
-
-	std::cout << "    Entries in Table4:	" << getTable(fResource, 4, mTable4)
-			<< std::endl;
+	std::println("    Number of blocks:\t{}",
+	             getDirBlocks(fResource, fileHeader.first_directory_block));
+	std::println("    Number of entries:\t{}", getEntries(fResource));
+	for (uint16_t t = 0; t < 5; t++) {
+		auto &dict = (t == 0 ? mTable0 : t == 1 ? mTable1
+		             : t == 2 ? mTable2 : t == 3 ? mTable3 : mTable4);
+		std::println("    Entries in Table{}:\t{}", t, getTable(fResource, t, dict));
+	}
 
 	getAssets(fResource);
 	fResource.close();
@@ -101,13 +89,11 @@ std::string RESOURCES::Resource::getDate(uint32_t uiDate) {
 }
 
 void RESOURCES::Resource::showFileHeader(GlobalHeader localFileHeader) {
-	std::cout << "    Signature:		" << localFileHeader.signature << std::endl;
-	std::cout << "    Size:		" << localFileHeader.file_size << std::endl;
-	std::cout << "    Lost Space:		" << localFileHeader.lost_space << std::endl;
-	std::cout << "    Created:		" << getDate(localFileHeader.create_time)
-			<< std::endl;
-	std::cout << "    Modified:		" << getDate(localFileHeader.modify_time)
-			<< std::endl;
+	std::println("    Signature:\t\t{}", localFileHeader.signature);
+	std::println("    Size:\t\t{}", localFileHeader.file_size);
+	std::println("    Lost Space:\t\t{}", localFileHeader.lost_space);
+	std::println("    Created:\t\t{}", getDate(localFileHeader.create_time));
+	std::println("    Modified:\t\t{}", getDate(localFileHeader.modify_time));
 }
 
 uint16_t RESOURCES::Resource::getDirBlocks(std::ifstream &resourceFile,
@@ -344,19 +330,15 @@ std::vector<std::string> RESOURCES::Resource::getCodeResourceNames() {
 // (relative to the blob start); each non-zero chain is a run of length-prefixed
 // strings (u16 length incl. trailing NUL) alternating key, value, terminated by
 // a zero length.
-std::map<std::string, std::string> RESOURCES::Resource::parseDictionary(
-		const std::vector<uint8_t> &d) {
+std::expected<std::map<std::string, std::string>,
+              RESOURCES::Resource::DictParseError>
+RESOURCES::Resource::parseDictionary(const std::vector<uint8_t> &d) {
 	std::map<std::string, std::string> out;
 	if (d.size() < 2)
 		return out;
 
-	auto rd16 = [&](size_t off) -> uint16_t {
-		return static_cast<uint16_t>(d[off] | (d[off + 1] << 8));
-	};
-	auto rd32 = [&](size_t off) -> uint32_t {
-		return d[off] | (d[off + 1] << 8) | (d[off + 2] << 16) |
-		       (static_cast<uint32_t>(d[off + 3]) << 24);
-	};
+	auto rd16 = [&](size_t off) { return Misc::loadLE<uint16_t>(&d[off]); };
+	auto rd32 = [&](size_t off) { return Misc::loadLE<uint32_t>(&d[off]); };
 
 	uint16_t buckets = rd16(0);
 	uint16_t counter = 1;
@@ -364,20 +346,20 @@ std::map<std::string, std::string> RESOURCES::Resource::parseDictionary(
 	for (uint16_t i = 0; i < buckets; i++) {
 		size_t boff = 2 + static_cast<size_t>(i) * 4;
 		if (boff + 4 > d.size())
-			break;
+			return std::unexpected(DictParseError{boff, "bucket offset past EOB"});
 		uint32_t chain = rd32(boff);
 		if (chain == 0)
 			continue;
 		size_t p = chain;
 		for (;; counter++) {
 			if (p + 2 > d.size())
-				break;
+				return std::unexpected(DictParseError{p, "truncated string length"});
 			uint16_t len = rd16(p);
 			p += 2;
 			if (len == 0) // end of chain
 				break;
 			if (p + len > d.size())
-				break;
+				return std::unexpected(DictParseError{p, "string body past EOB"});
 			std::string s(reinterpret_cast<const char *>(&d[p]), len);
 			if (!s.empty() && s.back() == '\0')
 				s.pop_back(); // drop trailing NUL counted in len
@@ -396,7 +378,13 @@ std::map<std::string, std::string> RESOURCES::Resource::getExports(
 	std::string num = searchDictionary(mTable0, codeName + ".EXPT");
 	if (num.empty())
 		return {};
-	return parseDictionary(getAsset(static_cast<uint16_t>(std::stoi(num))));
+	return parseDictionary(getAsset(static_cast<uint16_t>(std::stoi(num))))
+	    .transform_error([&](const DictParseError &e) {
+		    std::cerr << "warning: " << codeName << ".EXPT malformed at offset "
+		              << e.offset << ": " << e.message << std::endl;
+		    return e;
+	    })
+	    .value_or(std::map<std::string, std::string>{});
 }
 
 int RESOURCES::Resource::getResourceNumber(const std::string &name) {
@@ -414,7 +402,13 @@ std::map<std::string, std::string> RESOURCES::Resource::getImports(
 	std::string num = searchDictionary(mTable0, codeName + ".IMPT");
 	if (num.empty())
 		return {};
-	return parseDictionary(getAsset(static_cast<uint16_t>(std::stoi(num))));
+	return parseDictionary(getAsset(static_cast<uint16_t>(std::stoi(num))))
+	    .transform_error([&](const DictParseError &e) {
+		    std::cerr << "warning: " << codeName << ".IMPT malformed at offset "
+		              << e.offset << ": " << e.message << std::endl;
+		    return e;
+	    })
+	    .value_or(std::map<std::string, std::string>{});
 }
 
 void RESOURCES::Resource::showResources() {

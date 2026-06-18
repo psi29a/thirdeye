@@ -7,7 +7,7 @@ add_component_dir (files
     )
 
 add_component_dir (misc
-    stringops
+    stringops endian stacktrace
     )
         
 add_library(components STATIC ${COMPONENT_FILES} ${MOC_SRCS})

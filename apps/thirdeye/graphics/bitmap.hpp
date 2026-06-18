@@ -5,6 +5,7 @@
 
 #include <stdint.h>
 #include <vector>
+#include <flat_map>
 #include <map>
 #include <stdio.h>
 #include <iostream>
@@ -48,7 +49,11 @@ private:
 	std::vector<uint8_t> decodeVFXShape(uint16_t index);
 
 	uint16_t mNumSubBitmaps;
-	std::map<uint16_t, uint32_t> mBitmapOffets;
+	// Sub-shape index -> offset of its header in mBitmapData. Indices are dense
+	// (0..mNumSubBitmaps-1) and built once in the ctor, so flat_map's contiguous
+	// storage wins on lookup; an out-of-range index now misses (.find fails)
+	// rather than default-inserting -- the foot-gun CLAUDE.md warns about.
+	std::flat_map<uint16_t, uint32_t> mBitmapOffets;
 	std::map< uint16_t, SubBitmap > mSubBitmaps;
 	std::vector<uint8_t> mBitmapData;
 	uint32_t nextBitmapPos;

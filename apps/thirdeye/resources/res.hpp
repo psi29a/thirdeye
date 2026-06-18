@@ -9,6 +9,7 @@
 #define RES_HPP
 
 #include <cstdint>
+#include <expected>
 #include <fstream>
 #include <map>
 #include <string>
@@ -96,6 +97,14 @@ struct Dictionary {
 };
 
 class Resource {
+public:
+	// Reason for a parseDictionary failure: where in the blob and why.
+	struct DictParseError {
+		size_t offset;
+		std::string message;
+	};
+
+private:
 	std::filesystem::path mResFile;
 	std::map<uint16_t, DirectoryBlock> mDirBlocks;
 	std::map<uint16_t, EntryHeader> mEntryHeaders;
@@ -113,8 +122,8 @@ private:
 	uint16_t getEntries(std::ifstream &resourceFile);
 	uint16_t getTable(std::ifstream &resourceFile, uint16_t table,
 			std::map<std::string, Dictionary> &dictionary);
-	static std::map<std::string, std::string> parseDictionary(
-			const std::vector<uint8_t> &bytes);
+	static std::expected<std::map<std::string, std::string>, DictParseError>
+	parseDictionary(const std::vector<uint8_t> &bytes);
 	uint16_t getAssets(std::ifstream &resourceFile);
 	std::string getDate(uint32_t uiDate);
 	std::string searchDictionary(std::map<std::string, Dictionary> &dictionary,

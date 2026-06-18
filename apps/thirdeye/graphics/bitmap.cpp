@@ -4,6 +4,9 @@
 
 #include "bitmap.hpp"
 
+#include "components/misc/endian.hpp"
+
+#include <mdspan>
 #include <stdexcept>
 #include <string>
 
@@ -20,22 +23,18 @@ GRAPHICS::Bitmap::Bitmap(const std::vector<uint8_t> &vec) {
 	              vec[2] == '1' && vec[3] == '0';
 
 	if (mIsVFXShape) {
-		auto rd32 = [&](size_t off) -> uint32_t {
-			return vec[off] | (vec[off + 1] << 8) | (vec[off + 2] << 16) |
-			       (static_cast<uint32_t>(vec[off + 3]) << 24);
-		};
-		mNumSubBitmaps = static_cast<uint16_t>(rd32(4));
+		mNumSubBitmaps = static_cast<uint16_t>(Misc::loadLE<uint32_t>(&vec[4]));
 		for (uint16_t i = 0; i < mNumSubBitmaps; i++) {
 			size_t entry = 8 + static_cast<size_t>(i) * 8;
 			if (entry + 4 <= vec.size())
-				mBitmapOffets[i] = rd32(entry);
+				mBitmapOffets[i] = Misc::loadLE<uint32_t>(&vec[entry]);
 		}
 		return;
 	}
 
-	mNumSubBitmaps = *reinterpret_cast<const uint16_t*>(&vec[2 * 2]);
+	mNumSubBitmaps = Misc::loadLE<uint16_t>(&vec[4]);
 	for (uint16_t i = 0; i < mNumSubBitmaps; i++) {
-		mBitmapOffets[i] = *reinterpret_cast<const uint16_t*>(&vec[6 + i * 4]);
+		mBitmapOffets[i] = Misc::loadLE<uint16_t>(&vec[6 + i * 4]);
 	}
 }
 
@@ -74,12 +73,12 @@ uint16_t GRAPHICS::Bitmap::getWidth(uint16_t index) {
 		throw std::out_of_range("Bitmap::getWidth: shape index " +
 		                        std::to_string(index) + " >= count " +
 		                        std::to_string(mNumSubBitmaps));
-	uint32_t off = mBitmapOffets[index];
+	uint32_t off = mBitmapOffets.at(index);
 	// "1.10" subpicture header: boundsy (height-1) at +0, boundsx (width-1) at
 	// +2. Older format: width at +0. (Both little-endian u16.)
 	if (mIsVFXShape)
-		return *reinterpret_cast<const uint16_t*>(&mBitmapData[off + 2]) + 1;
-	return *reinterpret_cast<const uint16_t*>(&mBitmapData[off]);
+		return Misc::loadLE<uint16_t>(&mBitmapData[off + 2]) + 1;
+	return Misc::loadLE<uint16_t>(&mBitmapData[off]);
 }
 
 uint16_t GRAPHICS::Bitmap::getHeight(uint16_t index) {
@@ -87,10 +86,10 @@ uint16_t GRAPHICS::Bitmap::getHeight(uint16_t index) {
 		throw std::out_of_range("Bitmap::getHeight: shape index " +
 		                        std::to_string(index) + " >= count " +
 		                        std::to_string(mNumSubBitmaps));
-	uint32_t off = mBitmapOffets[index];
+	uint32_t off = mBitmapOffets.at(index);
 	if (mIsVFXShape)
-		return *reinterpret_cast<const uint16_t*>(&mBitmapData[off]) + 1;
-	return *reinterpret_cast<const uint16_t*>(&mBitmapData[off + 2]);
+		return Misc::loadLE<uint16_t>(&mBitmapData[off]) + 1;
+	return Misc::loadLE<uint16_t>(&mBitmapData[off + 2]);
 }
 
 // Decode one sub-shape of an AESOP/16 "1.10" VFX shape table into an 8-bit
@@ -103,10 +102,14 @@ uint16_t GRAPHICS::Bitmap::getHeight(uint16_t index) {
 //   odd  >= 3  string: amount = marker>>1, then `amount` literal pixels
 // There is exactly one end-of-line token per row, height rows in all.
 std::vector<uint8_t> GRAPHICS::Bitmap::decodeVFXShape(uint16_t index) {
-	uint32_t base = mBitmapOffets[index];
+	uint32_t base = mBitmapOffets.at(index);
 	uint16_t width = getWidth(index);
 	uint16_t height = getHeight(index);
 	std::vector<uint8_t> bitmap(static_cast<size_t>(width) * height, 0);
+
+	// 2D view over the row-major palette-indexed buffer; lets us write fb[y, x]
+	// instead of y*width+x and keeps the row stride implicit.
+	std::mdspan<uint8_t, std::dextents<size_t, 2>> fb(bitmap.data(), height, width);
 
 	uint32_t pos = base + 24; // skip the 24-byte subpicture header
 	const uint32_t end = static_cast<uint32_t>(mBitmapData.size());
@@ -127,14 +130,14 @@ std::vector<uint8_t> GRAPHICS::Bitmap::decodeVFXShape(uint16_t index) {
 				for (uint32_t i = 0; i < amount && pos < end; i++, x++) {
 					uint8_t px = mBitmapData[pos++];
 					if (x < width)
-						bitmap[static_cast<size_t>(y) * width + x] = px;
+						fb[y, x] = px;
 				}
 			} else {                    // run: one pixel repeated
 				if (pos >= end) break;
 				uint8_t px = mBitmapData[pos++];
 				for (uint32_t i = 0; i < amount; i++, x++)
 					if (x < width)
-						bitmap[static_cast<size_t>(y) * width + x] = px;
+						fb[y, x] = px;
 			}
 		}
 	}
@@ -150,19 +153,21 @@ std::vector<uint8_t> GRAPHICS::Bitmap::operator[](uint16_t index) {
 	if (mIsVFXShape)
 		return decodeVFXShape(index);
 
-	uint32_t pos = mBitmapOffets[index] + 4;	// skip over width and height
-	std::vector<uint8_t> bitmap(static_cast<size_t>(getWidth(index)) * getHeight(index));
-	memset(&bitmap[0], 0, static_cast<size_t>(getWidth(index)) * getHeight(index));
+	uint32_t pos = mBitmapOffets.at(index) + 4;	// skip over width and height
+	uint16_t width = getWidth(index);
+	uint16_t height = getHeight(index);
+	std::vector<uint8_t> bitmap(static_cast<size_t>(width) * height, 0);
+	std::mdspan<uint8_t, std::dextents<size_t, 2>> fb(bitmap.data(), height, width);
 
 	while (true) {
 		int32_t y = mBitmapData[pos];
 		if (y == 0xff)
 			break;
 
-		if ((y < 0) || (y >= getHeight(index))) {
+		if ((y < 0) || (y >= height)) {
 			throw std::runtime_error(
 					"Bitmap RLE decode out of sync: y-coord " + std::to_string(y) +
-					" outside height " + std::to_string(getHeight(index)));
+					" outside height " + std::to_string(height));
 		}
 		pos++;
 
@@ -180,14 +185,13 @@ std::vector<uint8_t> GRAPHICS::Bitmap::operator[](uint16_t index) {
 				pos++;
 
 				if (mode == 0) {		// Copy
-					memcpy(&bitmap[0] + x + y * getWidth(index),
-							&mBitmapData[0] + pos, amount);
+					memcpy(&fb[y, x], &mBitmapData[pos], amount);
 					pos += amount;
 				} else if (mode == 1)	// Fill
 						{
 					int value = mBitmapData[pos];
 					pos++;
-					memset(&bitmap[0] + x + y * getWidth(index), value, amount);
+					memset(&fb[y, x], value, amount);
 				}
 				x += amount;
 				rle_width -= amount;

@@ -38,10 +38,12 @@
 #include "opcodes.hpp"
 
 #include <cstdint>
+#include <flat_map>
 #include <functional>
 #include <map>
 #include <stdexcept>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace VM {
@@ -71,7 +73,7 @@ enum class AddrSpace : uint32_t { Invalid = 0, Code = 0x8, Stack = 0x9, Static =
 struct Addr { AddrSpace space; uint32_t offset; uint16_t obj; };
 
 inline Value makeAddr(AddrSpace s, uint32_t offset, uint16_t obj = 0) {
-	uint32_t tag = static_cast<uint32_t>(s) << 28;
+	uint32_t tag = std::to_underlying(s) << 28;
 	if (s == AddrSpace::Static || s == AddrSpace::Extern) {
 		// 14 bits each for offset and object index; fail loudly rather than
 		// silently truncating (offsets are 16-bit UWORDs in the original, but
@@ -179,8 +181,13 @@ public:
 	void setObjectLookup(ObjectLookup fn) { mObjectLookup = std::move(fn); }
 
 	// Optional: XR offset -> human-readable extern name, used by the trace.
+	// Built once at setup, looked up per-instruction during tracing -- flat_map
+	// is contiguous and cache-friendlier than std::map for that pattern.
 	void setExternNames(std::map<uint32_t, std::string> names) {
-		mExternNames = std::move(names);
+		mExternNames = std::flat_map<uint32_t, std::string>(
+			std::sorted_unique,
+			std::make_move_iterator(names.begin()),
+			std::make_move_iterator(names.end()));
 	}
 
 	// Read a NUL-terminated string from a tagged Code-space address (as produced
@@ -193,9 +200,13 @@ public:
 	std::string readString(Value addr) const;
 
 	// Map of runtime-function number (as referenced by RCRS) -> function name,
-	// built from the code object's .IMPT dictionary.
+	// built from the code object's .IMPT dictionary. Hot path: callRuntime()
+	// looks this up on every CALL opcode -- flat_map's contiguous storage wins.
 	void setImports(std::map<int32_t, std::string> imports) {
-		mImports = std::move(imports);
+		mImports = std::flat_map<int32_t, std::string>(
+			std::sorted_unique,
+			std::make_move_iterator(imports.begin()),
+			std::make_move_iterator(imports.end()));
 	}
 
 	// Runs a tiny hand-assembled program and checks results. Returns true on
@@ -214,8 +225,8 @@ private:
 	bool mTrace = false; // print each executed instruction
 	uint64_t mMaxSteps = 0; // instruction budget for one execute() (0 = unlimited)
 
-	std::map<int32_t, std::string> mImports; // runtime-fn number -> name
-	std::map<uint32_t, std::string> mExternNames; // XR offset -> extern name (trace)
+	std::flat_map<int32_t, std::string> mImports; // runtime-fn number -> name
+	std::flat_map<uint32_t, std::string> mExternNames; // XR offset -> extern name (trace)
 	RuntimeCall mRuntimeCall;                 // dispatch hook for CALL
 	SendHook mSendHook;                       // dispatch hook for SEND
 	PassHook mPassHook;                       // dispatch hook for PASS

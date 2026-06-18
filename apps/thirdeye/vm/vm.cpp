@@ -13,6 +13,7 @@
 #include <iomanip>
 #include <iostream>
 #include <sstream>
+#include <utility>
 
 namespace {
 // Two-digit hex like "0x20" for an opcode byte.
@@ -524,6 +525,12 @@ Value Interpreter::run() {
 
 		case Op::BRK: // the original's int-3 debugger hook
 			unimplemented(op);
+		default:
+			// raw was already range-checked against kMaxOpcode above, and every
+			// opcode in [0, kMaxOpcode] is handled by a case above -- so this
+			// branch is genuinely unreachable. Marking it lets the optimiser drop
+			// the implicit fall-through code at the bottom of the switch.
+			std::unreachable();
 		}
 		if (kSlowOp) {
 			auto opMs = std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -690,7 +697,7 @@ std::string Interpreter::readString(Value addr) const {
 
 void Interpreter::unimplemented(Op op) {
 	throw VmError(std::string("opcode ") + opName(op) + " (" +
-	              hexByte(static_cast<uint8_t>(op)) + ") not implemented "
+	              hexByte(std::to_underlying(op)) + ") not implemented "
 	              "(BRK is the original's int-3 debugger hook)");
 }
 

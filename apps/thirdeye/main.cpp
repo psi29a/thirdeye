@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <cctype>
+#include <cstdlib>
 #include <iostream>
 #include <string>
 
@@ -8,6 +9,7 @@
 #include "engine.hpp"
 
 #include <components/files/configurationmanager.hpp>
+#include <components/misc/stacktrace.hpp>
 
 #include "config.hpp"
 
@@ -104,6 +106,16 @@ int main(int argc, char** argv) {
         engine.go();
     } catch (std::exception &e) {
         std::cout << "\nERROR: " << e.what() << std::endl;
+        // Backtrace from the catch site -- useful when a VM/runtime exception
+        // surfaces here with no other context. Gated on THIRDEYE_TRACE to keep
+        // normal error output clean (the project's other crash-time diagnostics
+        // follow the same THIRDEYE_* env-var convention). Will become
+        // std::stacktrace::current() once libc++ ships <stacktrace>.
+        if (std::getenv("THIRDEYE_TRACE")) {
+            std::string trace = Misc::stacktrace(/*skip=*/1);
+            if (!trace.empty())
+                std::cout << "\nBacktrace:\n" << trace;
+        }
         return (1);
     }
 
