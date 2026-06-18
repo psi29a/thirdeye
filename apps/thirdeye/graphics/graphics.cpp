@@ -108,6 +108,7 @@ GRAPHICS::Graphics::~Graphics() {
 	SDL_FreeSurface(mScreen);
 	SDL_FreeSurface(mBackdrop);   // lazily created in drawImage (nullptr-safe free)
 	SDL_FreeSurface(mCompassSnap); // lazily created in snapshotCompass
+	if (mPresentTex != nullptr) SDL_DestroyTexture(mPresentTex);
 	SDL_FreePalette(mPalette);
 	SDL_DestroyRenderer(mRenderer);
 	SDL_DestroyWindow(mWindow);
@@ -117,12 +118,33 @@ GRAPHICS::Graphics::~Graphics() {
 void GRAPHICS::Graphics::drawImage(std::vector<uint8_t> &bmp, uint16_t index,
 		int posX, int posY, bool transparency, int mirror) {
 
-	Bitmap image(bmp);
-	std::vector<uint8_t> imageData = image[index];
-	int iw = image.getWidth(index), ih = image.getHeight(index);
+	// Cache the decoded shape (un-mirrored): the RLE VFX decode is the per-frame
+	// hotspot for the in-game 3D view, which re-runs the draw bytecode every
+	// frame and hits the same wall/floor/stair shapes dozens of times. Pointer
+	// to the source vector's first element is a stable key (Resource::mAssets
+	// owns these vectors and never reallocates them after load).
+	ShapeKey key{bmp.data(), index};
+	auto it = mShapeCache.find(key);
+	if (it == mShapeCache.end()) {
+		Bitmap image(bmp);
+		DecodedShape s;
+		s.w = image.getWidth(index);
+		s.h = image.getHeight(index);
+		s.pixels = image[index];
+		it = mShapeCache.emplace(key, std::move(s)).first;
+	}
+	int iw = it->second.w, ih = it->second.h;
+	// Mirror operates on a per-draw copy (the cached buffer stays canonical).
+	// Most draws have mirror=0 and skip the copy entirely.
+	std::vector<uint8_t> imageData;
+	const std::vector<uint8_t> *src = &it->second.pixels;
+	if (mirror) {
+		imageData = it->second.pixels;
+		src = &imageData;
+	}
 
 	// Apply the AESOP draw_bitmap mirror flag by flipping the indexed pixels in
-	// place (the shape stays at posX/posY; only its content reflects). 1=X flips
+	// place on the per-draw copy (the cached buffer stays canonical). 1=X flips
 	// each row left-to-right (right-hand dungeon walls), 2=Y flips the row order.
 	if ((mirror & 1) && iw > 0) {
 		for (int row = 0; row < ih; ++row)
@@ -136,8 +158,8 @@ void GRAPHICS::Graphics::drawImage(std::vector<uint8_t> &bmp, uint16_t index,
 			                 imageData.begin() + static_cast<ptrdiff_t>(ih - 1 - row) * iw);
 	}
 
-	SDL_Surface *surface = SDL_CreateRGBSurfaceFrom((void*) &imageData[0],
-			iw, ih, 8, iw, 0, 0, 0, 0);
+	SDL_Surface *surface = SDL_CreateRGBSurfaceFrom(
+			const_cast<uint8_t*>(src->data()), iw, ih, 8, iw, 0, 0, 0, 0);
 
 	SDL_Rect dest = { posX, posY, iw, ih };
 
@@ -155,11 +177,21 @@ void GRAPHICS::Graphics::drawImage(std::vector<uint8_t> &bmp, uint16_t index,
 	// Keep the backdrop snapshot in sync with the bitmap art (used to restore a
 	// text box's background so in-game text overlays the panel art). Text never
 	// touches mBackdrop (it's drawn straight to mScreen by printText), so this
-	// snapshot stays text-free regardless of draw order.
+	// snapshot stays text-free regardless of draw order. Mirror only the *drawn
+	// rect* (intersected with the active clip), not the whole 320x200 surface --
+	// the previous full-screen blit was ~256 KB per draw, and the in-game view
+	// does dozens of draws per frame (~10 MB/frame of needless memcpy, the main
+	// cause of slow keypress->render latency). The blit rect is intersected with
+	// SDL's current clip rect on mScreen so the backdrop matches what's visible.
 	if (mBackdrop == nullptr)
 		mBackdrop = SDL_CreateRGBSurface(0, WIDTH, HEIGHT, 32, 0, 0, 0, 0);
-	SDL_SetSurfaceBlendMode(mScreen, SDL_BLENDMODE_NONE);
-	SDL_BlitSurface(mScreen, NULL, mBackdrop, NULL);
+	SDL_Rect clip;
+	SDL_GetClipRect(mScreen, &clip);
+	SDL_Rect mirror_rect = dest;
+	if (SDL_IntersectRect(&mirror_rect, &clip, &mirror_rect)) {
+		SDL_SetSurfaceBlendMode(mScreen, SDL_BLENDMODE_NONE);
+		SDL_BlitSurface(mScreen, &mirror_rect, mBackdrop, &mirror_rect);
+	}
 }
 
 void GRAPHICS::Graphics::setClip(int x, int y, int w, int h) {
@@ -633,21 +665,21 @@ void GRAPHICS::Graphics::update() {
 	// the facing indicator the bytecode only redraws on a turn.
 	restoreCompass();
 
-	// generate texture from our screen surface
-	SDL_Texture *texture = SDL_CreateTextureFromSurface(mRenderer, mScreen);
-
-	// Clear the entire screen to our selected color.
+	// Persistent streaming texture. The previous loop did
+	// SDL_CreateTextureFromSurface + SDL_DestroyTexture every present, which
+	// re-allocates a GPU texture and copies/converts the full 320x200 pixels
+	// each call -- a fixed cost on every event pump (~30 Hz) even when nothing
+	// has changed. SDL_UpdateTexture reuses the same texture and uploads only
+	// the current frame's pixels; it dominates the present time at this
+	// resolution.
+	if (mPresentTex == nullptr) {
+		mPresentTex = SDL_CreateTexture(mRenderer, SDL_PIXELFORMAT_ARGB8888,
+		                                SDL_TEXTUREACCESS_STREAMING, WIDTH, HEIGHT);
+	}
+	SDL_UpdateTexture(mPresentTex, nullptr, mScreen->pixels, mScreen->pitch);
 	SDL_RenderClear(mRenderer);
-
-	// blit texture to display
-	SDL_RenderCopy(mRenderer, texture, NULL, NULL);
-
-	// Up until now everything was drawn behind the scenes.
+	SDL_RenderCopy(mRenderer, mPresentTex, NULL, NULL);
 	SDL_RenderPresent(mRenderer);
-
-	// cleanup
-	SDL_DestroyTexture(texture);
-
 }
 
 uint32_t GRAPHICS::Graphics::getSleep() {
@@ -703,6 +735,15 @@ void GRAPHICS::Graphics::drawText(std::vector<uint8_t> &fnt, std::string text,
 void GRAPHICS::Graphics::loadMouse(std::vector<uint8_t> &bitmap,
 		uint16_t index) {
 	Bitmap image(bitmap);
+	if (index >= image.getNumberOfBitmaps()) {
+		// The kernel's `set_pointer` (M:153) passes `kernel.report(2000)` as the
+		// shape index. The default report returns its arg verbatim (2000), and
+		// Icons (~100 shapes) can't satisfy that -- without this guard, we'd
+		// decode a ~155 MB garbage shape and burn 15 seconds in the inner loop.
+		// (See bitmap.cpp; the underlying decoder now also throws, this is the
+		// quiet early-return so the bytecode keeps going without a stale cursor.)
+		return;
+	}
 	std::vector<uint8_t> cursorData = image[index];
 
 	SDL_Surface *cursor = SDL_CreateRGBSurface(0,
