@@ -1,8 +1,8 @@
-Thirdeye: A reimplementation of the AESOP engine
+Thirdeye is from-scratch C++ reimplementation of SSI/Westwood's **AESOP** engine (AESOP/16 and AESOP/32), the bytecode VM that powers **Eye of the Beholder 3** (`EYE.RES`) and **Dungeon Hack** (`HACK.RES` + `OPEN.RES`). Written by John Miles in 1992.
 
-![Thirdeye 0.87.0](https://github.com/psi29a/thirdeye/releases/download/thirdeye-0.87.0/Screenshot.2026-06-15.at.16.48.39.png "Thirdeye")
+**End goal:** play Eye of the Beholder 3 and Dungeon Hack natively from the original game data. You must own the original games — Thirdeye ships no game assets.
 
-Thirdeye is an attempt at recreating the AESOP engine for the popular role-playing games Eye of the Beholder 3 and Dungeon Hack. You need to own and install the original games for Thirdeye to work.
+![Thirdeye](https://github.com/psi29a/thirdeye/releases/download/thirdeye-0.87.0/Screenshot.2026-06-15.at.16.48.39.png "Thirdeye")
 
 Version: 0.87.0  
 License: GPL (see GPL3.txt for more information)  

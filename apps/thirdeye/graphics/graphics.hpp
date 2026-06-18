@@ -15,6 +15,7 @@
 // only needed by graphics.cpp, which includes it directly.
 
 #include <map>
+#include <unordered_map>
 #include <vector>
 #include <stdint.h>
 #include <iostream>
@@ -61,6 +62,12 @@ private:
 	// re-apply it each present -- otherwise the cardinal/facing indicator (only
 	// redrawn by the bytecode on a turn) gets erased by an inventory-close redraw.
 	SDL_Surface *mCompassSnap = nullptr;
+	// Persistent streaming GPU texture for present (see update()): created
+	// once, refreshed each frame via SDL_UpdateTexture. Avoids the
+	// CreateTextureFromSurface + DestroyTexture per call that the original
+	// loop did on every event pump (~30 Hz), the dominant per-present cost
+	// at 320x200.
+	SDL_Texture *mPresentTex = nullptr;
 	SDL_Cursor *mCursor;
 	SDL_Palette *mPalette;
 	uint8_t mState;
@@ -76,6 +83,29 @@ private:
 	std::map<uint8_t, tuple<uint8_t, uint8_t, std::vector<uint8_t> > > mVideo;
 	std::map<uint16_t, uint16_t> mBitmap;
 	RNGType rng;
+
+	// Decoded-shape cache (drawImage). Keyed by (source-vector-data-ptr, index).
+	// The vectors live in Resource::mAssets (an unordered_map of loaded resources)
+	// and aren't reallocated after load, so the pointer is stable across the run.
+	// Avoids redoing the RLE VFX decode on every draw: the in-game view re-runs
+	// the draw bytecode every frame (~50 draws), and many draws hit the same
+	// wall/floor/stair shape -- the per-frame cost was dominated by re-decoding
+	// the same shapes (keypress->render latency).
+	struct DecodedShape {
+		int w, h;
+		std::vector<uint8_t> pixels; // indexed (w*h bytes, 0 = transparent)
+	};
+	struct ShapeKey {
+		const void *src;
+		uint16_t index;
+		bool operator==(const ShapeKey &o) const { return src == o.src && index == o.index; }
+	};
+	struct ShapeKeyHash {
+		size_t operator()(const ShapeKey &k) const noexcept {
+			return std::hash<const void*>{}(k.src) ^ (static_cast<size_t>(k.index) << 1);
+		}
+	};
+	std::unordered_map<ShapeKey, DecodedShape, ShapeKeyHash> mShapeCache;
 
 	// Per-text-window state (font/cursor/colour), keyed by AESOP window number.
 	struct TextWin {
