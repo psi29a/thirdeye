@@ -30,6 +30,14 @@ add_thirdeye_dir (vm
     vm opcodes objects events
     )
 
+add_thirdeye_dir (savegame
+    transfer lvl_tmp items_tmp savegame_dir
+    )
+
+add_thirdeye_dir (runtime
+    internal rtcode event rtobject eye graphics
+    )
+
 # Main executable
 add_executable(thirdeye
     ${THIRDEYE_LIBS} ${THIRDEYE_LIBS_HEADER}

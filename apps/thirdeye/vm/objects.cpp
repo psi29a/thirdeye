@@ -298,7 +298,7 @@ Value ObjectSystem::send(int objIndex, int message, std::vector<Value> args) {
 	              (message == 91 || message == 85 || message == 107 || message == 99));
 	if (kMonTrace && (atkMsg || aiMsg)) {
 		static int n = 0;
-		if (n++ < 60) {
+		if (n++ < 600) {
 			std::cerr << "[mon-msg] idx " << objIndex << " msg " << message
 			          << " handler " << (found ? defClass : -1);
 			for (size_t a = 0; a < args.size(); ++a)
