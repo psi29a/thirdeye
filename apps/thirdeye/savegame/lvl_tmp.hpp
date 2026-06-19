@@ -1,0 +1,27 @@
+#ifndef THIRDEYE_SAVEGAME_LVL_TMP_HPP
+#define THIRDEYE_SAVEGAME_LVL_TMP_HPP
+
+namespace RESOURCES { class Resource; }
+namespace VM { class ObjectSystem; }
+
+namespace THIRDEYE::savegame {
+
+// Populate the dungeon's lvlobj from a saved LVLnn.TMP: create each level object
+// (door / lever / stairs / decoration / monster) as its SOP class and link it
+// into the cell grid, so the dungeon's "draw objects"/"impedance" see them.
+// This is the native restore_level_objects, reconstructed from the file format
+// (see docs/eob3_savegame_format.md §3): a stream of variable-length records,
+// each
+//   +0 type/flag, +1 u16 id, +3 u16 CLASS (stored directly!), +11 x, +12 y,
+//   +14 decflags.
+// The class being in the record means no type->class table is needed. Must run
+// AFTER the dungeon's "init level" (which clears lvlobj), so it's called on the
+// first frame.
+//
+// Returns the number of objects placed.
+int loadLevelObjects(int level, VM::ObjectSystem &objects,
+                     RESOURCES::Resource &res);
+
+} // namespace THIRDEYE::savegame
+
+#endif // THIRDEYE_SAVEGAME_LVL_TMP_HPP

@@ -72,56 +72,137 @@ PC4 *Lady Reeya*, NPCs *Bug*, *Father Jon*.
 Character record (offsets relative to the record start; ✓ fields cross-checked
 across Sir Mikeal & Stonebeard):
 
-| off | sz | field | conf | notes |
-|-----|----|-------|------|-------|
-| +0   | 2 | object index | ✓ | the live SOP object id (32,33,34,35,…) the PC is created at |
-| +2   | 2 | class number | ✓ | 1369 = "PC" |
-| +6   | 2 | ? (=619) | ? | constant across PCs |
-| +96  | ~14 | **backpack** item slots | ✓ | u16 item-*object* ids (e.g. 999,998,997,996,995); 0xFFFF = empty |
-| +127 | 2 | equip: body armor | ✓ | item-object id; 0xFFFF empty |
-| +129 | 2 | equip: bracers | ~ | |
-| +131 | 2 | equip: right hand (weapon) | ✓ | |
-| +133 | 2 | equip: left ring | ~ | |
-| +135 | 2 | equip: right ring | ~ | |
-| +137 | 2 | equip: boots | ~ | |
-| +139 | 2 | equip: left hand | ✓ | |
-| +141 | 2 | equip: pouch A | ~ | |
-| +143 | 2 | equip: pouch B | ~ | |
-| +145 | 2 | equip: pouch C | ~ | |
-| +147 | 2 | equip: necklace | ~ | |
-| +149 | 2 | equip: helmet | ~ | |
-| +151 | 2 | arrows type | ~ | |
-| +153 | 2 | arrows quantity | ~ | |
-| +155 | ~21 | **name** (NUL-terminated) | ✓ | "Sir Mikeal", … |
-| +176 | 1 | race/sex? | ? | Mikeal 2, Stonebeard 7 |
-| +177 | 1 | ? | ? | Mikeal 58, Stonebeard 24 |
-| +181 | 1 | level? (=10) | ? | both 10 |
-| +189 | 2 | **HP current** | ✓ | Mikeal 97, Stonebeard 90 |
-| +191 | 2 | **HP max** | ✓ | |
-| +195 | 1 | **food %** (0..100) | ✓ | =goldbox abs 872 |
-| +197 | 4 | **XP** (class 1, LE) | ✓ | Mikeal 600000, Stonebeard 500000 |
-| +209 | 1 | **STR** | ✓ | both 18 |
-| +210 | 1 | **STR %** (exceptional) | ✓ | Mikeal 94, Stonebeard 76 → "18/94", "18/76" |
-| +211 | 1 | **INT** | ✓ | Mikeal 12, Stonebeard 14 |
-| +212 | 1 | **WIS** | ✓ | 16, 14 |
-| +213 | 1 | **DEX** | ✓ | 16, 16 |
-| +214 | 1 | **CON** | ✓ | 17, 19 |
-| +215 | 1 | **CHA** | ✓ | 17, 8 |
+Each PC field has a fixed +18 offset over its `PC` SOP class static offset
+(EYE.RES res 1369). The file record is essentially the PC's static block
+preceded by an 18-byte header (`+0..2` id/class, `+4` reserved, `+6` constant
+619, `+8..15` 0xFF fill, `+17` 0x00). Cross-referenced with the bundled
+Quick Start Party save:
 
-Still to map within the record: AC, alignment, portrait, multi-class levels &
-XP (classes 2/3), memorized/known spells, status effects (poison/paralysis), the
-remaining ~0xFF-filled tail (+217..+626, mostly empty here). Ishad Nha reported
-~103/627 bytes mapped; the table above is a superset of the cross-verified ones.
+| off | sz | field | PC static off | notes |
+|-----|----|-------|---------------|-------|
+| +0   | 2 | object index | — | live SOP object id (32..41 in this save) |
+| +2   | 2 | class number | — | 1369 = "PC" |
+| +6   | 2 | constant 619 | — | flags? unverified |
+| +96  | ~14 | **backpack** item slots (W:inventory[0..13]) | 78 | u16 item-object ids; 0xFFFF empty |
+| +127 | 2 | equip: body (W:inventory[14]) | 109 | item-object id |
+| +129 | 2 | equip: bracers (W:inventory[15]) | 111 | |
+| +131 | 2 | equip: right hand (W:inventory[16]) | 113 | |
+| +133 | 2 | equip: ring 1 (W:inventory[17]) | 115 | |
+| +135 | 2 | equip: ring 2 (W:inventory[18]) | 117 | |
+| +137 | 2 | equip: boots (W:inventory[19]) | 119 | |
+| +139 | 2 | equip: left hand (W:inventory[20]) | 121 | |
+| +141 | 2 | equip: pouch A..C (W:inventory[21..23]) | 123..127 | |
+| +147 | 2 | equip: necklace (W:inventory[24]) | 129 | |
+| +149 | 2 | equip: helmet (W:inventory[25]) | 131 | |
+| +151 | 2 | W:quiver — arrows type | 133 | |
+| +153 | 2 | W:arrows — arrows quantity | 135 | |
+| +155 | 20 | **B:name** | 137 | NUL-terminated, e.g. "Sir Mikeal" |
+| +175 | 1 | **B:race** | 157 | Mikeal 0=human, Stonebeard 6=dwarf, Father Jon 4=half-elf, … |
+| +176 | 1 | **B:classes** | 158 | multi-class bitfield; Mikeal=2 single, Stonebeard=7 multi |
+| +177 | 2 | **W:portrait** | 159 | portrait sheet number (Mikeal 58, Stonebeard 24) |
+| +179 | 1 | **B:PCstat** | 161 | status bits (poison/paralysis/…) |
+| +180 | 1 | **B:alignment** | 162 | Mikeal 0=lawful good?, Stonebeard 4=neutral, … |
+| +181 | 3 | **B:levels[3]** | 163 | per-class level; single-class trailing = 0 |
+| +184 | 3 | **B:lost_levels[3]** | 166 | drained levels (level-drain effects) |
+| +187 | 2 | **W:lost_hp** | 169 | HP lost to drain |
+| +189 | 2 | **W:hpts** — HP current | 171 | Mikeal 97, Stonebeard 90 |
+| +191 | 2 | **W:hmax** — HP max | 173 | |
+| +193 | 2 | **W:hbon** | 175 | HP per-level bonus from CON |
+| +195 | 2 | **W:food** (0..100) | 177 | =goldbox abs 872 |
+| +197 | 12 | **L:experience[3]** | 179 | per-class XP; -1 = unused. Mikeal {600000,-1,-1} |
+| +209 | 1 | **B:str** | 191 | Mikeal 18, Stonebeard 18 |
+| +210 | 1 | **B:exc_str** (%) | 192 | Mikeal 94, Stonebeard 76 → "18/94", "18/76" |
+| +211 | 1 | **B:int** | 193 | Mikeal 12, Stonebeard 14 |
+| +212 | 1 | **B:wis** | 194 | 16, 14 |
+| +213 | 1 | **B:dex** | 195 | 16, 16 |
+| +214 | 1 | **B:con** | 196 | 17, 19 |
+| +215 | 1 | **B:cha** | 197 | 17, 8 |
 
-### 2.3 Item objects
+All ✓ verified across all 6 named records in the Quick Start save and patched
+back into live PC objects via `runtime/eye.cpp resume_level`.
 
-After the character records, `ITEMS.TMP` stores the **live item objects** that the
-equipment/backpack slots point at: `u16 class` (an EOB3 item code class, e.g. 1347
-"…", 1323 "axe", 1325 "short sword", 1349 "robe") + the item's static block,
-~21-byte stride (varies by item class). `write_initial_tempfiles` serializes
-these; `resume_items`/`restore_items` recreate them and re-link the slots.
-(See `create_sav_and_item_format.md` for the char-gen item format these derive
-from — the inventory ids/types and the `table123` type→class map.)
+### Tail (+216..+626) — spell state + active effects
+
+The tail covers the rest of the PC class's static block, **411 bytes**:
+
+| off  | sz  | field | PC static off | conf | notes |
+|------|-----|-------|---------------|------|-------|
+| +216 | 1   | B:sparkle      | 198 | ~ | =0xFF for all 6 Quick Start records (default sentinel?) |
+| +217 | 4   | L:magiceffects | 199 | ✓ | active-effect bitfield (0 on a fresh load) |
+| +221 | 1   | B:tiger        | 203 | ✓ | tiger-transform state (0 for non-druids) |
+| +222 | 1   | B:lost_str     | 204 | ✓ | drained STR (0 in this save) |
+| +223 | 4   | ?              | 205 | ? | varies per PC (Mikeal `02 ae 1d ed`, Stonebeard `00 0e 00 90`, Lady Reeya `ff ff ff 00`, NPCs all `00`); possibly a checksum / hash / per-PC seed |
+| +227 | 200 | B:spell_cnt[200]  | 209 | ✓ | per-class × per-circle × per-slot spell availability counters (mostly 0 in this save) |
+| +427 | 200 | B:spell_stat[200] | 409 | ✓ | per-class × per-circle × per-slot spell prep state; first ~10 bytes = 0xFF "unmemorized" sentinel, scattered nonzero values for prepped spells (Salina has 30 nonzero slots — she's the cleric) |
+
+We don't decode the spell-slot layout (per-class × per-circle × per-slot is a
+lot of state for a future RE pass), but the parser captures both arrays as
+raw bytes (`Character::spellCnt` / `spellStat`) so `write_initial_tempfiles` +
+`resume_level` round-trip them losslessly. Active effects (`magiceffects`) +
+the smaller named fields go to named parser outputs.
+
+### 2.3 Item objects — the live-item stream
+
+After the 10 PC-class records, `ITEMS.TMP` stores the **live item objects** that
+the equipment/backpack slots point at. Each slot is a flat record:
+
+```
++0  u16  id
++2  u16  class    (0xFFFF = empty/dead slot)
++4  N    static block       — N = SOP class's total `instanceStaticSize`
++4+N 4   trailer             — 4 bytes (purpose unknown; likely a free-list /
+                               link pointer the writer keeps outside the SOP
+                               static block). For empty slots N=0 and this is
+                               the entire 4-byte payload (always 0xFFFFFFFF).
+```
+
+So empty slots are 8 bytes total, real items 8 + N. Verified against the Quick
+Start Party save (445 real items + ~58 empties; class strides match
+`instanceStaticSize`: dagger 1326 → 13 (+8 = 21-byte total), holy key 1530 →
+12 (+8 = 20), spellbook 1377 → 15 (+8 = 23), and so on).
+
+The 4-byte trailer's **closed-form decode is still pending** — across the
+445 items in the Quick Start save we see 81 distinct trailer patterns. The
+two largest buckets:
+
+| trailer | count | example items |
+|---------|-------|---------------|
+| `ff ff 00 00` | 167 | "free" / unattached items (no owner, not on a floor)  |
+| `ff 00 xx yy` | 164 | various, including most PC-equipped items (`ff 00 00 01`)|
+
+Where the **actual carried-by-PC information lives is NOT the trailer** —
+it's in the static block at byte +4 (the `B:lvl` field from `entities`, which
+items repurpose as an owner reference):
+
+| static[+4] | meaning |
+|-----------|---------|
+| 32–35     | PC object index (Sir Mikeal / Stonebeard / Salina / Lady Reeya) |
+| 1–14      | dungeon level number (item is on the floor or in a container) |
+| 0xFF      | "no location" — orphan / pool |
+
+This is what should drive a save's "is this item on PC X" vs "is it on
+floor / in container" determination, not the trailer. The trailer carries
+something else (free-list/link pointer? per-item flags?), and we currently
+parse it as an opaque 4 bytes — enough for byte-perfect round-trip via
+`write_initial_tempfiles`, but the *semantic* needs another RE pass. A
+sample of equipped items:
+
+| id | cls | owner | trailer | statics[0..5] |
+|----|-----|-------|---------|---------------|
+| 994 | 1338 chain mail | 32 (Mikeal) | `ff 00 00 01` | `00 00 0d 00 20 00` |
+| 985 | 1343 shield     | 33 (Stonebeard) | `ff 00 00 01` | `00 00 0d 00 21 00` |
+| 977 | 1345 spellbook  | 34 (Salina) | `ff ff 00 00` | `00 00 0c 00 22 00` |
+| 969 | 1343 shield     | 35 (Lady Reeya) | `ff 00 00 00` | `00 00 0d 00 23 00` |
+
+✅ **Implemented** in [savegame/items_tmp.cpp](../apps/thirdeye/savegame/items_tmp.cpp)
+(`parseItemStream`). `resume_level` recreates each item via
+`createProgram(id, cls)` + writes the saved static block, then patches the
+PCs' `W:inventory[14..25]` from the parsed `equip[]`.
+
+`write_initial_tempfiles` serializes these; `resume_items`/`restore_items` are
+EOB3-native (no released source). (See `create_sav_and_item_format.md` for the
+char-gen item format these derive from — the inventory ids/types and the
+`table123` type→class map.)
 
 ---
 
