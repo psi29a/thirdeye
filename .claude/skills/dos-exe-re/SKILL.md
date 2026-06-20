@@ -41,15 +41,23 @@ this is the thing that writes CREATE.SAV" before you spin up Ghidra.
 ## LZEXE — decompress before disassembling
 
 `CHARCOPY.EXE` (and possibly others) ship LZEXE'd. The MZ header is real but
-the code is packed. Two options:
+the code is packed.
 
-1. **Use [unlzexe](https://defacto2.net/file/detail/aa256e0)** (or any LZEXE
-   unpacker). The unpacked binary is a plain MZ Ghidra/r2 can load.
-2. **Run it under DOSBox once**, dump memory at entry, save the unpacked
-   image. Painful — prefer (1).
+✅ **In-tree unpacker:** [`tools/unlzexe.py`](../../../tools/unlzexe.py).
+Pure Python 3, stdlib-only, ~110 lines. Port of Bontchev's `unlzexe` 0.8 C
+source. Handles LZEXE v0.91 (the version EOB3's `.EXE`s ship with).
 
-`file` reports LZEXE'd binaries as
-`MS-DOS executable, LZEXE v0.91 compressed` so you'll know.
+```sh
+python3 tools/unlzexe.py ../data/CHARCOPY.EXE /tmp/CHARCOPY.unp.exe
+```
+
+The output is a plain MZ that Ghidra/r2 can load directly. `file` reports
+LZEXE'd inputs as `MS-DOS executable, LZEXE v0.91 compressed` so you know
+when to run it.
+
+> If you hit a v0.90-packed binary, the unpacker will assert; v0.90's reloc
+> table format and signature differ. Port `reloc90` from Bontchev's source
+> if needed.
 
 ## 16-bit MZ in Ghidra
 
@@ -87,6 +95,14 @@ interrupts: `int 21h` AH=3Ch (create), 3Dh (open), 3Fh (read), 40h (write),
 4. Compare against the RE table in
    [docs/create_sav_and_item_format.md](../../../docs/create_sav_and_item_format.md);
    any field we labelled `?` should resolve to a CHGEN local.
+
+## Already-completed: CHARCOPY.EXE
+
+`../eob3_research/CHARCOPY/` (sibling of the thirdeye repo) is a fully
+worked-out RE artifact dump for the EOB1/2 → EOB3 save-staging utility:
+unpacked binary, full disasm, string xrefs, `int 21h` site list, and a
+README summarising what it does. Useful as a template for the same
+treatment on the other DOS binaries. See its `README.md`.
 
 ## When the EXE isn't the right tool
 

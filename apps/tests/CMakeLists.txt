@@ -7,6 +7,7 @@ configure_file ("${CMAKE_CURRENT_SOURCE_DIR}/config.hpp.cmake" "${CMAKE_CURRENT_
 set(UNITTEST
     main.cpp
     savegame_tests.cpp
+    chargen_tests.cpp
 )
 
 set(UNITTEST_HEADER
@@ -28,6 +29,10 @@ add_runtests_dir (vm
 
 add_runtests_dir (savegame
     transfer items_tmp savegame_dir
+    )
+
+add_runtests_dir (chargen
+    item_dat itemtype_dat
     )
 
 # Main executable

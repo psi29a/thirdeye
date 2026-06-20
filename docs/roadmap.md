@@ -134,6 +134,12 @@ SENDs "transfer from Eye II" (M:14), which reads an EOB1/2 save and converts to 
 M:14's runtime functions the same way as `convert created party` (M:16). A standalone
 EOB1/2→EOB3 converter tool could share this reader.
 
+**De-risked**: `CHARCOPY.EXE` (the standalone DOS utility that stages the EOB1/2 save into
+the EOB3 dir) does **no format conversion** — it shells out to DOS `copy` and leaves the
+EOB1/2 save verbatim at `temptemp.sav` for M:14 to ingest. So the whole import lives in the
+SOP M:14 handler; **no DOS RE needed**. Full CHARCOPY artifact dump:
+[`../eob3_research/CHARCOPY/`](../../eob3_research/CHARCOPY/README.md).
+
 ### ⏳ Other stand-ins
 - Level objects load the *saved* `LVLnn.TMP` (not the new-game source).
 - Object link-chains/decflags are simplified.
@@ -159,6 +165,48 @@ never change game behaviour.
   arrow from `party_x/y/fdir`. Drawn on its own overlay surface (like the compass snapshot),
   gated so it never bleeds into the menu. Stretch: scrollable for large levels, level-to-level
   switching, fog-of-war on unexplored cells, optional note-pinning.
+
+## Phase 6 — Replace CHGEN.EXE with a C++20 chargen 🚧
+
+Goal: drop the dependency on the original `CHARGEN/CHGEN.EXE`, run all
+character generation natively. CHGEN.EXE also hosts the in-game Camp UI
+(Rest / Memorize / Pray / Scribe / Load / Save), so a full replacement
+covers both subsystems.
+
+Full RE artifact dump + 3-phase plan: [`../eob3_research/CHGEN/`](../../eob3_research/CHGEN/README.md).
+Quick map:
+
+| | Goal | Status |
+|---|---|---|
+| **Phase 6a — File-format readers** | ITEM.DAT, ITEMTYPE.DAT, CHARPICS.BMP, EOSPREFS.DAT. Reuse thirdeye's existing CPS/palette/font decoders for the rest. | 🚧 in progress (see [`apps/thirdeye/chargen/`](../apps/thirdeye/chargen/)) |
+| **Phase 6b — Chargen UI** | Race / class / alignment / stat-roll / portrait / starting-equipment flow. Writes `CREATE.SAV` in our already-RE'd format (so the existing `xfer` transfer keeps working). | ⏳ pending |
+| **Phase 6c — Camp UI in thirdeye** | Self-host Rest / Memorize / Pray / Scribe / Save / Load. Drops CHGEN.EXE entirely. | ⏳ pending |
+
+What's already done that this phase doesn't need to redo:
+- `CREATE.SAV` writer format ✅ (we read it; see [docs/create_sav_and_item_format.md](create_sav_and_item_format.md))
+- EOB1-type → EOB3-class map (`table123`) ✅ (in [savegame/transfer.cpp](../apps/thirdeye/savegame/transfer.cpp))
+- Typed-equipment-slot placement ✅ ([equipment_slots.md](equipment_slots.md))
+- CPS / palette / font decoders ✅ (in [apps/thirdeye/graphics/](../apps/thirdeye/graphics/))
+
+What's new RE work (some still pending, see the artifact README):
+- ITEM.DAT — header decoded, 14-byte record layout known. **Reader being written.**
+- ITEMTYPE.DAT — record stride known (16 B × 64), per-field semantics partly guessed.
+- CHARPICS.BMP — proprietary header + offset table; decoder TBD.
+- Chargen UI state machine — biggest CHGEN.EXE functions (1500-byte+) are the dispatchers; map them when Phase 6b lands.
+- AD&D 2e ruleset (race × class limits, stat-roll rules) — mostly documented externally; mechanical work.
+
+## Phase 7 — Replace other DOS binaries (longer-term)
+
+Same template as Phase 6 but for the rest of the install:
+
+| EXE | What | Notes |
+|---|---|---|
+| `CHARCOPY.EXE` | EOB1/2 save staging | RE done ([../eob3_research/CHARCOPY/](../../eob3_research/CHARCOPY/README.md)); replace by reading EOB1/2 saves directly in M:14 |
+| `CINE.EXE` | Intro/outro cinematic player | Replace with GFF player thirdeye already has |
+| `SOUND.EXE` | Sound driver shim | Thirdeye uses SDL_mixer + WildMIDI; not needed |
+| `AESOP.EXE` / `INTERP.EXE` | The SOP interpreter | **Already replaced** by thirdeye's VM |
+| `DOS4GW.EXE` | Watcom DOS extender | Only used by AESOP/32 paths; not needed |
+| `CHARGEN/MGA.OVL` / `XGA.OVL` | VGA mode-switching overlays | Not needed (SDL handles modes) |
 
 ---
 
