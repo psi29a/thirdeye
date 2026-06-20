@@ -45,46 +45,79 @@ narrative on completed work.
 - ✅ **Items & inventory (display)** — equipment screen renders the paper-doll + char-gen gear;
   slot regions register so interaction routes through the proven click path.
 
-### 🚧 Combat — RE'd, monsters load, attack chain wired through to-hit; hit doesn't land yet
+### ✅ Combat — basic attack/damage/die chain lands
 
-**What works** (`THIRDEYE_TESTMON=1`): monsters render (sword wraiths in colour), 4-per-cell,
-re-face the party as you move. The attack flow is end-to-end driven — kernel `auto-attack`
-(M:208, gated on `B:auto_button`) walks `W:player[]` and SENDs each PC `use/attack request`
-(M:163) → `use` → `acquire NPC target` → `roll to hit` (M:71). Fires 100+ times correctly
-targeting the wraith.
+`THIRDEYE_ATTACK=1` validates end-to-end: PC swings → `roll to hit` → `player to hit`
+(THAC0 on `tables` singleton 2003) → `weapon damage` / `adjust damage` → `take damage` →
+`die` → `remove`. Verified against troll (class 1934, HP 30) — HP drops on each hit, NPC
+dies at 0 HP, monster is removed from the level. Verified against sword wraith (class 1904,
+bit-6 incorporeal, `NPCstat & 0x40`) — `weapons.hand-to-hand` line 866 takes the special
+bit-0x40 path and SENDs `die` directly (no `take damage`), and the wraith is removed on
+first hit. Both flows reach `entities.remove` (msg 22) which unlinks from `lvlobj` plane 2
+so `acquire NPC target` no longer finds the corpse.
 
-**Blockers:**
-1. **`dice`/`rnd` were unimplemented** (stub → 0) — every combat roll was 0 → no hit ever.
-   ✅ Now real (`engine.cpp`, shared PRNG). Also unblocks monster AI / `bounce` / anything
-   random.
-2. **Sword wraith is bit-64 incorporeal undead** — `roll to hit` ENDs immediately on a bit-64
-   target (immune to normal weapons; needs magic/blessed). Correct EOB3 mechanic.
-3. **Right-hand item trips bit 25 of `report(weapon, 1)`** — i.e. it's not a plain melee
-   weapon. Points back at **auto-equip hand-slot mapping** (the sword likely landed in EOB3
-   slot 18, not the right hand 16).
-4. **`player to hit` (M:162)** — THAC0/level math via SEND to object index 2003 (combat-rules
-   singleton, not yet disassembled).
+**Subsystem wins along the way:**
+- `dice`/`rnd` now real (shared PRNG in [engine.cpp](../apps/thirdeye/engine.cpp)).
+- `player to hit` (M:162) — bytecode in `tables` class (2380), `INTC #07d3 ;2003` is the
+  *object index* of the kernel's `tables` singleton, not the "marble plaque" class. THAC0
+  = 20 − (level−1) / `B:table798[col]` × `B:table794[col]` − arg1.
+- **Synthetic-spawn `W:carried` init** — `THIRDEYE_ATTACK` bypasses `LVLnn.TMP`, so NPCs
+  came up with `W:carried = 0`. `NPC.die` loops on `W:carried != -1` and walks into obj 0,
+  stalling the death path. Init `W:carried = -1` (NPC offset 5) on synthetic spawn fixes it.
+  Real level NPCs already get this from the level loader.
+- Typed equipment placement (`TransferState::rebuildPlacement`) — for chargen transfer, not
+  exercised by the Quick Start `ITEMS.TMP` load.
 
-**Precise next steps to land a kill**: disassemble + fix `player to hit` so THAC0/level math
-gives a reachable target; handle magic-weapon vs bit-64. Then `roll for damage` (43) →
-`take damage` (82) → `die` complete the loop. Debug: `THIRDEYE_ATTACK=1` enables + drives
-auto-attack and logs wraith HP + PC hands; combat trace `[mon-msg]` covers msgs
-163/77/78/71/43/82/91/85/99/107.
+**Stand-ins still in place** (not blockers):
+- `THIRDEYE_TESTMON=1` gate on monster rendering — drop it now that combat works.
+- `[atk] mon … (live=N)` still shows the obj slot occupied after death; that's correct —
+  `NPC.die` deliberately doesn't call `destroy_object`, just `remove` + `place(-1,-1,-1)`.
 
-Then enable monster rendering by default (drop the `THIRDEYE_TESTMON` gate).
+**Open follow-ups** (real gameplay, not bring-up): magic-weapon vs bit-6 (today *any*
+hit kills incorporeals; should require `weapon flags & magic`), monster-AI attack-back
+(M:208 only schedules party→monster — monster→party comes through `bounce`/`my turn`),
+experience award + level up integration on the player side.
 
 ### 🚧 Save / load (the savegame format)
 
-*Half done:*
-- **`LVLnn.TMP` level-object format** RE'd + loaded (`loadLevelObjects`, see
+*Done:*
+- **`LVLnn.TMP` level-object format** RE'd + loaded
+  ([savegame/lvl_tmp.cpp](../apps/thirdeye/savegame/lvl_tmp.cpp), see
   [eob3_savegame_format.md](eob3_savegame_format.md) §3).
-- **`ITEMS.TMP` character record** documented (savegame doc §2).
+- **`ITEMS.TMP` character record** documented + parsed into a structured
+  [`ItemsTmp`](../apps/thirdeye/savegame/items_tmp.hpp) (party position + per-PC
+  name/HP/XP/stats/equipment-slot item-object ids). Unit-tested.
+- **`SAVEGAME.DIR` slot list** parsed ([`savegame_dir.hpp`](../apps/thirdeye/savegame/savegame_dir.hpp))
+  for the load/save menu.
+- **`resume_level` integration** (gated on `THIRDEYE_CONTINUE=1`): seeds the
+  party at the saved position (level 3 @ (7,24) facing E for Quick Start),
+  **recreates the saved item objects** from §2.3 (445 items in the Quick Start
+  save — daggers, holy keys, spellbooks, …), **patches each chargen-created
+  PC's name/HP/XP/abilities** from the parsed records, and copies the saved
+  `equip[]` into `PC.W:inventory[14..25]`. Verified end-to-end: PC 32 ends up
+  with `R=993 L=992` (Sir Mikeal's saved weapons) instead of `R=996 L=-1`
+  (chargen's). Strength bonuses + real weapons together drop a troll 30→18 HP
+  in 8 seconds.
+- **Live item-object stream (§2.3)** RE'd + parsed
+  ([`parseItemStream`](../apps/thirdeye/savegame/items_tmp.hpp)): variable-
+  stride records `(u16 id, u16 class, N statics, 4 trailer)`, where N comes
+  from the SOP class's total `instanceStaticSize` via a caller-supplied lookup.
+  Unit-tested + verified against the Quick Start save.
 
 *Remaining:*
-- Read the party (name/HP/XP/stats/equipment) + position from a real `ITEMS.TMP` on load
-  (currently the char-gen transfer supplies the party).
+- **Drop the `THIRDEYE_CONTINUE` gate.** Today, when a `SAVEGAME/ITEMS.TMP`
+  exists, we *could* always restore from it (the bundled "Quick Start Party"
+  case). But the chargen-new-game path should still work, so we need a
+  signal — either a different boot mode (Continue vs New Game on the title
+  menu) or "no `CREATE.SAV` = new game; save exists = continue".
 - `write_initial_tempfiles` (the new-game write).
-- Wire it all to **"Continue the Quest"** so a save loads end-to-end.
+- The 4-byte trailer in each §2.3 record is currently skipped; understand
+  what it stores (likely a free-list / link pointer) so it round-trips.
+- ~~Per-PC unmapped fields~~ ✅ done: race/classes/portrait/PCstat/alignment/
+  levels[3]/lost_levels[3]/lost_hp/hbon/xp[1..2] now all parsed and patched.
+  Remaining unmapped: memorized/known spells (the big B:spell_cnt/spell_stat
+  arrays at PC offset 209/409 — likely fill most of the +216..+626 tail), AC,
+  L:magiceffects, B:sparkle. None blocking gameplay today.
 
 Reference data in `../data/SAVEGAME/`: a used save **"Quick Start Party"** (named in
 `SAVEGAME.DIR`) + the binary state files. Convention: **`.TMP` = live state**, **`_00/_01.BIN`
@@ -100,6 +133,12 @@ EOB1/2 character record matches our `CREATE.SAV` RE
 SENDs "transfer from Eye II" (M:14), which reads an EOB1/2 save and converts to EOB3's. Wire
 M:14's runtime functions the same way as `convert created party` (M:16). A standalone
 EOB1/2→EOB3 converter tool could share this reader.
+
+**De-risked**: `CHARCOPY.EXE` (the standalone DOS utility that stages the EOB1/2 save into
+the EOB3 dir) does **no format conversion** — it shells out to DOS `copy` and leaves the
+EOB1/2 save verbatim at `temptemp.sav` for M:14 to ingest. So the whole import lives in the
+SOP M:14 handler; **no DOS RE needed**. Full CHARCOPY artifact dump:
+[`../eob3_research/CHARCOPY/`](../../eob3_research/CHARCOPY/README.md).
 
 ### ⏳ Other stand-ins
 - Level objects load the *saved* `LVLnn.TMP` (not the new-game source).
@@ -126,6 +165,48 @@ never change game behaviour.
   arrow from `party_x/y/fdir`. Drawn on its own overlay surface (like the compass snapshot),
   gated so it never bleeds into the menu. Stretch: scrollable for large levels, level-to-level
   switching, fog-of-war on unexplored cells, optional note-pinning.
+
+## Phase 6 — Replace CHGEN.EXE with a C++20 chargen 🚧
+
+Goal: drop the dependency on the original `CHARGEN/CHGEN.EXE`, run all
+character generation natively. CHGEN.EXE also hosts the in-game Camp UI
+(Rest / Memorize / Pray / Scribe / Load / Save), so a full replacement
+covers both subsystems.
+
+Full RE artifact dump + 3-phase plan: [`../eob3_research/CHGEN/`](../../eob3_research/CHGEN/README.md).
+Quick map:
+
+| | Goal | Status |
+|---|---|---|
+| **Phase 6a — File-format readers** | ITEM.DAT, ITEMTYPE.DAT, CHARPICS.BMP, EOSPREFS.DAT. Reuse thirdeye's existing CPS/palette/font decoders for the rest. | 🚧 in progress (see [`apps/thirdeye/chargen/`](../apps/thirdeye/chargen/)) |
+| **Phase 6b — Chargen UI** | Race / class / alignment / stat-roll / portrait / starting-equipment flow. Writes `CREATE.SAV` in our already-RE'd format (so the existing `xfer` transfer keeps working). | ⏳ pending |
+| **Phase 6c — Camp UI in thirdeye** | Self-host Rest / Memorize / Pray / Scribe / Save / Load. Drops CHGEN.EXE entirely. | ⏳ pending |
+
+What's already done that this phase doesn't need to redo:
+- `CREATE.SAV` writer format ✅ (we read it; see [docs/create_sav_and_item_format.md](create_sav_and_item_format.md))
+- EOB1-type → EOB3-class map (`table123`) ✅ (in [savegame/transfer.cpp](../apps/thirdeye/savegame/transfer.cpp))
+- Typed-equipment-slot placement ✅ ([equipment_slots.md](equipment_slots.md))
+- CPS / palette / font decoders ✅ (in [apps/thirdeye/graphics/](../apps/thirdeye/graphics/))
+
+What's new RE work (some still pending, see the artifact README):
+- ITEM.DAT — header decoded, 14-byte record layout known. **Reader being written.**
+- ITEMTYPE.DAT — record stride known (16 B × 64), per-field semantics partly guessed.
+- CHARPICS.BMP — proprietary header + offset table; decoder TBD.
+- Chargen UI state machine — biggest CHGEN.EXE functions (1500-byte+) are the dispatchers; map them when Phase 6b lands.
+- AD&D 2e ruleset (race × class limits, stat-roll rules) — mostly documented externally; mechanical work.
+
+## Phase 7 — Replace other DOS binaries (longer-term)
+
+Same template as Phase 6 but for the rest of the install:
+
+| EXE | What | Notes |
+|---|---|---|
+| `CHARCOPY.EXE` | EOB1/2 save staging | RE done ([../eob3_research/CHARCOPY/](../../eob3_research/CHARCOPY/README.md)); replace by reading EOB1/2 saves directly in M:14 |
+| `CINE.EXE` | Intro/outro cinematic player | Replace with GFF player thirdeye already has |
+| `SOUND.EXE` | Sound driver shim | Thirdeye uses SDL_mixer + WildMIDI; not needed |
+| `AESOP.EXE` / `INTERP.EXE` | The SOP interpreter | **Already replaced** by thirdeye's VM |
+| `DOS4GW.EXE` | Watcom DOS extender | Only used by AESOP/32 paths; not needed |
+| `CHARGEN/MGA.OVL` / `XGA.OVL` | VGA mode-switching overlays | Not needed (SDL handles modes) |
 
 ---
 

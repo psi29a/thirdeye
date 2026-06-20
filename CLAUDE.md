@@ -22,6 +22,8 @@ Version 0.87.0 · GPLv3 · SDL2 (Linux/macOS/Windows), C++20.
 - [docs/perf_notes.md](docs/perf_notes.md) — perf history + the `THIRDEYE_*` diagnostic env
   vars (worth skimming once — they save hours when something stalls silently).
 - [docs/eob3_savegame_format.md](docs/eob3_savegame_format.md) — `ITEMS.TMP` / `LVLnn.TMP`.
+- [docs/equipment_slots.md](docs/equipment_slots.md) — RE of `W:inventory[]` body-part
+  layout + EOB1 type → EOB3 class table + why the current chargen placement is wrong.
 - [docs/create_sav_and_item_format.md](docs/create_sav_and_item_format.md) — char-gen save +
   EOB1 14-byte item format.
 - [docs/upgrade_to_cpp20.md](docs/upgrade_to_cpp20.md) — build notes.
@@ -53,11 +55,21 @@ Run the VM over data:
   movement (WASD/QE + arrow keys + compass mouse), equipment screen with real char-gen gear,
   per-level objects from `LVLnn.TMP`. See [docs/progress.md](docs/progress.md).
 
-The current top-of-stack work item is combat (the attack chain runs but no hit lands — see
-[docs/roadmap.md](docs/roadmap.md) Phase 3).
+The current top-of-stack work item is save/load + party import — combat now lands
+(troll dies, sword wraith dies on contact). See [docs/roadmap.md](docs/roadmap.md) Phase 3.
 
 ## Conventions & gotchas (read this once)
 
+- **Our job is to *run* EYE.RES, not to RE it.** Thirdeye is an AESOP-compatible runtime;
+  the game logic lives in EYE.RES bytecode and executes unchanged on our VM. When something
+  misbehaves, the bug is almost always in our runtime (a stubbed CALL, a wrong opcode
+  semantic, an uninitialized static the original loader would have set) — not in the SOP.
+  **Read `../eob3_research/` first.** John Miles released the AESOP/32 runtime C source
+  (`runtime/*.C`: `EYE.C`, `RTCODE.C`, `RTOBJECT.C`, `INTERP.C`, `EVENT.C`, `GRAPHICS.C`,
+  etc.) and the compiler source (`aesop32/DEV/`) — that's the ground truth for how a CALL
+  is supposed to behave, how `create_program` initializes state, how events dispatch.
+  Reach for `daesop` only as a *debugging* tool, to confirm what the bytecode expects of
+  our runtime — never to "fix" the SOP itself.
 - **VM stack discipline is subtle.** `PUSH` reserves a slot, value loads/constants
   **overwrite the top slot in place** (which is why real bytecode emits a `PUSH` before each
   load), scalar stores don't pop, binary ops are left=second/right=top, branches don't pop.
