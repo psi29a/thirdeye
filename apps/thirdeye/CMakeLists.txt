@@ -34,6 +34,10 @@ add_thirdeye_dir (savegame
     transfer lvl_tmp items_tmp savegame_dir
     )
 
+add_thirdeye_dir (chargen
+    item_dat itemtype_dat
+    )
+
 add_thirdeye_dir (runtime
     internal rtcode event rtobject eye graphics
     )
