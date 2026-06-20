@@ -174,7 +174,8 @@ include(FetchContent)
 FetchContent_Declare(
     cli11
     GIT_REPOSITORY https://github.com/CLIUtils/CLI11.git
-    GIT_TAG        v2.4.2
+    GIT_TAG        v2.6.2  # uses cmake_minimum_required(VERSION 3.14...4.2);
+                           # v2.4.2 hit the "compat with CMake <3.10 going away" warning
 )
 FetchContent_MakeAvailable(cli11)
 # CLI11 is header-only; mark its headers SYSTEM so its warnings (MSVC C4866/
