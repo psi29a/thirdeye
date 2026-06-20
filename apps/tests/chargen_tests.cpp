@@ -103,8 +103,8 @@ TEST(ItemDat_Test, ParsesBundledItemDat) {
 	if (!std::filesystem::exists(path)) GTEST_SKIP() << path << " not found";
 
 	auto p = THIRDEYE::chargen::loadItemDat(path);
-	EXPECT_EQ(434u, p.items.size());
-	EXPECT_EQ(123u, p.names.size());
+	ASSERT_EQ(434u, p.items.size());   // fatal: we index items[0..1] below
+	ASSERT_EQ(123u, p.names.size());
 	// First couple of items have known shape (from the file dump):
 	// item[0]: unid=0 id=1 (placeholder/sentinel)
 	// item[1]: unid=2 id=1 bits=0 pic=0x1f type=0x16 (leather armor)
@@ -156,7 +156,7 @@ TEST(ItemTypeDat_Test, ParsesHandBuiltRecords) {
 }
 
 // Real-file integration test: the bundled CHARGEN/ITEMTYPE.DAT.
-// 1026 bytes = u16 count (64) + 64 × 16-byte records + u16 trailer (0x0004).
+// 1026 bytes = 64 × 16-byte records + u16 trailer (0x0004). No count header.
 TEST(ItemTypeDat_Test, ParsesBundledItemTypeDat) {
 	const char *dataDir = std::getenv("THIRDEYE_TEST_DATA_DIR");
 	if (!dataDir) GTEST_SKIP() << "set THIRDEYE_TEST_DATA_DIR=/path/to/eob3 dir";
@@ -164,7 +164,7 @@ TEST(ItemTypeDat_Test, ParsesBundledItemTypeDat) {
 	if (!std::filesystem::exists(path)) GTEST_SKIP() << path << " not found";
 
 	auto p = THIRDEYE::chargen::loadItemTypeDat(path);
-	EXPECT_EQ(64u,     p.types.size());
+	ASSERT_EQ(64u,     p.types.size());  // fatal: we index types[0] below
 	EXPECT_EQ(0x0004,  p.trailer);
 	// First record's distinctive bytes (from the file dump):
 	//   40 00 08 00 08 00 00 39 01 01 08 00 01 0a 00 00

@@ -118,10 +118,10 @@ ItemsTmp parseItemsTmp(const std::vector<uint8_t> &data) {
 		c.portrait    = readI16(data, base + kPortraitOff);
 		c.PCstat      = data[base + kPCstatOff];
 		c.alignment   = data[base + kAlignmentOff];
-		for (int i = 0; i < 3; ++i) {
-			c.levels[i]     = data[base + kLevelsOff + i];
-			c.lostLevels[i] = data[base + kLostLevelsOff + i];
-			c.xp[i]         = static_cast<int32_t>(readU32(data, base + kXpOff + i * 4));
+		for (int k = 0; k < 3; ++k) {
+			c.levels[k]     = data[base + kLevelsOff + k];
+			c.lostLevels[k] = data[base + kLostLevelsOff + k];
+			c.xp[k]         = static_cast<int32_t>(readU32(data, base + kXpOff + k * 4));
 		}
 		c.lostHp      = readI16(data, base + kLostHpOff);
 		c.hpCurrent   = readI16(data, base + kHpCurOff);

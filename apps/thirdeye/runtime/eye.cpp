@@ -11,6 +11,7 @@
 #include <filesystem>
 #include <fstream>
 #include <iterator>
+#include <ostream> // for rt() << ... << std::endl (internal.hpp only fwd-decls)
 #include <string>
 #include <vector>
 
@@ -323,10 +324,12 @@ bool tryHandle(Context &ctx, const std::string &fn,
 					wb(kLostStrOff,    1, c.lostStr);
 					wb(kUnknownGapOff, 4, static_cast<int32_t>(c.unknownGap));
 					if (uint8_t *p = ctx.objects.classStaticPtr(
-					        idx, kPcClass, kSpellCntOff, c.spellCnt.size()))
+					        idx, kPcClass, kSpellCntOff,
+					        static_cast<uint32_t>(c.spellCnt.size())))
 						std::memcpy(p, c.spellCnt.data(), c.spellCnt.size());
 					if (uint8_t *p = ctx.objects.classStaticPtr(
-					        idx, kPcClass, kSpellStatOff, c.spellStat.size()))
+					        idx, kPcClass, kSpellStatOff,
+					        static_cast<uint32_t>(c.spellStat.size())))
 						std::memcpy(p, c.spellStat.data(), c.spellStat.size());
 					// W:inventory[14..25] <- file slots 0..11 (body, bracers, rhand,
 					// lring, rring, boots, lhand, pouchA, pouchB, pouchC, necklace,

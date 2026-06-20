@@ -44,7 +44,10 @@ struct QuitRequested {};
 struct Relaunch { std::string program; };
 
 // Per-call references handed to every category. These come from the engine's
-// call site; the host TU owns the storage.
+// call site; the host TU owns the storage. Reference members make copy/move
+// assignment implicitly deleted -- the explicit deletions below silence
+// MSVC C5027 and document intent. Aggregate init was the old call style;
+// we keep an explicit constructor so callers can still write Context{...}.
 struct Context {
 	VM::ObjectSystem &objects;
 	VM::EventSystem &events;
@@ -53,6 +56,18 @@ struct Context {
 	std::map<int32_t, int32_t> &mem;
 	savegame::TransferState &xfer;
 	VM::Interpreter &vm;
+
+	Context(VM::ObjectSystem &objects_, VM::EventSystem &events_,
+	        GRAPHICS::Graphics *gfx_, RESOURCES::Resource &res_,
+	        std::map<int32_t, int32_t> &mem_, savegame::TransferState &xfer_,
+	        VM::Interpreter &vm_)
+	    : objects(objects_), events(events_), gfx(gfx_), res(res_),
+	      mem(mem_), xfer(xfer_), vm(vm_) {}
+
+	Context(const Context &) = default;
+	Context(Context &&) = default;
+	Context &operator=(const Context &) = delete;
+	Context &operator=(Context &&) = delete;
 };
 
 // --- Engine-owned globals (defined in engine.cpp) -------------------------
