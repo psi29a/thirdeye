@@ -193,9 +193,12 @@ bool tryHandle(Context &ctx, const std::string &fn,
 			                    now - gLastPresent).count();
 			auto updateUs = std::chrono::duration_cast<std::chrono::microseconds>(
 			                    now - presentStart).count();
-			std::cerr << "[perf] " << gDrawCount << " draws (" << gDrawNanos/1000.0
-			          << " us total), present=" << updateUs/1000.0
-			          << " ms, gap=" << sincePrev/1000.0 << " ms\n";
+			std::cerr << "[perf] " << gDrawCount << " draws ("
+			          << static_cast<double>(gDrawNanos) / 1000.0
+			          << " us total), present="
+			          << static_cast<double>(updateUs) / 1000.0
+			          << " ms, gap="
+			          << static_cast<double>(sincePrev) / 1000.0 << " ms\n";
 			gDrawCount = 0;
 			gDrawNanos = 0;
 			gLastPresent = now;

@@ -45,8 +45,10 @@ int loadLevelObjects(int level, VM::ObjectSystem &objects,
 		    x > 31 || y > 31)
 			continue;
 		int hp = d[o + 7] | (d[o + 8] << 8); // monster HP (constant per creature)
+		bool created = false;
 		try {
 			objects.createProgram(id, static_cast<uint16_t>(cls));
+			created = true;
 			// setS writes a static via the given *defining* class; it no-ops if that
 			// class isn't in the object's chain (so the feature- vs NPC-specific writes
 			// below each apply only to the right object kind).
@@ -143,7 +145,15 @@ int loadLevelObjects(int level, VM::ObjectSystem &objects,
 			seen[id] = true;
 			++placed;
 		} catch (const std::exception &) {
-			seen[id] = true; // create failure -- skip, keep going.
+			// Rollback: a later step may have thrown after createProgram
+			// succeeded, which would leave a partially-initialized live object
+			// in the table. Destroy it so the next scan pass can't pick it up
+			// and the obj id is free for re-use.
+			if (created) {
+				try { objects.destroyObject(id); }
+				catch (const std::exception &) {}
+			}
+			seen[id] = true; // mark scanned -- skip, keep going.
 		}
 	}
 	std::cout << "  [loadLevelObjects: placed " << placed << " objects from " << fn

@@ -69,11 +69,16 @@ TransferState::SlotCat TransferState::categoryForClass(int cls) {
 }
 
 int32_t TransferState::playerAttrib(int pc, int attr, int size) const {
-	// `pc`/`size` come from VM args: reject a bad size (the `8*i` shift would be
-	// >= 32 -- UB) and a negative pc before computing the offset.
-	if (pc < 0 || (size != 1 && size != 2 && size != 4))
+	// `pc`/`attr`/`size` come from VM args -- treat as untrusted. Reject:
+	//  - bad size (1/2/4 only; the `8*i` shift would be >= 32 = UB),
+	//  - out-of-range pc / negative attr (CREATE.SAV has 4 PC records),
+	// and only THEN do the size_t arithmetic (which can't overflow).
+	if (pc < 0 || pc >= 4 || attr < 0 ||
+	    (size != 1 && size != 2 && size != 4))
 		return 0;
-	size_t off = static_cast<size_t>(kPcBase + pc * kPcStride + attr);
+	size_t off = static_cast<size_t>(kPcBase)
+	           + static_cast<size_t>(pc) * static_cast<size_t>(kPcStride)
+	           + static_cast<size_t>(attr);
 	uint32_t v = 0;
 	for (int i = 0; i < size; ++i) {
 		if (off + i >= data.size()) break;
