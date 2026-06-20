@@ -3,6 +3,7 @@
 #include "../vm/events.hpp"
 #include "../vm/objects.hpp"
 
+#include <ostream> // for rt() << ... << std::endl (internal.hpp only fwd-decls)
 #include <string>
 
 namespace THIRDEYE::runtime::rtobject {
