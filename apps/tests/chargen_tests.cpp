@@ -1,11 +1,15 @@
 #include "gtest/gtest.h"
 
+#include "../thirdeye/chargen/charpics.hpp"
 #include "../thirdeye/chargen/item_dat.hpp"
 #include "../thirdeye/chargen/itemtype_dat.hpp"
+#include "../thirdeye/graphics/bitmap.hpp"
 
 #include <cstdint>
 #include <cstdlib>
 #include <filesystem>
+#include <fstream>
+#include <iterator>
 #include <vector>
 
 namespace {
@@ -172,4 +176,138 @@ TEST(ItemTypeDat_Test, ParsesBundledItemTypeDat) {
 	EXPECT_EQ(0x0008, p.types[0].width);
 	EXPECT_EQ(0x0008, p.types[0].height);
 	EXPECT_EQ(0x3900, p.types[0].slotMask);
+}
+
+// --- Bitmap CHARPICS auto-detect regressions --------------------------
+
+// An older-format buffer where u32@0 happens to equal the buffer size and
+// unknown1==0 must NOT be auto-detected as CHARPICS. We disambiguate by
+// requiring two monotonic-ascending u32 offsets at +10/+14.
+TEST(CharPics_Test, OlderFormatNotMisdetectedAsCharPics) {
+	// Simulate an older-format file: u16 fileSize, u16 unknown1=0, u16 numSubs=1,
+	// rest random bytes (NOT a sorted offset table). Total size 60.
+	std::vector<uint8_t> b(60, 0);
+	const uint16_t sz = static_cast<uint16_t>(b.size());
+	b[0] = sz & 0xFF; b[1] = (sz >> 8) & 0xFF;     // u16 fileSize -- happens to equal size
+	// b[2..3] = 0 (unknown1 = 0). Combined with b[0..1], u32@0 == size.
+	b[4] = 1; b[5] = 0;                             // numSubBitmaps = 1
+	// b[6..7] = 0 (offset to first sub)
+	// Bytes at +10..+17 are NOT plausible monotonic u32 offsets.
+	b[10] = 0xAA; b[11] = 0xBB; b[12] = 0; b[13] = 0;
+	b[14] = 0x10; b[15] = 0;   b[16] = 0; b[17] = 0;  // 0x10 < 0xBBAA -> non-monotonic
+	GRAPHICS::Bitmap bmp(b);
+	// Should fall through to OLDER format, numSubBitmaps = 1
+	EXPECT_EQ(1u, bmp.getNumberOfBitmaps());
+}
+
+// --- CHARPICS via graphics::Bitmap ------------------------------------
+
+// graphics::Bitmap now auto-detects the CHARPICS variant and exposes each
+// portrait as a regular Bitmap shape. The pixel decoder is best-effort
+// (literal-bytes-clamped-to-width) until the per-row RLE grammar is RE'd --
+// the test pins dimensions + that the decode produces width*height bytes.
+TEST(CharPics_Test, BitmapDecodesAllBundledPortraits) {
+	const char *dataDir = std::getenv("THIRDEYE_TEST_DATA_DIR");
+	if (!dataDir) GTEST_SKIP() << "set THIRDEYE_TEST_DATA_DIR=/path/to/eob3 dir";
+	auto path = std::filesystem::path(dataDir) / "CHARGEN" / "CHARPICS.BMP";
+	if (!std::filesystem::exists(path)) GTEST_SKIP() << path << " not found";
+
+	std::ifstream f(path, std::ios::binary);
+	std::vector<uint8_t> bytes((std::istreambuf_iterator<char>(f)),
+	                            std::istreambuf_iterator<char>());
+	GRAPHICS::Bitmap bmp(bytes);
+	ASSERT_EQ(89u, bmp.getNumberOfBitmaps())
+	    << "expected 89 portraits in bundled CHARPICS.BMP";
+	for (uint16_t i = 0; i < bmp.getNumberOfBitmaps(); ++i) {
+		EXPECT_EQ(32u, bmp.getWidth(i))  << "portrait " << i;
+		EXPECT_EQ(32u, bmp.getHeight(i)) << "portrait " << i;
+		auto px = bmp[i];
+		EXPECT_EQ(32u * 32u, px.size()) << "portrait " << i << " pixel buffer";
+	}
+}
+
+// --- CHARPICS.BMP ------------------------------------------------------
+
+TEST(CharPics_Test, EmptyBuffer) {
+	auto p = THIRDEYE::chargen::parseCharPics({});
+	EXPECT_TRUE(p.portraits.empty());
+}
+
+// Hand-build a minimal CHARPICS-style file with 2 tiny portraits:
+//   header (10 bytes) + offset table (2 entries, 8 bytes) + portrait sub-headers + RLE bytes.
+TEST(CharPics_Test, ParsesHandBuilt) {
+	std::vector<uint8_t> b;
+	auto u32 = [&](uint32_t v) {
+		for (int i = 0; i < 4; ++i) b.push_back((v >> (i * 8)) & 0xFF);
+	};
+	auto u16 = [&](uint16_t v) {
+		b.push_back(v & 0xFF); b.push_back((v >> 8) & 0xFF);
+	};
+	auto skip = [&](size_t n) { b.resize(b.size() + n, 0); };
+
+	// Header (placeholder file size; we'll fix it later)
+	size_t headerStart = b.size();
+	u32(0); u16(0); u16(0); u16(0);
+
+	// Reserve offset table (2 × u32)
+	size_t tableStart = b.size();
+	u32(0); u32(0);
+
+	// Portrait 0: 4x4, RLE = 5 bytes of fake data
+	size_t off0 = b.size();
+	u16(3);          // boundsx = width-1
+	u16(4);          // boundsy = height
+	u16(0);          // reserved
+	for (int i = 0; i < 5; ++i) b.push_back(static_cast<uint8_t>(0xA0 + i));
+
+	// Portrait 1: 8x8, RLE = 3 bytes
+	size_t off1 = b.size();
+	u16(7); u16(8); u16(0);
+	b.push_back(0xB1); b.push_back(0xB2); b.push_back(0xB3);
+
+	// Patch offsets + file size
+	auto patchU32 = [&](size_t off, uint32_t v) {
+		for (int i = 0; i < 4; ++i) b[off + i] = (v >> (i * 8)) & 0xFF;
+	};
+	patchU32(tableStart + 0, static_cast<uint32_t>(off0));
+	patchU32(tableStart + 4, static_cast<uint32_t>(off1));
+	patchU32(headerStart, static_cast<uint32_t>(b.size()));
+
+	auto p = THIRDEYE::chargen::parseCharPics(b);
+	EXPECT_EQ(b.size(), p.declaredFileSize);
+	ASSERT_EQ(2u, p.portraits.size());
+	EXPECT_EQ(4,  p.portraits[0].width);
+	EXPECT_EQ(4,  p.portraits[0].height);
+	EXPECT_EQ(5u, p.portraits[0].rleData.size());
+	EXPECT_EQ(0xA0, p.portraits[0].rleData[0]);
+	EXPECT_EQ(0xA4, p.portraits[0].rleData[4]);
+	EXPECT_EQ(8,  p.portraits[1].width);
+	EXPECT_EQ(8,  p.portraits[1].height);
+	EXPECT_EQ(3u, p.portraits[1].rleData.size());
+}
+
+// Real-data: bundled CHARGEN/CHARPICS.BMP has 89 32x32 portraits.
+TEST(CharPics_Test, ParsesBundledCharPics) {
+	const char *dataDir = std::getenv("THIRDEYE_TEST_DATA_DIR");
+	if (!dataDir) GTEST_SKIP() << "set THIRDEYE_TEST_DATA_DIR=/path/to/eob3 dir";
+	auto path = std::filesystem::path(dataDir) / "CHARGEN" / "CHARPICS.BMP";
+	if (!std::filesystem::exists(path)) GTEST_SKIP() << path << " not found";
+
+	auto p = THIRDEYE::chargen::loadCharPics(path);
+	EXPECT_EQ(82005u, p.declaredFileSize);
+	ASSERT_EQ(89u,    p.portraits.size());
+	// All 89 are 32x32 in this file (a chargen invariant).
+	for (size_t i = 0; i < p.portraits.size(); ++i) {
+		EXPECT_EQ(32, p.portraits[i].width)
+		    << "portrait " << i << " width";
+		EXPECT_EQ(32, p.portraits[i].height)
+		    << "portrait " << i << " height";
+		EXPECT_GT(p.portraits[i].rleData.size(), 0u);
+	}
+	// 14 of the 89 are "empty"-shaped (~229 - 6 header = ~223-byte RLE).
+	// Pin the distribution loosely.
+	int small = 0;
+	for (const auto &q : p.portraits)
+		if (q.rleData.size() < 300) ++small;
+	EXPECT_EQ(14, small) << "expected 14 'empty' portrait slots";
 }
