@@ -65,6 +65,9 @@ void THIRDEYE::Engine::setSkipMenu(bool skipMenu) {
 void THIRDEYE::Engine::setSkipIntro(bool skipIntro) {
 	mSkipIntro = skipIntro;
 }
+void THIRDEYE::Engine::setChargen(bool chargen) {
+	mChargen = chargen;
+}
 
 // The game-data path may be either a directory (in which case we append the
 // selected game's main .RES) or a direct path to a .RES file (used as-is, with
@@ -510,8 +513,27 @@ void THIRDEYE::Engine::bootObject(RESOURCES::Resource &resource,
 	// work -- see the Phase 3 save/load note in CLAUDE.md.)
 	constexpr int32_t MODE_INTR = 0x494e5452; // 'I''N''T''R' LE -> title menu
 	constexpr int32_t MODE_CHGN = 0x4348474e; // 'C''H''G''N' LE -> char-gen + game
+	constexpr int32_t MODE_CINE = 0x43494e45; // 'C''I''N''E' LE -> straight into the game
+	                                          //                    (resume_level builds the party from the save)
+	// Clean gate-drop for THIRDEYE_CONTINUE: when --skip-menu is set we auto-detect.
+	// ITEMS.TMP present  -> CINE (continue from save: resume_level creates PCs).
+	// ITEMS.TMP missing  -> CHGN (run chargen-transfer: copy CREATE.SAV's PCs).
+	// --chargen overrides: force CHGN regardless of save state (start a new game).
+	auto saveExists = []() {
+		std::error_code ec;
+		return std::filesystem::exists("SAVEGAME/ITEMS.TMP", ec) ||
+		       std::filesystem::exists("savegame/items.tmp", ec);
+	};
 	std::map<int32_t, int32_t> mem;
-	mem[1264] = mSkipMenu ? MODE_CHGN : MODE_INTR;
+	int32_t bootMode = MODE_INTR;
+	if (mChargen)       bootMode = MODE_CHGN;
+	else if (mSkipMenu) bootMode = saveExists() ? MODE_CINE : MODE_CHGN;
+	mem[1264] = bootMode;
+	std::cout << "  [boot mode = "
+	          << (bootMode == MODE_CINE ? "CINE (continue from save)"
+	            : bootMode == MODE_CHGN ? "CHGN (chargen + game)"
+	            : "INTR (title menu)")
+	          << "]" << std::endl;
 	TransferState xfer; // char-gen party transfer file (CHARGEN\CREATE.SAV)
 
 	objects.setRuntimeCall(

@@ -66,6 +66,11 @@ int main(int argc, char** argv) {
                      "Ted/Alice), skipping the title menu");
         app.add_flag("--skip-intro", skipIntro,
                      "Skip the intro cinematic");
+        bool chargen = false;
+        app.add_flag("--chargen", chargen,
+                     "Force the chargen flow (Bob/Carol/Ted/Alice from CHARGEN/"
+                     "CREATE.SAV) even when a saved party exists in SAVEGAME/"
+                     "ITEMS.TMP. Implies --skip-menu.");
         app.add_flag("--debug", debug, "Enable debug mode");
         app.add_flag("--nosound", nosound, "Disable all sounds");
         app.add_flag("--new-game", newGame, "Activate new game mechanics");
@@ -88,6 +93,7 @@ int main(int argc, char** argv) {
             {"fs-strict", fsStrict ? "true" : "false"},
             {"skip-menu",  skipMenu  ? "true" : "false"},
             {"skip-intro", skipIntro ? "true" : "false"},
+            {"chargen",    chargen   ? "true" : "false"},
         };
         cfgMgr.readConfiguration(variables);
 
@@ -95,8 +101,12 @@ int main(int argc, char** argv) {
         engine.setGameData(variables["game-data"]);
         engine.setGame(variables["game"]);
         engine.setForceVM(toBool(variables["vm"]));
-        engine.setSkipMenu(toBool(variables["skip-menu"]));
+        // --chargen implies --skip-menu (no point showing the menu if we already
+        // know we want a new game).
+        engine.setSkipMenu(toBool(variables["skip-menu"]) ||
+                           toBool(variables["chargen"]));
         engine.setSkipIntro(toBool(variables["skip-intro"]));
+        engine.setChargen(toBool(variables["chargen"]));
         engine.setDebugMode(toBool(variables["debug"]));
         engine.setSoundUsage(toBool(variables["nosound"]));
         engine.setScale(static_cast<uint16_t>(std::stoi(variables["scale"])));

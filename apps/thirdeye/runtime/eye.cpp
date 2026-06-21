@@ -183,12 +183,18 @@ bool tryHandle(Context &ctx, const std::string &fn,
 			ctx.objects.createProgram(kEntitiesIndex, kEntitiesClass);
 		int kernel = ctx.objects.firstObjectOfClass(kKernelClass);
 
-		// THIRDEYE_CONTINUE: load the save once; reused for position + PC patching.
-		bool wantContinue = std::getenv("THIRDEYE_CONTINUE") != nullptr;
+		// Continue-from-save is now gated on "does the save file actually exist"
+		// instead of the THIRDEYE_CONTINUE env var (legacy). With the boot-mode
+		// auto-detect in bootObject, the same file-existence check also picks
+		// MODE_CINE upstream -- so when we arrive here in CINE mode (no chargen
+		// ran), wantContinue is true and we create+patch PCs from scratch below.
+		auto savePath =
+		    ctx.res.resourcePath().parent_path() / "SAVEGAME" / "ITEMS.TMP";
+		std::error_code ec;
+		bool wantContinue = std::filesystem::exists(savePath, ec);
 		THIRDEYE::savegame::ItemsTmp items;
 		if (wantContinue)
-			items = THIRDEYE::savegame::loadItemsTmp(
-			    ctx.res.resourcePath().parent_path() / "SAVEGAME" / "ITEMS.TMP");
+			items = THIRDEYE::savegame::loadItemsTmp(savePath);
 
 		if (kernel >= 0) {
 			auto setSlot = [&](uint32_t slot, int16_t val) {
@@ -265,12 +271,34 @@ bool tryHandle(Context &ctx, const std::string &fn,
 				constexpr uint32_t kStrOff = 191, kExcStrOff = 192, kIntOff = 193;
 				constexpr uint32_t kWisOff = 194, kDexOff = 195, kConOff = 196;
 				constexpr uint32_t kChaOff = 197;
-				int patched = 0;
-				for (const auto &c : items.characters) {
+				int patched = 0, createdPcs = 0;
+				for (size_t slotIdx = 0; slotIdx < items.characters.size(); ++slotIdx) {
+					const auto &c = items.characters[slotIdx];
 					if (c.classNumber != 1369) continue;
 					int idx = c.objectIndex;
 					if (idx <= 0) continue;
-					if (ctx.objects.objectLookup(idx) != idx) continue;
+					// In CINE mode (boot bypassed chargen because a save exists)
+					// the PC objects don't exist yet -- create them. In CHGN mode
+					// they were just created by the chargen-transfer SOP and this
+					// is a no-op. We also need to seed PC.W:num (offset 0) with the
+					// slot index AND register the PC in kernel.player[slot] so the
+					// HUD finds it -- chargen would have done that, CINE didn't.
+					bool freshlyCreated = false;
+					if (ctx.objects.objectLookup(idx) != idx) {
+						try {
+							ctx.objects.createProgram(idx, kPcClass);
+							++createdPcs;
+							freshlyCreated = true;
+						} catch (const std::exception &) { continue; }
+					}
+					if (freshlyCreated && slotIdx < kPlayerSlots) {
+						// W:num is the PC's own copy of its party slot.
+						if (uint8_t *np = ctx.objects.classStaticPtr(
+						        idx, kPcClass, kPcNumOff, 1))
+							*np = static_cast<uint8_t>(slotIdx);
+						setSlot(static_cast<uint32_t>(slotIdx), static_cast<int16_t>(idx));
+						++placed;
+					}
 
 					auto wb = [&](uint32_t off, int sz, int32_t v) {
 						if (uint8_t *p = ctx.objects.classStaticPtr(idx, kPcClass, off, sz))
@@ -353,7 +381,11 @@ bool tryHandle(Context &ctx, const std::string &fn,
 					     << " lh=" << c.equip[6] << "]" << std::endl;
 				}
 				rt() << "  [resume_level: " << patched
-				     << " PCs patched from ITEMS.TMP (with equip[])]" << std::endl;
+				     << " PCs patched from ITEMS.TMP (with equip[])"
+				     << (createdPcs ? "; " + std::to_string(createdPcs) +
+				                      " created from scratch (CINE)"
+				                    : "")
+				     << "]" << std::endl;
 			}
 
 			// (4) Position seeding.
