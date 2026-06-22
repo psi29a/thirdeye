@@ -23,6 +23,12 @@ int32_t EventSystem::matchParameter(int32_t eventType, int32_t eventParam,
 	return eventParam == testParam;
 }
 
+size_t EventSystem::liveWindowCount() const {
+	size_t n = 0;
+	for (const auto &w : mWindows) if (w.used) ++n;
+	return n;
+}
+
 // init_event_queue() + init_notify_list().
 void EventSystem::reset() {
 	mHead = mTail = 0;

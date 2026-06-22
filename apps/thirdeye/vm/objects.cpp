@@ -204,6 +204,31 @@ int ObjectSystem::createInstance(uint16_t classNumber) {
 	return allocAt(-1, classNumber); // allocate only; caller sends MSG_CREATE
 }
 
+int ObjectSystem::createInstanceAt(int index, uint16_t classNumber) {
+	return allocAt(index, classNumber); // pinned slot; caller sends MSG_CREATE
+}
+
+size_t ObjectSystem::liveObjectCount() const {
+	size_t n = 0;
+	for (auto cls : mObjList) if (cls != kFreeSlot) ++n;
+	return n;
+}
+
+void ObjectSystem::resetInstances() {
+	// Drop every live instance. We do NOT send MSG_DESTROY here -- that's
+	// the SOP's responsibility (`start` self-destroys before relaunch, the
+	// menu/picker SOPs destroy their owned objects). This is the engine-
+	// level cleanup that catches whatever leaked, matching the original
+	// AESOP runtime's launch()-exec-replace semantics where the whole
+	// process memory is replaced.
+	mObjList.clear();
+	mStatics.clear();
+	mDepth = 0;
+	// mClasses + mExternCache + mRuntimeCall + mDynamicStatics persist:
+	// classes are parsed once at boot, the runtime hook bindings outlive
+	// the relaunch loop.
+}
+
 int ObjectSystem::createProgram(int index, uint16_t classNumber) {
 	int i = allocAt(index, classNumber);
 	// The system sends MSG_CREATE to a freshly created instance (RTOBJECT.C

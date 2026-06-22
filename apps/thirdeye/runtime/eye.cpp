@@ -134,24 +134,32 @@ bool tryHandle(Context &ctx, const std::string &fn,
 		int slot = static_cast<int>(args[0]);
 		int idx  = slot - 1;
 		auto dir = ctx.res.resourcePath().parent_path() / "SAVEGAME";
-		int copied = THIRDEYE::savegame::restoreLevels(dir, idx);
+		// Re-confirm the ITEMS.TMP refresh BEFORE counting level copies.
+		// The SOP pairs restore_items + restore_level_objects, but if the
+		// first call's copy_file failed (disk full, race, ...) ITEMS.TMP is
+		// stale. Self-dispatching resume_level on `copied > 0` alone could
+		// then patch live PC state from the wrong slot. restoreItems with
+		// overwrite_existing is idempotent for the happy path (re-copying
+		// the same content) and acts as a confirmation gate for the
+		// failure path. CodeRabbit'd.
+		bool itemsOk = THIRDEYE::savegame::restoreItems(dir, idx);
+		int copied = itemsOk
+		                 ? THIRDEYE::savegame::restoreLevels(dir, idx) : 0;
 		rt() << "  [restore_level_objects: copied " << copied
 		     << " LVL??.TMP from slot " << idx
-		     << (copied == 0 ? " (slot empty or no backups; LVL??.TMP preserved)"
-		                     : "")
+		     << (!itemsOk ? " (ITEMS.TMP refresh failed; LVL??.TMP preserved)"
+		         : copied == 0 ? " (slot empty or no backups; LVL??.TMP preserved)"
+		                       : "")
 		     << "]" << std::endl;
-		// The SOP's save-picker path expects this call to *also* materialize
-		// PCs / items from the just-restored ITEMS.TMP into live SOP objects
-		// (the file copy alone leaves the runtime party empty, which the SOP
-		// reads as "everyone died" -> game-over screen). resume_level already
-		// has the create-PCs-from-save logic; self-dispatch into it -- but
-		// only when a real restore happened, so an empty-slot misfire can't
-		// re-seed the party from stale ITEMS.TMP.
-		if (copied > 0) {
+		// resume_level only fires when BOTH halves landed: a valid ITEMS.TMP
+		// for this slot AND at least one LVL??.TMP. This guarantees the live
+		// PC state we patch matches the file state we just wrote.
+		bool restored = itemsOk && copied > 0;
+		if (restored) {
 			VM::Value rl;
 			tryHandle(ctx, "resume_level", {VM::Value{0}}, rl);
 		}
-		result = copied > 0 ? 1 : 0;
+		result = restored ? 1 : 0;
 		return true;
 	}
 	if (fn == "string_compare" && args.size() >= 2) {

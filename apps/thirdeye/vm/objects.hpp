@@ -61,6 +61,27 @@ public:
 	// that travels on the stack as an object handle / THIS).
 	int createInstance(uint16_t classNumber);
 
+	// Like createInstance but pins the instance to a specific object index
+	// (replacing whatever was there). Does NOT send MSG_CREATE -- caller
+	// chooses, matching createInstance's contract. Used by the engine's boot
+	// loop to keep `start` at obj 0 across relaunches so the SOP's hardcoded
+	// `destroy_object(0)` self-destroy convention works on every iteration.
+	int createInstanceAt(int index, uint16_t classNumber);
+
+	// Free EVERY live instance without sending MSG_DESTROY. The engine boot
+	// loop calls this between relaunch iterations to simulate the original
+	// AESOP runtime's `launch()` exec-replace (fresh process memory). Each
+	// menu iteration creates ~80 sub-windows/objects but only releases a few
+	// before self-destroying `start`; without a reset, several cancel-loops
+	// exhaust the EventSystem's 256-window table and clicks stop working.
+	// Class registry (mClasses) is preserved so we don't re-parse every SOP.
+	void resetInstances();
+
+	// Count of currently-live instances. Diagnostic; used by the engine
+	// boot loop's leak-canary log to surface the per-iteration object leak
+	// that motivates resetInstances().
+	size_t liveObjectCount() const;
+
 	// Runtime-function object management (see RTOBJECT.C):
 	//   create_program(index, class): create an instance of `class` at object
 	//     `index` (replacing whatever is there; index -1 = next free), send it
