@@ -138,6 +138,17 @@ public:
 	// Diagnostics / tests: number of live (non-tombstone) events in the queue.
 	size_t pendingEvents() const;
 
+	// Count of currently-used window handles (sums mWindows[i].used).
+	// Diagnostic; used by the engine boot loop's leak-canary log and the
+	// test that pins reset() restores the 2-page initial state.
+	size_t liveWindowCount() const;
+
+	// NB: reset() is already public above -- the engine boot loop calls it
+	// between relaunch iterations to clear the leaked sub-windows / events
+	// the SOP accumulated under the about-to-be-destroyed `start`. See the
+	// comment block on resetInstances in ObjectSystem for the rationale
+	// (matches the original AESOP runtime's launch() exec-replace).
+
 	// When set, dispatch logs each message it delivers (bring-up visibility).
 	void setVerbose(bool v) { mVerbose = v; }
 

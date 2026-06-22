@@ -597,7 +597,15 @@ void THIRDEYE::Engine::bootObject(RESOURCES::Resource &resource,
 		// art, so its boxes restore the backdrop snapshot (true overlay, no blob).
 		if (gfx)
 			gfx->setTextRestoreBackground(mode != MODE_INTR);
-		int objIndex = objects.createInstance(classNumber);
+		// Pin `start` to obj 0 every iteration. The SOP's self-destroy
+		// convention (CANCEL on the picker, back-out from any sub-menu)
+		// hardcodes `destroy_object(0)` -- if we let createInstance append
+		// at the next free slot, the second relaunch's start lands at some
+		// high index and the SOP's destroy_object(0) hits the OLD slot,
+		// leaving the new start "alive" -> our self-destroy check returns
+		// false -> we quit instead of relaunching. allocAt(0, ...) replaces
+		// whatever stale tombstone is at slot 0 each time.
+		int objIndex = objects.createInstanceAt(0, classNumber);
 		std::string relaunch; // non-empty => a sub-program to run, then re-boot
 		try {
 			VM::Value result = objects.send(objIndex, MSG_CREATE, {});
@@ -613,11 +621,26 @@ void THIRDEYE::Engine::bootObject(RESOURCES::Resource &resource,
 				// Re-read mode: the SOP may have poked cell 1264 between boot
 				// and self-destroy (e.g. picker -> menu sets it back to INTR).
 				const int32_t nextMode = readMode();
-				std::cout << "  [start self-destroyed -- relaunching with mode "
+				// Simulate the original AESOP `launch()` exec-replace by
+				// resetting per-process state: every live object + every live
+				// subwindow + the event queue. The SOP authors didn't bother
+				// releasing the ~80 sub-windows / handful of helper objects
+				// each menu iteration creates because the original DOS runtime
+				// reaped the whole process on launch(). Without these resets,
+				// 3-4 cancel cycles exhaust the 256-handle window table and
+				// mouse hit-testing dies. The class registry + the runtime
+				// hooks (dynamic-statics, etc.) persist; only instance state
+				// is wiped.
+				std::cout << "  [start self-destroyed -- "
+				          << objects.liveObjectCount() << " obj / "
+				          << events.liveWindowCount() << " win leaked; "
+				             "resetting + relaunching with mode "
 				          << (nextMode == MODE_CINE ? "CINE"
 				            : nextMode == MODE_CHGN ? "CHGN" : "INTR")
 				          << "]" << std::endl;
-				continue; // loop to re-create start
+				objects.resetInstances();
+				events.reset();
+				continue; // loop to re-create start in the cleared environment
 			}
 			std::cout << "Boot handler returned " << result << " -- quitting."
 			          << std::endl;

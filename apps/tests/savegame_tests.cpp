@@ -690,6 +690,7 @@ TEST(Restore_Test, ItemsNegativeIndexNoOp) {
 	auto after = readBytes(dir / "ITEMS.TMP");
 	ASSERT_EQ(2u, after.size());
 	EXPECT_EQ(0xAA, after[0]);
+	EXPECT_EQ(0xBB, after[1]); // entire payload must survive a no-op
 }
 
 // restoreLevels gates on ITEMS_NN.BIN existing -- if the picker fires
@@ -706,6 +707,21 @@ TEST(Restore_Test, LevelsNoItemsBinPreservesAllTmp) {
 	auto b = readBytes(dir / "LVL07.TMP");
 	ASSERT_EQ(1u, a.size()); EXPECT_EQ(0x11, a[0]);
 	ASSERT_EQ(1u, b.size()); EXPECT_EQ(0x77, b[0]);
+}
+
+// restoreLevels short-circuits on negative slot just like restoreItems --
+// the runtime gate (the `restore_level_objects` handler) requires BOTH
+// halves to land before firing resume_level, so this is the symmetric
+// guard for the items-side fail-fast pinned in ItemsNegativeIndexNoOp.
+TEST(Restore_Test, LevelsNegativeIndexNoOp) {
+	auto dir = makeScratchDir("levels_neg");
+	writeBytes(dir / "LVL01.TMP", {0x11, 0x22, 0x33});
+	EXPECT_EQ(0, THIRDEYE::savegame::restoreLevels(dir, -1));
+	auto after = readBytes(dir / "LVL01.TMP");
+	ASSERT_EQ(3u, after.size());
+	EXPECT_EQ(0x11, after[0]);
+	EXPECT_EQ(0x22, after[1]);
+	EXPECT_EQ(0x33, after[2]);
 }
 
 // restoreLevels copies just the LVL??_NN.BIN files that exist; missing
