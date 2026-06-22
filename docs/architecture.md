@@ -182,3 +182,35 @@ frame-paced loop. The whole game session runs *inside* `send(start, MSG_CREATE)`
 at quit), so the top-level SDL loop lives in `dispatch_event` — the shape of the original
 `INTERP.EXE`. With graphics active the instruction budget is disabled (`setMaxSteps(0)`);
 headless keeps it.
+
+## Program-chain loop (`launch()` simulation)
+
+The original DOS bootstrap (`AESOP.C`) `spawnvp`'d `INTERP.EXE` and re-launched it on exit
+code 127 — each menu choice that hands off (Introduction → CINE, Begin → CHGEN, CANCEL on
+any sub-menu) calls `launch(...)` in SOP, which exec-replaces the process. Fresh memory,
+fresh object table, fresh window table; only command-line args (the cell-1264 mode hint) and
+on-disk files (saves) survived.
+
+Thirdeye doesn't spawn — it loops `send(start, MSG_CREATE)` in `bootObject`. To stay 1:1 with
+the original semantics, the loop:
+
+1. **Pins `start` to obj 0** via `ObjectSystem::createInstanceAt(0, ...)`. The SOP's
+   self-destroy convention is `destroy_object(0)` — letting `createInstance` append at the
+   next free slot would land the new `start` at a high index on relaunch, and
+   `destroy_object(0)` would hit a long-freed tombstone instead of the live `start`.
+2. **Detects self-destroy** by checking `objectLookup(0) != 0` after `send` returns. If
+   true → relaunch; if false → start returned cleanly (Abandon the Quest) → quit.
+3. **Resets per-process state** before the next iteration: `ObjectSystem::resetInstances()`
+   drops every live SOP object, `EventSystem::reset()` releases every assigned subwindow
+   and clears the event queue. The class registry, runtime hooks, and the `mem` map
+   (cell 1264 etc.) survive — they map onto "the executable image and command-line args"
+   that the original `spawnvp` boundary preserved.
+
+**This is not a SOP bug.** The original game's menu/picker code legitimately leaks ~80 sub-
+windows per iteration (the SOP author knew the OS would reap them on the next launch()).
+The leak is a property of our model (one process, many iterations), not their code. Skipping
+the reset will exhaust the 256-handle window table after 3-4 cancel cycles and silently kill
+mouse hit-testing. The boot-loop trace prints a leak-canary count per iteration —
+`[start self-destroyed -- N obj / M win leaked; resetting + relaunching]` — so a regression
+where someone *fixes* a SOP-side leak (which they shouldn't, the original is 1:1) won't be
+silently masked by our cleanup.

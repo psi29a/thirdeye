@@ -664,6 +664,67 @@ TEST (Event_Test, WindowRectReturnsAssignedRectangle) {
 	EXPECT_FALSE(ev.windowRect(w, x1, y1, x2, y2)); // released -> no rect
 }
 
+// --- resetInstances drops every live object so the engine boot loop can
+// simulate AESOP's launch() exec-replace (fresh process memory) between
+// relaunches. Without it, the SOP's per-iteration object accumulation
+// leaks across the boot loop. ---
+TEST (Object_Test, ResetInstancesClearsAllLiveObjects) {
+	VM::ObjectSystem os;
+	os.addClass(makeClass(1, 0xFFFFFFFFu, 0, {PUSH, SHTC, 7, END}));
+	int a = os.createInstance(1);
+	int b = os.createInstance(1);
+	int c = os.createInstance(1);
+	EXPECT_EQ(3u, os.liveObjectCount());
+	os.resetInstances();
+	EXPECT_EQ(0u, os.liveObjectCount());
+	// Classes persist (not re-registered) so we can re-create immediately.
+	EXPECT_EQ(0, os.createInstanceAt(0, 1));
+	EXPECT_EQ(7, os.send(0, 0, {}));
+	(void)a; (void)b; (void)c;
+}
+
+// --- EventSystem::reset releases every assigned subwindow (back to the 2
+// initial PAGE1/PAGE2 entries). The engine boot loop calls this between
+// relaunches to clear the ~80 sub-windows the SOP leaks per iteration --
+// without it, 3 cancel cycles fill the 256-handle table and clicks die. ---
+TEST (Event_Test, ResetReleasesAllSubwindows) {
+	VM::ObjectSystem os;
+	VM::EventSystem ev(os);
+	// PAGE1 + PAGE2 are pre-allocated -> 2 used at boot.
+	EXPECT_EQ(2u, ev.liveWindowCount());
+	for (int i = 0; i < 80; ++i)
+		ev.assignWindow(0, 0, 0, 10, 10);
+	EXPECT_EQ(82u, ev.liveWindowCount());
+	ev.reset();
+	EXPECT_EQ(2u, ev.liveWindowCount()); // back to just the pages
+	// New windows are allocatable again (would otherwise fail at 256).
+	int32_t w = ev.assignWindow(0, 0, 0, 10, 10);
+	EXPECT_EQ(2, w); // first slot after the 2 pages
+}
+
+// --- createInstanceAt pins a class instance at a specific obj index. The
+// engine's boot loop uses this to keep `start` at obj 0 across relaunches
+// so the SOP's hardcoded `destroy_object(0)` self-destroy convention works
+// on every iteration (cancel -> back to menu -> cancel again was quitting
+// because the second start landed at a high free index). ---
+TEST (Object_Test, CreateInstanceAtPinsToSpecificSlot) {
+	VM::ObjectSystem os;
+	os.addClass(makeClass(1, 0xFFFFFFFFu, 0, {PUSH, SHTC, 7, END})); // msg0 -> 7
+	// Allocate a few times to grow mObjList so slot 0 isn't trivially "next".
+	(void) os.createInstance(1);
+	(void) os.createInstance(1);
+	(void) os.createInstance(1);
+	// Pin to slot 0 -- must return 0 (replaces whatever was there).
+	int pinned = os.createInstanceAt(0, 1);
+	EXPECT_EQ(0, pinned);
+	EXPECT_EQ(7, os.send(0, 0, {})); // handler dispatches on the pinned obj
+	// Destroying obj 0 frees the slot; a fresh createInstanceAt(0, ...)
+	// re-pins, matching the boot loop's relaunch semantics.
+	os.destroyObject(0);
+	EXPECT_EQ(0, os.createInstanceAt(0, 1));
+	EXPECT_EQ(7, os.send(0, 0, {}));
+}
+
 // --- set_x1/x2/y1/y2 mutate the named subwindow's edges (port of
 // GIL2VFX_set_x1/x2/y1/y2). The save-picker uses set_x2(99, 13) to narrow
 // window 99 to a 13-pixel column for the slot numbers; without per-edge
