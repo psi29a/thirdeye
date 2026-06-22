@@ -537,7 +537,7 @@ void THIRDEYE::Engine::bootObject(RESOURCES::Resource &resource,
 	int32_t bootMode = MODE_INTR;
 	if (mChargen)       bootMode = MODE_CHGN;
 	else if (mSkipMenu) bootMode = saveExists() ? MODE_CINE : MODE_CHGN;
-	mem[1264] = bootMode;
+	mem.insert_or_assign(1264, bootMode);
 	std::cout << "  [boot mode = "
 	          << (bootMode == MODE_CINE ? "CINE (continue from save)"
 	            : bootMode == MODE_CHGN ? "CHGN (chargen + game)"
@@ -580,14 +580,23 @@ void THIRDEYE::Engine::bootObject(RESOURCES::Resource &resource,
 	// unwinds here as Relaunch; we play our internal stand-in for that program and
 	// re-enter start, which re-reads the mode the bytecode left in cell 1264. This
 	// mirrors the DOS program chain (each program ends by launching the next).
+	// Side-effect-free read for the sparse mem map. operator[] would silently
+	// default-insert if the key were missing (we seed cell 1264 above, but
+	// the SOP can also poke arbitrary cells); .find() makes the absence
+	// explicit and falls back to INTR (the safe boot mode).
+	auto readMode = [&]() -> int32_t {
+		auto it = mem.find(1264);
+		return it != mem.end() ? it->second : MODE_INTR;
+	};
 	bool quit = false;
 	while (!quit) {
+		const int32_t mode = readMode();
 		// Text-box clear style depends on the screen we're booting into: the title
 		// menu (INTR) bakes its options into the backdrop bitmap, so its text boxes
 		// flat-fill to erase them; the in-game HUD draws text over detailed panel
 		// art, so its boxes restore the backdrop snapshot (true overlay, no blob).
 		if (gfx)
-			gfx->setTextRestoreBackground(mem[1264] != MODE_INTR);
+			gfx->setTextRestoreBackground(mode != MODE_INTR);
 		int objIndex = objects.createInstance(classNumber);
 		std::string relaunch; // non-empty => a sub-program to run, then re-boot
 		try {
@@ -601,9 +610,12 @@ void THIRDEYE::Engine::bootObject(RESOURCES::Resource &resource,
 			// Quest -> clean exit).
 			bool selfDestroyed = objects.objectLookup(objIndex) != objIndex;
 			if (selfDestroyed) {
+				// Re-read mode: the SOP may have poked cell 1264 between boot
+				// and self-destroy (e.g. picker -> menu sets it back to INTR).
+				const int32_t nextMode = readMode();
 				std::cout << "  [start self-destroyed -- relaunching with mode "
-				          << (mem[1264] == MODE_CINE ? "CINE"
-				            : mem[1264] == MODE_CHGN ? "CHGN" : "INTR")
+				          << (nextMode == MODE_CINE ? "CINE"
+				            : nextMode == MODE_CHGN ? "CHGN" : "INTR")
 				          << "]" << std::endl;
 				continue; // loop to re-create start
 			}
