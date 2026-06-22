@@ -5,11 +5,11 @@
 #include "../thirdeye/savegame/transfer.hpp"
 
 #include <algorithm>
+#include <atomic>
 #include <cstdint>
 #include <cstdlib>
 #include <filesystem>
 #include <initializer_list>
-#include <unistd.h>  // for getpid() in the scratch-dir helper
 #include <fstream>
 #include <iostream>
 #include <map>
@@ -625,10 +625,13 @@ TEST(Transfer_Test, RebuildPlacementCategorizesItems) {
 
 namespace {
 // One-shot scratch dir under the gtest temp area. Caller does the writes.
+// Uses a process-local counter (not PID) so the implementation stays
+// portable across Linux/macOS/Windows -- no <unistd.h>/<process.h> split.
 std::filesystem::path makeScratchDir(const char *tag) {
+	static std::atomic<unsigned long long> kCounter{0};
 	auto dir = std::filesystem::temp_directory_path() /
 	           ("thirdeye_restore_test_" + std::string(tag) + "_" +
-	            std::to_string(::getpid()));
+	            std::to_string(kCounter.fetch_add(1)));
 	std::error_code ec;
 	std::filesystem::remove_all(dir, ec);
 	std::filesystem::create_directories(dir);
