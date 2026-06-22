@@ -8,6 +8,8 @@
 #include <cstdint>
 #include <cstdlib>
 #include <filesystem>
+#include <initializer_list>
+#include <unistd.h>  // for getpid() in the scratch-dir helper
 #include <fstream>
 #include <iostream>
 #include <map>
@@ -610,4 +612,116 @@ TEST(Transfer_Test, RebuildPlacementCategorizesItems) {
 	EXPECT_EQ(-1, ts.pcItemAtSlot[0][0]);
 	EXPECT_EQ(-1, ts.pcItemAtSlot[0][15]); // bracers (not provided)
 	EXPECT_EQ(-1, ts.pcItemAtSlot[0][25]); // helmet
+}
+
+// --- Save-slot restoration safety -------------------------------------
+//
+// Pins the picker's two safety invariants (see items_tmp.hpp docs above
+// restoreItems / restoreLevels): fail-fast on missing source so the user's
+// currently-loaded save state survives a botched click. These regressed
+// in production when the picker fired against an empty slot -- live
+// ITEMS.TMP got pre-deleted and then the copy_file failed, leaving the
+// user with no save at all.
+
+namespace {
+// One-shot scratch dir under the gtest temp area. Caller does the writes.
+std::filesystem::path makeScratchDir(const char *tag) {
+	auto dir = std::filesystem::temp_directory_path() /
+	           ("thirdeye_restore_test_" + std::string(tag) + "_" +
+	            std::to_string(::getpid()));
+	std::error_code ec;
+	std::filesystem::remove_all(dir, ec);
+	std::filesystem::create_directories(dir);
+	return dir;
+}
+
+void writeBytes(const std::filesystem::path &p,
+                std::initializer_list<uint8_t> bytes) {
+	std::ofstream f(p, std::ios::binary);
+	for (auto b : bytes) f.put(static_cast<char>(b));
+}
+
+std::vector<uint8_t> readBytes(const std::filesystem::path &p) {
+	std::ifstream f(p, std::ios::binary);
+	return {std::istreambuf_iterator<char>(f),
+	        std::istreambuf_iterator<char>()};
+}
+} // namespace
+
+// restoreItems on a missing BIN must NOT touch the live ITEMS.TMP. This is
+// the bug that ate the user's Quick Start Party when they clicked an empty
+// row in the picker.
+TEST(Restore_Test, ItemsMissingSourcePreservesTmp) {
+	auto dir = makeScratchDir("items_missing");
+	// Seed a live TMP that simulates the currently-loaded save.
+	writeBytes(dir / "ITEMS.TMP", {0xCA, 0xFE, 0xBA, 0xBE});
+	// No ITEMS_06.BIN exists -> restore must fail-fast and preserve TMP.
+	EXPECT_FALSE(THIRDEYE::savegame::restoreItems(dir, 6));
+	auto after = readBytes(dir / "ITEMS.TMP");
+	ASSERT_EQ(4u, after.size());
+	EXPECT_EQ(0xCA, after[0]);
+	EXPECT_EQ(0xFE, after[1]);
+	EXPECT_EQ(0xBA, after[2]);
+	EXPECT_EQ(0xBE, after[3]);
+}
+
+// restoreItems with a real source replaces ITEMS.TMP atomically.
+TEST(Restore_Test, ItemsHappyPath) {
+	auto dir = makeScratchDir("items_happy");
+	writeBytes(dir / "ITEMS.TMP",   {0xFF, 0xFF}); // stale
+	writeBytes(dir / "ITEMS_03.BIN", {0x01, 0x02, 0x03});
+	EXPECT_TRUE(THIRDEYE::savegame::restoreItems(dir, 3));
+	auto after = readBytes(dir / "ITEMS.TMP");
+	ASSERT_EQ(3u, after.size());
+	EXPECT_EQ(0x01, after[0]);
+	EXPECT_EQ(0x02, after[1]);
+	EXPECT_EQ(0x03, after[2]);
+}
+
+// restoreItems with a negative index (the SOP's 1-based "slot 0" maps to
+// idx -1) returns false without touching anything.
+TEST(Restore_Test, ItemsNegativeIndexNoOp) {
+	auto dir = makeScratchDir("items_neg");
+	writeBytes(dir / "ITEMS.TMP", {0xAA, 0xBB});
+	EXPECT_FALSE(THIRDEYE::savegame::restoreItems(dir, -1));
+	auto after = readBytes(dir / "ITEMS.TMP");
+	ASSERT_EQ(2u, after.size());
+	EXPECT_EQ(0xAA, after[0]);
+}
+
+// restoreLevels gates on ITEMS_NN.BIN existing -- if the picker fires
+// against an empty slot, NO LVL??.TMP gets wiped. Live state survives.
+TEST(Restore_Test, LevelsNoItemsBinPreservesAllTmp) {
+	auto dir = makeScratchDir("levels_noitems");
+	// Live level state from the user's previous session.
+	writeBytes(dir / "LVL01.TMP", {0x11});
+	writeBytes(dir / "LVL07.TMP", {0x77});
+	// Slot 6 has no ITEMS_06.BIN (= empty slot).
+	EXPECT_EQ(0, THIRDEYE::savegame::restoreLevels(dir, 6));
+	// Both TMPs preserved byte-for-byte.
+	auto a = readBytes(dir / "LVL01.TMP");
+	auto b = readBytes(dir / "LVL07.TMP");
+	ASSERT_EQ(1u, a.size()); EXPECT_EQ(0x11, a[0]);
+	ASSERT_EQ(1u, b.size()); EXPECT_EQ(0x77, b[0]);
+}
+
+// restoreLevels copies just the LVL??_NN.BIN files that exist; missing
+// per-level BINs are skipped without touching their TMP either.
+TEST(Restore_Test, LevelsHappyPathCopiesPresentBackups) {
+	auto dir = makeScratchDir("levels_happy");
+	// Slot 3: ITEMS gate + two of the 14 levels backed up.
+	writeBytes(dir / "ITEMS_03.BIN",    {0x00});
+	writeBytes(dir / "LVL01_03.BIN",    {0xA1});
+	writeBytes(dir / "LVL14_03.BIN",    {0xA2});
+	// Live state for one level that's NOT in the backup (must survive).
+	writeBytes(dir / "LVL05.TMP",       {0x55});
+	EXPECT_EQ(2, THIRDEYE::savegame::restoreLevels(dir, 3));
+	// Restored backups overwrote / created the TMP:
+	auto a = readBytes(dir / "LVL01.TMP");
+	auto b = readBytes(dir / "LVL14.TMP");
+	ASSERT_EQ(1u, a.size()); EXPECT_EQ(0xA1, a[0]);
+	ASSERT_EQ(1u, b.size()); EXPECT_EQ(0xA2, b[0]);
+	// Level 5 had no backup in slot 3 -- its TMP must be untouched.
+	auto c = readBytes(dir / "LVL05.TMP");
+	ASSERT_EQ(1u, c.size()); EXPECT_EQ(0x55, c[0]);
 }

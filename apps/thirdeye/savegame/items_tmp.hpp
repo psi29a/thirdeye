@@ -184,6 +184,28 @@ std::vector<ItemRecord> parseItemStream(const std::vector<uint8_t> &data,
                                         size_t streamOff,
                                         const ClassStaticSize &lookup);
 
+// --- Slot-backup restoration -----------------------------------------
+//
+// Both helpers below copy SAVEGAME/<NAME>_<NN>.BIN -> SAVEGAME/<NAME>.TMP
+// using `copy_file(overwrite_existing)`. Two safety invariants the SOP's
+// Restore-Game picker depends on:
+//   1. **Fail fast on missing source.** If <NAME>_<NN>.BIN doesn't exist
+//      (empty slot / bogus index), do NOT touch the destination TMP. The
+//      user's currently-loaded state must survive a botched restore. (An
+//      earlier pre-delete-then-copy version destroyed live state when the
+//      picker fired against an empty slot -- see the bug report that
+//      added this helper.)
+//   2. **Don't create empty TMPs.** `copy_file` is the only write op;
+//      either it succeeds (replacing the target atomically-ish) or the
+//      target is left as-is.
+//
+// `restoreItems` returns true on success, false on missing-source.
+// `restoreLevels` returns the number of LVL??.TMP files actually copied
+// (0..14); a slot whose ITEMS_NN.BIN is absent short-circuits to 0
+// without touching any LVL??.TMP.
+bool restoreItems(const std::filesystem::path &saveDir, int slotIdx);
+int  restoreLevels(const std::filesystem::path &saveDir, int slotIdx);
+
 } // namespace THIRDEYE::savegame
 
 #endif // THIRDEYE_SAVEGAME_ITEMS_TMP_HPP
