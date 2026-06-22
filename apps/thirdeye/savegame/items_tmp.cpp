@@ -1,5 +1,7 @@
 #include "items_tmp.hpp"
 
+#include <cstdio>
+#include <cstdlib>
 #include <fstream>
 #include <iterator>
 
@@ -174,16 +176,21 @@ std::vector<ItemRecord> parseItemStream(const std::vector<uint8_t> &data,
                                         size_t streamOff,
                                         const ClassStaticSize &lookup) {
 	std::vector<ItemRecord> out;
+	// ponytail: env-var-gated trailer probe. Set THIRDEYE_DUMP_TRAILERS=1 to
+	// print every parsed record's (id, cls, trailer) for RE; off by default
+	// so the normal trace stays clean.
+	const bool dumpTrailers =
+	    std::getenv("THIRDEYE_DUMP_TRAILERS") != nullptr;
 	constexpr uint16_t kEmptyCls = 0xFFFF;
 	// Per-record layout (RE'd against the Quick Start Party save):
 	//   +0  u16  id
 	//   +2  u16  class (0xFFFF = empty/dead slot)
 	//   +4  N    static block (= instanceStaticSize(class); 0 for empty slots)
-	//   +4+N  4  trailer (always present, even on empty slots). For empty
-	//           slots the trailer is the entire 4-byte payload (0xFFFFFFFF
-	//           seen consistently); for real items it varies per record --
-	//           plausibly a free-list/link pointer the original writer keeps
-	//           outside the SOP static block. We don't decode it; just skip.
+	//   +4+N  4  trailer (always present, even on empty slots). Captured into
+	//           ItemRecord::trailer for round-trip; partial RE in
+	//           items_tmp.hpp. Common values: 0x0000FFFF = not placed,
+	//           0x010000FF = equipped on a PC, others = container/dungeon
+	//           placement metadata not yet decoded.
 	// Empty slots therefore total 8 bytes; real items total 8 + N.
 	constexpr uint32_t kTrailerSize = 4;
 	size_t o = streamOff;
@@ -205,10 +212,58 @@ std::vector<ItemRecord> parseItemStream(const std::vector<uint8_t> &data,
 		r.cls = cls;
 		r.staticBlock.assign(data.begin() + o + 4,
 		                     data.begin() + o + 4 + blockSize);
+		size_t t = o + 4 + blockSize;
+		r.trailer =  static_cast<uint32_t>(data[t])
+		          | (static_cast<uint32_t>(data[t + 1]) << 8)
+		          | (static_cast<uint32_t>(data[t + 2]) << 16)
+		          | (static_cast<uint32_t>(data[t + 3]) << 24);
+		if (dumpTrailers)
+			std::fprintf(stderr,
+			    "[trailer] off=0x%05zx id=%u cls=%u block=%u trailer=0x%08x"
+			    " (%u %u %u %u)\n",
+			    o, id, cls, blockSize, r.trailer,
+			    data[t], data[t + 1], data[t + 2], data[t + 3]);
 		out.push_back(std::move(r));
 		o += 4 + blockSize + kTrailerSize;
 	}
 	return out;
+}
+
+bool restoreItems(const std::filesystem::path &saveDir, int slotIdx) {
+	if (slotIdx < 0) return false;
+	char src[24];
+	std::snprintf(src, sizeof(src), "ITEMS_%02d.BIN", slotIdx);
+	std::error_code ec;
+	if (!std::filesystem::exists(saveDir / src, ec))
+		return false; // fail fast: leave ITEMS.TMP untouched
+	std::filesystem::copy_file(
+	    saveDir / src, saveDir / "ITEMS.TMP",
+	    std::filesystem::copy_options::overwrite_existing, ec);
+	return !ec;
+}
+
+int restoreLevels(const std::filesystem::path &saveDir, int slotIdx) {
+	if (slotIdx < 0) return 0;
+	// Gate on the matching ITEMS_NN.BIN: the picker always calls
+	// restoreItems immediately before us, so if that source doesn't exist
+	// this slot has no save and we must not wipe LVL??.TMP.
+	char itemsSrc[24];
+	std::snprintf(itemsSrc, sizeof(itemsSrc), "ITEMS_%02d.BIN", slotIdx);
+	std::error_code ec;
+	if (!std::filesystem::exists(saveDir / itemsSrc, ec))
+		return 0;
+	int copied = 0;
+	for (int lvl = 1; lvl <= 14; ++lvl) {
+		char src[24], dst[24];
+		std::snprintf(src, sizeof(src), "LVL%02d_%02d.BIN", lvl, slotIdx);
+		std::snprintf(dst, sizeof(dst), "LVL%02d.TMP", lvl);
+		if (!std::filesystem::exists(saveDir / src, ec)) continue;
+		std::filesystem::copy_file(
+		    saveDir / src, saveDir / dst,
+		    std::filesystem::copy_options::overwrite_existing, ec);
+		if (!ec) ++copied;
+	}
+	return copied;
 }
 
 } // namespace THIRDEYE::savegame

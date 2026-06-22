@@ -4,9 +4,15 @@
 #include "../thirdeye/savegame/savegame_dir.hpp"
 #include "../thirdeye/savegame/transfer.hpp"
 
+#include <algorithm>
+#include <atomic>
 #include <cstdint>
 #include <cstdlib>
 #include <filesystem>
+#include <initializer_list>
+#include <fstream>
+#include <iostream>
+#include <map>
 #include <vector>
 
 namespace {
@@ -202,6 +208,130 @@ TEST(ItemsTmp_Test, ParsesQuickStartParty) {
 	EXPECT_EQ(0,    stonebeard.magicEffects);
 	// Sparkle is 0xFF (default sentinel) for all 6 named records in this save.
 	EXPECT_EQ(0xFF, mikeal.sparkle);
+}
+
+// Item chain pointers live in the STATIC BLOCK (last 4 bytes = next_u16,
+// prev_u16 LE), not in the trailer. Pin this against the 14-arrow stack in
+// the bundled save: each arrow's next-link points at the next arrow's id,
+// the head has prev=0xFFFF, the tail has next=0xFFFF.
+TEST(ItemStream_Test, StaticBlockChainPointersInBundledSave) {
+	const char *dataDir = std::getenv("THIRDEYE_TEST_DATA_DIR");
+	if (!dataDir) GTEST_SKIP() << "set THIRDEYE_TEST_DATA_DIR=/path/to/eob3 data dir";
+	auto path = std::filesystem::path(dataDir) / "SAVEGAME" / "ITEMS.TMP";
+	if (!std::filesystem::exists(path)) GTEST_SKIP() << path << " not found";
+
+	std::ifstream f(path.string(), std::ios::binary);
+	std::vector<uint8_t> bytes((std::istreambuf_iterator<char>(f)),
+	                            std::istreambuf_iterator<char>());
+	// Use a real static-size lookup: cls 1335 (arrow) has a 13-byte block per
+	// the trailer dump. Hardcode just what we need to walk this fixed chain.
+	auto p = THIRDEYE::savegame::loadItemsTmp(path);
+	auto stream = THIRDEYE::savegame::parseItemStream(
+	    bytes, p.itemStreamOff, [](uint16_t cls) -> uint32_t {
+	        // Complete class -> static-block-size table for every class
+	        // observed in the bundled Quick Start save (extracted from the
+	        // THIRDEYE_DUMP_TRAILERS=1 run). Three distinct sizes: 12, 13, 15.
+	        static const uint32_t k13[] = {
+	            1323,1324,1325,1326,1327,1328,1329,1330,1332,1333,1334,1335,
+	            1336,1338,1339,1340,1341,1342,1343,1349,1350,1351,1353,1355,
+	            1682,1696,1709,1714,1723,1726,1751,1754,1761,1764,1770,1786,
+	            1791,1797,1818,1839,1879,1891};
+	        static const uint32_t k12[] = {
+	            1344,1345,1346,1347,1352,1357,1358,1359,1360,1362,1363,1366,
+	            1367,1368,1375,1397,1400,1403,1408,1411,1414,1417,1420,1425,
+	            1434,1451,1456,1459,1462,1465,1468,1471,1474,1477,1480,1483,
+	            1486,1492,1495,1498,1501,1504,1524,1527,1530,1533,1536,1539,
+	            1542,1545,1548,1551,1554,1557,1560,1566,1569,1572,1575,1578};
+	        static const uint32_t k15[] = {1376,1377,1602};
+	        for (uint32_t c : k13) if (c == cls) return 13;
+	        for (uint32_t c : k12) if (c == cls) return 12;
+	        for (uint32_t c : k15) if (c == cls) return 15;
+	        return 0;
+	    });
+	// Locate the 14-arrow stack head (id 612, cls 1335) -- the parser may have
+	// stopped earlier on an unknown class. Verify if present.
+	auto it = std::find_if(stream.begin(), stream.end(),
+	                       [](const auto &r){ return r.id == 612; });
+	if (it == stream.end())
+		GTEST_SKIP() << "parser stopped before id 612 (need more class sizes)";
+	const auto &r = *it;
+	ASSERT_EQ(13u, r.staticBlock.size());
+	// Block layout for cls 1335 (arrow, block size 13):
+	//   bytes 10..11 = next u16 LE  (0xFFFF = chain tail)
+	//   byte  12     = prev u8      (0xFF = chain head; only the low byte of
+	//                                the prev item id is stored, since chained
+	//                                items live in the same id locality)
+	uint16_t next = r.staticBlock[10] | (r.staticBlock[11] << 8);
+	uint8_t  prev = r.staticBlock[12];
+	EXPECT_EQ(613u, next) << "id 612 should chain to id 613 (next arrow)";
+	EXPECT_EQ(0x63, prev) << "id 612 prev byte = low(611) = 0x63";
+	// Tail (id 625): next = 0xFFFF
+	auto tailIt = std::find_if(stream.begin(), stream.end(),
+	                           [](const auto &r){ return r.id == 625; });
+	if (tailIt != stream.end()) {
+		ASSERT_GE(tailIt->staticBlock.size(), 12u)
+		    << "id 625 static block too short for next-pointer read";
+		uint16_t tailNext = tailIt->staticBlock[10] | (tailIt->staticBlock[11] << 8);
+		EXPECT_EQ(0xFFFFu, tailNext) << "id 625 is chain tail";
+	}
+	// Head (id 611, Delmair's quiver): prev = 0xFF (no previous)
+	auto headIt = std::find_if(stream.begin(), stream.end(),
+	                           [](const auto &r){ return r.id == 611; });
+	if (headIt != stream.end()) {
+		ASSERT_GE(headIt->staticBlock.size(), 13u)
+		    << "id 611 static block too short for prev-byte read";
+		EXPECT_EQ(0xFF, headIt->staticBlock[12])
+		    << "id 611 is chain head (prev=0xFF)";
+	}
+}
+
+// Trailer byte 3 (magical bonus) decode. The literal trailer values used
+// here are the actual byte patterns observed in the bundled Quick Start
+// Party save (Father Jon's ring of protection +3, Sir Mikeal's +1 plate/
+// short sword/shield, etc.) -- but the test itself is synthetic and runs
+// without bundled data, so it stays useful in CI environments without
+// THIRDEYE_TEST_DATA_DIR. See `../../eob3_research/SAVEGAME/README.md`
+// for the cross-reference table that motivated these literals.
+TEST(ItemStream_Test, MagicalBonusDecodedFromTrailerLiterals) {
+	THIRDEYE::savegame::ItemRecord r;
+	r.trailer = 0x80000007u;       // byte 3 = 0x80 = -128 signed (synthetic boundary)
+	EXPECT_EQ(static_cast<int8_t>(-128), r.magicalBonus());
+	r.trailer = 0x010000FFu;       // observed "+1" pattern (Sir Mikeal's plate)
+	EXPECT_EQ(1, r.magicalBonus());
+	r.trailer = 0xFD0000FFu;       // observed "-3" pattern (cursed cls-1350 ring)
+	EXPECT_EQ(-3, r.magicalBonus());
+}
+
+// Empty-slot trailers in the bundled save are uniformly 0x0000FFFF (bytes
+// FF FF 00 00). Pins that part of the RE so future writers can emit the
+// correct sentinel on initial-tempfile creation.
+TEST(ItemStream_Test, EmptySlotTrailerIsFFFFinBundledSave) {
+	const char *dataDir = std::getenv("THIRDEYE_TEST_DATA_DIR");
+	if (!dataDir) GTEST_SKIP() << "set THIRDEYE_TEST_DATA_DIR=/path/to/eob3 data dir";
+	auto path = std::filesystem::path(dataDir) / "SAVEGAME" / "ITEMS.TMP";
+	if (!std::filesystem::exists(path)) GTEST_SKIP() << path << " not found";
+
+	std::ifstream f(path.string(), std::ios::binary);
+	std::vector<uint8_t> bytes((std::istreambuf_iterator<char>(f)),
+	                            std::istreambuf_iterator<char>());
+	auto p = THIRDEYE::savegame::loadItemsTmp(path);
+
+	// Walk consecutive empty slots from streamOff (cls == 0xFFFF), read each
+	// trailer raw. The first non-empty record terminates the run.
+	size_t o = p.itemStreamOff;
+	int emptyCount = 0;
+	while (o + 8 <= bytes.size()) {
+		uint16_t cls = bytes[o + 2] | (bytes[o + 3] << 8);
+		if (cls != 0xFFFF) break;
+		uint32_t t = bytes[o + 4] | (bytes[o + 5] << 8) |
+		             (bytes[o + 6] << 16) | (bytes[o + 7] << 24);
+		EXPECT_EQ(0x0000FFFFu, t)
+		    << "empty slot @0x" << std::hex << o << std::dec
+		    << " has unexpected trailer";
+		++emptyCount;
+		o += 8;
+	}
+	EXPECT_GT(emptyCount, 0) << "expected some empty slots before first item";
 }
 
 // All ten character slots populate when the buffer is large enough.
@@ -482,4 +612,135 @@ TEST(Transfer_Test, RebuildPlacementCategorizesItems) {
 	EXPECT_EQ(-1, ts.pcItemAtSlot[0][0]);
 	EXPECT_EQ(-1, ts.pcItemAtSlot[0][15]); // bracers (not provided)
 	EXPECT_EQ(-1, ts.pcItemAtSlot[0][25]); // helmet
+}
+
+// --- Save-slot restoration safety -------------------------------------
+//
+// Pins the picker's two safety invariants (see items_tmp.hpp docs above
+// restoreItems / restoreLevels): fail-fast on missing source so the user's
+// currently-loaded save state survives a botched click. These regressed
+// in production when the picker fired against an empty slot -- live
+// ITEMS.TMP got pre-deleted and then the copy_file failed, leaving the
+// user with no save at all.
+
+namespace {
+// One-shot scratch dir under the gtest temp area. Caller does the writes.
+// Uses a process-local counter (not PID) so the implementation stays
+// portable across Linux/macOS/Windows -- no <unistd.h>/<process.h> split.
+std::filesystem::path makeScratchDir(const char *tag) {
+	static std::atomic<unsigned long long> kCounter{0};
+	auto dir = std::filesystem::temp_directory_path() /
+	           ("thirdeye_restore_test_" + std::string(tag) + "_" +
+	            std::to_string(kCounter.fetch_add(1)));
+	std::error_code ec;
+	std::filesystem::remove_all(dir, ec);
+	std::filesystem::create_directories(dir);
+	return dir;
+}
+
+void writeBytes(const std::filesystem::path &p,
+                std::initializer_list<uint8_t> bytes) {
+	std::ofstream f(p, std::ios::binary);
+	for (auto b : bytes) f.put(static_cast<char>(b));
+}
+
+std::vector<uint8_t> readBytes(const std::filesystem::path &p) {
+	std::ifstream f(p, std::ios::binary);
+	return {std::istreambuf_iterator<char>(f),
+	        std::istreambuf_iterator<char>()};
+}
+} // namespace
+
+// restoreItems on a missing BIN must NOT touch the live ITEMS.TMP. This is
+// the bug that ate the user's Quick Start Party when they clicked an empty
+// row in the picker.
+TEST(Restore_Test, ItemsMissingSourcePreservesTmp) {
+	auto dir = makeScratchDir("items_missing");
+	// Seed a live TMP that simulates the currently-loaded save.
+	writeBytes(dir / "ITEMS.TMP", {0xCA, 0xFE, 0xBA, 0xBE});
+	// No ITEMS_06.BIN exists -> restore must fail-fast and preserve TMP.
+	EXPECT_FALSE(THIRDEYE::savegame::restoreItems(dir, 6));
+	auto after = readBytes(dir / "ITEMS.TMP");
+	ASSERT_EQ(4u, after.size());
+	EXPECT_EQ(0xCA, after[0]);
+	EXPECT_EQ(0xFE, after[1]);
+	EXPECT_EQ(0xBA, after[2]);
+	EXPECT_EQ(0xBE, after[3]);
+}
+
+// restoreItems with a real source replaces ITEMS.TMP atomically.
+TEST(Restore_Test, ItemsHappyPath) {
+	auto dir = makeScratchDir("items_happy");
+	writeBytes(dir / "ITEMS.TMP",   {0xFF, 0xFF}); // stale
+	writeBytes(dir / "ITEMS_03.BIN", {0x01, 0x02, 0x03});
+	EXPECT_TRUE(THIRDEYE::savegame::restoreItems(dir, 3));
+	auto after = readBytes(dir / "ITEMS.TMP");
+	ASSERT_EQ(3u, after.size());
+	EXPECT_EQ(0x01, after[0]);
+	EXPECT_EQ(0x02, after[1]);
+	EXPECT_EQ(0x03, after[2]);
+}
+
+// restoreItems with a negative index (the SOP's 1-based "slot 0" maps to
+// idx -1) returns false without touching anything.
+TEST(Restore_Test, ItemsNegativeIndexNoOp) {
+	auto dir = makeScratchDir("items_neg");
+	writeBytes(dir / "ITEMS.TMP", {0xAA, 0xBB});
+	EXPECT_FALSE(THIRDEYE::savegame::restoreItems(dir, -1));
+	auto after = readBytes(dir / "ITEMS.TMP");
+	ASSERT_EQ(2u, after.size());
+	EXPECT_EQ(0xAA, after[0]);
+	EXPECT_EQ(0xBB, after[1]); // entire payload must survive a no-op
+}
+
+// restoreLevels gates on ITEMS_NN.BIN existing -- if the picker fires
+// against an empty slot, NO LVL??.TMP gets wiped. Live state survives.
+TEST(Restore_Test, LevelsNoItemsBinPreservesAllTmp) {
+	auto dir = makeScratchDir("levels_noitems");
+	// Live level state from the user's previous session.
+	writeBytes(dir / "LVL01.TMP", {0x11});
+	writeBytes(dir / "LVL07.TMP", {0x77});
+	// Slot 6 has no ITEMS_06.BIN (= empty slot).
+	EXPECT_EQ(0, THIRDEYE::savegame::restoreLevels(dir, 6));
+	// Both TMPs preserved byte-for-byte.
+	auto a = readBytes(dir / "LVL01.TMP");
+	auto b = readBytes(dir / "LVL07.TMP");
+	ASSERT_EQ(1u, a.size()); EXPECT_EQ(0x11, a[0]);
+	ASSERT_EQ(1u, b.size()); EXPECT_EQ(0x77, b[0]);
+}
+
+// restoreLevels short-circuits on negative slot just like restoreItems --
+// the runtime gate (the `restore_level_objects` handler) requires BOTH
+// halves to land before firing resume_level, so this is the symmetric
+// guard for the items-side fail-fast pinned in ItemsNegativeIndexNoOp.
+TEST(Restore_Test, LevelsNegativeIndexNoOp) {
+	auto dir = makeScratchDir("levels_neg");
+	writeBytes(dir / "LVL01.TMP", {0x11, 0x22, 0x33});
+	EXPECT_EQ(0, THIRDEYE::savegame::restoreLevels(dir, -1));
+	auto after = readBytes(dir / "LVL01.TMP");
+	ASSERT_EQ(3u, after.size());
+	EXPECT_EQ(0x11, after[0]);
+	EXPECT_EQ(0x22, after[1]);
+	EXPECT_EQ(0x33, after[2]);
+}
+
+// restoreLevels copies just the LVL??_NN.BIN files that exist; missing
+// per-level BINs are skipped without touching their TMP either.
+TEST(Restore_Test, LevelsHappyPathCopiesPresentBackups) {
+	auto dir = makeScratchDir("levels_happy");
+	// Slot 3: ITEMS gate + two of the 14 levels backed up.
+	writeBytes(dir / "ITEMS_03.BIN",    {0x00});
+	writeBytes(dir / "LVL01_03.BIN",    {0xA1});
+	writeBytes(dir / "LVL14_03.BIN",    {0xA2});
+	// Live state for one level that's NOT in the backup (must survive).
+	writeBytes(dir / "LVL05.TMP",       {0x55});
+	EXPECT_EQ(2, THIRDEYE::savegame::restoreLevels(dir, 3));
+	// Restored backups overwrote / created the TMP:
+	auto a = readBytes(dir / "LVL01.TMP");
+	auto b = readBytes(dir / "LVL14.TMP");
+	ASSERT_EQ(1u, a.size()); EXPECT_EQ(0xA1, a[0]);
+	ASSERT_EQ(1u, b.size()); EXPECT_EQ(0xA2, b[0]);
+	// Level 5 had no backup in slot 3 -- its TMP must be untouched.
+	auto c = readBytes(dir / "LVL05.TMP");
+	ASSERT_EQ(1u, c.size()); EXPECT_EQ(0x55, c[0]);
 }

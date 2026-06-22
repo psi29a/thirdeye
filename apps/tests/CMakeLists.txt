@@ -32,7 +32,7 @@ add_runtests_dir (savegame
     )
 
 add_runtests_dir (chargen
-    item_dat itemtype_dat
+    item_dat itemtype_dat charpics
     )
 
 # Main executable

@@ -61,6 +61,27 @@ public:
 	// that travels on the stack as an object handle / THIS).
 	int createInstance(uint16_t classNumber);
 
+	// Like createInstance but pins the instance to a specific object index
+	// (replacing whatever was there). Does NOT send MSG_CREATE -- caller
+	// chooses, matching createInstance's contract. Used by the engine's boot
+	// loop to keep `start` at obj 0 across relaunches so the SOP's hardcoded
+	// `destroy_object(0)` self-destroy convention works on every iteration.
+	int createInstanceAt(int index, uint16_t classNumber);
+
+	// Free EVERY live instance without sending MSG_DESTROY. The engine boot
+	// loop calls this between relaunch iterations to simulate the original
+	// AESOP runtime's `launch()` exec-replace (fresh process memory). Each
+	// menu iteration creates ~80 sub-windows/objects but only releases a few
+	// before self-destroying `start`; without a reset, several cancel-loops
+	// exhaust the EventSystem's 256-window table and clicks stop working.
+	// Class registry (mClasses) is preserved so we don't re-parse every SOP.
+	void resetInstances();
+
+	// Count of currently-live instances. Diagnostic; used by the engine
+	// boot loop's leak-canary log to surface the per-iteration object leak
+	// that motivates resetInstances().
+	size_t liveObjectCount() const;
+
 	// Runtime-function object management (see RTOBJECT.C):
 	//   create_program(index, class): create an instance of `class` at object
 	//     `index` (replacing whatever is there; index -1 = next free), send it
@@ -105,6 +126,17 @@ public:
 	// Bounds-checked pointer into object `objIndex`'s static storage; throws on
 	// a dead slot or out-of-range access.
 	uint8_t* staticsPtr(int objIndex, uint32_t offset, uint32_t size);
+
+	// Runtime-owned synthetic-statics hook. Used by thirdeye to expose buffers
+	// (e.g. savegame-picker slot names) at a sentinel obj index that the SOP
+	// can address via Static/Extern reads without us having to invent a real
+	// SOP class. If the hook is set and returns non-null for (obj, off, sz),
+	// staticsPtr short-circuits to that pointer; null means "fall through".
+	using DynamicStaticsHook =
+	    std::function<uint8_t*(int obj, uint32_t off, uint32_t sz)>;
+	void setDynamicStaticsHook(DynamicStaticsHook h) {
+		mDynamicStatics = std::move(h);
+	}
 	// Pointer to a static variable declared at `offset` within `definingClass`'s
 	// own block (accounts for the base-class-first layout), in object `objIndex`.
 	uint8_t* classStaticPtr(int objIndex, uint16_t definingClass, uint32_t offset,
@@ -147,6 +179,7 @@ private:
 	// if a nested create_program adds objects.
 	std::deque<std::vector<uint8_t>> mStatics;
 	Interpreter::RuntimeCall mRuntimeCall;
+	DynamicStaticsHook mDynamicStatics;
 	bool mTrace = false;
 	uint64_t mMaxSteps = 0;
 	int mDepth = 0; // current SEND/PASS recursion depth
