@@ -68,8 +68,16 @@ bool tryHandle(Context &ctx, const std::string &fn,
 	if (fn == "savegame_title" && args.size() >= 1) {
 		int slot = static_cast<int>(args[0]);
 		// Read the slot name from SAVEGAME.DIR; write into our runtime-owned
-		// buffer; return a Static-tagged address that sprint/print resolves
-		// through ObjectSystem::setDynamicStaticsHook.
+		// buffer; ALWAYS return the buffer addr so the SOP's string_compare
+		// against the "__________________________" empty-slot marker returns
+		// the right thing for both cases:
+		//   used slot   -> buffer = "Quick Start Party" -> compare != 0 -> render name + click loads
+		//   empty slot  -> buffer = "__________________________" -> compare == 0 -> render dashes + click is ignored
+		// Returning 0 for empty slots (which we used to do) made the SOP's
+		// string_compare see "" vs "____" = NON-zero = "slot is used" = it
+		// would happily fire restore_items on every empty slot the user
+		// clicked, corrupting ITEMS.TMP. The original game's savegame_title
+		// also writes the underscore marker into the buffer for empty slots.
 		std::string name;
 		try {
 			auto entries = THIRDEYE::savegame::loadSaveDir(
@@ -79,22 +87,28 @@ bool tryHandle(Context &ctx, const std::string &fn,
 				name = entries[slot].name;
 		} catch (const std::exception &) {}
 		ensureSlotNameHook(ctx.objects);
-		if (slot >= 0 && slot < kSaveSlots) {
-			uint8_t *p = gSlotNameBuf + slot * kSlotNameLen;
-			std::memset(p, 0, kSlotNameLen);
-			size_t n = name.size() < static_cast<size_t>(kSlotNameLen - 1)
-			               ? name.size() : kSlotNameLen - 1;
+		if (slot < 0 || slot >= kSaveSlots) {
+			result = 0;
+			return true;
+		}
+		// 26 underscores -- matches the marker the SOP's string_compare passes
+		// (we observed "__________________________" in the picker trace).
+		constexpr size_t kEmptyMarkLen = 26;
+		uint8_t *p = gSlotNameBuf + slot * kSlotNameLen;
+		std::memset(p, 0, kSlotNameLen);
+		if (name.empty()) {
+			std::memset(p, '_',
+			            std::min<size_t>(kEmptyMarkLen, kSlotNameLen - 1));
+		} else {
+			size_t n = std::min(name.size(),
+			                    static_cast<size_t>(kSlotNameLen - 1));
 			std::memcpy(p, name.data(), n);
 		}
-		if (name.empty()) {
-			result = 0; // empty slot: SOP treats this as "no save"
-		} else {
-			result = VM::makeAddr(VM::AddrSpace::Static,
-			                      static_cast<uint32_t>(slot * kSlotNameLen),
-			                      kSaveBufObj);
-		}
+		result = VM::makeAddr(VM::AddrSpace::Static,
+		                      static_cast<uint32_t>(slot * kSlotNameLen),
+		                      kSaveBufObj);
 		rt() << "  [savegame_title slot=" << slot
-		     << (name.empty() ? " -> empty" : " -> \"" + name + "\"")
+		     << (name.empty() ? " -> empty (\"_____\")" : " -> \"" + name + "\"")
 		     << "]" << std::endl;
 		return true;
 	}
@@ -104,22 +118,12 @@ bool tryHandle(Context &ctx, const std::string &fn,
 	if (fn == "restore_items" && args.size() >= 1) {
 		int slot = static_cast<int>(args[0]);
 		int idx  = slot - 1; // SOP is 1-based; backup files are 00, 01.
-		if (idx < 0) { result = 0; return true; }
 		auto dir = ctx.res.resourcePath().parent_path() / "SAVEGAME";
-		char src[24];
-		std::snprintf(src, sizeof(src), "ITEMS_%02d.BIN", idx);
-		// Delete the stale TMP up-front. resume_level treats ITEMS.TMP
-		// existence as the "continue from save" signal, so a failed restore
-		// must not silently load the previous slot's state.
-		std::error_code rm_ec;
-		std::filesystem::remove(dir / "ITEMS.TMP", rm_ec);
-		std::error_code ec;
-		std::filesystem::copy_file(
-		    dir / src, dir / "ITEMS.TMP",
-		    std::filesystem::copy_options::overwrite_existing, ec);
-		rt() << "  [restore_items: " << src << " -> ITEMS.TMP "
-		     << (ec ? "FAILED: " + ec.message() : "OK") << "]" << std::endl;
-		result = ec ? 0 : 1;
+		bool ok = THIRDEYE::savegame::restoreItems(dir, idx);
+		rt() << "  [restore_items: slot " << idx
+		     << (ok ? " -> ITEMS.TMP OK" : " not found; ITEMS.TMP preserved")
+		     << "]" << std::endl;
+		result = ok ? 1 : 0;
 		return true;
 	}
 	// restore_level_objects(slot, ...) -- copy SAVEGAME/LVL??_(slot-1):02d.BIN
@@ -129,46 +133,32 @@ bool tryHandle(Context &ctx, const std::string &fn,
 	if (fn == "restore_level_objects" && args.size() >= 1) {
 		int slot = static_cast<int>(args[0]);
 		int idx  = slot - 1;
-		if (idx < 0) { result = 0; return true; }
 		auto dir = ctx.res.resourcePath().parent_path() / "SAVEGAME";
-		int copied = 0, missing = 0;
-		for (int lvl = 1; lvl <= 14; ++lvl) {
-			char src[24], dst[24];
-			std::snprintf(src, sizeof(src), "LVL%02d_%02d.BIN", lvl, idx);
-			std::snprintf(dst, sizeof(dst), "LVL%02d.TMP", lvl);
-			std::error_code ec;
-			// Same defensive pattern as restore_items: clear the stale TMP
-			// so a missing/failed BIN can't leave the previous slot's level
-			// state lying around.
-			std::filesystem::remove(dir / dst, ec);
-			if (!std::filesystem::exists(dir / src, ec)) { ++missing; continue; }
-			std::filesystem::copy_file(
-			    dir / src, dir / dst,
-			    std::filesystem::copy_options::overwrite_existing, ec);
-			if (!ec) ++copied;
-		}
+		int copied = THIRDEYE::savegame::restoreLevels(dir, idx);
 		rt() << "  [restore_level_objects: copied " << copied
 		     << " LVL??.TMP from slot " << idx
-		     << " (" << missing << " levels had no backup)]" << std::endl;
+		     << (copied == 0 ? " (slot empty or no backups; LVL??.TMP preserved)"
+		                     : "")
+		     << "]" << std::endl;
 		// The SOP's save-picker path expects this call to *also* materialize
 		// PCs / items from the just-restored ITEMS.TMP into live SOP objects
 		// (the file copy alone leaves the runtime party empty, which the SOP
 		// reads as "everyone died" -> game-over screen). resume_level already
-		// has the create-PCs-from-save logic; self-dispatch into it.
-		VM::Value rl;
-		tryHandle(ctx, "resume_level", {VM::Value{0}}, rl);
-		result = 1;
+		// has the create-PCs-from-save logic; self-dispatch into it -- but
+		// only when a real restore happened, so an empty-slot misfire can't
+		// re-seed the party from stale ITEMS.TMP.
+		if (copied > 0) {
+			VM::Value rl;
+			tryHandle(ctx, "resume_level", {VM::Value{0}}, rl);
+		}
+		result = copied > 0 ? 1 : 0;
 		return true;
 	}
 	if (fn == "string_compare" && args.size() >= 2) {
 		// strcmp semantics: 0 = equal, nonzero = different. Both args are
 		// tagged addresses (Code string OR Static/Extern buffer); readString
-		// handles either. args[0] == 0 means "no string" (e.g. savegame_title
-		// returned 0 for an empty slot); treat that as the empty string for
-		// comparison purposes.
-		std::string a = (args[0] == 0)
-		                    ? std::string{}
-		                    : ctx.vm.readString(args[0]);
+		// handles either and returns "" for an unresolvable address.
+		std::string a = ctx.vm.readString(args[0]);
 		std::string b = ctx.vm.readString(args[1]);
 		int cmp = a.compare(b);
 		result = cmp;
