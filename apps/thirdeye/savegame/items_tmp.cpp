@@ -229,4 +229,41 @@ std::vector<ItemRecord> parseItemStream(const std::vector<uint8_t> &data,
 	return out;
 }
 
+bool restoreItems(const std::filesystem::path &saveDir, int slotIdx) {
+	if (slotIdx < 0) return false;
+	char src[24];
+	std::snprintf(src, sizeof(src), "ITEMS_%02d.BIN", slotIdx);
+	std::error_code ec;
+	if (!std::filesystem::exists(saveDir / src, ec))
+		return false; // fail fast: leave ITEMS.TMP untouched
+	std::filesystem::copy_file(
+	    saveDir / src, saveDir / "ITEMS.TMP",
+	    std::filesystem::copy_options::overwrite_existing, ec);
+	return !ec;
+}
+
+int restoreLevels(const std::filesystem::path &saveDir, int slotIdx) {
+	if (slotIdx < 0) return 0;
+	// Gate on the matching ITEMS_NN.BIN: the picker always calls
+	// restoreItems immediately before us, so if that source doesn't exist
+	// this slot has no save and we must not wipe LVL??.TMP.
+	char itemsSrc[24];
+	std::snprintf(itemsSrc, sizeof(itemsSrc), "ITEMS_%02d.BIN", slotIdx);
+	std::error_code ec;
+	if (!std::filesystem::exists(saveDir / itemsSrc, ec))
+		return 0;
+	int copied = 0;
+	for (int lvl = 1; lvl <= 14; ++lvl) {
+		char src[24], dst[24];
+		std::snprintf(src, sizeof(src), "LVL%02d_%02d.BIN", lvl, slotIdx);
+		std::snprintf(dst, sizeof(dst), "LVL%02d.TMP", lvl);
+		if (!std::filesystem::exists(saveDir / src, ec)) continue;
+		std::filesystem::copy_file(
+		    saveDir / src, saveDir / dst,
+		    std::filesystem::copy_options::overwrite_existing, ec);
+		if (!ec) ++copied;
+	}
+	return copied;
+}
+
 } // namespace THIRDEYE::savegame
