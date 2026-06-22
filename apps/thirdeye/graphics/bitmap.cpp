@@ -64,10 +64,16 @@ GRAPHICS::Bitmap::Bitmap(const std::vector<uint8_t> &vec) {
 		constexpr size_t kHdr = 10;
 		uint32_t lastOff = 0;
 		size_t pos = kHdr;
+		// Each portrait starts with a 6-byte sub-header (boundsx, boundsy,
+		// reserved); require that the offset leaves room for at least that
+		// header so the later getWidth/getHeight + decode path can't run off
+		// the end on a malformed/truncated file.
+		constexpr size_t kSubHdr = 6;
 		while (pos + 4 <= vec.size()) {
 			uint32_t v = rd32(pos);
 			if (v <= lastOff) break;
-			if (v < pos + 4 || v >= vec.size()) break;
+			if (v < pos + 4) break;
+			if (static_cast<size_t>(v) + kSubHdr > vec.size()) break;
 			mBitmapOffets[mNumSubBitmaps++] = v;
 			lastOff = v;
 			pos += 4;

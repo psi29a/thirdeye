@@ -29,17 +29,24 @@ constexpr int kSaveSlots = 32;       // larger than the picker's 12-slot view
 constexpr int kSlotNameLen = 32;     // padded name slot
 constexpr uint16_t kSaveBufObj = 0x3FFE; // unused obj id; staticsPtr routes here
 uint8_t gSlotNameBuf[kSaveSlots * kSlotNameLen] = {};
-bool gSlotNameHookInstalled = false;
 
 void ensureSlotNameHook(VM::ObjectSystem &objects) {
-	if (gSlotNameHookInstalled) return;
+	// Install per-ObjectSystem instead of process-global: a second VM in the
+	// same process (tests, future split-engine scenarios) would otherwise
+	// share the "already installed" flag while having no hook of its own,
+	// leaving savegame_title returns pointing into a dead-object path.
+	// setDynamicStaticsHook is idempotent for the same target so re-installing
+	// per boot is cheap and correct.
 	objects.setDynamicStaticsHook([](int obj, uint32_t off,
 	                                 uint32_t size) -> uint8_t* {
 		if (obj != kSaveBufObj) return nullptr;
-		if (off + size > sizeof(gSlotNameBuf)) return nullptr;
+		// Compute against the buffer length as a single u64 to avoid the
+		// `off + size` u32-wrap that could let an attacker-controlled offset
+		// slip past the bounds check and return an OOB pointer.
+		constexpr uint64_t kBufLen = sizeof(gSlotNameBuf);
+		if (static_cast<uint64_t>(off) + size > kBufLen) return nullptr;
 		return gSlotNameBuf + off;
 	});
-	gSlotNameHookInstalled = true;
 }
 } // namespace
 
@@ -97,9 +104,15 @@ bool tryHandle(Context &ctx, const std::string &fn,
 	if (fn == "restore_items" && args.size() >= 1) {
 		int slot = static_cast<int>(args[0]);
 		int idx  = slot - 1; // SOP is 1-based; backup files are 00, 01.
+		if (idx < 0) { result = 0; return true; }
 		auto dir = ctx.res.resourcePath().parent_path() / "SAVEGAME";
 		char src[24];
 		std::snprintf(src, sizeof(src), "ITEMS_%02d.BIN", idx);
+		// Delete the stale TMP up-front. resume_level treats ITEMS.TMP
+		// existence as the "continue from save" signal, so a failed restore
+		// must not silently load the previous slot's state.
+		std::error_code rm_ec;
+		std::filesystem::remove(dir / "ITEMS.TMP", rm_ec);
 		std::error_code ec;
 		std::filesystem::copy_file(
 		    dir / src, dir / "ITEMS.TMP",
@@ -116,6 +129,7 @@ bool tryHandle(Context &ctx, const std::string &fn,
 	if (fn == "restore_level_objects" && args.size() >= 1) {
 		int slot = static_cast<int>(args[0]);
 		int idx  = slot - 1;
+		if (idx < 0) { result = 0; return true; }
 		auto dir = ctx.res.resourcePath().parent_path() / "SAVEGAME";
 		int copied = 0, missing = 0;
 		for (int lvl = 1; lvl <= 14; ++lvl) {
@@ -123,6 +137,10 @@ bool tryHandle(Context &ctx, const std::string &fn,
 			std::snprintf(src, sizeof(src), "LVL%02d_%02d.BIN", lvl, idx);
 			std::snprintf(dst, sizeof(dst), "LVL%02d.TMP", lvl);
 			std::error_code ec;
+			// Same defensive pattern as restore_items: clear the stale TMP
+			// so a missing/failed BIN can't leave the previous slot's level
+			// state lying around.
+			std::filesystem::remove(dir / dst, ec);
 			if (!std::filesystem::exists(dir / src, ec)) { ++missing; continue; }
 			std::filesystem::copy_file(
 			    dir / src, dir / dst,

@@ -524,10 +524,14 @@ void THIRDEYE::Engine::bootObject(RESOURCES::Resource &resource,
 	// ITEMS.TMP present  -> CINE (continue from save: resume_level creates PCs).
 	// ITEMS.TMP missing  -> CHGN (run chargen-transfer: copy CREATE.SAV's PCs).
 	// --chargen overrides: force CHGN regardless of save state (start a new game).
-	auto saveExists = []() {
+	// Resolve against the loaded .RES's parent dir, not the process CWD --
+	// otherwise launching thirdeye from any directory other than the game
+	// dir picks CHGN even when a save exists (matches resume_level's lookup).
+	auto saveExists = [&]() {
 		std::error_code ec;
-		return std::filesystem::exists("SAVEGAME/ITEMS.TMP", ec) ||
-		       std::filesystem::exists("savegame/items.tmp", ec);
+		auto root = resource.resourcePath().parent_path();
+		return std::filesystem::exists(root / "SAVEGAME" / "ITEMS.TMP", ec) ||
+		       std::filesystem::exists(root / "savegame" / "items.tmp", ec);
 	};
 	std::map<int32_t, int32_t> mem;
 	int32_t bootMode = MODE_INTR;
@@ -588,6 +592,21 @@ void THIRDEYE::Engine::bootObject(RESOURCES::Resource &resource,
 		std::string relaunch; // non-empty => a sub-program to run, then re-boot
 		try {
 			VM::Value result = objects.send(objIndex, MSG_CREATE, {});
+			// AESOP self-destroy convention: when start cancels back to itself
+			// (e.g. CANCEL on the Restore-Game picker, or back-out from any
+			// sub-menu), the SOP calls destroy_object(0) on its own handler.
+			// The original interpreter's top-level loop re-creates start at
+			// that point with whichever mode the bytecode left in cell 1264.
+			// If start is still alive, it returned normally (Abandon the
+			// Quest -> clean exit).
+			bool selfDestroyed = objects.objectLookup(objIndex) != objIndex;
+			if (selfDestroyed) {
+				std::cout << "  [start self-destroyed -- relaunching with mode "
+				          << (mem[1264] == MODE_CINE ? "CINE"
+				            : mem[1264] == MODE_CHGN ? "CHGN" : "INTR")
+				          << "]" << std::endl;
+				continue; // loop to re-create start
+			}
 			std::cout << "Boot handler returned " << result << " -- quitting."
 			          << std::endl;
 			quit = true; // start returned normally (e.g. "Abandon the Quest")
