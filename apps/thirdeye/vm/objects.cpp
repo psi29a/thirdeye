@@ -121,6 +121,13 @@ uint32_t ObjectSystem::resolveExtern(uint16_t importingClass, uint32_t xrOffset)
 }
 
 uint8_t* ObjectSystem::staticsPtr(int objIndex, uint32_t offset, uint32_t size) {
+	// Thirdeye runtime-owned buffer (e.g. savegame-picker slot names): a
+	// sentinel obj index that has no live SOP object behind it. Checked
+	// first so it doesn't trip the "dead object" throw below.
+	if (mDynamicStatics) {
+		if (uint8_t* p = mDynamicStatics(objIndex, offset, size))
+			return p;
+	}
 	if (objIndex < 0 || static_cast<size_t>(objIndex) >= mObjList.size() ||
 	    mObjList[objIndex] == kFreeSlot)
 		throw VmError("extern access to dead object index " +

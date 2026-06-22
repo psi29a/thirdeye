@@ -504,13 +504,18 @@ void THIRDEYE::Engine::bootObject(RESOURCES::Resource &resource,
 
 	// Seed the boot "mode" that start.MSG_CREATE reads via peekmem(1264) and
 	// CASEs on (see the start disassembly). The 4-char modes are stored
-	// little-endian: "INTR" -> title menu, "CINE" -> straight to the game (but the
-	// party comes from a savegame via resume_*, still stubbed -> empty party),
-	// "CHGN" -> run the char-gen party transfer first, then enter the game.
-	// --skip-menu picks CHGN so it enters with the real default party (Bob/Carol/
-	// Ted/Alice from CHARGEN\CREATE.SAV) instead of an empty one; otherwise we show
-	// the menu. (Loading the actual "Quick Start Party" savegame is the resume_*
-	// work -- see the Phase 3 save/load note in CLAUDE.md.)
+	// little-endian:
+	//   "INTR" -> title menu (title screen + "Begin a New Quest" / "Continue
+	//             the Quest" / "Summon Heroes" buttons)
+	//   "CINE" -> straight to the game (party comes from a savegame via
+	//             resume_*). With a fresh EOB3 install this lands on the
+	//             pre-shipped "Quick Start Party" save (Sir Mikeal et al. on
+	//             level 3) -- not empty -- because Westwood/SSI ship
+	//             SAVEGAME/ITEMS.TMP with the install for exactly this.
+	//   "CHGN" -> run the chargen-transfer SOP first (= read CHARGEN/CREATE.SAV
+	//             into live PCs, then enter the game). On a fresh install
+	//             CREATE.SAV holds the dev sample party (Bob/Carol/Ted/Alice);
+	//             if the user ran CHGEN.EXE to roll their own, it's theirs.
 	constexpr int32_t MODE_INTR = 0x494e5452; // 'I''N''T''R' LE -> title menu
 	constexpr int32_t MODE_CHGN = 0x4348474e; // 'C''H''G''N' LE -> char-gen + game
 	constexpr int32_t MODE_CINE = 0x43494e45; // 'C''I''N''E' LE -> straight into the game

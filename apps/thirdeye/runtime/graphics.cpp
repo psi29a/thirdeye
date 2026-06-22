@@ -66,13 +66,44 @@ bool tryHandle(Context &ctx, const std::string &fn,
 	// wide shapes (stairs/doors) for an oblique cell bleed past their column
 	// into adjacent cells -- the "stair shape inside the side wall" artifact
 	// when strafing past a stair cell.
+	// set_x1/x2/y1/y2(wnd, val): mutate one edge of the subwindow. Matches
+	// GIL2VFX_set_x{1,2}/set_y{1,2}: just assigns panes[wnd].{x0,x1,y0,y1}.
+	// Two consumers:
+	//   * dungeon view's per-cell clip (kept via gViewClipX1/X2; the in-game
+	//     draw_bitmap to kViewPage reads them to narrow each cell's strip).
+	//   * save-picker's slot-number column (set_x2(99, 13) narrows window 99
+	//     for the digits, set_x2(99, 175) widens it back for the names).
+	// For the second case we ALSO refresh any text window bound to the
+	// changed subwindow so subsequent printText uses the new edges.
+	auto refreshBoundText = [&](int32_t handle) {
+		if (!ctx.gfx) return;
+		int32_t x0, y0, x1, y1;
+		if (ctx.events.windowRect(handle, x0, y0, x1, y1))
+			ctx.gfx->updateTextWindowsFor(handle, x0, y0, x1, y1);
+	};
 	if (fn == "set_x1" && args.size() >= 2) {
 		gViewClipX1 = static_cast<int>(args[1]);
+		ctx.events.setWindowEdge(args[0], 'l', args[1]);
+		refreshBoundText(args[0]);
 		result = 0;
 		return true;
 	}
 	if (fn == "set_x2" && args.size() >= 2) {
 		gViewClipX2 = static_cast<int>(args[1]);
+		ctx.events.setWindowEdge(args[0], 'r', args[1]);
+		refreshBoundText(args[0]);
+		result = 0;
+		return true;
+	}
+	if (fn == "set_y1" && args.size() >= 2) {
+		ctx.events.setWindowEdge(args[0], 't', args[1]);
+		refreshBoundText(args[0]);
+		result = 0;
+		return true;
+	}
+	if (fn == "set_y2" && args.size() >= 2) {
+		ctx.events.setWindowEdge(args[0], 'b', args[1]);
+		refreshBoundText(args[0]);
 		result = 0;
 		return true;
 	}
@@ -251,7 +282,20 @@ bool tryHandle(Context &ctx, const std::string &fn,
 	if (fn == "text_window" && args.size() >= 2) {
 		int32_t x0, y0, x1, y1;
 		if (ctx.events.windowRect(args[1], x0, y0, x1, y1))
-			ctx.gfx->setTextWindow(static_cast<int>(args[0]), x0, y0, x1, y1);
+			ctx.gfx->setTextWindow(static_cast<int>(args[0]), x0, y0, x1, y1,
+			                       static_cast<int>(args[1]));
+		result = 0;
+		return true;
+	}
+	// wipe_window(wnd, color) -- repaint the bound subwindow's rectangle.
+	// Matches GIL2VFX_wipe_window: it's the explicit "clear before redraw"
+	// the SOP uses (e.g. for HUD redraws). text_window itself NO LONGER
+	// wipes (matching GIL2VFX_select_text_window), so the save-picker's
+	// many rebinds don't erase the slot names between draws.
+	if (fn == "wipe_window" && args.size() >= 1) {
+		int32_t x0, y0, x1, y1;
+		if (ctx.gfx && ctx.events.windowRect(args[0], x0, y0, x1, y1))
+			ctx.gfx->wipeTextBox(x0, y0, x1, y1);
 		result = 0;
 		return true;
 	}
@@ -294,13 +338,24 @@ bool tryHandle(Context &ctx, const std::string &fn,
 	}
 	// print(wndnum, string_resource, args...) -- the resource is a "S:"+text
 	// format string; trailing args fill %d/%s (e.g. the HP "%d of %d" readout).
+	// The save-picker also uses this for slot names, where args[1] is a
+	// Static-tagged address into our runtime-owned slot-name buffer (not a
+	// resource id) -- try readString first when the value looks like a
+	// tagged address (top nibble = Code/Static/Extern, i.e. >= 0x80000000).
 	if (fn == "print" && args.size() >= 2) {
 		try {
-			std::vector<uint8_t> &s = fetch(args[1]);
-			size_t off = (s.size() >= 2 && s[0] == 'S' && s[1] == ':') ? 2 : 0;
 			std::string fmt;
-			for (size_t i = off; i < s.size() && s[i] != 0; ++i)
-				fmt.push_back(static_cast<char>(s[i]));
+			uint32_t u = static_cast<uint32_t>(args[1]);
+			bool looksTagged = (u >> 28) >= 0x8u; // Code=0x8 / Stack / Static / Extern
+			if (looksTagged) {
+				fmt = ctx.vm.readString(args[1]);
+			}
+			if (fmt.empty()) {
+				std::vector<uint8_t> &s = fetch(args[1]);
+				size_t off = (s.size() >= 2 && s[0] == 'S' && s[1] == ':') ? 2 : 0;
+				for (size_t i = off; i < s.size() && s[i] != 0; ++i)
+					fmt.push_back(static_cast<char>(s[i]));
+			}
 			std::string text = formatSop(fmt, args, 2, ctx.vm);
 			ctx.gfx->printText(static_cast<int>(args[0]), text);
 			rt() << "  [text \"" << text << "\"]" << std::endl;
