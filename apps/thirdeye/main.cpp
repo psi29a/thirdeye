@@ -62,15 +62,18 @@ int main(int argc, char** argv) {
         app.add_flag("--vm", forceVM,
                      "Boot the SOP bytecode VM (run the 'start' object) instead of the intro");
         app.add_flag("--skip-menu", skipMenu,
-                     "Boot straight into the game with the default party (Bob/Carol/"
-                     "Ted/Alice), skipping the title menu");
+                     "Skip the title menu. With a save present, continue it; "
+                     "otherwise run the chargen-transfer flow (loads whichever "
+                     "party is currently in CHARGEN/CREATE.SAV -- Westwood's "
+                     "sample party Bob/Carol/Ted/Alice on a fresh install, or "
+                     "your own party if you previously ran CHGEN.EXE)");
         app.add_flag("--skip-intro", skipIntro,
                      "Skip the intro cinematic");
         bool chargen = false;
         app.add_flag("--chargen", chargen,
-                     "Force the chargen flow (Bob/Carol/Ted/Alice from CHARGEN/"
-                     "CREATE.SAV) even when a saved party exists in SAVEGAME/"
-                     "ITEMS.TMP. Implies --skip-menu.");
+                     "Force the chargen-transfer flow (load whatever's in "
+                     "CHARGEN/CREATE.SAV) even when a saved party exists in "
+                     "SAVEGAME/ITEMS.TMP. Implies --skip-menu.");
         app.add_flag("--debug", debug, "Enable debug mode");
         app.add_flag("--nosound", nosound, "Disable all sounds");
         app.add_flag("--new-game", newGame, "Activate new game mechanics");

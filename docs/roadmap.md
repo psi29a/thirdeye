@@ -105,27 +105,48 @@ experience award + level up integration on the player side.
   Unit-tested + verified against the Quick Start save.
 
 *Remaining:*
-- **Drop the `THIRDEYE_CONTINUE` gate.** Today, when a `SAVEGAME/ITEMS.TMP`
-  exists, we *could* always restore from it (the bundled "Quick Start Party"
-  case). But the chargen-new-game path should still work, so we need a
-  signal — either a different boot mode (Continue vs New Game on the title
-  menu) or "no `CREATE.SAV` = new game; save exists = continue".
+- ~~**Drop the `THIRDEYE_CONTINUE` gate.**~~ ✅ done. `bootObject` auto-detects:
+  `--skip-menu` + `SAVEGAME/ITEMS.TMP` present → boot mode `CINE`; missing →
+  `CHGN`. New `--chargen` flag forces `CHGN` even when a save exists
+  (start-a-new-game). `resume_level` matches: file-existence check replaces
+  the env var, and it can now `createProgram` PCs from scratch on the CINE
+  path (defensive today since the SOP's CINE branch still runs chargen-
+  transfer; live the moment we bypass that).
 - `write_initial_tempfiles` (the new-game write).
-- The 4-byte trailer in each §2.3 record is currently skipped; understand
-  what it stores (likely a free-list / link pointer) so it round-trips.
+- ~~The 4-byte trailer in each §2.3 record is currently skipped~~ ✅ RE'd:
+  - **byte 3 = magical bonus (signed int8)** -- verified end-to-end
+    against named items (Father Jon's ring of protection +3, Sir Mikeal's
+    +1 plate/sword/shield, etc.). Accessor: `ItemRecord::magicalBonus()`.
+  - bytes 0..2 = placement word + flags, partially decoded; see
+    [`../../eob3_research/SAVEGAME/README.md`](../../eob3_research/SAVEGAME/README.md)
+    for the per-pattern breakdown and trailer log artifact.
+  - Probe behind `THIRDEYE_DUMP_TRAILERS=1` for further RE.
 - ~~Per-PC unmapped fields~~ ✅ done: race/classes/portrait/PCstat/alignment/
   levels[3]/lost_levels[3]/lost_hp/hbon/xp[1..2] now all parsed and patched.
   Remaining unmapped: memorized/known spells (the big B:spell_cnt/spell_stat
   arrays at PC offset 209/409 — likely fill most of the +216..+626 tail), AC,
   L:magiceffects, B:sparkle. None blocking gameplay today.
 
-Reference data in `../data/SAVEGAME/`: a used save **"Quick Start Party"** (named in
-`SAVEGAME.DIR`) + the binary state files. Convention: **`.TMP` = live state**, **`_00/_01.BIN`
-= the two saved slots** (load = copy `_NN.BIN`→`.TMP`, then `resume_*` reads `.TMP`). The
-EOB1/2 character record matches our `CREATE.SAV` RE
-(https://moddingwiki.shikadi.net/wiki/Eye_of_the_Beholder_Save_Game_Format); EOB3's item/level
-`.TMP` formats are not on the wiki. EOB3 had a 16-bit-pointer save bug (daesop's
-`/eob3menupatch` works around it for the original; our native VM sidesteps it).
+Reference data in `../data/SAVEGAME/`: the **"Quick Start Party"** save —
+*not* the user's; this is a pre-rolled save game that Westwood/SSI shipped
+with every EOB3 install so a new player can hit "Continue the Quest" on
+the title menu and play immediately without rolling a party. Confirmed
+against a live install at archive.org/details/msdos_Eye_of_the_Beholder_III_-_Assault_on_Myth_Drannor_1993
+(menu screenshot: "1 Quick Start Party"; after restore: Sir Mikeal,
+Stonebeard, Salina, Lady Reeya on level 3 at the Graveyard, message log
+shows `Restoring "Quick Start Party" ... Done.`). The other shipped party
+— Bob/Carol/Ted/Alice in `CHARGEN/CREATE.SAV` — is a developer sample
+party left behind in the chargen-transfer file; not advertised to the
+player, but consumed by `chargen-transfer` if "Begin a New Quest" is
+chosen without rolling first.
+
+Convention: **`.TMP` = live state**, **`_00/_01.BIN` = the two saved slots**
+(load = copy `_NN.BIN`→`.TMP`, then `resume_*` reads `.TMP`). The EOB1/2
+character record matches our `CREATE.SAV` RE
+(https://moddingwiki.shikadi.net/wiki/Eye_of_the_Beholder_Save_Game_Format);
+EOB3's item/level `.TMP` formats are not on the wiki. EOB3 had a 16-bit-
+pointer save bug (daesop's `/eob3menupatch` works around it for the
+original; our native VM sidesteps it).
 
 ### 🚧 EOB1/EOB2 → EOB3 party import
 

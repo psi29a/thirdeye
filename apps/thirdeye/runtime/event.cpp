@@ -365,6 +365,19 @@ bool tryHandle(Context &ctx, const std::string &fn,
 		result = 0;
 		return true;
 	}
+	// mouse_XY(): return the current cursor position packed as the same
+	// (y << 16) | (x & 0xFFFF) the SOP gets from a SYS_MOUSEMOVE event's
+	// parameter. The save-picker reads this to pick which slot row the user
+	// clicked; without it, every click resolved to (0, 0) and the SOP either
+	// auto-confirmed the wrong slot or ignored the click.
+	if (fn == "mouse_XY") {
+		int32_t x = ctx.events.pointX();
+		int32_t y = ctx.events.pointY();
+		result = static_cast<int32_t>(
+		    (static_cast<uint32_t>(y) << 16) |
+		    (static_cast<uint32_t>(x) & 0xFFFFu));
+		return true;
+	}
 	return false;
 }
 

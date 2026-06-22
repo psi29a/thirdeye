@@ -864,12 +864,30 @@ void GRAPHICS::Graphics::setTextXY(int wndnum, int x, int y) {
 }
 
 void GRAPHICS::Graphics::setTextWindow(int wndnum, int x0, int y0, int x1,
-		int y1) {
-	mTextWin[wndnum].winX0 = x0;
-	mTextWin[wndnum].winX1 = x1;
-	mTextWin[wndnum].winY0 = y0;
-	mTextWin[wndnum].winY1 = y1;
-	// Clear the box before text (re)draws, so old/baked text doesn't ghost.
+		int y1, int handle) {
+	mTextWin[wndnum].boundHandle = handle;
+	setTextWindow(wndnum, x0, y0, x1, y1);
+}
+
+void GRAPHICS::Graphics::updateTextWindowsFor(int handle, int x0, int y0,
+		int x1, int y1) {
+	for (auto &kv : mTextWin) {
+		if (kv.second.boundHandle == handle) {
+			kv.second.winX0 = x0;
+			kv.second.winY0 = y0;
+			kv.second.winX1 = x1;
+			kv.second.winY1 = y1;
+		}
+	}
+}
+
+void GRAPHICS::Graphics::wipeTextBox(int x0, int y0, int x1, int y1) {
+	// Repaint the rectangle from whichever source matches the current mode:
+	// in-game = restore the panel-art backdrop; menus = sampled flat colour.
+	// Extracted so the SOP's explicit wipe_window can call it without going
+	// through setTextWindow (which used to wipe as a side effect, matching
+	// GIL2VFX_select_text_window's intent of just rebinding -- the original
+	// only wipes inside GIL2VFX_home / GIL2VFX_wipe_window).
 	if (x0 < 0 || y0 < 0 || x1 >= WIDTH || y1 >= HEIGHT || x1 < x0 || y1 < y0)
 		return;
 	SDL_Rect r = { x0, y0, x1 - x0 + 1, y1 - y0 + 1 };
@@ -890,6 +908,17 @@ void GRAPHICS::Graphics::setTextWindow(int wndnum, int x0, int y0, int x1,
 		Uint32 bg = pixels[sy * pitch + sx];
 		SDL_FillRect(mScreen, &r, bg);
 	}
+}
+
+void GRAPHICS::Graphics::setTextWindow(int wndnum, int x0, int y0, int x1,
+		int y1) {
+	// Pure bind -- matches GIL2VFX_select_text_window. Callers that need to
+	// erase the box first should call wipeTextBox (the SOP does this through
+	// wipe_window; our HUD redraw path can call it directly).
+	mTextWin[wndnum].winX0 = x0;
+	mTextWin[wndnum].winX1 = x1;
+	mTextWin[wndnum].winY0 = y0;
+	mTextWin[wndnum].winY1 = y1;
 }
 
 void GRAPHICS::Graphics::setTextJustify(int wndnum, int justify) {

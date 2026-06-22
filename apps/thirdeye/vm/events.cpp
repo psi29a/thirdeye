@@ -368,6 +368,18 @@ bool EventSystem::windowRect(int32_t handle, int32_t &x1, int32_t &y1,
 	return true;
 }
 
+void EventSystem::setWindowEdge(int32_t handle, char which, int32_t val) {
+	if (handle < 0 || handle >= MAX_WINDOWS || !mWindows[handle].used)
+		return;
+	Win &w = mWindows[handle];
+	switch (which) {
+		case 'l': w.x0 = val; break;
+		case 't': w.y0 = val; break;
+		case 'r': w.x1 = val; break;
+		case 'b': w.y1 = val; break;
+	}
+}
+
 // mouse_in_window(): inclusive rectangle test against window `wnd`.
 bool EventSystem::mouseInWindow(int32_t wnd) const {
 	if (wnd < 0 || wnd >= MAX_WINDOWS || !mWindows[wnd].used)

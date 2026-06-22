@@ -1,5 +1,7 @@
 #include "items_tmp.hpp"
 
+#include <cstdio>
+#include <cstdlib>
 #include <fstream>
 #include <iterator>
 
@@ -174,16 +176,21 @@ std::vector<ItemRecord> parseItemStream(const std::vector<uint8_t> &data,
                                         size_t streamOff,
                                         const ClassStaticSize &lookup) {
 	std::vector<ItemRecord> out;
+	// ponytail: env-var-gated trailer probe. Set THIRDEYE_DUMP_TRAILERS=1 to
+	// print every parsed record's (id, cls, trailer) for RE; off by default
+	// so the normal trace stays clean.
+	const bool dumpTrailers =
+	    std::getenv("THIRDEYE_DUMP_TRAILERS") != nullptr;
 	constexpr uint16_t kEmptyCls = 0xFFFF;
 	// Per-record layout (RE'd against the Quick Start Party save):
 	//   +0  u16  id
 	//   +2  u16  class (0xFFFF = empty/dead slot)
 	//   +4  N    static block (= instanceStaticSize(class); 0 for empty slots)
-	//   +4+N  4  trailer (always present, even on empty slots). For empty
-	//           slots the trailer is the entire 4-byte payload (0xFFFFFFFF
-	//           seen consistently); for real items it varies per record --
-	//           plausibly a free-list/link pointer the original writer keeps
-	//           outside the SOP static block. We don't decode it; just skip.
+	//   +4+N  4  trailer (always present, even on empty slots). Captured into
+	//           ItemRecord::trailer for round-trip; partial RE in
+	//           items_tmp.hpp. Common values: 0x0000FFFF = not placed,
+	//           0x010000FF = equipped on a PC, others = container/dungeon
+	//           placement metadata not yet decoded.
 	// Empty slots therefore total 8 bytes; real items total 8 + N.
 	constexpr uint32_t kTrailerSize = 4;
 	size_t o = streamOff;
@@ -205,6 +212,17 @@ std::vector<ItemRecord> parseItemStream(const std::vector<uint8_t> &data,
 		r.cls = cls;
 		r.staticBlock.assign(data.begin() + o + 4,
 		                     data.begin() + o + 4 + blockSize);
+		size_t t = o + 4 + blockSize;
+		r.trailer =  static_cast<uint32_t>(data[t])
+		          | (static_cast<uint32_t>(data[t + 1]) << 8)
+		          | (static_cast<uint32_t>(data[t + 2]) << 16)
+		          | (static_cast<uint32_t>(data[t + 3]) << 24);
+		if (dumpTrailers)
+			std::fprintf(stderr,
+			    "[trailer] off=0x%05zx id=%u cls=%u block=%u trailer=0x%08x"
+			    " (%u %u %u %u)\n",
+			    o, id, cls, blockSize, r.trailer,
+			    data[t], data[t + 1], data[t + 2], data[t + 3]);
 		out.push_back(std::move(r));
 		o += 4 + blockSize + kTrailerSize;
 	}
