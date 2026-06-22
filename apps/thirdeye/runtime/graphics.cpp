@@ -346,11 +346,16 @@ bool tryHandle(Context &ctx, const std::string &fn,
 		try {
 			std::string fmt;
 			uint32_t u = static_cast<uint32_t>(args[1]);
-			bool looksTagged = (u >> 28) >= 0x8u; // Code=0x8 / Stack / Static / Extern
-			if (looksTagged) {
+			// Code/Stack/Static/Extern (top nibble >= 0x8) -- treat as a
+			// tagged string address. We commit to the tagged-read path:
+			// even if the resolved string is empty (a legitimate empty slot
+			// name, say), DON'T fall back to fetch() on a u32 that isn't a
+			// resource id -- that would either print garbage or swallow a
+			// "resource not found" exception silently.
+			bool isTagged = (u >> 28) >= 0x8u;
+			if (isTagged) {
 				fmt = ctx.vm.readString(args[1]);
-			}
-			if (fmt.empty()) {
+			} else {
 				std::vector<uint8_t> &s = fetch(args[1]);
 				size_t off = (s.size() >= 2 && s[0] == 'S' && s[1] == ':') ? 2 : 0;
 				for (size_t i = off; i < s.size() && s[i] != 0; ++i)

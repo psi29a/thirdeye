@@ -267,6 +267,8 @@ TEST(ItemStream_Test, StaticBlockChainPointersInBundledSave) {
 	auto tailIt = std::find_if(stream.begin(), stream.end(),
 	                           [](const auto &r){ return r.id == 625; });
 	if (tailIt != stream.end()) {
+		ASSERT_GE(tailIt->staticBlock.size(), 12u)
+		    << "id 625 static block too short for next-pointer read";
 		uint16_t tailNext = tailIt->staticBlock[10] | (tailIt->staticBlock[11] << 8);
 		EXPECT_EQ(0xFFFFu, tailNext) << "id 625 is chain tail";
 	}
@@ -274,29 +276,27 @@ TEST(ItemStream_Test, StaticBlockChainPointersInBundledSave) {
 	auto headIt = std::find_if(stream.begin(), stream.end(),
 	                           [](const auto &r){ return r.id == 611; });
 	if (headIt != stream.end()) {
+		ASSERT_GE(headIt->staticBlock.size(), 13u)
+		    << "id 611 static block too short for prev-byte read";
 		EXPECT_EQ(0xFF, headIt->staticBlock[12])
 		    << "id 611 is chain head (prev=0xFF)";
 	}
 }
 
-// Trailer byte 3 (magical bonus) decode -- verified against named items in
-// the bundled Quick Start Party save. Father Jon's ring of protection +3,
-// Sir Mikeal's +1 plate/short sword/shield, Stonebeard's +1 plate/axe/shield.
-// This pins one decoded byte of the 4-byte trailer.
-TEST(ItemStream_Test, MagicalBonusDecodedFromBundledSave) {
-	const char *dataDir = std::getenv("THIRDEYE_TEST_DATA_DIR");
-	if (!dataDir) GTEST_SKIP() << "set THIRDEYE_TEST_DATA_DIR=/path/to/eob3 data dir";
-	auto path = std::filesystem::path(dataDir) / "SAVEGAME" / "ITEMS.TMP";
-	if (!std::filesystem::exists(path)) GTEST_SKIP() << path << " not found";
-
-	// Synthetic round-trip first: build a record whose trailer is 0x07000080
-	// (byte 3 = 0x80 = -128 signed). magicalBonus() should report -128.
+// Trailer byte 3 (magical bonus) decode. The literal trailer values used
+// here are the actual byte patterns observed in the bundled Quick Start
+// Party save (Father Jon's ring of protection +3, Sir Mikeal's +1 plate/
+// short sword/shield, etc.) -- but the test itself is synthetic and runs
+// without bundled data, so it stays useful in CI environments without
+// THIRDEYE_TEST_DATA_DIR. See `../../eob3_research/SAVEGAME/README.md`
+// for the cross-reference table that motivated these literals.
+TEST(ItemStream_Test, MagicalBonusDecodedFromTrailerLiterals) {
 	THIRDEYE::savegame::ItemRecord r;
-	r.trailer = 0x80000007u;
+	r.trailer = 0x80000007u;       // byte 3 = 0x80 = -128 signed (synthetic boundary)
 	EXPECT_EQ(static_cast<int8_t>(-128), r.magicalBonus());
-	r.trailer = 0x010000FFu;  // observed "+1" pattern
+	r.trailer = 0x010000FFu;       // observed "+1" pattern (Sir Mikeal's plate)
 	EXPECT_EQ(1, r.magicalBonus());
-	r.trailer = 0xFD0000FFu;  // observed "-3" pattern (cursed)
+	r.trailer = 0xFD0000FFu;       // observed "-3" pattern (cursed cls-1350 ring)
 	EXPECT_EQ(-3, r.magicalBonus());
 }
 

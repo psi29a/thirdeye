@@ -865,8 +865,11 @@ void GRAPHICS::Graphics::setTextXY(int wndnum, int x, int y) {
 
 void GRAPHICS::Graphics::setTextWindow(int wndnum, int x0, int y0, int x1,
 		int y1, int handle) {
-	mTextWin[wndnum].boundHandle = handle;
+	// Delegate to the 4-coord overload (which resets boundHandle to -1) then
+	// install the real handle. Order matters: doing it the other way would
+	// have the 4-coord call clobber the handle we just set.
 	setTextWindow(wndnum, x0, y0, x1, y1);
+	mTextWin[wndnum].boundHandle = handle;
 }
 
 void GRAPHICS::Graphics::updateTextWindowsFor(int handle, int x0, int y0,
@@ -919,6 +922,10 @@ void GRAPHICS::Graphics::setTextWindow(int wndnum, int x0, int y0, int x1,
 	mTextWin[wndnum].winX1 = x1;
 	mTextWin[wndnum].winY0 = y0;
 	mTextWin[wndnum].winY1 = y1;
+	// Ad-hoc rect (no subwindow handle): clear any stale binding, otherwise
+	// a subsequent set_x/y on the previously-bound handle would unexpectedly
+	// move this window's edges.
+	mTextWin[wndnum].boundHandle = -1;
 }
 
 void GRAPHICS::Graphics::setTextJustify(int wndnum, int justify) {

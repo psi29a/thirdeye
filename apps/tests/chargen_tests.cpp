@@ -213,6 +213,7 @@ TEST(CharPics_Test, BitmapDecodesAllBundledPortraits) {
 	if (!std::filesystem::exists(path)) GTEST_SKIP() << path << " not found";
 
 	std::ifstream f(path, std::ios::binary);
+	ASSERT_TRUE(f.is_open()) << "failed to open fixture: " << path;
 	std::vector<uint8_t> bytes((std::istreambuf_iterator<char>(f)),
 	                            std::istreambuf_iterator<char>());
 	GRAPHICS::Bitmap bmp(bytes);
