@@ -137,6 +137,41 @@ struct ItemRecord {
 	uint16_t id = 0;
 	uint16_t cls = 0xFFFF;
 	std::vector<uint8_t> staticBlock; // exactly `lookup(cls)` bytes
+	// 4-byte trailer that follows each record's static block. RE'd by
+	// correlating trailers against ItemsTmp::Character::equip[]/backpack/quiver
+	// across the bundled Quick Start Party save (445 items). Decoded layout:
+	//
+	//   byte 0..1   placement words (paired interpretation):
+	//                 (0xFF, 0x00)  -> equipped on (or carried by) a PC
+	//                 (0xFF, 0xFF)  -> inert: in a backpack/pouch, or an
+	//                                  empty slot the engine isn't using
+	//                 (0x00, 0x00)  -> placed in dungeon / container (subtype
+	//                                  in byte 2)
+	//                 (0x00, 0x01)  -> placed in dungeon, addressed variant
+	//                 (lvl,  0x00)  -> rare: at the named dungeon level
+	//                                  (saw byte 0 = 2 for a 14-arrow stack)
+	//   byte 2      flags / subtype:
+	//                 - For ordinary weapons/armor: 0 or {8, 12, 32} bit flags
+	//                   (likely cursed/identified/etc; not pinned).
+	//                 - For special items (cls 1376 = scrolls?, 1377 = potions):
+	//                   byte 2 is a 0..83 subtype id (potion/scroll variant).
+	//   byte 3      magical bonus (SIGNED int8): -N for cursed, +N for
+	//               enhanced. VERIFIED: cls 1350 (ring of protection) carries
+	//               values {-3, -2, -1, 0, 1, 2, 3, 4} matching D&D enchant
+	//               + curse range; Father Jon's "ring of protection +3" has
+	//               byte 3 = 3; Sir Mikeal's +1 plate/sword/shield all have
+	//               byte 3 = 1.
+	//
+	// Captured byte-for-byte; writers should round-trip the raw u32. Probe
+	// the dump via THIRDEYE_DUMP_TRAILERS=1.
+	uint32_t trailer = 0;
+
+	// Accessor for the verified field. Other fields (bytes 0..2) are
+	// documented above but not promoted to typed accessors until we pin the
+	// flag semantics.
+	int8_t magicalBonus() const {
+		return static_cast<int8_t>((trailer >> 24) & 0xFF);
+	}
 };
 
 using ClassStaticSize = std::function<uint32_t(uint16_t cls)>;
@@ -148,6 +183,28 @@ using ClassStaticSize = std::function<uint32_t(uint16_t cls)>;
 std::vector<ItemRecord> parseItemStream(const std::vector<uint8_t> &data,
                                         size_t streamOff,
                                         const ClassStaticSize &lookup);
+
+// --- Slot-backup restoration -----------------------------------------
+//
+// Both helpers below copy SAVEGAME/<NAME>_<NN>.BIN -> SAVEGAME/<NAME>.TMP
+// using `copy_file(overwrite_existing)`. Two safety invariants the SOP's
+// Restore-Game picker depends on:
+//   1. **Fail fast on missing source.** If <NAME>_<NN>.BIN doesn't exist
+//      (empty slot / bogus index), do NOT touch the destination TMP. The
+//      user's currently-loaded state must survive a botched restore. (An
+//      earlier pre-delete-then-copy version destroyed live state when the
+//      picker fired against an empty slot -- see the bug report that
+//      added this helper.)
+//   2. **Don't create empty TMPs.** `copy_file` is the only write op;
+//      either it succeeds (replacing the target atomically-ish) or the
+//      target is left as-is.
+//
+// `restoreItems` returns true on success, false on missing-source.
+// `restoreLevels` returns the number of LVL??.TMP files actually copied
+// (0..14); a slot whose ITEMS_NN.BIN is absent short-circuits to 0
+// without touching any LVL??.TMP.
+bool restoreItems(const std::filesystem::path &saveDir, int slotIdx);
+int  restoreLevels(const std::filesystem::path &saveDir, int slotIdx);
 
 } // namespace THIRDEYE::savegame
 

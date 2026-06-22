@@ -848,28 +848,55 @@ void GRAPHICS::Graphics::setTextFont(int wndnum, int fontId,
 		std::vector<uint8_t> &fontRes) {
 	// Build the glyph set once per font and cache it: text_style is called on
 	// every menu redraw, and rebuilding 128 glyphs each frame would be wasteful.
-	auto &cached = mFontCache[fontId];
-	if (!cached)
-		cached = std::make_shared<Font>(fontRes);
-	mTextWin[wndnum].font = cached;
+	auto fontIt = mFontCache.find(fontId);
+	if (fontIt == mFontCache.end())
+		fontIt = mFontCache.emplace(fontId,
+		                            std::make_shared<Font>(fontRes)).first;
+	auto [it, _] = mTextWin.try_emplace(wndnum);
+	it->second.font = fontIt->second;
 }
 
 void GRAPHICS::Graphics::setTextColor(int wndnum, uint8_t color) {
-	mTextWin[wndnum].fg = color;
+	auto [it, _] = mTextWin.try_emplace(wndnum);
+	it->second.fg = color;
 }
 
 void GRAPHICS::Graphics::setTextXY(int wndnum, int x, int y) {
-	mTextWin[wndnum].htab = x;
-	mTextWin[wndnum].vtab = y;
+	auto [it, _] = mTextWin.try_emplace(wndnum);
+	it->second.htab = x;
+	it->second.vtab = y;
 }
 
 void GRAPHICS::Graphics::setTextWindow(int wndnum, int x0, int y0, int x1,
-		int y1) {
-	mTextWin[wndnum].winX0 = x0;
-	mTextWin[wndnum].winX1 = x1;
-	mTextWin[wndnum].winY0 = y0;
-	mTextWin[wndnum].winY1 = y1;
-	// Clear the box before text (re)draws, so old/baked text doesn't ghost.
+		int y1, int handle) {
+	// Delegate to the 4-coord overload (which resets boundHandle to -1) then
+	// install the real handle. Order matters: doing it the other way would
+	// have the 4-coord call clobber the handle we just set.
+	setTextWindow(wndnum, x0, y0, x1, y1);
+	// setTextWindow guaranteed the entry exists; .at() is a side-effect-free
+	// read suitable for the now-known key.
+	mTextWin.at(wndnum).boundHandle = handle;
+}
+
+void GRAPHICS::Graphics::updateTextWindowsFor(int handle, int x0, int y0,
+		int x1, int y1) {
+	for (auto &kv : mTextWin) {
+		if (kv.second.boundHandle == handle) {
+			kv.second.winX0 = x0;
+			kv.second.winY0 = y0;
+			kv.second.winX1 = x1;
+			kv.second.winY1 = y1;
+		}
+	}
+}
+
+void GRAPHICS::Graphics::wipeTextBox(int x0, int y0, int x1, int y1) {
+	// Repaint the rectangle from whichever source matches the current mode:
+	// in-game = restore the panel-art backdrop; menus = sampled flat colour.
+	// Extracted so the SOP's explicit wipe_window can call it without going
+	// through setTextWindow (which used to wipe as a side effect, matching
+	// GIL2VFX_select_text_window's intent of just rebinding -- the original
+	// only wipes inside GIL2VFX_home / GIL2VFX_wipe_window).
 	if (x0 < 0 || y0 < 0 || x1 >= WIDTH || y1 >= HEIGHT || x1 < x0 || y1 < y0)
 		return;
 	SDL_Rect r = { x0, y0, x1 - x0 + 1, y1 - y0 + 1 };
@@ -892,8 +919,31 @@ void GRAPHICS::Graphics::setTextWindow(int wndnum, int x0, int y0, int x1,
 	}
 }
 
+void GRAPHICS::Graphics::setTextWindow(int wndnum, int x0, int y0, int x1,
+		int y1) {
+	// Pure bind -- matches GIL2VFX_select_text_window. Callers that need to
+	// erase the box first should call wipeTextBox (the SOP does this through
+	// wipe_window; our HUD redraw path can call it directly).
+	//
+	// `text_window` is the canonical "first touch" for a wndnum (SOP binds
+	// it before setting font/colour/cursor), so we explicitly create-or-
+	// update via try_emplace + per-field assign rather than operator[],
+	// matching the project guideline on sparse-map writes.
+	auto [it, _] = mTextWin.try_emplace(wndnum);
+	TextWin &tw = it->second;
+	tw.winX0 = x0;
+	tw.winX1 = x1;
+	tw.winY0 = y0;
+	tw.winY1 = y1;
+	// Ad-hoc rect (no subwindow handle): clear any stale binding, otherwise
+	// a subsequent set_x/y on the previously-bound handle would unexpectedly
+	// move this window's edges.
+	tw.boundHandle = -1;
+}
+
 void GRAPHICS::Graphics::setTextJustify(int wndnum, int justify) {
-	mTextWin[wndnum].justify = justify;
+	auto [it, _] = mTextWin.try_emplace(wndnum);
+	it->second.justify = justify;
 }
 
 void GRAPHICS::Graphics::printText(int wndnum, const std::string &text) {

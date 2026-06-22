@@ -65,6 +65,9 @@ void THIRDEYE::Engine::setSkipMenu(bool skipMenu) {
 void THIRDEYE::Engine::setSkipIntro(bool skipIntro) {
 	mSkipIntro = skipIntro;
 }
+void THIRDEYE::Engine::setChargen(bool chargen) {
+	mChargen = chargen;
+}
 
 // The game-data path may be either a directory (in which case we append the
 // selected game's main .RES) or a direct path to a .RES file (used as-is, with
@@ -501,17 +504,45 @@ void THIRDEYE::Engine::bootObject(RESOURCES::Resource &resource,
 
 	// Seed the boot "mode" that start.MSG_CREATE reads via peekmem(1264) and
 	// CASEs on (see the start disassembly). The 4-char modes are stored
-	// little-endian: "INTR" -> title menu, "CINE" -> straight to the game (but the
-	// party comes from a savegame via resume_*, still stubbed -> empty party),
-	// "CHGN" -> run the char-gen party transfer first, then enter the game.
-	// --skip-menu picks CHGN so it enters with the real default party (Bob/Carol/
-	// Ted/Alice from CHARGEN\CREATE.SAV) instead of an empty one; otherwise we show
-	// the menu. (Loading the actual "Quick Start Party" savegame is the resume_*
-	// work -- see the Phase 3 save/load note in CLAUDE.md.)
+	// little-endian:
+	//   "INTR" -> title menu (title screen + "Begin a New Quest" / "Continue
+	//             the Quest" / "Summon Heroes" buttons)
+	//   "CINE" -> straight to the game (party comes from a savegame via
+	//             resume_*). With a fresh EOB3 install this lands on the
+	//             pre-shipped "Quick Start Party" save (Sir Mikeal et al. on
+	//             level 3) -- not empty -- because Westwood/SSI ship
+	//             SAVEGAME/ITEMS.TMP with the install for exactly this.
+	//   "CHGN" -> run the chargen-transfer SOP first (= read CHARGEN/CREATE.SAV
+	//             into live PCs, then enter the game). On a fresh install
+	//             CREATE.SAV holds the dev sample party (Bob/Carol/Ted/Alice);
+	//             if the user ran CHGEN.EXE to roll their own, it's theirs.
 	constexpr int32_t MODE_INTR = 0x494e5452; // 'I''N''T''R' LE -> title menu
 	constexpr int32_t MODE_CHGN = 0x4348474e; // 'C''H''G''N' LE -> char-gen + game
+	constexpr int32_t MODE_CINE = 0x43494e45; // 'C''I''N''E' LE -> straight into the game
+	                                          //                    (resume_level builds the party from the save)
+	// Clean gate-drop for THIRDEYE_CONTINUE: when --skip-menu is set we auto-detect.
+	// ITEMS.TMP present  -> CINE (continue from save: resume_level creates PCs).
+	// ITEMS.TMP missing  -> CHGN (run chargen-transfer: copy CREATE.SAV's PCs).
+	// --chargen overrides: force CHGN regardless of save state (start a new game).
+	// Resolve against the loaded .RES's parent dir, not the process CWD --
+	// otherwise launching thirdeye from any directory other than the game
+	// dir picks CHGN even when a save exists (matches resume_level's lookup).
+	auto saveExists = [&]() {
+		std::error_code ec;
+		auto root = resource.resourcePath().parent_path();
+		return std::filesystem::exists(root / "SAVEGAME" / "ITEMS.TMP", ec) ||
+		       std::filesystem::exists(root / "savegame" / "items.tmp", ec);
+	};
 	std::map<int32_t, int32_t> mem;
-	mem[1264] = mSkipMenu ? MODE_CHGN : MODE_INTR;
+	int32_t bootMode = MODE_INTR;
+	if (mChargen)       bootMode = MODE_CHGN;
+	else if (mSkipMenu) bootMode = saveExists() ? MODE_CINE : MODE_CHGN;
+	mem.insert_or_assign(1264, bootMode);
+	std::cout << "  [boot mode = "
+	          << (bootMode == MODE_CINE ? "CINE (continue from save)"
+	            : bootMode == MODE_CHGN ? "CHGN (chargen + game)"
+	            : "INTR (title menu)")
+	          << "]" << std::endl;
 	TransferState xfer; // char-gen party transfer file (CHARGEN\CREATE.SAV)
 
 	objects.setRuntimeCall(
@@ -549,18 +580,68 @@ void THIRDEYE::Engine::bootObject(RESOURCES::Resource &resource,
 	// unwinds here as Relaunch; we play our internal stand-in for that program and
 	// re-enter start, which re-reads the mode the bytecode left in cell 1264. This
 	// mirrors the DOS program chain (each program ends by launching the next).
+	// Side-effect-free read for the sparse mem map. operator[] would silently
+	// default-insert if the key were missing (we seed cell 1264 above, but
+	// the SOP can also poke arbitrary cells); .find() makes the absence
+	// explicit and falls back to INTR (the safe boot mode).
+	auto readMode = [&]() -> int32_t {
+		auto it = mem.find(1264);
+		return it != mem.end() ? it->second : MODE_INTR;
+	};
 	bool quit = false;
 	while (!quit) {
+		const int32_t mode = readMode();
 		// Text-box clear style depends on the screen we're booting into: the title
 		// menu (INTR) bakes its options into the backdrop bitmap, so its text boxes
 		// flat-fill to erase them; the in-game HUD draws text over detailed panel
 		// art, so its boxes restore the backdrop snapshot (true overlay, no blob).
 		if (gfx)
-			gfx->setTextRestoreBackground(mem[1264] != MODE_INTR);
-		int objIndex = objects.createInstance(classNumber);
+			gfx->setTextRestoreBackground(mode != MODE_INTR);
+		// Pin `start` to obj 0 every iteration. The SOP's self-destroy
+		// convention (CANCEL on the picker, back-out from any sub-menu)
+		// hardcodes `destroy_object(0)` -- if we let createInstance append
+		// at the next free slot, the second relaunch's start lands at some
+		// high index and the SOP's destroy_object(0) hits the OLD slot,
+		// leaving the new start "alive" -> our self-destroy check returns
+		// false -> we quit instead of relaunching. allocAt(0, ...) replaces
+		// whatever stale tombstone is at slot 0 each time.
+		int objIndex = objects.createInstanceAt(0, classNumber);
 		std::string relaunch; // non-empty => a sub-program to run, then re-boot
 		try {
 			VM::Value result = objects.send(objIndex, MSG_CREATE, {});
+			// AESOP self-destroy convention: when start cancels back to itself
+			// (e.g. CANCEL on the Restore-Game picker, or back-out from any
+			// sub-menu), the SOP calls destroy_object(0) on its own handler.
+			// The original interpreter's top-level loop re-creates start at
+			// that point with whichever mode the bytecode left in cell 1264.
+			// If start is still alive, it returned normally (Abandon the
+			// Quest -> clean exit).
+			bool selfDestroyed = objects.objectLookup(objIndex) != objIndex;
+			if (selfDestroyed) {
+				// Re-read mode: the SOP may have poked cell 1264 between boot
+				// and self-destroy (e.g. picker -> menu sets it back to INTR).
+				const int32_t nextMode = readMode();
+				// Simulate the original AESOP `launch()` exec-replace by
+				// resetting per-process state: every live object + every live
+				// subwindow + the event queue. The SOP authors didn't bother
+				// releasing the ~80 sub-windows / handful of helper objects
+				// each menu iteration creates because the original DOS runtime
+				// reaped the whole process on launch(). Without these resets,
+				// 3-4 cancel cycles exhaust the 256-handle window table and
+				// mouse hit-testing dies. The class registry + the runtime
+				// hooks (dynamic-statics, etc.) persist; only instance state
+				// is wiped.
+				std::cout << "  [start self-destroyed -- "
+				          << objects.liveObjectCount() << " obj / "
+				          << events.liveWindowCount() << " win leaked; "
+				             "resetting + relaunching with mode "
+				          << (nextMode == MODE_CINE ? "CINE"
+				            : nextMode == MODE_CHGN ? "CHGN" : "INTR")
+				          << "]" << std::endl;
+				objects.resetInstances();
+				events.reset();
+				continue; // loop to re-create start in the cleared environment
+			}
 			std::cout << "Boot handler returned " << result << " -- quitting."
 			          << std::endl;
 			quit = true; // start returned normally (e.g. "Abandon the Quest")

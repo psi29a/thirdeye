@@ -116,6 +116,11 @@ private:
 		int winX0 = 0, winX1 = WIDTH - 1; // bound window's horizontal extent
 		int winY0 = 0, winY1 = HEIGHT - 1; // bound window's vertical extent
 		int justify = 0;                  // 0=left, 1=right, 2=center (GIL2VFX)
+		// Handle of the subwindow this text window is bound to (text_window(N,
+		// M) -> boundHandle=M). When set_x1/x2/y1/y2 mutates the subwindow's
+		// edges, the runtime calls Graphics::updateTextWindowsFor() to refresh
+		// any bound text window's winX0/winX1/winY0/winY1.
+		int boundHandle = -1;
 	};
 	std::map<int, TextWin> mTextWin;
 	// Built glyph sets, cached by font resource id (text_style is called every
@@ -212,6 +217,22 @@ public:
 	// centering) and clears the interior to its background, so previously-drawn
 	// (or bitmap-baked) text there doesn't ghost under the fresh text.
 	void setTextWindow(int wndnum, int x0, int y0, int x1, int y1);
+	// Repaint a screen-coord rectangle from either the panel-art backdrop
+	// (in-game) or sampled flat colour (menus). Callable directly from the
+	// SOP's wipe_window runtime function -- matches GIL2VFX_wipe_window /
+	// GIL2VFX_home in the original. Used to be a side effect of
+	// setTextWindow; pulled out so the save-picker's many rebinds don't
+	// wipe between draws.
+	void wipeTextBox(int x0, int y0, int x1, int y1);
+	// Variant that also records the source subwindow handle for live re-query
+	// when set_x1/x2/y1/y2 mutates it. The runtime calls this from
+	// text_window(N, M); the existing 4-coord overload is kept for callers
+	// that bind to an ad-hoc rectangle (not a subwindow handle).
+	void setTextWindow(int wndnum, int x0, int y0, int x1, int y1, int handle);
+	// Update every text window currently bound to subwindow `handle` so their
+	// cached edges match the new (x0, y0)-(x1, y1). Called by the runtime
+	// after set_x1/x2/y1/y2 mutates the subwindow's bounds.
+	void updateTextWindowsFor(int handle, int x0, int y0, int x1, int y1);
 	// Choose how setTextWindow clears a box before (re)drawing text: true =
 	// restore the bitmap backdrop (text overlays panel art, in-game); false =
 	// flat-fill the sampled background (the title menu, which bakes its options).
