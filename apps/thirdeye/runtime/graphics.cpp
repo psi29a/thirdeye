@@ -21,10 +21,12 @@ namespace {
 // PAL_OUT=0xB0.
 constexpr uint16_t kFirstColor[5] = {0x00, 0xB0, 0xC0, 0xE0, 0xB0};
 
-// The dungeon 3D view renders into off-screen page 94, blitted to its view
-// window (the dungeon's assign_subwindow 0,0-175,119 = 176x120). We composite
-// onto one screen surface, so page-94 draws are clipped to this window.
-constexpr uint16_t kViewPage = 94;
+// The dungeon view's off-screen page number is NOT fixed: it depends on what
+// SOP objects loaded before. With --skip-menu (CINE shortcut) it's 92; with
+// the full menu/load-game path it's 99. We learn it from the SOP's own
+// set_x2(P, kViewW-1) calls (=175 = view's natural right edge) and remember
+// every such page in gViewPages. Without dynamic detection, wall draws to a
+// non-recognized view page escape the clip and bleed onto the portrait panels.
 constexpr int kViewW = 176, kViewH = 120;
 
 } // namespace
@@ -90,6 +92,11 @@ bool tryHandle(Context &ctx, const std::string &fn,
 	}
 	if (fn == "set_x2" && args.size() >= 2) {
 		gViewClipX2 = static_cast<int>(args[1]);
+		// set_x2(P, kViewW-1) = "restore to view's natural right edge" -- the SOP
+		// only does this on the dungeon view's off-screen page, so it's our
+		// signal for which page number to clip wall draws to.
+		if (static_cast<int>(args[1]) == kViewW - 1)
+			gViewPages.insert(static_cast<int>(args[0]));
 		ctx.events.setWindowEdge(args[0], 'r', args[1]);
 		refreshBoundText(args[0]);
 		result = 0;
@@ -149,11 +156,13 @@ bool tryHandle(Context &ctx, const std::string &fn,
 		uint16_t table = static_cast<uint16_t>(args[1]);
 		uint16_t number = static_cast<uint16_t>(args[2]);
 		int x = static_cast<int>(args[3]), y = static_cast<int>(args[4]);
-		// The dungeon 3D view renders into off-screen page 94; we composite onto
+		// The dungeon 3D view renders into an off-screen page; we composite onto
 		// the one screen surface, so without the page model the wide wall shapes
-		// would bleed out of the view into the character panels. Clip page-94
-		// draws to the dungeon's view window (assign_subwindow 0,0-175,119).
-		bool viewPage = page == kViewPage;
+		// would bleed out of the view into the character panels. Clip draws to
+		// any page the SOP has marked view-like via set_x2(P, 175) (see
+		// gViewPages in internal.hpp -- the page number is not fixed across
+		// boot paths).
+		bool viewPage = gViewPages.count(page) != 0;
 		if (viewPage) {
 			// Honor the per-cell horizontal clip set by set_x1/set_x2 (see
 			// runtime-fn block). x = -1 means "use the view's natural edge".
@@ -165,9 +174,9 @@ bool tryHandle(Context &ctx, const std::string &fn,
 		// arg[6] = flip/mirror (GIL2VFX: 1=X, 2=Y, 3=both); the view draws
 		// right-hand walls as the X-mirror of the left-hand shape.
 		int mirror = args.size() > 6 ? static_cast<int>(args[6]) : 0;
-		// The compass facing indicator (page 104, resource 187) is only drawn on
+		// The compass facing indicator (page 102, resource 187) is only drawn on
 		// a turn; mark it so the next compass refresh re-snapshots (see below).
-		if (page == 104 && table == 187)
+		if (page == 102 && table == 187)
 			gCompassDirty = true;
 		try {
 			auto t0 = gPerf ? std::chrono::steady_clock::now()
@@ -181,8 +190,9 @@ bool tryHandle(Context &ctx, const std::string &fn,
 				                  std::chrono::steady_clock::now() - t0).count();
 				++gDrawCount;
 			}
-			rt() << "  [drew " << table << ":" << number << " @ " << x
-			     << "," << y << (mirror ? " M" : "") << "]" << std::endl;
+			rt() << "  [drew p" << page << " " << table << ":" << number
+			     << " @ " << x << "," << y << (mirror ? " M" : "") << "]"
+			     << std::endl;
 		} catch (const std::exception &e) {
 			rt() << "  [draw failed: " << e.what() << "]" << std::endl;
 		}
