@@ -210,16 +210,34 @@ void THIRDEYE::runtime::pumpHost(GRAPHICS::Graphics &gfx, VM::EventSystem &event
 	// SYS_TIMER event (see EventSystem::postTimer / INTRFACE.C timer_callback).
 	events.postTimer(static_cast<int32_t>(SDL_GetTicks() >> 5));
 
-	// Debug: THIRDEYE_AUTOWALK posts a scripted move (the same SYS_KEYDOWN the
-	// arrow keys post) every ~40 pumps, so a headless run can be verified to walk
-	// the dungeon (the kernel notify()s 0x4800=up->move forward, etc.). Value is a
-	// hex scan code (default 0x4800 = forward).
+	// Debug: THIRDEYE_AUTOWALK posts scripted SYS_KEYDOWNs (the same the arrow
+	// keys/WASD/QE post) every ~40 pumps, so a headless run can drive the engine
+	// for repro/regression testing. Value is one OR MORE comma-separated hex
+	// scan codes: "4800" = repeat forward; "4900,4800,4800" = turn-right once
+	// then walk forward x2 then hold (last code repeats). Useful sequences:
+	//   4800=forward 5000=back 4b00=strafe-L 4d00=strafe-R 4700=turn-L 4900=turn-R
+	//   5000,0d,0d = menu Down + Enter + Enter (advances title menu + save picker)
+	//   0d = Enter   1b = Esc
 	if (const char *aw = std::getenv("THIRDEYE_AUTOWALK")) {
+		static std::vector<int32_t> codes;
 		static int tick = 0;
-		int32_t code = static_cast<int32_t>(std::strtol(aw, nullptr, 16));
-		if (code == 0) code = 0x4800;
-		if (++tick % 40 == 0)
-			events.postEvent(0, VM::SYS_KEYDOWN, code);
+		if (codes.empty()) {
+			std::string s = aw;
+			for (size_t p = 0; p < s.size(); ) {
+				size_t e = s.find(',', p);
+				int32_t c = static_cast<int32_t>(std::strtol(
+					s.substr(p, e == std::string::npos ? e : e - p).c_str(), nullptr, 16));
+				if (c != 0) codes.push_back(c);
+				if (e == std::string::npos) break;
+				p = e + 1;
+			}
+			if (codes.empty()) codes.push_back(0x4800);
+		}
+		if (++tick % 40 == 0) {
+			size_t idx = static_cast<size_t>(tick / 40 - 1);
+			if (idx >= codes.size()) idx = codes.size() - 1;
+			events.postEvent(0, VM::SYS_KEYDOWN, codes[idx]);
+		}
 	}
 	// Debug: THIRDEYE_AUTOKEY=<decimal SDL scancode> pushes a synthetic SDL_KEYDOWN
 	// with that physical scancode every ~40 pumps, so the real key handler (WASD/QE/
