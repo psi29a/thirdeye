@@ -121,6 +121,13 @@ uint32_t ObjectSystem::resolveExtern(uint16_t importingClass, uint32_t xrOffset)
 }
 
 uint8_t* ObjectSystem::staticsPtr(int objIndex, uint32_t offset, uint32_t size) {
+	// Thirdeye runtime-owned buffer (e.g. savegame-picker slot names): a
+	// sentinel obj index that has no live SOP object behind it. Checked
+	// first so it doesn't trip the "dead object" throw below.
+	if (mDynamicStatics) {
+		if (uint8_t* p = mDynamicStatics(objIndex, offset, size))
+			return p;
+	}
 	if (objIndex < 0 || static_cast<size_t>(objIndex) >= mObjList.size() ||
 	    mObjList[objIndex] == kFreeSlot)
 		throw VmError("extern access to dead object index " +
@@ -195,6 +202,31 @@ int ObjectSystem::allocAt(int index, uint16_t classNumber) {
 
 int ObjectSystem::createInstance(uint16_t classNumber) {
 	return allocAt(-1, classNumber); // allocate only; caller sends MSG_CREATE
+}
+
+int ObjectSystem::createInstanceAt(int index, uint16_t classNumber) {
+	return allocAt(index, classNumber); // pinned slot; caller sends MSG_CREATE
+}
+
+size_t ObjectSystem::liveObjectCount() const {
+	size_t n = 0;
+	for (auto cls : mObjList) if (cls != kFreeSlot) ++n;
+	return n;
+}
+
+void ObjectSystem::resetInstances() {
+	// Drop every live instance. We do NOT send MSG_DESTROY here -- that's
+	// the SOP's responsibility (`start` self-destroys before relaunch, the
+	// menu/picker SOPs destroy their owned objects). This is the engine-
+	// level cleanup that catches whatever leaked, matching the original
+	// AESOP runtime's launch()-exec-replace semantics where the whole
+	// process memory is replaced.
+	mObjList.clear();
+	mStatics.clear();
+	mDepth = 0;
+	// mClasses + mExternCache + mRuntimeCall + mDynamicStatics persist:
+	// classes are parsed once at boot, the runtime hook bindings outlive
+	// the relaunch loop.
 }
 
 int ObjectSystem::createProgram(int index, uint16_t classNumber) {

@@ -112,6 +112,12 @@ public:
 	// hovered option's window to work out which option it is.
 	bool windowRect(int32_t handle, int32_t &x1, int32_t &y1, int32_t &x2,
 	                int32_t &y2) const;
+	// set_x1/set_y1/set_x2/set_y2(wnd, val): mutate a single edge of an existing
+	// window. Matches GIL2VFX_set_x1/x2/y1/y2 in the original runtime, which
+	// just assigns panes[wnd].{x0,y0,x1,y1}. The save-picker uses these to
+	// narrow window 99 to a 13-pixel column for the slot numbers ("1".."12")
+	// then widen it back to 175 for the slot names ("Quick Start Party").
+	void setWindowEdge(int32_t handle, char which, int32_t val);
 	// Feed host input. mouseMove posts SYS_MOUSEMOVE (coalesced) and the
 	// ENTER/LEAVE region events; mouseButton posts CLICK/RELEASE plus the
 	// *_CLICK_REGION events for whichever registered region holds the mouse.
@@ -123,8 +129,25 @@ public:
 	// behaviour (menu fade-in, cursor blink, animation).
 	void postTimer(int32_t heartbeat);
 
+	// Current mouse position (last posted via mouseMove). The SOP's mouse_XY
+	// runtime call reads these to figure out which save-slot row / button
+	// the user clicked.
+	int32_t pointX() const { return mPointX; }
+	int32_t pointY() const { return mPointY; }
+
 	// Diagnostics / tests: number of live (non-tombstone) events in the queue.
 	size_t pendingEvents() const;
+
+	// Count of currently-used window handles (sums mWindows[i].used).
+	// Diagnostic; used by the engine boot loop's leak-canary log and the
+	// test that pins reset() restores the 2-page initial state.
+	size_t liveWindowCount() const;
+
+	// NB: reset() is already public above -- the engine boot loop calls it
+	// between relaunch iterations to clear the leaked sub-windows / events
+	// the SOP accumulated under the about-to-be-destroyed `start`. See the
+	// comment block on resetInstances in ObjectSystem for the rationale
+	// (matches the original AESOP runtime's launch() exec-replace).
 
 	// When set, dispatch logs each message it delivers (bring-up visibility).
 	void setVerbose(bool v) { mVerbose = v; }

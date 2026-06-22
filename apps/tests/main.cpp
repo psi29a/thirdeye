@@ -664,6 +664,175 @@ TEST (Event_Test, WindowRectReturnsAssignedRectangle) {
 	EXPECT_FALSE(ev.windowRect(w, x1, y1, x2, y2)); // released -> no rect
 }
 
+// --- resetInstances drops every live object so the engine boot loop can
+// simulate AESOP's launch() exec-replace (fresh process memory) between
+// relaunches. Without it, the SOP's per-iteration object accumulation
+// leaks across the boot loop. ---
+TEST (Object_Test, ResetInstancesClearsAllLiveObjects) {
+	VM::ObjectSystem os;
+	os.addClass(makeClass(1, 0xFFFFFFFFu, 0, {PUSH, SHTC, 7, END}));
+	int a = os.createInstance(1);
+	int b = os.createInstance(1);
+	int c = os.createInstance(1);
+	EXPECT_EQ(3u, os.liveObjectCount());
+	os.resetInstances();
+	EXPECT_EQ(0u, os.liveObjectCount());
+	// Classes persist (not re-registered) so we can re-create immediately.
+	EXPECT_EQ(0, os.createInstanceAt(0, 1));
+	EXPECT_EQ(7, os.send(0, 0, {}));
+	(void)a; (void)b; (void)c;
+}
+
+// --- EventSystem::reset releases every assigned subwindow (back to the 2
+// initial PAGE1/PAGE2 entries). The engine boot loop calls this between
+// relaunches to clear the ~80 sub-windows the SOP leaks per iteration --
+// without it, 3 cancel cycles fill the 256-handle table and clicks die. ---
+TEST (Event_Test, ResetReleasesAllSubwindows) {
+	VM::ObjectSystem os;
+	VM::EventSystem ev(os);
+	// PAGE1 + PAGE2 are pre-allocated -> 2 used at boot.
+	EXPECT_EQ(2u, ev.liveWindowCount());
+	for (int i = 0; i < 80; ++i)
+		ev.assignWindow(0, 0, 0, 10, 10);
+	EXPECT_EQ(82u, ev.liveWindowCount());
+	ev.reset();
+	EXPECT_EQ(2u, ev.liveWindowCount()); // back to just the pages
+	// New windows are allocatable again (would otherwise fail at 256).
+	int32_t w = ev.assignWindow(0, 0, 0, 10, 10);
+	EXPECT_EQ(2, w); // first slot after the 2 pages
+}
+
+// --- createInstanceAt pins a class instance at a specific obj index. The
+// engine's boot loop uses this to keep `start` at obj 0 across relaunches
+// so the SOP's hardcoded `destroy_object(0)` self-destroy convention works
+// on every iteration (cancel -> back to menu -> cancel again was quitting
+// because the second start landed at a high free index). ---
+TEST (Object_Test, CreateInstanceAtPinsToSpecificSlot) {
+	VM::ObjectSystem os;
+	os.addClass(makeClass(1, 0xFFFFFFFFu, 0, {PUSH, SHTC, 7, END})); // msg0 -> 7
+	// Allocate a few times to grow mObjList so slot 0 isn't trivially "next".
+	(void) os.createInstance(1);
+	(void) os.createInstance(1);
+	(void) os.createInstance(1);
+	// Pin to slot 0 -- must return 0 (replaces whatever was there).
+	int pinned = os.createInstanceAt(0, 1);
+	EXPECT_EQ(0, pinned);
+	EXPECT_EQ(7, os.send(0, 0, {})); // handler dispatches on the pinned obj
+	// Destroying obj 0 frees the slot; a fresh createInstanceAt(0, ...)
+	// re-pins, matching the boot loop's relaunch semantics.
+	os.destroyObject(0);
+	EXPECT_EQ(0, os.createInstanceAt(0, 1));
+	EXPECT_EQ(7, os.send(0, 0, {}));
+}
+
+// --- set_x1/x2/y1/y2 mutate the named subwindow's edges (port of
+// GIL2VFX_set_x1/x2/y1/y2). The save-picker uses set_x2(99, 13) to narrow
+// window 99 to a 13-pixel column for the slot numbers; without per-edge
+// mutation the column-narrowing broke the picker layout. ---
+TEST (Event_Test, SetWindowEdgeMutatesNamedEdge) {
+	VM::ObjectSystem os;
+	VM::EventSystem ev(os);
+	int32_t w = ev.assignWindow(0, 10, 20, 100, 80);
+	ev.setWindowEdge(w, 'l', 50);  // narrow from the left
+	int32_t x1, y1, x2, y2;
+	ASSERT_TRUE(ev.windowRect(w, x1, y1, x2, y2));
+	EXPECT_EQ(50, x1); EXPECT_EQ(20, y1); EXPECT_EQ(100, x2); EXPECT_EQ(80, y2);
+	ev.setWindowEdge(w, 'r', 60);  // narrow from the right
+	ev.setWindowEdge(w, 't', 30);
+	ev.setWindowEdge(w, 'b', 70);
+	ASSERT_TRUE(ev.windowRect(w, x1, y1, x2, y2));
+	EXPECT_EQ(50, x1); EXPECT_EQ(30, y1); EXPECT_EQ(60, x2); EXPECT_EQ(70, y2);
+}
+
+// Edges on an unknown / released handle are silently dropped (no crash, no
+// resurrection of the released slot).
+TEST (Event_Test, SetWindowEdgeOnDeadHandleIsNoOp) {
+	VM::ObjectSystem os;
+	VM::EventSystem ev(os);
+	int32_t w = ev.assignWindow(0, 0, 0, 10, 10);
+	ev.releaseWindow(w);
+	ev.setWindowEdge(w, 'r', 99);          // released
+	ev.setWindowEdge(9999, 'r', 99);       // never assigned
+	int32_t x1, y1, x2, y2;
+	EXPECT_FALSE(ev.windowRect(w, x1, y1, x2, y2));    // still released
+	EXPECT_FALSE(ev.windowRect(9999, x1, y1, x2, y2));
+}
+
+// --- mouseMove stores the position; pointX/pointY expose it. The runtime
+// mouse_XY handler packs (y<<16)|x and the SOP's save-picker uses that to
+// figure out which slot row got clicked -- previously stubbed to (0,0) so
+// every click resolved to slot 1 by accident. ---
+TEST (Event_Test, MouseMoveExposesCurrentPosition) {
+	VM::ObjectSystem os;
+	VM::EventSystem ev(os);
+	EXPECT_EQ(0, ev.pointX());
+	EXPECT_EQ(0, ev.pointY());
+	ev.mouseMove(100, 22);
+	EXPECT_EQ(100, ev.pointX());
+	EXPECT_EQ(22,  ev.pointY());
+	ev.mouseMove(0, 199);              // edge values still propagate
+	EXPECT_EQ(0,   ev.pointX());
+	EXPECT_EQ(199, ev.pointY());
+}
+
+// --- ObjectSystem::setDynamicStaticsHook: thirdeye's escape hatch for
+// exposing runtime-owned byte buffers (e.g. the savegame-picker slot-name
+// table) at a sentinel obj id that the SOP can address via Static/Extern
+// reads without us inventing a fake SOP class. ---
+TEST (Object_Test, DynamicStaticsHookFiresBeforeNormalLookup) {
+	VM::ObjectSystem os;
+	static uint8_t buf[8] = {0xDE, 0xAD, 0xBE, 0xEF, 0x01, 0x02, 0x03, 0x04};
+	constexpr int kSentinel = 0x3FFE;
+	int hookCalls = 0;
+	os.setDynamicStaticsHook([&hookCalls](int obj, uint32_t off,
+	                                       uint32_t sz) -> uint8_t* {
+		++hookCalls;
+		if (obj != kSentinel) return nullptr;
+		if (off + sz > sizeof(buf)) return nullptr;
+		return buf + off;
+	});
+	// Sentinel obj is routed to the hook even though no SOP class owns it.
+	uint8_t *p = os.staticsPtr(kSentinel, 4, 4);
+	ASSERT_NE(nullptr, p);
+	EXPECT_EQ(0x01, p[0]);
+	EXPECT_EQ(0x04, p[3]);
+	EXPECT_EQ(1, hookCalls);
+}
+
+// Hook returning nullptr for an unknown obj falls through to the normal
+// dead-object exception path (no silent OOB read).
+TEST (Object_Test, DynamicStaticsHookFallsThroughOnNullReturn) {
+	VM::ObjectSystem os;
+	os.setDynamicStaticsHook([](int, uint32_t, uint32_t) -> uint8_t* {
+		return nullptr; // never claims any obj
+	});
+	EXPECT_THROW(os.staticsPtr(/*deadObj*/ 9999, 0, 1), VM::VmError);
+}
+
+// The hook bounds-check guards against u32 wrap. A pathological
+// (off, size) like (0xFFFFFFFC, 8) used to be able to slip past `off + size
+// > buf_len` via u32 wraparound; the runtime's hook now compares as u64.
+// This test pins that the hook itself is responsible for its own bounds
+// (the ObjectSystem just routes), so a buggy hook's nullptr return still
+// produces the dead-object exception rather than an OOB pointer.
+TEST (Object_Test, DynamicStaticsHookBoundsCheckedByHook) {
+	VM::ObjectSystem os;
+	static uint8_t buf[8] = {};
+	os.setDynamicStaticsHook([](int obj, uint32_t off,
+	                             uint32_t sz) -> uint8_t* {
+		if (obj != 0x3FFE) return nullptr;
+		// u64-widened bounds check: a u32 (off + sz) would wrap.
+		if (static_cast<uint64_t>(off) + sz > sizeof(buf)) return nullptr;
+		return buf + off;
+	});
+	// Pathological request: a u32 add of (0xFFFFFFFC + 8) wraps to 4 < 8,
+	// which a naive `off + sz > 8` check would accept. The u64 widening
+	// must catch it and return nullptr -> dead-object throw.
+	EXPECT_THROW(os.staticsPtr(0x3FFE, 0xFFFFFFFC, 8), VM::VmError);
+	// Valid request still works.
+	EXPECT_NE(nullptr, os.staticsPtr(0x3FFE, 0, 8));
+}
+
 int main(int argc, char **argv) {
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();

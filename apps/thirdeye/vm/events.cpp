@@ -23,6 +23,12 @@ int32_t EventSystem::matchParameter(int32_t eventType, int32_t eventParam,
 	return eventParam == testParam;
 }
 
+size_t EventSystem::liveWindowCount() const {
+	size_t n = 0;
+	for (const auto &w : mWindows) if (w.used) ++n;
+	return n;
+}
+
 // init_event_queue() + init_notify_list().
 void EventSystem::reset() {
 	mHead = mTail = 0;
@@ -366,6 +372,18 @@ bool EventSystem::windowRect(int32_t handle, int32_t &x1, int32_t &y1,
 	const Win &w = mWindows[handle];
 	x1 = w.x0; y1 = w.y0; x2 = w.x1; y2 = w.y1;
 	return true;
+}
+
+void EventSystem::setWindowEdge(int32_t handle, char which, int32_t val) {
+	if (handle < 0 || handle >= MAX_WINDOWS || !mWindows[handle].used)
+		return;
+	Win &w = mWindows[handle];
+	switch (which) {
+		case 'l': w.x0 = val; break;
+		case 't': w.y0 = val; break;
+		case 'r': w.x1 = val; break;
+		case 'b': w.y1 = val; break;
+	}
 }
 
 // mouse_in_window(): inclusive rectangle test against window `wnd`.

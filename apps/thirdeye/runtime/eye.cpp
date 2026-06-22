@@ -2,6 +2,7 @@
 
 #include "../resources/res.hpp"
 #include "../savegame/items_tmp.hpp"
+#include "../savegame/savegame_dir.hpp"
 #include "../savegame/transfer.hpp"
 #include "../vm/objects.hpp"
 
@@ -17,8 +18,163 @@
 
 namespace THIRDEYE::runtime::eye {
 
+// Savegame-picker slot-name buffer. The SOP picker passes whatever
+// savegame_title returned to sprint/print, which calls back through the
+// VM's readString -> ObjectSystem::staticsPtr. We expose this buffer at
+// a sentinel obj id via ObjectSystem::setDynamicStaticsHook, so the SOP
+// reads "Quick Start Party" (and friends) without us inventing a fake
+// SOP object class.
+namespace {
+constexpr int kSaveSlots = 32;       // larger than the picker's 12-slot view
+constexpr int kSlotNameLen = 32;     // padded name slot
+constexpr uint16_t kSaveBufObj = 0x3FFE; // unused obj id; staticsPtr routes here
+uint8_t gSlotNameBuf[kSaveSlots * kSlotNameLen] = {};
+
+void ensureSlotNameHook(VM::ObjectSystem &objects) {
+	// Install per-ObjectSystem instead of process-global: a second VM in the
+	// same process (tests, future split-engine scenarios) would otherwise
+	// share the "already installed" flag while having no hook of its own,
+	// leaving savegame_title returns pointing into a dead-object path.
+	// setDynamicStaticsHook is idempotent for the same target so re-installing
+	// per boot is cheap and correct.
+	objects.setDynamicStaticsHook([](int obj, uint32_t off,
+	                                 uint32_t size) -> uint8_t* {
+		if (obj != kSaveBufObj) return nullptr;
+		// Compute against the buffer length as a single u64 to avoid the
+		// `off + size` u32-wrap that could let an attacker-controlled offset
+		// slip past the bounds check and return an OOB pointer.
+		constexpr uint64_t kBufLen = sizeof(gSlotNameBuf);
+		if (static_cast<uint64_t>(off) + size > kBufLen) return nullptr;
+		return gSlotNameBuf + off;
+	});
+}
+} // namespace
+
 bool tryHandle(Context &ctx, const std::string &fn,
                const std::vector<VM::Value> &args, VM::Value &result) {
+	// --- save-picker probe (Continue the Quest → Restore Game) -----------
+	// The SOP's save-picker iterates slots 0..N, calls savegame_title(slot)
+	// to fetch the slot's name, then string_compare(name, "_______") to
+	// check if the slot is empty. With both stubbed to 0, every slot looks
+	// empty and the picker prints "No game is saved at that position".
+	//
+	// Wire savegame_title to return the slot index for slots that have a
+	// save in SAVEGAME.DIR (any non-zero distinguishes "used"), 0 otherwise;
+	// and string_compare returns non-zero when arg0 != "______" pattern
+	// (= the slot has a real name). This is intentionally minimal -- enough
+	// to advance the SOP past "is this slot empty" and reveal what it calls
+	// next (= the actual save-restoration runtime function we still need
+	// to wire). Real string display is a future step.
+	if (fn == "savegame_title" && args.size() >= 1) {
+		int slot = static_cast<int>(args[0]);
+		// Read the slot name from SAVEGAME.DIR; write into our runtime-owned
+		// buffer; ALWAYS return the buffer addr so the SOP's string_compare
+		// against the "__________________________" empty-slot marker returns
+		// the right thing for both cases:
+		//   used slot   -> buffer = "Quick Start Party" -> compare != 0 -> render name + click loads
+		//   empty slot  -> buffer = "__________________________" -> compare == 0 -> render dashes + click is ignored
+		// Returning 0 for empty slots (which we used to do) made the SOP's
+		// string_compare see "" vs "____" = NON-zero = "slot is used" = it
+		// would happily fire restore_items on every empty slot the user
+		// clicked, corrupting ITEMS.TMP. The original game's savegame_title
+		// also writes the underscore marker into the buffer for empty slots.
+		std::string name;
+		try {
+			auto entries = THIRDEYE::savegame::loadSaveDir(
+			    ctx.res.resourcePath().parent_path() / "SAVEGAME" / "SAVEGAME.DIR");
+			if (slot >= 0 && static_cast<size_t>(slot) < entries.size() &&
+			    entries[slot].used)
+				name = entries[slot].name;
+		} catch (const std::exception &) {}
+		ensureSlotNameHook(ctx.objects);
+		if (slot < 0 || slot >= kSaveSlots) {
+			result = 0;
+			return true;
+		}
+		// 26 underscores -- matches the marker the SOP's string_compare passes
+		// (we observed "__________________________" in the picker trace).
+		constexpr size_t kEmptyMarkLen = 26;
+		uint8_t *p = gSlotNameBuf + slot * kSlotNameLen;
+		std::memset(p, 0, kSlotNameLen);
+		if (name.empty()) {
+			std::memset(p, '_',
+			            std::min<size_t>(kEmptyMarkLen, kSlotNameLen - 1));
+		} else {
+			size_t n = std::min(name.size(),
+			                    static_cast<size_t>(kSlotNameLen - 1));
+			std::memcpy(p, name.data(), n);
+		}
+		result = VM::makeAddr(VM::AddrSpace::Static,
+		                      static_cast<uint32_t>(slot * kSlotNameLen),
+		                      kSaveBufObj);
+		rt() << "  [savegame_title slot=" << slot
+		     << (name.empty() ? " -> empty (\"_____\")" : " -> \"" + name + "\"")
+		     << "]" << std::endl;
+		return true;
+	}
+	// restore_items(slot) -- copy SAVEGAME/ITEMS_(slot-1):02d.BIN -> ITEMS.TMP.
+	// The SOP's save picker calls this after the user clicks a used slot;
+	// resume_level later reads ITEMS.TMP and seeds the party from it.
+	if (fn == "restore_items" && args.size() >= 1) {
+		int slot = static_cast<int>(args[0]);
+		int idx  = slot - 1; // SOP is 1-based; backup files are 00, 01.
+		auto dir = ctx.res.resourcePath().parent_path() / "SAVEGAME";
+		bool ok = THIRDEYE::savegame::restoreItems(dir, idx);
+		rt() << "  [restore_items: slot " << idx
+		     << (ok ? " -> ITEMS.TMP OK" : " not found; ITEMS.TMP preserved")
+		     << "]" << std::endl;
+		result = ok ? 1 : 0;
+		return true;
+	}
+	// restore_level_objects(slot, ...) -- copy SAVEGAME/LVL??_(slot-1):02d.BIN
+	// -> LVL??.TMP for every level whose backup exists. (The 2nd arg looks
+	// like a redraw cookie / progress counter -- ignored; we restore all
+	// levels in one shot so subsequent change_level reads the right state.)
+	if (fn == "restore_level_objects" && args.size() >= 1) {
+		int slot = static_cast<int>(args[0]);
+		int idx  = slot - 1;
+		auto dir = ctx.res.resourcePath().parent_path() / "SAVEGAME";
+		// Re-confirm the ITEMS.TMP refresh BEFORE counting level copies.
+		// The SOP pairs restore_items + restore_level_objects, but if the
+		// first call's copy_file failed (disk full, race, ...) ITEMS.TMP is
+		// stale. Self-dispatching resume_level on `copied > 0` alone could
+		// then patch live PC state from the wrong slot. restoreItems with
+		// overwrite_existing is idempotent for the happy path (re-copying
+		// the same content) and acts as a confirmation gate for the
+		// failure path. CodeRabbit'd.
+		bool itemsOk = THIRDEYE::savegame::restoreItems(dir, idx);
+		int copied = itemsOk
+		                 ? THIRDEYE::savegame::restoreLevels(dir, idx) : 0;
+		rt() << "  [restore_level_objects: copied " << copied
+		     << " LVL??.TMP from slot " << idx
+		     << (!itemsOk ? " (ITEMS.TMP refresh failed; LVL??.TMP preserved)"
+		         : copied == 0 ? " (slot empty or no backups; LVL??.TMP preserved)"
+		                       : "")
+		     << "]" << std::endl;
+		// resume_level only fires when BOTH halves landed: a valid ITEMS.TMP
+		// for this slot AND at least one LVL??.TMP. This guarantees the live
+		// PC state we patch matches the file state we just wrote.
+		bool restored = itemsOk && copied > 0;
+		if (restored) {
+			VM::Value rl;
+			tryHandle(ctx, "resume_level", {VM::Value{0}}, rl);
+		}
+		result = restored ? 1 : 0;
+		return true;
+	}
+	if (fn == "string_compare" && args.size() >= 2) {
+		// strcmp semantics: 0 = equal, nonzero = different. Both args are
+		// tagged addresses (Code string OR Static/Extern buffer); readString
+		// handles either and returns "" for an unresolvable address.
+		std::string a = ctx.vm.readString(args[0]);
+		std::string b = ctx.vm.readString(args[1]);
+		int cmp = a.compare(b);
+		result = cmp;
+		rt() << "  [string_compare \"" << a << "\" vs \"" << b
+		     << "\" -> " << cmp << "]" << std::endl;
+		return true;
+	}
+
 	// --- char-gen party transfer (EYE.C transfer-file API) ---
 	// open_transfer_file(name): buffer the CHGEN.EXE output (CHARGEN\CREATE.SAV)
 	// so player_attrib/item_attrib can read the created party out of it. The DOS
@@ -183,12 +339,18 @@ bool tryHandle(Context &ctx, const std::string &fn,
 			ctx.objects.createProgram(kEntitiesIndex, kEntitiesClass);
 		int kernel = ctx.objects.firstObjectOfClass(kKernelClass);
 
-		// THIRDEYE_CONTINUE: load the save once; reused for position + PC patching.
-		bool wantContinue = std::getenv("THIRDEYE_CONTINUE") != nullptr;
+		// Continue-from-save is now gated on "does the save file actually exist"
+		// instead of the THIRDEYE_CONTINUE env var (legacy). With the boot-mode
+		// auto-detect in bootObject, the same file-existence check also picks
+		// MODE_CINE upstream -- so when we arrive here in CINE mode (no chargen
+		// ran), wantContinue is true and we create+patch PCs from scratch below.
+		auto savePath =
+		    ctx.res.resourcePath().parent_path() / "SAVEGAME" / "ITEMS.TMP";
+		std::error_code ec;
+		bool wantContinue = std::filesystem::exists(savePath, ec);
 		THIRDEYE::savegame::ItemsTmp items;
 		if (wantContinue)
-			items = THIRDEYE::savegame::loadItemsTmp(
-			    ctx.res.resourcePath().parent_path() / "SAVEGAME" / "ITEMS.TMP");
+			items = THIRDEYE::savegame::loadItemsTmp(savePath);
 
 		if (kernel >= 0) {
 			auto setSlot = [&](uint32_t slot, int16_t val) {
@@ -265,12 +427,34 @@ bool tryHandle(Context &ctx, const std::string &fn,
 				constexpr uint32_t kStrOff = 191, kExcStrOff = 192, kIntOff = 193;
 				constexpr uint32_t kWisOff = 194, kDexOff = 195, kConOff = 196;
 				constexpr uint32_t kChaOff = 197;
-				int patched = 0;
-				for (const auto &c : items.characters) {
+				int patched = 0, createdPcs = 0;
+				for (size_t slotIdx = 0; slotIdx < items.characters.size(); ++slotIdx) {
+					const auto &c = items.characters[slotIdx];
 					if (c.classNumber != 1369) continue;
 					int idx = c.objectIndex;
 					if (idx <= 0) continue;
-					if (ctx.objects.objectLookup(idx) != idx) continue;
+					// In CINE mode (boot bypassed chargen because a save exists)
+					// the PC objects don't exist yet -- create them. In CHGN mode
+					// they were just created by the chargen-transfer SOP and this
+					// is a no-op. We also need to seed PC.W:num (offset 0) with the
+					// slot index AND register the PC in kernel.player[slot] so the
+					// HUD finds it -- chargen would have done that, CINE didn't.
+					bool freshlyCreated = false;
+					if (ctx.objects.objectLookup(idx) != idx) {
+						try {
+							ctx.objects.createProgram(idx, kPcClass);
+							++createdPcs;
+							freshlyCreated = true;
+						} catch (const std::exception &) { continue; }
+					}
+					if (freshlyCreated && slotIdx < kPlayerSlots) {
+						// W:num is the PC's own copy of its party slot.
+						if (uint8_t *np = ctx.objects.classStaticPtr(
+						        idx, kPcClass, kPcNumOff, 1))
+							*np = static_cast<uint8_t>(slotIdx);
+						setSlot(static_cast<uint32_t>(slotIdx), static_cast<int16_t>(idx));
+						++placed;
+					}
 
 					auto wb = [&](uint32_t off, int sz, int32_t v) {
 						if (uint8_t *p = ctx.objects.classStaticPtr(idx, kPcClass, off, sz))
@@ -353,7 +537,11 @@ bool tryHandle(Context &ctx, const std::string &fn,
 					     << " lh=" << c.equip[6] << "]" << std::endl;
 				}
 				rt() << "  [resume_level: " << patched
-				     << " PCs patched from ITEMS.TMP (with equip[])]" << std::endl;
+				     << " PCs patched from ITEMS.TMP (with equip[])"
+				     << (createdPcs ? "; " + std::to_string(createdPcs) +
+				                      " created from scratch (CINE)"
+				                    : "")
+				     << "]" << std::endl;
 			}
 
 			// (4) Position seeding.

@@ -28,8 +28,10 @@ narrative on completed work.
 - ✅ AESOP/16 `"1.10"` bitmap decoder.
 - ✅ Text rendering pipeline (`text_window`/`text_style`/`text_color`/`text_xy`/`print`/
   `sprint`).
-- 🚧 EOB3 runtime-function set (`EYE.C`/`RTCODE.C`/`INTRFACE.C`) wired. Still stubbed: sound,
-  most of save/load, much of `EYE.C`.
+- 🚧 EOB3 runtime-function set (`EYE.C`/`RTCODE.C`/`INTRFACE.C`) wired. Still stubbed: sound
+  (the SDL_mixer+WildMIDI pipe exists; the SOP-driven sound calls are stubs). Save/load + the
+  Restore-Game picker now flow end-to-end (see Phase 3). Much of `EYE.C` (combat-edge cases,
+  level transition flow) still incremental.
 - ✅ **Goal reached**: title menu + in-game HUD both render and are interactive (SOP-driven).
 
 ## Phase 3 — Playable EOB3 🚧 (dungeon is explorable + populated)
@@ -103,29 +105,63 @@ experience award + level up integration on the player side.
   stride records `(u16 id, u16 class, N statics, 4 trailer)`, where N comes
   from the SOP class's total `instanceStaticSize` via a caller-supplied lookup.
   Unit-tested + verified against the Quick Start save.
+- **Title-menu → Restore-Game picker → in-game flow** wired end-to-end. The
+  SOP's `savegame_title`/`string_compare`/`restore_items`/`restore_level_objects`
+  runtime functions now do the real work (read `SAVEGAME.DIR`, expose slot
+  names through a runtime-owned dynamic-statics buffer routed via
+  `ObjectSystem::setDynamicStaticsHook`, copy `ITEMS_NN.BIN` → `ITEMS.TMP` /
+  `LVLnn_NN.BIN` → `LVLnn.TMP`, then self-dispatch into `resume_level` to
+  materialize live PCs + items). The picker now renders correctly thanks to
+  two GIL2VFX fixes: `set_x1/x2/y1/y2` mutate the bound subwindow's edges
+  (`EventSystem::setWindowEdge` + `Graphics::updateTextWindowsFor`), and
+  `text_window` is a pure rebind — the explicit `wipe_window` runtime
+  function handles clearing (matches `GIL2VFX_select_text_window` vs
+  `GIL2VFX_wipe_window` separation). Mouse-click routing through `mouse_XY()`
+  wired against `EventSystem::pointX/pointY`.
 
 *Remaining:*
-- **Drop the `THIRDEYE_CONTINUE` gate.** Today, when a `SAVEGAME/ITEMS.TMP`
-  exists, we *could* always restore from it (the bundled "Quick Start Party"
-  case). But the chargen-new-game path should still work, so we need a
-  signal — either a different boot mode (Continue vs New Game on the title
-  menu) or "no `CREATE.SAV` = new game; save exists = continue".
+- ~~**Drop the `THIRDEYE_CONTINUE` gate.**~~ ✅ done. `bootObject` auto-detects:
+  `--skip-menu` + `SAVEGAME/ITEMS.TMP` present → boot mode `CINE`; missing →
+  `CHGN`. New `--chargen` flag forces `CHGN` even when a save exists
+  (start-a-new-game). `resume_level` matches: file-existence check replaces
+  the env var, and it can now `createProgram` PCs from scratch on the CINE
+  path (defensive today since the SOP's CINE branch still runs chargen-
+  transfer; live the moment we bypass that).
 - `write_initial_tempfiles` (the new-game write).
-- The 4-byte trailer in each §2.3 record is currently skipped; understand
-  what it stores (likely a free-list / link pointer) so it round-trips.
+- ~~The 4-byte trailer in each §2.3 record is currently skipped~~ ✅ RE'd:
+  - **byte 3 = magical bonus (signed int8)** -- verified end-to-end
+    against named items (Father Jon's ring of protection +3, Sir Mikeal's
+    +1 plate/sword/shield, etc.). Accessor: `ItemRecord::magicalBonus()`.
+  - bytes 0..2 = placement word + flags, partially decoded; see
+    [`../eob3_research/SAVEGAME/README.md`](../eob3_research/SAVEGAME/README.md)
+    for the per-pattern breakdown and trailer log artifact.
+  - Probe behind `THIRDEYE_DUMP_TRAILERS=1` for further RE.
 - ~~Per-PC unmapped fields~~ ✅ done: race/classes/portrait/PCstat/alignment/
   levels[3]/lost_levels[3]/lost_hp/hbon/xp[1..2] now all parsed and patched.
   Remaining unmapped: memorized/known spells (the big B:spell_cnt/spell_stat
   arrays at PC offset 209/409 — likely fill most of the +216..+626 tail), AC,
   L:magiceffects, B:sparkle. None blocking gameplay today.
 
-Reference data in `../data/SAVEGAME/`: a used save **"Quick Start Party"** (named in
-`SAVEGAME.DIR`) + the binary state files. Convention: **`.TMP` = live state**, **`_00/_01.BIN`
-= the two saved slots** (load = copy `_NN.BIN`→`.TMP`, then `resume_*` reads `.TMP`). The
-EOB1/2 character record matches our `CREATE.SAV` RE
-(https://moddingwiki.shikadi.net/wiki/Eye_of_the_Beholder_Save_Game_Format); EOB3's item/level
-`.TMP` formats are not on the wiki. EOB3 had a 16-bit-pointer save bug (daesop's
-`/eob3menupatch` works around it for the original; our native VM sidesteps it).
+Reference data in `../data/SAVEGAME/`: the **"Quick Start Party"** save —
+*not* the user's; this is a pre-rolled save game that Westwood/SSI shipped
+with every EOB3 install so a new player can hit "Continue the Quest" on
+the title menu and play immediately without rolling a party. Confirmed
+against a live install at archive.org/details/msdos_Eye_of_the_Beholder_III_-_Assault_on_Myth_Drannor_1993
+(menu screenshot: "1 Quick Start Party"; after restore: Sir Mikeal,
+Stonebeard, Salina, Lady Reeya on level 3 at the Graveyard, message log
+shows `Restoring "Quick Start Party" ... Done.`). The other shipped party
+— Bob/Carol/Ted/Alice in `CHARGEN/CREATE.SAV` — is a developer sample
+party left behind in the chargen-transfer file; not advertised to the
+player, but consumed by `chargen-transfer` if "Begin a New Quest" is
+chosen without rolling first.
+
+Convention: **`.TMP` = live state**, **`_00/_01.BIN` = the two saved slots**
+(load = copy `_NN.BIN`→`.TMP`, then `resume_*` reads `.TMP`). The EOB1/2
+character record matches our `CREATE.SAV` RE
+(https://moddingwiki.shikadi.net/wiki/Eye_of_the_Beholder_Save_Game_Format);
+EOB3's item/level `.TMP` formats are not on the wiki. EOB3 had a 16-bit-
+pointer save bug (daesop's `/eob3menupatch` works around it for the
+original; our native VM sidesteps it).
 
 ### 🚧 EOB1/EOB2 → EOB3 party import
 
@@ -138,7 +174,7 @@ EOB1/2→EOB3 converter tool could share this reader.
 the EOB3 dir) does **no format conversion** — it shells out to DOS `copy` and leaves the
 EOB1/2 save verbatim at `temptemp.sav` for M:14 to ingest. So the whole import lives in the
 SOP M:14 handler; **no DOS RE needed**. Full CHARCOPY artifact dump:
-[`../eob3_research/CHARCOPY/`](../../eob3_research/CHARCOPY/README.md).
+[`../eob3_research/CHARCOPY/`](../eob3_research/CHARCOPY/README.md).
 
 ### ⏳ Other stand-ins
 - Level objects load the *saved* `LVLnn.TMP` (not the new-game source).
@@ -155,6 +191,28 @@ SOP M:14 handler; **no DOS RE needed**. Full CHARCOPY artifact dump:
 
 Enhancements not in the original — opt-in, kept separate from the SOP-driven core so they
 never change game behaviour.
+
+- 🚀 **Qt-based launcher (planned).** First-run UX so a fresh user doesn't have to fight DOS
+  install layouts. The launcher:
+  - **Detects an existing EOB3 install.** Looks in common spots (next to the binary, a few
+    well-known paths) for `EYE.RES` + `CHARGEN/` + `SAVEGAME/`. If found, just launches
+    thirdeye with the right `--game-data` pointing at it.
+  - **Configures settings.** Resolution scale, sound on/off, controls, save-game directory,
+    log verbosity. Persists to a `thirdeye.cfg` next to the binary or in the user's app-data
+    dir.
+  - **Offers to download the game if missing.** Pulls the original DOS disk images from
+    [archive.org/download/eye-of-the-beholder-3](https://archive.org/download/eye-of-the-beholder-3)
+    (CC-licensed abandonware mirror). The zips contain DOS disk dumps with `.ARJ`-packed
+    contents — the launcher needs a built-in ARJ unpacker (ARJ is a well-documented format;
+    a small in-tree decoder is cleanest, no shell-out to a system `arj` binary the user
+    probably doesn't have).
+  - **Installs the unpacked game** into a thirdeye-owned data dir (NOT inside the repo —
+    Thirdeye ships no assets and that policy is non-negotiable).
+  - **Qt for the UI** (cross-platform; matches our Linux/macOS/Windows targets). Stays in a
+    separate `apps/launcher/` so the CLI runtime has zero Qt dependency.
+
+  Phasing: (a) detection + settings UI on a known install (immediate value); (b) ARJ unpacker
+  + install flow; (c) download/progress UI + checksums. Each phase ships independently.
 
 - 🗺️ **Automapper (planned).** Toggle with **M**. Parchment/beige overlay showing the current
   dungeon level: cells the party has explored, party position + facing, discovered
@@ -173,12 +231,12 @@ character generation natively. CHGEN.EXE also hosts the in-game Camp UI
 (Rest / Memorize / Pray / Scribe / Load / Save), so a full replacement
 covers both subsystems.
 
-Full RE artifact dump + 3-phase plan: [`../eob3_research/CHGEN/`](../../eob3_research/CHGEN/README.md).
+Full RE artifact dump + 3-phase plan: [`../eob3_research/CHGEN/`](../eob3_research/CHGEN/README.md).
 Quick map:
 
 | | Goal | Status |
 |---|---|---|
-| **Phase 6a — File-format readers** | ITEM.DAT, ITEMTYPE.DAT, CHARPICS.BMP, EOSPREFS.DAT. Reuse thirdeye's existing CPS/palette/font decoders for the rest. | 🚧 in progress (see [`apps/thirdeye/chargen/`](../apps/thirdeye/chargen/)) |
+| **Phase 6a — File-format readers** | ITEM.DAT, ITEMTYPE.DAT, CHARPICS.BMP, EOSPREFS.DAT. Reuse thirdeye's existing CPS/palette/font decoders for the rest. | ✅ ITEM.DAT, ITEMTYPE.DAT, CHARPICS.BMP readers landed in [`apps/thirdeye/chargen/`](../apps/thirdeye/chargen/) with unit + bundled-data tests; CHARPICS also wired as a third variant in the `Bitmap` decoder (auto-detected by file-size header) so all 89 portraits load. EOSPREFS.DAT stubbed pending need. |
 | **Phase 6b — Chargen UI** | Race / class / alignment / stat-roll / portrait / starting-equipment flow. Writes `CREATE.SAV` in our already-RE'd format (so the existing `xfer` transfer keeps working). | ⏳ pending |
 | **Phase 6c — Camp UI in thirdeye** | Self-host Rest / Memorize / Pray / Scribe / Save / Load. Drops CHGEN.EXE entirely. | ⏳ pending |
 
@@ -188,11 +246,19 @@ What's already done that this phase doesn't need to redo:
 - Typed-equipment-slot placement ✅ ([equipment_slots.md](equipment_slots.md))
 - CPS / palette / font decoders ✅ (in [apps/thirdeye/graphics/](../apps/thirdeye/graphics/))
 
-What's new RE work (some still pending, see the artifact README):
-- ITEM.DAT — header decoded, 14-byte record layout known. **Reader being written.**
-- ITEMTYPE.DAT — record stride known (16 B × 64), per-field semantics partly guessed.
-- CHARPICS.BMP — proprietary header + offset table; decoder TBD.
-- Chargen UI state machine — biggest CHGEN.EXE functions (1500-byte+) are the dispatchers; map them when Phase 6b lands.
+What's new RE work:
+- ITEM.DAT — ✅ header decoded, 14-byte record layout known, reader landed + tested.
+- ITEMTYPE.DAT — ✅ record stride known (16 B × 64), reader landed; per-field semantics
+  partly guessed (fields 6/7/8 still notional — confirm via CHGEN.EXE xrefs when Phase 6b
+  needs them).
+- CHARPICS.BMP — ✅ proprietary header + offset table + per-row RLE decoded. 89 portraits
+  load through the unified `Bitmap` interface. Horizontal alignment is centered (statistically
+  validated against 70/75 non-empty portrait silhouettes); DOSBox-X dynamic-analysis as the
+  next refinement path if needed. Full RE notes: [`../eob3_research/CHGEN/decompiled/README.md`](../eob3_research/CHGEN/decompiled/README.md).
+- Chargen UI state machine — DOSBox screenshot reference walkthrough captured in
+  [`../eob3_research/CHGEN/dosbox_screenshots/`](../eob3_research/CHGEN/dosbox_screenshots/)
+  (9 screens: slot picker → race → class → alignment → stat roll → portrait pick → stat modify
+  → name entry → 4-PC complete). Maps the flow Phase 6b needs to reproduce.
 - AD&D 2e ruleset (race × class limits, stat-roll rules) — mostly documented externally; mechanical work.
 
 ## Phase 7 — Replace other DOS binaries (longer-term)
@@ -201,7 +267,7 @@ Same template as Phase 6 but for the rest of the install:
 
 | EXE | What | Notes |
 |---|---|---|
-| `CHARCOPY.EXE` | EOB1/2 save staging | RE done ([../eob3_research/CHARCOPY/](../../eob3_research/CHARCOPY/README.md)); replace by reading EOB1/2 saves directly in M:14 |
+| `CHARCOPY.EXE` | EOB1/2 save staging | RE done ([../eob3_research/CHARCOPY/](../eob3_research/CHARCOPY/README.md)); replace by reading EOB1/2 saves directly in M:14 |
 | `CINE.EXE` | Intro/outro cinematic player | Replace with GFF player thirdeye already has |
 | `SOUND.EXE` | Sound driver shim | Thirdeye uses SDL_mixer + WildMIDI; not needed |
 | `AESOP.EXE` / `INTERP.EXE` | The SOP interpreter | **Already replaced** by thirdeye's VM |

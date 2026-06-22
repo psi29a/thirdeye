@@ -40,7 +40,12 @@ are those static maps and do **not** appear in `LVLnn.TMP`.
 
 `SAVEGAME.DIR`: ASCII slot names separated by `\r\n`, e.g. `"Quick Start
 Party\r\n___________…"` — one used slot, the rest blank (`_`-filled), ~21 slots,
-terminated by `\x1a`.
+terminated by `\x1a`. The one used slot ("Quick Start Party") is a
+pre-rolled save game **shipped by Westwood/SSI** so a new player can pick
+"Continue the Quest" on the title menu and start playing immediately. The
+party is Sir Mikeal / Stonebeard / Salina / Lady Reeya on level 3 at the
+Graveyard. Confirmed against the live game at
+[archive.org/details/msdos_Eye_of_the_Beholder_III_-_Assault_on_Myth_Drannor_1993](https://archive.org/details/msdos_Eye_of_the_Beholder_III_-_Assault_on_Myth_Drannor_1993).
 
 ---
 
