@@ -29,7 +29,7 @@ GRAPHICS::Bitmap::Bitmap(const std::vector<uint8_t> &vec) {
 		for (uint16_t i = 0; i < mNumSubBitmaps; i++) {
 			size_t entry = 8 + static_cast<size_t>(i) * 8;
 			if (entry + 4 <= vec.size())
-				mBitmapOffets[i] = rd32(entry);
+				mBitmapOffets.insert_or_assign(i, rd32(entry));
 		}
 		return;
 	}
@@ -74,7 +74,7 @@ GRAPHICS::Bitmap::Bitmap(const std::vector<uint8_t> &vec) {
 			if (v <= lastOff) break;
 			if (v < pos + 4) break;
 			if (static_cast<size_t>(v) + kSubHdr > vec.size()) break;
-			mBitmapOffets[mNumSubBitmaps++] = v;
+			mBitmapOffets.insert_or_assign(mNumSubBitmaps++, v);
 			lastOff = v;
 			pos += 4;
 		}
@@ -83,7 +83,8 @@ GRAPHICS::Bitmap::Bitmap(const std::vector<uint8_t> &vec) {
 
 	mNumSubBitmaps = *reinterpret_cast<const uint16_t*>(&vec[2 * 2]);
 	for (uint16_t i = 0; i < mNumSubBitmaps; i++) {
-		mBitmapOffets[i] = *reinterpret_cast<const uint16_t*>(&vec[6 + i * 4]);
+		mBitmapOffets.insert_or_assign(
+		    i, *reinterpret_cast<const uint16_t*>(&vec[6 + i * 4]));
 	}
 }
 
@@ -122,7 +123,7 @@ uint16_t GRAPHICS::Bitmap::getWidth(uint16_t index) {
 		throw std::out_of_range("Bitmap::getWidth: shape index " +
 		                        std::to_string(index) + " >= count " +
 		                        std::to_string(mNumSubBitmaps));
-	uint32_t off = mBitmapOffets[index];
+	uint32_t off = mBitmapOffets.at(index);
 	// "1.10" subpicture header: boundsy (height-1) at +0, boundsx (width-1) at
 	// +2. CHARPICS sub-header: boundsx (width-1) at +0, boundsy (height) at
 	// +2. Older format: width at +0. (All little-endian u16.)
@@ -138,7 +139,7 @@ uint16_t GRAPHICS::Bitmap::getHeight(uint16_t index) {
 		throw std::out_of_range("Bitmap::getHeight: shape index " +
 		                        std::to_string(index) + " >= count " +
 		                        std::to_string(mNumSubBitmaps));
-	uint32_t off = mBitmapOffets[index];
+	uint32_t off = mBitmapOffets.at(index);
 	if (mIsVFXShape)
 		return *reinterpret_cast<const uint16_t*>(&mBitmapData[off]) + 1;
 	if (mIsCharPics)
@@ -177,7 +178,7 @@ uint16_t GRAPHICS::Bitmap::getHeight(uint16_t index) {
 // portrait silhouettes for the cases we've verified. If a future RE pass
 // finds an explicit offset byte, this is the only line to change.
 std::vector<uint8_t> GRAPHICS::Bitmap::decodeCharPicsShape(uint16_t index) {
-	uint32_t base = mBitmapOffets[index];
+	uint32_t base = mBitmapOffets.at(index);
 	uint16_t width  = getWidth(index);
 	uint16_t height = getHeight(index);
 	std::vector<uint8_t> bitmap(static_cast<size_t>(width) * height, 0);
@@ -193,7 +194,7 @@ std::vector<uint8_t> GRAPHICS::Bitmap::decodeCharPicsShape(uint16_t index) {
 		// `<y+1>0x00 0x80 0x1f`. Last row goes to end of shape (or EOF).
 		uint32_t rowEnd = end;
 		uint32_t shapeEnd = (index + 1 < mNumSubBitmaps)
-		                        ? mBitmapOffets[index + 1] : end;
+		                        ? mBitmapOffets.at(index + 1) : end;
 		if (rowEnd > shapeEnd) rowEnd = shapeEnd;
 		uint8_t nextRow = static_cast<uint8_t>(y + 1);
 		for (uint32_t i = pos; i + 3 < rowEnd; ++i) {
@@ -235,7 +236,7 @@ std::vector<uint8_t> GRAPHICS::Bitmap::decodeCharPicsShape(uint16_t index) {
 //   odd  >= 3  string: amount = marker>>1, then `amount` literal pixels
 // There is exactly one end-of-line token per row, height rows in all.
 std::vector<uint8_t> GRAPHICS::Bitmap::decodeVFXShape(uint16_t index) {
-	uint32_t base = mBitmapOffets[index];
+	uint32_t base = mBitmapOffets.at(index);
 	uint16_t width = getWidth(index);
 	uint16_t height = getHeight(index);
 	std::vector<uint8_t> bitmap(static_cast<size_t>(width) * height, 0);
@@ -284,7 +285,7 @@ std::vector<uint8_t> GRAPHICS::Bitmap::operator[](uint16_t index) {
 	if (mIsCharPics)
 		return decodeCharPicsShape(index);
 
-	uint32_t pos = mBitmapOffets[index] + 4;	// skip over width and height
+	uint32_t pos = mBitmapOffets.at(index) + 4;	// skip over width and height
 	std::vector<uint8_t> bitmap(static_cast<size_t>(getWidth(index)) * getHeight(index));
 	memset(&bitmap[0], 0, static_cast<size_t>(getWidth(index)) * getHeight(index));
 
