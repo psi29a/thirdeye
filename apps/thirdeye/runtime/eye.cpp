@@ -2,6 +2,7 @@
 
 #include "../resources/res.hpp"
 #include "../savegame/items_tmp.hpp"
+#include "../savegame/savegame_dir.hpp"
 #include "../savegame/transfer.hpp"
 #include "../vm/objects.hpp"
 
@@ -17,8 +18,147 @@
 
 namespace THIRDEYE::runtime::eye {
 
+// Savegame-picker slot-name buffer. The SOP picker passes whatever
+// savegame_title returned to sprint/print, which calls back through the
+// VM's readString -> ObjectSystem::staticsPtr. We expose this buffer at
+// a sentinel obj id via ObjectSystem::setDynamicStaticsHook, so the SOP
+// reads "Quick Start Party" (and friends) without us inventing a fake
+// SOP object class.
+namespace {
+constexpr int kSaveSlots = 32;       // larger than the picker's 12-slot view
+constexpr int kSlotNameLen = 32;     // padded name slot
+constexpr uint16_t kSaveBufObj = 0x3FFE; // unused obj id; staticsPtr routes here
+uint8_t gSlotNameBuf[kSaveSlots * kSlotNameLen] = {};
+bool gSlotNameHookInstalled = false;
+
+void ensureSlotNameHook(VM::ObjectSystem &objects) {
+	if (gSlotNameHookInstalled) return;
+	objects.setDynamicStaticsHook([](int obj, uint32_t off,
+	                                 uint32_t size) -> uint8_t* {
+		if (obj != kSaveBufObj) return nullptr;
+		if (off + size > sizeof(gSlotNameBuf)) return nullptr;
+		return gSlotNameBuf + off;
+	});
+	gSlotNameHookInstalled = true;
+}
+} // namespace
+
 bool tryHandle(Context &ctx, const std::string &fn,
                const std::vector<VM::Value> &args, VM::Value &result) {
+	// --- save-picker probe (Continue the Quest → Restore Game) -----------
+	// The SOP's save-picker iterates slots 0..N, calls savegame_title(slot)
+	// to fetch the slot's name, then string_compare(name, "_______") to
+	// check if the slot is empty. With both stubbed to 0, every slot looks
+	// empty and the picker prints "No game is saved at that position".
+	//
+	// Wire savegame_title to return the slot index for slots that have a
+	// save in SAVEGAME.DIR (any non-zero distinguishes "used"), 0 otherwise;
+	// and string_compare returns non-zero when arg0 != "______" pattern
+	// (= the slot has a real name). This is intentionally minimal -- enough
+	// to advance the SOP past "is this slot empty" and reveal what it calls
+	// next (= the actual save-restoration runtime function we still need
+	// to wire). Real string display is a future step.
+	if (fn == "savegame_title" && args.size() >= 1) {
+		int slot = static_cast<int>(args[0]);
+		// Read the slot name from SAVEGAME.DIR; write into our runtime-owned
+		// buffer; return a Static-tagged address that sprint/print resolves
+		// through ObjectSystem::setDynamicStaticsHook.
+		std::string name;
+		try {
+			auto entries = THIRDEYE::savegame::loadSaveDir(
+			    ctx.res.resourcePath().parent_path() / "SAVEGAME" / "SAVEGAME.DIR");
+			if (slot >= 0 && static_cast<size_t>(slot) < entries.size() &&
+			    entries[slot].used)
+				name = entries[slot].name;
+		} catch (const std::exception &) {}
+		ensureSlotNameHook(ctx.objects);
+		if (slot >= 0 && slot < kSaveSlots) {
+			uint8_t *p = gSlotNameBuf + slot * kSlotNameLen;
+			std::memset(p, 0, kSlotNameLen);
+			size_t n = name.size() < static_cast<size_t>(kSlotNameLen - 1)
+			               ? name.size() : kSlotNameLen - 1;
+			std::memcpy(p, name.data(), n);
+		}
+		if (name.empty()) {
+			result = 0; // empty slot: SOP treats this as "no save"
+		} else {
+			result = VM::makeAddr(VM::AddrSpace::Static,
+			                      static_cast<uint32_t>(slot * kSlotNameLen),
+			                      kSaveBufObj);
+		}
+		rt() << "  [savegame_title slot=" << slot
+		     << (name.empty() ? " -> empty" : " -> \"" + name + "\"")
+		     << "]" << std::endl;
+		return true;
+	}
+	// restore_items(slot) -- copy SAVEGAME/ITEMS_(slot-1):02d.BIN -> ITEMS.TMP.
+	// The SOP's save picker calls this after the user clicks a used slot;
+	// resume_level later reads ITEMS.TMP and seeds the party from it.
+	if (fn == "restore_items" && args.size() >= 1) {
+		int slot = static_cast<int>(args[0]);
+		int idx  = slot - 1; // SOP is 1-based; backup files are 00, 01.
+		auto dir = ctx.res.resourcePath().parent_path() / "SAVEGAME";
+		char src[24];
+		std::snprintf(src, sizeof(src), "ITEMS_%02d.BIN", idx);
+		std::error_code ec;
+		std::filesystem::copy_file(
+		    dir / src, dir / "ITEMS.TMP",
+		    std::filesystem::copy_options::overwrite_existing, ec);
+		rt() << "  [restore_items: " << src << " -> ITEMS.TMP "
+		     << (ec ? "FAILED: " + ec.message() : "OK") << "]" << std::endl;
+		result = ec ? 0 : 1;
+		return true;
+	}
+	// restore_level_objects(slot, ...) -- copy SAVEGAME/LVL??_(slot-1):02d.BIN
+	// -> LVL??.TMP for every level whose backup exists. (The 2nd arg looks
+	// like a redraw cookie / progress counter -- ignored; we restore all
+	// levels in one shot so subsequent change_level reads the right state.)
+	if (fn == "restore_level_objects" && args.size() >= 1) {
+		int slot = static_cast<int>(args[0]);
+		int idx  = slot - 1;
+		auto dir = ctx.res.resourcePath().parent_path() / "SAVEGAME";
+		int copied = 0, missing = 0;
+		for (int lvl = 1; lvl <= 14; ++lvl) {
+			char src[24], dst[24];
+			std::snprintf(src, sizeof(src), "LVL%02d_%02d.BIN", lvl, idx);
+			std::snprintf(dst, sizeof(dst), "LVL%02d.TMP", lvl);
+			std::error_code ec;
+			if (!std::filesystem::exists(dir / src, ec)) { ++missing; continue; }
+			std::filesystem::copy_file(
+			    dir / src, dir / dst,
+			    std::filesystem::copy_options::overwrite_existing, ec);
+			if (!ec) ++copied;
+		}
+		rt() << "  [restore_level_objects: copied " << copied
+		     << " LVL??.TMP from slot " << idx
+		     << " (" << missing << " levels had no backup)]" << std::endl;
+		// The SOP's save-picker path expects this call to *also* materialize
+		// PCs / items from the just-restored ITEMS.TMP into live SOP objects
+		// (the file copy alone leaves the runtime party empty, which the SOP
+		// reads as "everyone died" -> game-over screen). resume_level already
+		// has the create-PCs-from-save logic; self-dispatch into it.
+		VM::Value rl;
+		tryHandle(ctx, "resume_level", {VM::Value{0}}, rl);
+		result = 1;
+		return true;
+	}
+	if (fn == "string_compare" && args.size() >= 2) {
+		// strcmp semantics: 0 = equal, nonzero = different. Both args are
+		// tagged addresses (Code string OR Static/Extern buffer); readString
+		// handles either. args[0] == 0 means "no string" (e.g. savegame_title
+		// returned 0 for an empty slot); treat that as the empty string for
+		// comparison purposes.
+		std::string a = (args[0] == 0)
+		                    ? std::string{}
+		                    : ctx.vm.readString(args[0]);
+		std::string b = ctx.vm.readString(args[1]);
+		int cmp = a.compare(b);
+		result = cmp;
+		rt() << "  [string_compare \"" << a << "\" vs \"" << b
+		     << "\" -> " << cmp << "]" << std::endl;
+		return true;
+	}
+
 	// --- char-gen party transfer (EYE.C transfer-file API) ---
 	// open_transfer_file(name): buffer the CHGEN.EXE output (CHARGEN\CREATE.SAV)
 	// so player_attrib/item_attrib can read the created party out of it. The DOS

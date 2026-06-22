@@ -105,6 +105,17 @@ public:
 	// Bounds-checked pointer into object `objIndex`'s static storage; throws on
 	// a dead slot or out-of-range access.
 	uint8_t* staticsPtr(int objIndex, uint32_t offset, uint32_t size);
+
+	// Runtime-owned synthetic-statics hook. Used by thirdeye to expose buffers
+	// (e.g. savegame-picker slot names) at a sentinel obj index that the SOP
+	// can address via Static/Extern reads without us having to invent a real
+	// SOP class. If the hook is set and returns non-null for (obj, off, sz),
+	// staticsPtr short-circuits to that pointer; null means "fall through".
+	using DynamicStaticsHook =
+	    std::function<uint8_t*(int obj, uint32_t off, uint32_t sz)>;
+	void setDynamicStaticsHook(DynamicStaticsHook h) {
+		mDynamicStatics = std::move(h);
+	}
 	// Pointer to a static variable declared at `offset` within `definingClass`'s
 	// own block (accounts for the base-class-first layout), in object `objIndex`.
 	uint8_t* classStaticPtr(int objIndex, uint16_t definingClass, uint32_t offset,
@@ -147,6 +158,7 @@ private:
 	// if a nested create_program adds objects.
 	std::deque<std::vector<uint8_t>> mStatics;
 	Interpreter::RuntimeCall mRuntimeCall;
+	DynamicStaticsHook mDynamicStatics;
 	bool mTrace = false;
 	uint64_t mMaxSteps = 0;
 	int mDepth = 0; // current SEND/PASS recursion depth
