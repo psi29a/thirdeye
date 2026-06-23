@@ -88,17 +88,36 @@ jobs:
         if: runner.os == 'Windows'
         uses: ilammy/msvc-dev-cmd@v1
 
+      # Compiler caching: ccache hashes preprocessor output + flags, returns the
+      # cached .o on a hit. After one warm run, an unchanged TU compiles in
+      # milliseconds. ccache 4.x supports MSVC, so one variant covers all three
+      # platforms. The action handles install + GHA cache wiring; we just point
+      # CMake at it via CMAKE_*_COMPILER_LAUNCHER below.
+      - name: Set up ccache
+        uses: hendrikmuhs/ccache-action@v1.2
+        with:
+          key: ${{ matrix.os }}-${{ matrix.config }}
+          max-size: 500M
+          verbose: 1
+
       - name: Configure (Linux/macOS)
         if: runner.os != 'Windows'
         run: |
-          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=${{ matrix.config }}
+          cmake -S . -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=${{ matrix.config }} \
+            -DCMAKE_C_COMPILER_LAUNCHER=ccache \
+            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
         shell: bash
 
       - name: Configure (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=${{ matrix.config }} -DCMAKE_TOOLCHAIN_FILE="$env:USERPROFILE\vcpkg\scripts\buildsystems\vcpkg.cmake"
+          cmake -S . -B build -G Ninja `
+            -DCMAKE_BUILD_TYPE=${{ matrix.config }} `
+            -DCMAKE_C_COMPILER_LAUNCHER=ccache `
+            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache `
+            -DCMAKE_TOOLCHAIN_FILE="$env:USERPROFILE\vcpkg\scripts\buildsystems\vcpkg.cmake"
 
       - name: Build
         run: cmake --build build --config ${{ matrix.config }} -- -j 2
