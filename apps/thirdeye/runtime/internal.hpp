@@ -20,7 +20,6 @@
 #include <chrono>
 #include <iosfwd>
 #include <map>
-#include <set>
 #include <string>
 #include <vector>
 
@@ -90,19 +89,9 @@ extern int gDrawCount;
 extern long gDrawNanos;
 extern std::chrono::steady_clock::time_point gLastPresent;
 
-// "draw objects" (M:225 in dungeon class) clips each view cell's draws to a
-// horizontal strip via set_x1/set_x2. We track the most recent pair as a
-// single global and apply it to the view-page clip in draw_bitmap. -1 means
-// "no narrowing" (use the full view extent).
-extern int gViewClipX1, gViewClipX2;
-
-// The dungeon view's off-screen page number is NOT fixed: which page the SOP
-// picks depends on boot order (e.g. menu-load uses 99, the --skip-menu CINE
-// shortcut uses 92). We learn it by watching the SOP's own set_x2(P, 175) call
-// -- 175 = kViewW-1 = view's natural right edge -- and clip any draw_bitmap
-// to a page in this set. Mirrors the original GIL2VFX_draw_bitmap, which
-// naturally clips each draw to its pane rect.
-extern std::set<int> gViewPages;
+// (No globals here: per-cell view narrowing is held in the events.windowRect
+// table -- set_x1/x2/y1/y2 mutate the pane's edges via setWindowEdge, and
+// draw_bitmap reads them back via windowRect. Mirrors GIL2VFX's panes[wnd].)
 
 // Set at go(); for timing prints.
 extern std::chrono::steady_clock::time_point gBootStart;
