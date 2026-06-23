@@ -219,6 +219,10 @@ void THIRDEYE::runtime::pumpHost(GRAPHICS::Graphics &gfx, VM::EventSystem &event
 	//   5000,0d,0d = menu Down + Enter + Enter (advances title menu + save picker)
 	//   0d = Enter   1b = Esc
 	if (const char *aw = std::getenv("THIRDEYE_AUTOWALK")) {
+		// Cache the parsed sequence in statics: AUTOWALK is a process-launch
+		// env var (set once before exec), so re-parsing every event pump
+		// (~30 Hz) is wasted work. Callers wanting a different script
+		// restart the process; we deliberately don't honor setenv at runtime.
 		static std::vector<int32_t> codes;
 		static int tick = 0;
 		if (codes.empty()) {
