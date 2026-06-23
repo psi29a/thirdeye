@@ -291,8 +291,12 @@ int loadAreaInstances(const std::filesystem::path &saveDir,
 		uint16_t size = d[off + 6] | (uint16_t(d[off + 7]) << 8);
 		off += 8;
 		if (off + size > d.size()) break;
-		if (cls != 0xFFFFFFFFu && slot >= kFirstAreaSlot &&
-		    slot <= kLastAreaSlot) {
+		// 0xFFFFFFFFu = empty slot sentinel; > 0xFFFF = corrupt / future-format
+		// (every real EOB3 class number fits in 16 bits, and the VM's class
+		// table is keyed by uint16_t -- the on-disk u32 is just the AESOP
+		// container's natural width). Skip rather than silently truncate.
+		if (cls != 0xFFFFFFFFu && cls <= 0xFFFFu &&
+		    slot >= kFirstAreaSlot && slot <= kLastAreaSlot) {
 			std::vector<uint8_t> data(d.begin() + off, d.begin() + off + size);
 			create(static_cast<int>(slot), static_cast<uint16_t>(cls), data);
 			++created;
