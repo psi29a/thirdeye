@@ -12,14 +12,14 @@ what the runtime is being asked to do. We never edit it.
 
 ```sh
 # Resource listing (find class numbers + names)
-build-release/thirdeye.app/Contents/MacOS/daesop -ir ../data/EYE.RES /tmp/eye.lst
+build/thirdeye.app/Contents/MacOS/daesop -ir ../data/EYE.RES /tmp/eye.lst
 
 # Disassemble a code resource by number (1369 = PC, 1622 = NPC, 1688 = weapons,
 # 1370 = entities, 1382 = kernel, 2380 = tables, 1380 = xfer)
-build-release/thirdeye.app/Contents/MacOS/daesop -k ../data/EYE.RES 1369 /tmp/pc.dasm
+build/thirdeye.app/Contents/MacOS/daesop -k ../data/EYE.RES 1369 /tmp/pc.dasm
 
 # ...or by name
-build-release/thirdeye.app/Contents/MacOS/daesop -j ../data/EYE.RES PC /tmp/pc.dasm
+build/thirdeye.app/Contents/MacOS/daesop -j ../data/EYE.RES PC /tmp/pc.dasm
 ```
 
 The `.dasm` output is **non-ISO extended-ASCII** (resource strings can be any byte). Always

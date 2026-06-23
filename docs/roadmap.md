@@ -71,9 +71,20 @@ so `acquire NPC target` no longer finds the corpse.
   exercised by the Quick Start `ITEMS.TMP` load.
 
 **Stand-ins still in place** (not blockers):
-- `THIRDEYE_TESTMON=1` gate on monster rendering — drop it now that combat works.
 - `[atk] mon … (live=N)` still shows the obj slot occupied after death; that's correct —
   `NPC.die` deliberately doesn't call `destroy_object`, just `remove` + `place(-1,-1,-1)`.
+- ~~Wraith creature palette loads unconditionally at 0xC0 on every level.~~
+  **Fixed (SOP-driven, 2026-06-23):** the 14 area-class singletons (mauslvl1, magelvl3,
+  graveyrd, …) are now pre-created at object slots 1..14 from `ITEMS_00.BIN`'s native
+  CDESC stream ([savegame/items_tmp.cpp](../apps/thirdeye/savegame/items_tmp.cpp)
+  `loadAreaInstances`). With them live, the kernel's natural `SEND dungeon, "init level"`
+  cascade fires `SEND area, "enter level"` → `set_palette(1, walls), set_palette(2, M1),
+  set_palette(3, M2)` directly from EOB3 bytecode — no C++ hardcoded enumeration.
+  Surfaced one VM bug: `staticsPtr` was throwing on extern accesses where the SOP probes
+  a static via a class not in the target's ancestor chain (dungeon "init level" does
+  `LXB B:lvl` on every alive object 1..1999); DOS-AESOP would have read whatever was
+  at that linear-memory offset, so we now return a sinkhole instead of throwing
+  (vm/objects.cpp `staticsPtr` + vm/vm.cpp `externPtr`).
 
 **Open follow-ups** (real gameplay, not bring-up): magic-weapon vs bit-6 (today *any*
 hit kills incorporeals; should require `weapon flags & magic`), monster-AI attack-back

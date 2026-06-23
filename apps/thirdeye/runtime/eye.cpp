@@ -2,6 +2,7 @@
 
 #include "../resources/res.hpp"
 #include "../savegame/items_tmp.hpp"
+#include "../savegame/lvl_tmp.hpp"
 #include "../savegame/savegame_dir.hpp"
 #include "../savegame/transfer.hpp"
 #include "../vm/objects.hpp"
@@ -276,8 +277,223 @@ bool tryHandle(Context &ctx, const std::string &fn,
 		result = 0;
 		return true;
 	}
+	// write_initial_tempfiles: called by the chargen-transfer SOP after PCs +
+	// items have been built in memory. EYE.C does
+	//   save_range(items_tmp, FIRST_ITEM, LAST_ITEM);  // serialize live state
+	//   for (lvl in 1..14) copy_file(LVLnn_00.BIN, LVLnn.TMP);
+	// LVL half: direct file copy (matches the C source).
+	// ITEMS half: we (1) seed bytes 0..676 from ITEMS_00.BIN (the kernel-state
+	// scaffold the engine doesn't need to round-trip yet), (2) overwrite the 10
+	// PC records @677 with live PC statics field-by-field per docs §2.2, and
+	// (3) replace the item stream @6947 with a fresh serialization of every
+	// live item object (class is a subclass of `items` 1371). Resume_level
+	// reads this file back and reconstructs the party.
 	if (fn == "write_initial_tempfiles") {
-		rt() << "  [write_initial_tempfiles: stub -- party not persisted yet]"
+		auto saveDir = ctx.res.resourcePath().parent_path() / "SAVEGAME";
+		int lvlCopied = THIRDEYE::savegame::restoreLevels(saveDir, 0);
+
+		// Step 1 -- seed scaffold from ITEMS_00.BIN (gives us bytes 0..676 of
+		// kernel statics so resume_level's eventual unknown reads land on
+		// reasonable defaults).
+		auto srcPath = saveDir / "ITEMS_00.BIN";
+		auto dstPath = saveDir / "ITEMS.TMP";
+		std::ifstream src(srcPath, std::ios::binary);
+		std::vector<uint8_t> buf;
+		bool scaffoldOk = false;
+		if (src) {
+			buf.assign(std::istreambuf_iterator<char>(src),
+			           std::istreambuf_iterator<char>());
+			scaffoldOk = !buf.empty();
+		}
+		if (!scaffoldOk) buf.assign(677 + 10 * 627, 0);
+
+		// File-format offsets verified against items_tmp.cpp's reader.
+		constexpr size_t kPosOff       = 252;
+		constexpr size_t kPcRecordBase = 677;
+		constexpr size_t kPcStride     = 627;
+		constexpr size_t kMaxRecords   = 10;
+		constexpr size_t kItemStreamOff = kPcRecordBase + kMaxRecords * kPcStride;
+
+		// PC class statics offsets (mirror items_tmp.cpp).
+		constexpr uint16_t kKernelClass = 1382, kPcClass = 1369;
+		constexpr uint16_t kItemsBase = 1371; // every item subclasses 1371
+		constexpr uint32_t kPartyPosOff = 243; // x, y, fdir, lvl (4 bytes)
+		constexpr uint32_t kPcNumOff    = 0;   // W:num (party slot)
+		constexpr uint32_t kPcInvOff    = 81;  // W:inventory[26]
+		constexpr uint32_t kPcQuiverOff = 133, kPcArrowsOff = 135;
+		constexpr uint32_t kPcNameOff = 137, kPcNameLen = 20;
+		constexpr uint32_t kPcRaceOff = 157, kPcClassesOff = 158;
+		constexpr uint32_t kPcPortraitOff = 159, kPcPCstatOff = 161;
+		constexpr uint32_t kPcAlignOff = 162, kPcLevelsOff = 163;
+		constexpr uint32_t kPcLostLvlsOff = 166, kPcLostHpOff = 169;
+		constexpr uint32_t kPcHpCurOff = 171, kPcHpMaxOff = 173, kPcHbonOff = 175;
+		constexpr uint32_t kPcFoodOff = 177, kPcXpOff = 179; // L[3]
+		constexpr uint32_t kPcStrOff = 191, kPcExcStrOff = 192, kPcIntOff = 193;
+		constexpr uint32_t kPcWisOff = 194, kPcDexOff = 195, kPcConOff = 196;
+		constexpr uint32_t kPcChaOff = 197, kPcSparkleOff = 198;
+		constexpr uint32_t kPcMagicEffOff = 199, kPcTigerOff = 203, kPcLostStrOff = 204;
+		constexpr uint32_t kPcSpellCntOff = 209, kPcSpellStatOff = 409;
+		constexpr uint32_t kPcSpellLen = 200;
+
+		// File-record offsets within a 627-byte PC record (also from the reader).
+		constexpr size_t kFObjIndex = 0, kFClass = 2, kFConst619 = 6;
+		constexpr size_t kFBackpack = 96, kFEquip = 127;
+		constexpr size_t kFArrowsType = 151, kFArrowsQty = 153;
+		constexpr size_t kFName = 155, kFRace = 175, kFClasses = 176;
+		constexpr size_t kFPortrait = 177, kFPCstat = 179, kFAlign = 180;
+		constexpr size_t kFLevels = 181, kFLostLvls = 184, kFLostHp = 187;
+		constexpr size_t kFHpCur = 189, kFHpMax = 191, kFHbon = 193, kFFood = 195;
+		constexpr size_t kFXp = 197, kFStr = 209, kFStrPct = 210;
+		constexpr size_t kFInt = 211, kFWis = 212, kFDex = 213, kFCon = 214;
+		constexpr size_t kFCha = 215, kFSparkle = 216, kFMagicEff = 217;
+		constexpr size_t kFTiger = 221, kFLostStr = 222;
+		constexpr size_t kFSpellCnt = 227, kFSpellStat = 427;
+
+		auto putU16 = [](uint8_t *p, uint16_t v) {
+			p[0] = v & 0xFF; p[1] = (v >> 8) & 0xFF;
+		};
+		auto putI16 = [&](uint8_t *p, int16_t v) {
+			putU16(p, static_cast<uint16_t>(v));
+		};
+		auto putU32 = [](uint8_t *p, uint32_t v) {
+			p[0] = v & 0xFF; p[1] = (v >> 8) & 0xFF;
+			p[2] = (v >> 16) & 0xFF; p[3] = (v >> 24) & 0xFF;
+		};
+		auto readPcU8 = [&](int pc, uint32_t off) -> uint8_t {
+			uint8_t *p = ctx.objects.classStaticPtr(pc, kPcClass, off, 1);
+			return p ? *p : 0;
+		};
+		auto readPcU16 = [&](int pc, uint32_t off) -> uint16_t {
+			uint8_t *p = ctx.objects.classStaticPtr(pc, kPcClass, off, 2);
+			return p ? static_cast<uint16_t>(p[0] | (p[1] << 8)) : 0;
+		};
+		auto readPcU32 = [&](int pc, uint32_t off) -> uint32_t {
+			uint8_t *p = ctx.objects.classStaticPtr(pc, kPcClass, off, 4);
+			return p ? static_cast<uint32_t>(p[0]) | (p[1] << 8u)
+			           | (uint32_t(p[2]) << 16) | (uint32_t(p[3]) << 24) : 0;
+		};
+
+		// Step 2 -- patch party position.
+		// If the kernel is live (continue path), copy its saved position. If not
+		// (new-game chargen), write level 1 (15,15,N) -- the same starting cell
+		// resume_level uses when no save data is present.
+		if (buf.size() > kPosOff + 4) {
+			int kn = ctx.objects.firstObjectOfClass(kKernelClass);
+			if (kn >= 0) {
+				if (uint8_t *kp = ctx.objects.classStaticPtr(kn, kKernelClass,
+				                                             kPartyPosOff, 4))
+					std::memcpy(&buf[kPosOff], kp, 4);
+			} else {
+				buf[kPosOff]     = 15; // x
+				buf[kPosOff + 1] = 15; // y
+				buf[kPosOff + 2] = 0;  // facing N
+				buf[kPosOff + 3] = 1;  // level 1
+			}
+		}
+
+		// Step 3 -- write live PC records. Zero-fill the 10-slot block first
+		// so empty slots are recognisably empty (classNumber == 0).
+		if (buf.size() < kItemStreamOff) buf.resize(kItemStreamOff, 0);
+		std::fill(buf.begin() + kPcRecordBase, buf.begin() + kItemStreamOff, 0u);
+		int pcsWritten = 0;
+		for (int pc : ctx.objects.objectsOfClass(kPcClass)) {
+			uint32_t slot = readPcU8(pc, kPcNumOff);
+			if (slot >= kMaxRecords) continue;
+			uint8_t *rec = &buf[kPcRecordBase + slot * kPcStride];
+			putU16(rec + kFObjIndex, static_cast<uint16_t>(pc));
+			putU16(rec + kFClass,    kPcClass);
+			putU16(rec + kFConst619, 619); // constant from the format doc
+			// equip[12] @+127: W:inventory[14..25].
+			for (int s = 0; s < 12; ++s)
+				putU16(rec + kFEquip + s * 2,
+				       readPcU16(pc, kPcInvOff + (14 + s) * 2));
+			// backpack: W:inventory[0..13] @ PC+81. The file places this block
+			// at file +96 (PC+81 == file+96 here -- the +18 reader-offset rule
+			// has a deliberate 3-byte shift in this region, NOT a doc error).
+			for (int s = 0; s < 14; ++s)
+				putU16(rec + kFBackpack + s * 2,
+				       readPcU16(pc, kPcInvOff + s * 2));
+			putI16(rec + kFArrowsType, static_cast<int16_t>(readPcU16(pc, kPcQuiverOff)));
+			putI16(rec + kFArrowsQty,  static_cast<int16_t>(readPcU16(pc, kPcArrowsOff)));
+			if (uint8_t *np = ctx.objects.classStaticPtr(pc, kPcClass, kPcNameOff,
+			                                              kPcNameLen))
+				std::memcpy(rec + kFName, np, kPcNameLen);
+			rec[kFRace]    = readPcU8(pc, kPcRaceOff);
+			rec[kFClasses] = readPcU8(pc, kPcClassesOff);
+			putU16(rec + kFPortrait, readPcU16(pc, kPcPortraitOff));
+			rec[kFPCstat]  = readPcU8(pc, kPcPCstatOff);
+			rec[kFAlign]   = readPcU8(pc, kPcAlignOff);
+			for (int k = 0; k < 3; ++k) {
+				rec[kFLevels + k]   = readPcU8(pc, kPcLevelsOff + k);
+				rec[kFLostLvls + k] = readPcU8(pc, kPcLostLvlsOff + k);
+				putU32(rec + kFXp + k * 4, readPcU32(pc, kPcXpOff + k * 4));
+			}
+			putI16(rec + kFLostHp, static_cast<int16_t>(readPcU16(pc, kPcLostHpOff)));
+			putI16(rec + kFHpCur,  static_cast<int16_t>(readPcU16(pc, kPcHpCurOff)));
+			putI16(rec + kFHpMax,  static_cast<int16_t>(readPcU16(pc, kPcHpMaxOff)));
+			putI16(rec + kFHbon,   static_cast<int16_t>(readPcU16(pc, kPcHbonOff)));
+			putI16(rec + kFFood,   static_cast<int16_t>(readPcU16(pc, kPcFoodOff)));
+			rec[kFStr]    = readPcU8(pc, kPcStrOff);
+			rec[kFStrPct] = readPcU8(pc, kPcExcStrOff);
+			rec[kFInt]    = readPcU8(pc, kPcIntOff);
+			rec[kFWis]    = readPcU8(pc, kPcWisOff);
+			rec[kFDex]    = readPcU8(pc, kPcDexOff);
+			rec[kFCon]    = readPcU8(pc, kPcConOff);
+			rec[kFCha]    = readPcU8(pc, kPcChaOff);
+			rec[kFSparkle] = readPcU8(pc, kPcSparkleOff);
+			putU32(rec + kFMagicEff, readPcU32(pc, kPcMagicEffOff));
+			rec[kFTiger]   = readPcU8(pc, kPcTigerOff);
+			rec[kFLostStr] = readPcU8(pc, kPcLostStrOff);
+			if (uint8_t *sp = ctx.objects.classStaticPtr(pc, kPcClass,
+			                                              kPcSpellCntOff, kPcSpellLen))
+				std::memcpy(rec + kFSpellCnt, sp, kPcSpellLen);
+			if (uint8_t *sp = ctx.objects.classStaticPtr(pc, kPcClass,
+			                                              kPcSpellStatOff, kPcSpellLen))
+				std::memcpy(rec + kFSpellStat, sp, kPcSpellLen);
+			++pcsWritten;
+		}
+
+		// Step 4 -- truncate at kItemStreamOff and append a fresh item stream.
+		// Walk the entity range (indices below kNumEntities); every live entity
+		// whose class is a subclass of `items` (1371) gets a record.
+		buf.resize(kItemStreamOff);
+		int itemsWritten = 0;
+		for (int i = 0; i < VM::ObjectSystem::kNumEntities; ++i) {
+			uint16_t cls = ctx.objects.classOf(i);
+			if (cls == 0xFFFF) continue; // empty slot
+			if (!ctx.objects.isSubclassOf(cls, kItemsBase)) continue;
+			uint32_t blockSize = ctx.objects.instanceStaticSize(cls);
+			size_t recOff = buf.size();
+			buf.resize(recOff + 4 + blockSize + 4, 0);
+			putU16(&buf[recOff],     static_cast<uint16_t>(i));
+			putU16(&buf[recOff + 2], cls);
+			if (blockSize > 0) {
+				// staticsPtr(i, 0, blockSize) reads the full flat statics block
+				// from the start; classStaticPtr would add staticBase(cls) and
+				// land past the end for classes with parents.
+				if (uint8_t *sp = ctx.objects.staticsPtr(i, 0, blockSize))
+					std::memcpy(&buf[recOff + 4], sp, blockSize);
+			}
+			// Trailer: 0 (placement bytes unknowable post-chargen; resume_level
+			// doesn't consume the trailer anyway).
+			++itemsWritten;
+		}
+
+		// Step 5 -- write the buffer to ITEMS.TMP.
+		bool itemsOk = false;
+		{
+			std::ofstream out(dstPath, std::ios::binary | std::ios::trunc);
+			if (out) {
+				out.write(reinterpret_cast<const char*>(buf.data()),
+				          static_cast<std::streamsize>(buf.size()));
+				itemsOk = !!out;
+			}
+		}
+		rt() << "  [write_initial_tempfiles: ITEMS.TMP "
+		     << (itemsOk ? "written" : "FAILED")
+		     << " (" << pcsWritten << " PCs, " << itemsWritten
+		     << " items, scaffold=" << (scaffoldOk ? "ITEMS_00.BIN" : "zero-fill")
+		     << "), " << lvlCopied << " LVL??_00.BIN -> LVL??.TMP]"
 		     << std::endl;
 		result = 0;
 		return true;
@@ -285,9 +501,15 @@ bool tryHandle(Context &ctx, const std::string &fn,
 	// change_level(old_level, new_level): the native EYE.C function that swaps the
 	// dungeon to a new level. The bytecode then sets party_lvl=new_level + SENDs
 	// "init level" (which reads the loaded tiles). We load the new level's maze +
-	// tileset; the bytecode/stairs logic owns the party's landing position.
+	// tileset AND its objects AND each creature's sprite palette; the
+	// bytecode/stairs logic owns the party's landing position.
 	if (fn == "change_level" && args.size() >= 2) {
-		loadDungeonLevel(static_cast<int>(args[1]), ctx.objects, ctx.res, ctx.gfx);
+		int newLvl = static_cast<int>(args[1]);
+		loadDungeonLevel(newLvl, ctx.objects, ctx.res, ctx.gfx);
+		THIRDEYE::savegame::loadLevelObjects(newLvl, ctx.objects, ctx.res);
+		// Creature palettes load via the SOP "enter level" cascade (kernel
+		// SEND "init level" -> dungeon -> SEND area, "enter level" -> set_palette
+		// region 2/3). Same path as the boot-time resume_level case.
 		result = 0;
 		return true;
 	}
@@ -586,15 +808,39 @@ bool tryHandle(Context &ctx, const std::string &fn,
 			     << " party members in player[] (stand-in for savegame load)]"
 			     << std::endl;
 		}
-		// Load the level's tiles (maze + wall set + palette) into the dungeon. The
-		// real resume_level reads these from LVLnn.TMP; this stand-in loads the static
-		// map resource + its tileset (see loadDungeonLevel) so "init level"/"draw
-		// walls" have real data instead of an empty level.
+		// Load the level's tiles (maze + wall set + palette) AND its level objects
+		// (doors/levers/monsters/items from LVLnn.TMP) into the dungeon. Doing both
+		// here keeps the saved level's maze + objects atomic -- the previous one-shot
+		// in pumpHost raced this and loaded LVL01.TMP into whatever maze change_level
+		// had switched to, leaving the visible level monster-less.
 		uint8_t lvl = 1;
 		if (kernel >= 0)
 			if (uint8_t *p = ctx.objects.classStaticPtr(kernel, kKernelClass, 246, 1))
 				lvl = *p ? *p : 1;
 		loadDungeonLevel(lvl, ctx.objects, ctx.res, ctx.gfx);
+		THIRDEYE::savegame::loadLevelObjects(lvl, ctx.objects, ctx.res);
+		// Pre-create the 14 area-class singletons from ITEMS_00.BIN. They live
+		// at object slots 1..14 in the native CDESC format and are what dungeon's
+		// SOP "init level" handler looks up via SOLE -- once present, the kernel
+		// SOP's natural `SEND dungeon "init level"` (which fires right after we
+		// return) propagates `SEND area, "enter level"` and the area class then
+		// calls `set_palette(1, walls), set_palette(2, M1), set_palette(3, M2)`
+		// directly from bytecode. No C++-side palette enumeration needed.
+		auto saveDir = ctx.res.resourcePath().parent_path() / "SAVEGAME";
+		int areaCount = THIRDEYE::savegame::loadAreaInstances(
+		    saveDir, [&](int slot, uint16_t cls,
+		                 const std::vector<uint8_t> &data) {
+			    try {
+				    ctx.objects.createProgram(slot, cls);
+				    if (!data.empty())
+					    if (uint8_t *sp = ctx.objects.staticsPtr(
+					            slot, 0, static_cast<uint32_t>(data.size())))
+						    std::memcpy(sp, data.data(), data.size());
+			    } catch (const std::exception &) {}
+		    });
+		rt() << "  [resume_level: instantiated " << areaCount
+		     << " area-class singletons (SOP \"enter level\" cascade)]"
+		     << std::endl;
 		result = 0;
 		return true;
 	}

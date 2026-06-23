@@ -1,6 +1,8 @@
 #ifndef THIRDEYE_SAVEGAME_LVL_TMP_HPP
 #define THIRDEYE_SAVEGAME_LVL_TMP_HPP
 
+#include <cstdint>
+
 namespace RESOURCES { class Resource; }
 namespace VM { class ObjectSystem; }
 
@@ -17,6 +19,10 @@ namespace THIRDEYE::savegame {
 // The class being in the record means no type->class table is needed. Must run
 // AFTER the dungeon's "init level" (which clears lvlobj), so it's called on the
 // first frame.
+//
+// Creature palette loading is driven by the SOP "enter level" cascade (see
+// THIRDEYE::savegame::loadAreaInstances + runtime set_palette CALLs), so this
+// helper no longer needs to collect monster classes for the caller.
 //
 // Returns the number of objects placed.
 int loadLevelObjects(int level, VM::ObjectSystem &objects,

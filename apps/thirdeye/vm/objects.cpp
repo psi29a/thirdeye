@@ -133,11 +133,14 @@ uint8_t* ObjectSystem::staticsPtr(int objIndex, uint32_t offset, uint32_t size) 
 		throw VmError("extern access to dead object index " +
 		              std::to_string(objIndex));
 	std::vector<uint8_t>& s = mStatics[objIndex];
+	// Out-of-range = the SOP reached for a static via a class that isn't in the
+	// target's ancestor chain (e.g. dungeon's "init level" probes B:lvl on every
+	// alive obj, including area-class singletons that aren't entities). DOS
+	// AESOP just read garbage memory there; we return null so callers
+	// (Interpreter::externPtr, the runtime CALLs that already check `if (uint8_t *p
+	// = classStaticPtr(...))`) can sub in a zero/sinkhole and keep going.
 	if (static_cast<uint64_t>(offset) + size > s.size())
-		throw VmError("extern access out of range (object " +
-		              std::to_string(objIndex) + ", offset " +
-		              std::to_string(offset) + ", size " + std::to_string(size) +
-		              ", storage " + std::to_string(s.size()) + ")");
+		return nullptr;
 	return s.data() + offset;
 }
 
@@ -314,10 +317,10 @@ Value ObjectSystem::send(int objIndex, int message, std::vector<Value> args) {
 	uint16_t defClass;
 	uint32_t offset;
 	bool found = resolve(startClass, message, defClass, offset);
-	// Debug (THIRDEYE_TESTMON): trace creature draw/report dispatch to monster-range
+	// Debug (THIRDEYE_MONTRACE): trace creature draw/report dispatch to monster-range
 	// objects -- which class handles it, with params. Gate cached so normal play pays
 	// nothing. (Used to find the plane-2 / NPCstat bring-up; kept for combat work.)
-	static const bool kMonTrace = std::getenv("THIRDEYE_TESTMON") != nullptr;
+	static const bool kMonTrace = std::getenv("THIRDEYE_MONTRACE") != nullptr;
 	// Combat/AI trace. Attack chain (any object -- PCs too): use/attack request(163),
 	// acquire NPC/feature target(77/78), roll to hit(71), roll for damage(43), take
 	// damage(82), die(55), remove(22). Plus monster AI: watch(91), my turn(85),
