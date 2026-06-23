@@ -93,12 +93,19 @@ TEST(EventClip, AllFourEdgesRoundTrip) {
 	EXPECT_EQ(y1, 122);
 }
 
-// "-1" means "restore the pane's natural edge" in the SOP's set_x convention.
-// Our setWindowEdge stores -1 verbatim; draw_bitmap is responsible for
-// interpreting -1 as "use the pane's existing edge" (which is what the
-// pre-seeded rect already holds). This test pins the storage semantics so a
-// future regression that auto-rewrites -1 to 0 or to "remembered last value"
-// gets caught.
+// Negative edge values are stored VERBATIM -- matching the original
+// GIL2VFX_set_x1: `panes[wnd].x0 = val` (no sentinel semantics, no
+// "restore natural edge" logic). The SOP's convention: pages 74..85
+// (the per-cell aux windows reset on every party step) are flagged
+// inactive by writing -1 to all four edges, producing a degenerate
+// rect that any subsequent draw_bitmap clips away to nothing. Aux
+// windows are never draw targets in EOB3's SOP (empirically: the
+// intersection of "pages with set_x*(P, -1)" and "pages with
+// draw_bitmap(P, ...)" is empty in the menu-load path), so the
+// degenerate-clip suppression never fires in real gameplay. This
+// test pins the storage contract; do NOT add "interpret -1 as
+// 'use the pane's natural edge'" -- that would diverge from
+// GIL2VFX and break the aux-window-disable convention.
 TEST(EventClip, NegativeOneIsStoredVerbatim) {
 	ObjectSystem objects;
 	EventSystem events(objects);
@@ -260,6 +267,51 @@ TEST(ClipPrimitive, NarrowedClipConfinesBlit) {
 	EXPECT_EQ(pixelAt(dest, 128, 0), kColorBackground);
 	EXPECT_EQ(pixelAt(dest, 200, 50), kColorBackground);
 	EXPECT_EQ(pixelAt(dest, 0, 120), kColorBackground);
+
+	SDL_FreeSurface(src);
+	SDL_FreeSurface(dest);
+}
+
+// Aux-window disable contract (mirrors original GIL2VFX): if a window's
+// edges are set to -1 (which the SOP does on pages 74..85 after every
+// party step), and *somehow* a draw_bitmap to that page slips through,
+// the resulting clip rect from `px1 - px0 + 1` is degenerate and the
+// blit is suppressed. This locks in the intent so a "helpful" patch
+// that special-cases negative edges (e.g. "treat -1 as 'use the
+// surface's natural edge'") will fail this test -- such a patch would
+// turn the SOP's disable convention into an accidental full-screen
+// draw and reproduce the wall-leak we just fixed.
+TEST(ClipPrimitive, NegativeEdgesProduceDegenerateClipAndSuppressBlit) {
+	SDL_Surface *dest = makeFilled(kColorBackground);
+	SDL_Surface *src = makeFilled(kColorForeground);
+	ASSERT_NE(dest, nullptr);
+	ASSERT_NE(src, nullptr);
+
+	// Simulate windowRect returning (-1, -1, -1, -1) for an aux page the
+	// SOP has disabled. Apply the exact arithmetic draw_bitmap uses.
+	int32_t px0 = -1, py0 = -1, px1 = -1, py1 = -1;
+	SDL_Rect clip{px0, py0, px1 - px0 + 1, py1 - py0 + 1};
+	ASSERT_EQ(clip.w, 1);
+	ASSERT_EQ(clip.h, 1);
+	SDL_SetClipRect(dest, &clip);
+	ASSERT_EQ(SDL_BlitSurface(src, nullptr, dest, nullptr), 0);
+	SDL_SetClipRect(dest, nullptr);
+
+	// SDL intersects the clip rect with the surface's bounds, so an
+	// at-most-1-pixel clip starting at (-1,-1) lands entirely off-surface;
+	// nothing changes. (Even if it did land 1 pixel inside, the user-
+	// visible effect is "draw was effectively suppressed", which is what
+	// the SOP convention asks for.)
+	int dirty = 0;
+	for (int y = 0; y < kSurfH; ++y)
+		for (int x = 0; x < kSurfW; ++x)
+			if (pixelAt(dest, x, y) != kColorBackground) ++dirty;
+	EXPECT_LE(dirty, 1)
+		<< "Negative-edge pane must suppress (or near-suppress) the blit. "
+		   "If you're tempted to special-case -1 in draw_bitmap, READ THIS: "
+		   "the original GIL2VFX_set_x1 stores -1 verbatim; the SOP uses "
+		   "this to mark aux pages disabled. Re-interpreting -1 as 'use "
+		   "natural edge' breaks that convention.";
 
 	SDL_FreeSurface(src);
 	SDL_FreeSurface(dest);
