@@ -43,6 +43,32 @@ Run the VM over data:
 - For EOB3 the user's install lives at `../data/`:
   `build/thirdeye.app/Contents/MacOS/thirdeye ../data/EYE.RES --skip-intro --vm --skip-menu --scale=4`.
 
+### End-to-end / regression harness
+
+For repro + regression of anything that needs the game running (rendering, input,
+menu flows), drive the engine headlessly with `THIRDEYE_AUTOWALK` (comma-sequence
+of hex scan codes, one per ~40 pumps; last code repeats) + `THIRDEYE_DUMP` (BMP
+snapshot per present), then diff with Pillow.
+
+```bash
+# title menu Down → Enter (Continue) → Enter (load save) → turn-right → walk fwd ×4
+THIRDEYE_DUMP=/tmp/f_%d.bmp \
+THIRDEYE_AUTOWALK=5000,0d,0d,4900,4800,4800,4800,4800 \
+  build/thirdeye.app/Contents/MacOS/thirdeye ../data/EYE.RES --skip-intro --vm --scale=2 &
+sleep 15 && kill -INT $!
+python3 -c "from PIL import Image, ImageChops; \
+  a=Image.open('/tmp/f_15.bmp').convert('RGB'); \
+  b=Image.open('/tmp/f_25.bmp').convert('RGB'); \
+  print(ImageChops.difference(a,b).getbbox())"
+```
+
+Codes: `4800`=fwd `5000`=back `4b00`/`4d00`=strafe L/R `4700`/`4900`=turn L/R `0d`=Enter
+`1b`=Esc. A bbox capped at `x=176` means no leak past the dungeon-view rect — that's
+how we caught the page-92-vs-99 wall-clip bug (see [progress.md](docs/progress.md)).
+`THIRDEYE_PARTY=x,y,fdir` seeds position/facing. To reach gameplay, drive the title
+menu through `THIRDEYE_AUTOWALK` (no shortcut env var — the shortcut bypassed SOP
+state and reproduced bugs that didn't exist in real play).
+
 ## What runs today
 
 - Intro cinematic (with music), title screen/menu graphics, palette + mouse cursor; SFX/XMIDI
@@ -92,7 +118,9 @@ The current top-of-stack work item is save/load + party import — combat now la
 Full list in [docs/perf_notes.md](docs/perf_notes.md). The first-reach-for ones:
 
 - `THIRDEYE_DUMP=/tmp/frame_%04d.bmp` — snapshot every present (numbered if path has `%`).
-- `THIRDEYE_AUTOWALK=4d00` — scripted move every ~40 pumps (4800=fwd, 4b00/4d00=strafe L/R).
+- `THIRDEYE_AUTOWALK=4d00` (or comma-list `5000,0d,0d,4900,4800,4800,4800`) — scripted
+  SYS_KEYDOWN(s) every ~40 pumps; last value repeats. Drives headless e2e/regression
+  tests (4800=fwd, 4b00/4d00=strafe L/R, 4700/4900=turn L/R, 0d=Enter, 1b=Esc).
 - `THIRDEYE_TIMING=1` — log when each runtime fn is first called; `=2` logs every call.
 - `THIRDEYE_SLOWOP=1` — log any single opcode (CALL/SEND) that took >50 ms.
 - `THIRDEYE_PERF=1` — per-present `{draws, drawImage µs, present ms, gap}`.

@@ -15,12 +15,11 @@ and the next silent-stall hunt will need the same toolkit.
 | `THIRDEYE_SLOWOP=1` | Log any single *opcode* (CALL/SEND/etc.) that took >50 ms. Pinpoints a single slow runtime function (this is what caught `set_mouse_pointer`). |
 | `THIRDEYE_VMSTEPS=1` | Log cumulative VM step count every 100 ms wall-clock with current PC. Catches a silent hot loop (no runtime calls, no SENDs visible). |
 | `THIRDEYE_DUMP=/path/frame.bmp` | `saveScreenshot` every present frame. If the path contains `%`, it's printf-formatted (e.g. `/tmp/frame_%04d.bmp` = numbered frames). |
-| `THIRDEYE_AUTOWALK=<hex scancode>` | Post a scripted move every ~40 pumps (`4800`=fwd, `5000`=back, `4b00`/`4d00`=strafe L/R, `4700`/`4900`=turn L/R). |
+| `THIRDEYE_AUTOWALK=<hex>[,<hex>,...]` | Comma-separated SYS_KEYDOWN script (one code per ~40 pumps; last value repeats). E2E/regression lever: drive the engine headless from boot through menu navigation into gameplay. Common codes: `4800`=fwd, `5000`=back, `4b00`/`4d00`=strafe L/R, `4700`/`4900`=turn L/R, `0d`=Enter, `1b`=Esc. Example: `5000,0d,0d,4900,4800,4800,4800,4800` = title-menu Down → Enter (Continue) → Enter (load save) → turn-right → walk fwd ×4. Pair with `THIRDEYE_DUMP=/tmp/f_%d.bmp` to capture frames per present. |
 | `THIRDEYE_AUTOKEY=<scancode>` | Push an SDL_KEYDOWN with that physical scancode every ~40 pumps. `THIRDEYE_AUTOKEY1=1` makes it single-shot. |
 | `THIRDEYE_CLICK="x,y[;x,y;...]"` | Inject a click sequence (logical coords). `THIRDEYE_CLICK1=1` plays once and stops. |
 | `THIRDEYE_MAZE=x0,y0,x1,y1` | Dump maze cells in the given rect on level load. |
 | `THIRDEYE_PARTY=x,y,fdir` | Seed party position + facing for the new game. |
-| `THIRDEYE_GOTO=<n>` | Start on level *n* (debug; uses `change_level` path). |
 | `THIRDEYE_TESTMON=1` | Enable monster rendering + trace creature draw/AI dispatch. |
 | `THIRDEYE_TESTOBJ=1` | Spawn a Mausoleum skull door in front of the party. |
 | `THIRDEYE_NO_OBJECTS=1` | Skip `loadLevelObjects` (sanity check). |

@@ -81,17 +81,6 @@ Unit tests are built by default into the `runtests` executable (GoogleTest).
 To configure without tests (also avoids the GoogleTest download):
     cmake -S . -B build -G Ninja -DUNIT_TESTS=OFF
 
-INSTALLATION
-
-Windows:
-TODO
-
-Linux:
-Run either in place with generic tar balls or install distribution specific packages.
-
-OSX:
-TODO
-
 CHANGELOG
 
 0.87.0:
