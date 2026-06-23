@@ -65,9 +65,9 @@ python3 -c "from PIL import Image, ImageChops; \
 Codes: `4800`=fwd `5000`=back `4b00`/`4d00`=strafe L/R `4700`/`4900`=turn L/R `0d`=Enter
 `1b`=Esc. A bbox capped at `x=176` means no leak past the dungeon-view rect — that's
 how we caught the page-92-vs-99 wall-clip bug (see [progress.md](docs/progress.md)).
-`THIRDEYE_GOTO=<n>` jumps to level *n* (bypasses the menu); `THIRDEYE_PARTY=x,y,fdir`
-seeds position/facing — useful when you want the gameplay state without driving the
-menu first.
+`THIRDEYE_PARTY=x,y,fdir` seeds position/facing. To reach gameplay, drive the title
+menu through `THIRDEYE_AUTOWALK` (no shortcut env var — the shortcut bypassed SOP
+state and reproduced bugs that didn't exist in real play).
 
 ## What runs today
 

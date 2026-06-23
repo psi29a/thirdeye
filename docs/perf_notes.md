@@ -20,7 +20,6 @@ and the next silent-stall hunt will need the same toolkit.
 | `THIRDEYE_CLICK="x,y[;x,y;...]"` | Inject a click sequence (logical coords). `THIRDEYE_CLICK1=1` plays once and stops. |
 | `THIRDEYE_MAZE=x0,y0,x1,y1` | Dump maze cells in the given rect on level load. |
 | `THIRDEYE_PARTY=x,y,fdir` | Seed party position + facing for the new game. |
-| `THIRDEYE_GOTO=<n>` | Start on level *n* (debug; uses `change_level` path). |
 | `THIRDEYE_TESTMON=1` | Enable monster rendering + trace creature draw/AI dispatch. |
 | `THIRDEYE_TESTOBJ=1` | Spawn a Mausoleum skull door in front of the party. |
 | `THIRDEYE_NO_OBJECTS=1` | Skip `loadLevelObjects` (sanity check). |
