@@ -19,7 +19,6 @@ bool gPerf = false;
 int gDrawCount = 0;
 long gDrawNanos = 0;
 std::chrono::steady_clock::time_point gLastPresent;
-int gViewClipX1 = -1, gViewClipX2 = -1;
 std::chrono::steady_clock::time_point gBootStart;
 bool gFirstPresentLogged = false;
 

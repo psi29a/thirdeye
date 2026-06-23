@@ -89,11 +89,9 @@ extern int gDrawCount;
 extern long gDrawNanos;
 extern std::chrono::steady_clock::time_point gLastPresent;
 
-// "draw objects" (M:225 in dungeon class) clips each view cell's draws to a
-// horizontal strip via set_x1/set_x2. We track the most recent pair as a
-// single global and apply it to the view-page clip in draw_bitmap. -1 means
-// "no narrowing" (use the full view extent).
-extern int gViewClipX1, gViewClipX2;
+// (No globals here: per-cell view narrowing is held in the events.windowRect
+// table -- set_x1/x2/y1/y2 mutate the pane's edges via setWindowEdge, and
+// draw_bitmap reads them back via windowRect. Mirrors GIL2VFX's panes[wnd].)
 
 // Set at go(); for timing prints.
 extern std::chrono::steady_clock::time_point gBootStart;
