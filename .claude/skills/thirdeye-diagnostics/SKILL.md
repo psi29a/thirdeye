@@ -27,7 +27,7 @@ cmake --build build 2>&1 | tail -5
 |---|---|
 | `THIRDEYE_ATTACK=1` | Spawn a target monster in front of the party, enable kernel `auto-attack` (M:208), force `B:auto_attack` on each PC, clear `B:h_stat` recovery each tick. Logs `[atk] mon N hp H (live=L)` and `[hand] pc P R=N L=N`. |
 | `THIRDEYE_CONTINUE=1` | Opt into `SAVEGAME/ITEMS.TMP` for party position on `resume_level`. Off by default (chargen-transferred party would land at the saved party's spot — a mismatch). Will become unconditional once PC-record restoration lands. |
-| `THIRDEYE_MONTRACE=1` | Trace SEND dispatch for combat-relevant messages (163/77/78/71/162/43/82/55/22/235 + AI 91/85/107/99 on monster-range objects). Format: `[mon-msg] idx N msg M handler C arg0=… arg1=…`. Capped at 600 lines — bump in [vm/objects.cpp:301](../../../apps/thirdeye/vm/objects.cpp#L301) if you need more. |
+| `THIRDEYE_MONTRACE=1` | Trace SEND dispatch for combat-relevant messages (163/77/78/71/162/43/82/55/22/235 + AI 91/85/107/99 on monster-range objects). Format: `[mon-msg] idx N msg M handler C arg0=… arg1=…`. Capped at 600 lines — bump in [vm/objects.cpp:336](../../../apps/thirdeye/vm/objects.cpp#L336) if you need more. |
 | `THIRDEYE_MONCLASS=N` | Override the `THIRDEYE_ATTACK` target. `1904`=sword wraith (bit-6 incorporeal), `1934`=troll (normal melee), `1943`=warrior shade, etc. Pair with `THIRDEYE_MONHP=N`. |
 | `THIRDEYE_DUMP=/tmp/frame_%04d.bmp` | Snapshot every present (use `%` to number; otherwise overwrites). The fastest way to see what's actually on screen when X-forwarding is awkward. |
 | `THIRDEYE_AUTOWALK=4d00` | Inject a scripted scancode every ~40 pumps: `4800`=fwd, `4b00`=L, `4d00`=R, `5000`=back. Drives the dungeon without you needing focus. |
