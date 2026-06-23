@@ -31,10 +31,12 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y cmake ninja-build build-essential libsdl2-dev libopenal-dev libwildmidi-dev
 
+      # `brew update` is the slow part (~30s on a clean macos-latest runner that
+      # already ships with a recent brew). The formulae we need (cmake/ninja/sdl2/
+      # openal-soft/wildmidi) are stable; the preinstalled brew is fresh enough.
       - name: Install dependencies (macOS)
         if: runner.os == 'macOS'
         run: |
-          brew update
           brew install cmake ninja sdl2 openal-soft wildmidi
 
       # Expose the GitHub Actions cache endpoint/token to vcpkg's x-gha binary
@@ -47,11 +49,27 @@ jobs:
             core.exportVariable('ACTIONS_CACHE_URL', process.env.ACTIONS_CACHE_URL || '');
             core.exportVariable('ACTIONS_RUNTIME_TOKEN', process.env.ACTIONS_RUNTIME_TOKEN || '');
 
+      # Cache the entire vcpkg tree (the tool + installed/). On a hit we skip
+      # clone + bootstrap + install entirely (~9 min -> seconds). The cache key
+      # is the workflow file's hash: any change to the dep list (or vcpkg
+      # version) lives here, so editing this file naturally invalidates.
+      # VCPKG_BINARY_SOURCES = x-gha is still useful for partial restores when
+      # this directory cache misses (e.g. workflow edit, weekly eviction):
+      # vcpkg install then pulls per-package binary caches instead of building
+      # from source.
+      - name: Cache vcpkg
+        if: runner.os == 'Windows'
+        id: cache-vcpkg
+        uses: actions/cache@v4
+        with:
+          path: ~/vcpkg
+          key: vcpkg-${{ runner.os }}-${{ hashFiles('.github/workflows/ci.yml') }}
+
       # cmake, ninja and git are preinstalled on the windows-latest image, so we
       # only need vcpkg. (Installing via choco modifies the machine PATH, which
       # does not propagate into the same step's environment.)
       - name: Install dependencies (Windows)
-        if: runner.os == 'Windows'
+        if: runner.os == 'Windows' && steps.cache-vcpkg.outputs.cache-hit != 'true'
         shell: pwsh
         run: |
           git clone https://github.com/microsoft/vcpkg.git $env:USERPROFILE\vcpkg
