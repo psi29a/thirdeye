@@ -19,75 +19,11 @@ namespace THIRDEYE::runtime::event {
 namespace {
 
 void runDebugHooks(VM::ObjectSystem &objects, RESOURCES::Resource &res) {
-	// Level objects (doors/levers/stairs/decorations/monsters): on the first
-	// in-game frame (AFTER the dungeon's init level has cleared lvlobj), load them
-	// from the saved LVLnn.TMP into the cell grid so they render + interact. On by
-	// default (a populated dungeon); THIRDEYE_NO_OBJECTS disables it. NB: this loads
-	// the *saved* level state (a stand-in until the new-game write_initial_tempfiles
-	// source / the "Continue the Quest" load path is wired).
-	if (!std::getenv("THIRDEYE_NO_OBJECTS")) {
-		static bool loaded = false;
-		if (!loaded && objects.firstObjectOfClass(1381) >= 0) {
-			loaded = true;
-			int lvl = 1;
-			int kn = objects.firstObjectOfClass(1382);
-			if (kn >= 0)
-				if (uint8_t *p = objects.classStaticPtr(kn, 1382, 246, 1))
-					lvl = *p ? *p : 1;
-			savegame::loadLevelObjects(lvl, objects, res);
-		}
-	}
-	// Auto-wield (safety net): make sure each PC has *something* to fight with in
-	// the right hand (W:inventory slot 16). The char-gen transfer already arms the
-	// default party (Bob holds a staff, etc.), so this is normally inert -- but a
-	// PC whose hand ends up EMPTY (a save-loaded or hand-swapped party) would
-	// "swing" nothing and "roll for damage" (which reads the held weapon's dice)
-	// would deal zero. So: only when the hand is empty, move the first weapon (a
-	// subclass of 1688 "weapons") found elsewhere in the 26-slot inventory into it.
-	// Never displaces an item the PC is already holding. One-time, after the
-	// transfer. (The actual combat fix is the dice/rnd runtime functions; this just
-	// guarantees an unarmed PC can still attack.)
-	{
-		static bool wielded = false;
-		constexpr uint16_t kPC = 1369, kWeapons = 1688;
-		constexpr int kInvBase = 81, kRHand = 16;
-		if (!wielded && !objects.objectsOfClass(kPC).empty()) {
-			wielded = true;
-			auto slotItem = [&](int pc, int slot) -> int {
-				uint8_t *p =
-				    objects.classStaticPtr(pc, kPC, kInvBase + slot * 2, 2);
-				return p ? static_cast<int16_t>(p[0] | (p[1] << 8)) : 0;
-			};
-			auto setSlot = [&](int pc, int slot, int item) {
-				if (uint8_t *p =
-				        objects.classStaticPtr(pc, kPC, kInvBase + slot * 2, 2)) {
-					p[0] = item & 0xFF;
-					p[1] = (item >> 8) & 0xFF;
-				}
-			};
-			auto isWeapon = [&](int item) {
-				return item > 0 &&
-				       objects.isSubclassOf(objects.classOf(item), kWeapons);
-			};
-			for (int pc : objects.objectsOfClass(kPC)) {
-				if (slotItem(pc, kRHand) != 0)
-					continue; // hand not empty -- leave the PC's loadout alone
-				for (int slot = 0; slot < 26; ++slot) {
-					if (slot == kRHand)
-						continue;
-					int it = slotItem(pc, slot);
-					if (isWeapon(it)) {
-						setSlot(pc, slot, 0);     // remove from its old slot
-						setSlot(pc, kRHand, it);  // into the empty hand
-						if (gRtTrace)
-							rt() << "  [auto-wield] pc " << pc << " weapon " << it
-							     << " (slot " << slot << ") -> empty right hand\n";
-						break;
-					}
-				}
-			}
-		}
-	}
+	// (Level-object loading now lives in resume_level alongside loadDungeonLevel
+	// -- having a one-shot here too raced resume_level's party_lvl patch and
+	// loaded LVL01.TMP into whatever maze had been swapped in.)
+	(void)res;
+
 	// Creature notes: the 3D view redraws ~4 Hz even when idle (the kernel "timer
 	// tick" sends "draw view" gated on B:update@249), so monsters re-render live --
 	// the "0 redraws idle" seen earlier was just the runtime trace being off without

@@ -206,6 +206,32 @@ std::vector<ItemRecord> parseItemStream(const std::vector<uint8_t> &data,
 bool restoreItems(const std::filesystem::path &saveDir, int slotIdx);
 int  restoreLevels(const std::filesystem::path &saveDir, int slotIdx);
 
+// --- Native ITEMS_00.BIN CDESC parsing (area-class instances) ---
+//
+// The "real" ITEMS save format is the native AESOP `save_range`/`restore_range`
+// CDESC stream: byte 0 = 0x1A (binary magic), then 1000 records (one per object
+// slot in [FIRST_ITEM..LAST_ITEM] = 0..999), each `{u16 slot, u32 class,
+// u16 size, size_bytes data}`. CDESC slots with class=0xFFFFFFFF are empty.
+//
+// Of particular interest: slots 1..14 hold one **area-class instance per
+// dungeon level** (e.g. slot 1 = class 2409 "mauslvl1", slot 3 = class 2415
+// "graveyrd", etc.). These are the singletons that dungeon's SOP "init level"
+// handler looks up via `SOLE` to drive `SEND "enter level"` -- which calls
+// `set_palette` for walls + PAL_M1 + PAL_M2 *from the bytecode*, not from C++.
+//
+// Without these instances live in the object table, "init level" finds no area
+// object and the creature palette load never fires. So at boot/load time we
+// pre-create them by reading ITEMS_00.BIN's CDESC records for slots 0..14 and
+// instantiating each (with its saved static data restored verbatim).
+//
+// Returns the count of objects created. saveDir is the SAVEGAME/ directory.
+// The `create` callback receives (objIndex, classNumber, staticData) -- the
+// caller wires it to ObjectSystem::createProgram + classStaticPtr writes.
+using CdescCreate = std::function<void(int slot, uint16_t cls,
+                                       const std::vector<uint8_t> &data)>;
+int loadAreaInstances(const std::filesystem::path &saveDir,
+                      const CdescCreate &create);
+
 } // namespace THIRDEYE::savegame
 
 #endif // THIRDEYE_SAVEGAME_ITEMS_TMP_HPP
