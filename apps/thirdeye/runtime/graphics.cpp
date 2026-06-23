@@ -21,13 +21,10 @@ namespace {
 // PAL_OUT=0xB0.
 constexpr uint16_t kFirstColor[5] = {0x00, 0xB0, 0xC0, 0xE0, 0xB0};
 
-// The dungeon view's off-screen page number is NOT fixed: it depends on what
-// SOP objects loaded before. With --skip-menu (CINE shortcut) it's 92; with
-// the full menu/load-game path it's 99. We learn it from the SOP's own
-// set_x2(P, kViewW-1) calls (=175 = view's natural right edge) and remember
-// every such page in gViewPages. Without dynamic detection, wall draws to a
-// non-recognized view page escape the clip and bleed onto the portrait panels.
-constexpr int kViewW = 176, kViewH = 120;
+// All clipping is now per-pane via events.windowRect(), matching the original
+// GIL2VFX_draw_bitmap. No hardcoded view dimensions live here -- the dungeon
+// view, the HUD, the save-picker windows etc. all carry their natural rects
+// in the events table from assign_subwindow / set_x* edits.
 
 } // namespace
 
@@ -56,27 +53,17 @@ bool tryHandle(Context &ctx, const std::string &fn,
 		result = 0;
 		return true;
 	}
-	// set_x1/set_x2(window, x): set the active draw clip for `window` to a
-	// left/right pixel column. The dungeon's "draw objects" calls these per
-	// view-cell to narrow each cell's draws to a horizontal strip; at the end
-	// of the handler it restores set_x1(view, 0) / set_x2(view, 175). x = -1
-	// means "no clip" (use the window's natural edge). We track the most
-	// recent pair as a single global and apply it to the view-page clip in
-	// draw_bitmap (see kViewPage block). The `window` arg is ignored: the
-	// dungeon's view is the only consumer in the in-game render path, so a
-	// single global pair matches every observed call. Without honoring these,
-	// wide shapes (stairs/doors) for an oblique cell bleed past their column
-	// into adjacent cells -- the "stair shape inside the side wall" artifact
-	// when strafing past a stair cell.
 	// set_x1/x2/y1/y2(wnd, val): mutate one edge of the subwindow. Matches
-	// GIL2VFX_set_x{1,2}/set_y{1,2}: just assigns panes[wnd].{x0,x1,y0,y1}.
-	// Two consumers:
-	//   * dungeon view's per-cell clip (kept via gViewClipX1/X2; the in-game
-	//     draw_bitmap to kViewPage reads them to narrow each cell's strip).
+	// GIL2VFX_set_x{1,2}/set_y{1,2}: assigns panes[wnd].{x0,x1,y0,y1}, which
+	// the original GIL2VFX_draw_bitmap then reads as the natural clip rect.
+	// We mirror that: setWindowEdge updates events.windowRect(wnd), which
+	// draw_bitmap below reads to clip the blit. Used by:
+	//   * dungeon view's per-cell narrowing (set_x2(view, 127) etc. for each
+	//     cell's horizontal strip, then set_x2(view, 175) to restore wide).
 	//   * save-picker's slot-number column (set_x2(99, 13) narrows window 99
 	//     for the digits, set_x2(99, 175) widens it back for the names).
-	// For the second case we ALSO refresh any text window bound to the
-	// changed subwindow so subsequent printText uses the new edges.
+	// For text windows bound to the changed subwindow, the new edges propagate
+	// to printText so the next render uses them.
 	auto refreshBoundText = [&](int32_t handle) {
 		if (!ctx.gfx) return;
 		int32_t x0, y0, x1, y1;
@@ -84,19 +71,12 @@ bool tryHandle(Context &ctx, const std::string &fn,
 			ctx.gfx->updateTextWindowsFor(handle, x0, y0, x1, y1);
 	};
 	if (fn == "set_x1" && args.size() >= 2) {
-		gViewClipX1 = static_cast<int>(args[1]);
 		ctx.events.setWindowEdge(args[0], 'l', args[1]);
 		refreshBoundText(args[0]);
 		result = 0;
 		return true;
 	}
 	if (fn == "set_x2" && args.size() >= 2) {
-		gViewClipX2 = static_cast<int>(args[1]);
-		// set_x2(P, kViewW-1) = "restore to view's natural right edge" -- the SOP
-		// only does this on the dungeon view's off-screen page, so it's our
-		// signal for which page number to clip wall draws to.
-		if (static_cast<int>(args[1]) == kViewW - 1)
-			gViewPages.insert(static_cast<int>(args[0]));
 		ctx.events.setWindowEdge(args[0], 'r', args[1]);
 		refreshBoundText(args[0]);
 		result = 0;
@@ -156,21 +136,18 @@ bool tryHandle(Context &ctx, const std::string &fn,
 		uint16_t table = static_cast<uint16_t>(args[1]);
 		uint16_t number = static_cast<uint16_t>(args[2]);
 		int x = static_cast<int>(args[3]), y = static_cast<int>(args[4]);
-		// The dungeon 3D view renders into an off-screen page; we composite onto
-		// the one screen surface, so without the page model the wide wall shapes
-		// would bleed out of the view into the character panels. Clip draws to
-		// any page the SOP has marked view-like via set_x2(P, 175) (see
-		// gViewPages in internal.hpp -- the page number is not fixed across
-		// boot paths).
-		bool viewPage = gViewPages.count(page) != 0;
-		if (viewPage) {
-			// Honor the per-cell horizontal clip set by set_x1/set_x2 (see
-			// runtime-fn block). x = -1 means "use the view's natural edge".
-			int cx1 = gViewClipX1 < 0 ? 0 : std::max(0, gViewClipX1);
-			int cx2 = gViewClipX2 < 0 ? kViewW - 1 : std::min(kViewW - 1, gViewClipX2);
-			if (cx2 < cx1) cx2 = cx1; // empty clip = nothing draws
-			ctx.gfx->setClip(cx1, 0, cx2 - cx1 + 1, kViewH);
-		}
+		// Match the original GIL2VFX_draw_bitmap: every draw clips to its pane's
+		// natural rect (panes[wnd].x0..x1, y0..y1). Our events table is the SOP's
+		// pane table -- assign_subwindow registered the rect when the SOP created
+		// the page, and set_x1/x2/y1/y2 mutate the rect (so per-cell narrowing on
+		// the dungeon view page is already reflected here). PAGE1/PAGE2 (handles
+		// 0/1) are seeded as full 320x200 in EventSystem::EventSystem, so HUD
+		// draws to page 1 see no narrowing and reach the portrait panels.
+		int32_t px0, py0, px1, py1;
+		bool clipped = ctx.events.windowRect(static_cast<int32_t>(page),
+		                                     px0, py0, px1, py1);
+		if (clipped)
+			ctx.gfx->setClip(px0, py0, px1 - px0 + 1, py1 - py0 + 1);
 		// arg[6] = flip/mirror (GIL2VFX: 1=X, 2=Y, 3=both); the view draws
 		// right-hand walls as the X-mirror of the left-hand shape.
 		int mirror = args.size() > 6 ? static_cast<int>(args[6]) : 0;
@@ -196,7 +173,7 @@ bool tryHandle(Context &ctx, const std::string &fn,
 		} catch (const std::exception &e) {
 			rt() << "  [draw failed: " << e.what() << "]" << std::endl;
 		}
-		if (viewPage)
+		if (clipped)
 			ctx.gfx->clearClip();
 		result = 0;
 		return true;
