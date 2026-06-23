@@ -50,20 +50,24 @@ jobs:
             core.exportVariable('ACTIONS_RUNTIME_TOKEN', process.env.ACTIONS_RUNTIME_TOKEN || '');
 
       # Cache the entire vcpkg tree (the tool + installed/). On a hit we skip
-      # clone + bootstrap + install entirely (~9 min -> seconds). The cache key
-      # is the workflow file's hash: any change to the dep list (or vcpkg
-      # version) lives here, so editing this file naturally invalidates.
-      # VCPKG_BINARY_SOURCES = x-gha is still useful for partial restores when
-      # this directory cache misses (e.g. workflow edit, weekly eviction):
-      # vcpkg install then pulls per-package binary caches instead of building
-      # from source.
+      # clone + bootstrap + install entirely (~9 min -> seconds). The key is a
+      # MANUAL version (vcpkg-v<N>): bump only when the install command below
+      # changes (new package, different triplet, vcpkg pinning, ...). Don't
+      # use hashFiles() over this workflow -- any unrelated CI edit (e.g.
+      # adding ccache, tweaking artifacts) would invalidate a perfectly good
+      # 300 MB cache. VCPKG_BINARY_SOURCES = x-gha is still useful for partial
+      # restores when THIS directory cache does miss (after a bump or weekly
+      # eviction): vcpkg install then pulls per-package binary caches instead
+      # of building from source.
       - name: Cache vcpkg
         if: runner.os == 'Windows'
         id: cache-vcpkg
         uses: actions/cache@v4
         with:
           path: ~/vcpkg
-          key: vcpkg-${{ runner.os }}-${{ hashFiles('.github/workflows/ci.yml') }}
+          key: vcpkg-${{ runner.os }}-v1-sdl2-openal-soft-wildmidi
+          restore-keys: |
+            vcpkg-${{ runner.os }}-v1-
 
       # cmake, ninja and git are preinstalled on the windows-latest image, so we
       # only need vcpkg. (Installing via choco modifies the machine PATH, which
