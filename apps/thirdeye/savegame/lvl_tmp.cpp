@@ -87,11 +87,6 @@ int loadLevelObjects(int level, VM::ObjectSystem &objects,
 				return false;
 			};
 			bool isMonster = isNpcClass(cls);
-			// THIRDEYE_TESTMON: enable monster rendering (the creature-draw bring-up).
-			// Off by default -- the NPC draw needs full creature state and currently
-			// garbles, so monsters load (for combat) but don't render until ready.
-			static const bool kRenderMonsters =
-			    std::getenv("THIRDEYE_TESTMON") != nullptr;
 			if (isMonster) {
 				setS(kNPC, 3, hp, 2);     // hitpts
 				setS(kNPC, 7, 0, 1);      // fdir (creature facing; default 0)
@@ -113,24 +108,15 @@ int loadLevelObjects(int level, VM::ObjectSystem &objects,
 				try { npcstat = objects.send(id, 18, { 1 }); } // report(1)
 				catch (const std::exception &) {}
 				setS(kNPC, 0, npcstat, 2);
-				if (kRenderMonsters)
-					std::cerr << "[mon] id " << id << " class " << cls << " @(" << x
-					          << "," << y << ") hp " << hp << " NPCstat 0x" << std::hex
-					          << npcstat << std::dec << " sub " << (df & 3) << "\n";
 			}
 			// Link into the cell grid so "draw objects" renders it. lvlobj has 3
 			// planes (plane*2048 + y*64 + x*2): features/decorations (doors) go in
-			// PLANE 0, but MONSTERS go in PLANE 2 -- NPC.draw walks the cell's object
-			// chain in plane 2 (the disassembly reads `lvlobj[2<<11 + ...]`), so a
-			// monster linked in plane 0 gets a `draw` from "draw objects" but finds an
-			// empty chain and renders nothing. Monsters are skipped unless
-			// THIRDEYE_TESTMON (creature-draw bring-up, see above).
+			// PLANE 0, MONSTERS go in PLANE 2 -- NPC.draw walks the cell's object
+			// chain in plane 2 (the disassembly reads `lvlobj[2<<11 + ...]`).
 			uint32_t plane = isMonster ? 4096u : 0u;
-			uint8_t *cellp = (isMonster && !kRenderMonsters)
-			                     ? nullptr
-			                     : objects.classStaticPtr(
-			                           dn, kDungeonClass,
-			                           1024 + plane + (y * 64 + x * 2), 2);
+			uint8_t *cellp = objects.classStaticPtr(
+			                     dn, kDungeonClass,
+			                     1024 + plane + (y * 64 + x * 2), 2);
 			if (cellp) {
 				// Monsters: prepend to the cell's link-chain so up to 4-per-cell all
 				// render -- the new monster's W:next@6 points at the previous head, then

@@ -60,9 +60,10 @@ TransferState::SlotCat TransferState::categoryForClass(int cls) {
 	case 1350: return SlotCat::RING;
 	case 1351: return SlotCat::BRACERS;
 	case 1352: return SlotCat::NECKLACE;
-	// ponytail: cloak (1355) has no dedicated body offset in ITEMS.TMP --
-	// route to pouches/backpack until we RE its slot.
-	case 1355:
+	// Cloak of protection: no dedicated body-part in the ITEMS.TMP layout;
+	// docs/equipment_slots.md §8 resolves it to the necklace/amulet slot (24)
+	// since it works through magic effects rather than the AC slot scan.
+	case 1355: return SlotCat::NECKLACE;
 	case 1344: case 1345: case 1346: case 1347:
 	default: return SlotCat::CARRIED;
 	}
@@ -118,9 +119,13 @@ void TransferState::rebuildPlacement() {
 			switch (categoryForClass(cls)) {
 			case SlotCat::WEAPON:
 			case SlotCat::RANGED:    t = pickFrom({16, 20}); break;
-			// ponytail: 2H sword takes only slot 16; blocking slot 20 (linked
-			// flag in h_stat) is a runtime concern, add when combat uses it.
-			case SlotCat::WEAPON_2H: t = pickFrom({16}); break;
+			// 2H sword: occupies right hand (16) AND blocks the left hand (20)
+			// so nothing else lands there; h_stat linking is a runtime-combat
+			// concern handled by the PC "use/attack" message.
+			case SlotCat::WEAPON_2H:
+				t = pickFrom({16});
+				if (t == 16) pcItemAtSlot[pc][20] = static_cast<int8_t>(kInvSlots);
+				break;
 			case SlotCat::BODY:      t = pickFrom({14}); break;
 			case SlotCat::HELMET:    t = pickFrom({25}); break;
 			case SlotCat::SHIELD:    t = pickFrom({20, 16}); break;

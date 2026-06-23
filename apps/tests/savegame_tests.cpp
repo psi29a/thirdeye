@@ -383,9 +383,10 @@ TEST(Transfer_Test, CategoryForKnownClasses) {
 	EXPECT_EQ(Cat::RING,      TS::categoryForClass(1350)); // ring of protection
 	EXPECT_EQ(Cat::BRACERS,   TS::categoryForClass(1351)); // bracers
 	EXPECT_EQ(Cat::NECKLACE,  TS::categoryForClass(1352)); // necklace
-	// Carried fallback: spellbook, thieves' tools, holy symbol, rations, cloak.
+	// Carried fallback: spellbook, thieves' tools, holy symbol, rations.
 	EXPECT_EQ(Cat::CARRIED,   TS::categoryForClass(1345));
-	EXPECT_EQ(Cat::CARRIED,   TS::categoryForClass(1355)); // cloak (no slot yet)
+	// Cloak of protection: necklace slot (24) -- docs/equipment_slots.md §8.
+	EXPECT_EQ(Cat::NECKLACE,  TS::categoryForClass(1355));
 }
 
 // Empty / unopened transfer file: item_attrib(1) = -1 (no type), 0 elsewhere.
@@ -743,4 +744,141 @@ TEST(Restore_Test, LevelsHappyPathCopiesPresentBackups) {
 	// Level 5 had no backup in slot 3 -- its TMP must be untouched.
 	auto c = readBytes(dir / "LVL05.TMP");
 	ASSERT_EQ(1u, c.size()); EXPECT_EQ(0x55, c[0]);
+}
+
+// --- loadAreaInstances (CDESC parser for ITEMS_00.BIN) -----------------
+//
+// The native ITEMS save uses an AESOP `save_range`/`restore_range` CDESC
+// stream: byte 0 = 0x1A magic, then 1000 records (slots 0..999), each
+// `{u16 slot, u32 class, u16 size, size_bytes data}`. We pre-create the 14
+// area-class singletons living at slots 1..14 from ITEMS_00.BIN so the SOP's
+// "init level" -> "enter level" cascade can find them via SOLE and fire its
+// `set_palette` calls. These tests pin the parser's contract independently
+// of the runtime wiring.
+
+namespace {
+// Helper: write a CDESC stream (magic + records). Each rec is (slot, class,
+// data). Class 0xFFFFFFFFu = empty slot (no data follows).
+struct AreaCdesc {
+	uint16_t slot;
+	uint32_t cls;
+	std::vector<uint8_t> data;
+};
+
+void writeCdescFile(const std::filesystem::path &p,
+                    std::initializer_list<AreaCdesc> recs) {
+	std::ofstream f(p, std::ios::binary);
+	f.put(static_cast<char>(0x1A)); // magic
+	for (const auto &r : recs) {
+		auto u16 = [&](uint16_t v) { f.put(v & 0xFF); f.put((v >> 8) & 0xFF); };
+		auto u32 = [&](uint32_t v) {
+			for (int i = 0; i < 4; ++i) f.put((v >> (8 * i)) & 0xFF);
+		};
+		u16(r.slot);
+		u32(r.cls);
+		u16(static_cast<uint16_t>(r.data.size()));
+		f.write(reinterpret_cast<const char*>(r.data.data()),
+		        static_cast<std::streamsize>(r.data.size()));
+	}
+}
+} // namespace
+
+// Happy path: ITEMS_00.BIN with the canonical level-area layout (one entry
+// per dungeon level at slots 1..14) round-trips slot, class, and data
+// through the create-callback.
+TEST(AreaInstances_Test, ParsesAreaSlotsFromCdescStream) {
+	auto dir = makeScratchDir("area_happy");
+	writeCdescFile(dir / "ITEMS_00.BIN", {
+	    // slot 0 is the kernel; we skip it (loader starts at slot 1).
+	    {0, 1382, {0xAA}},
+	    {1, 2409, {0x01, 0x02, 0x03}}, // mauslvl1
+	    {2, 2412, {0x04, 0x05}},        // mauslvl2
+	    {3, 2415, {0x06}},              // graveyrd
+	    // slot 8 is empty in the real ITEMS_00.BIN (slot 8 / level 8 unused)
+	    {8, 0xFFFFFFFFu, {}},
+	    {14, 2447, {0x99}},             // templvl4
+	    // slot 15+ should be IGNORED (outside the area range).
+	    {15, 1234, {0xFF}},
+	});
+
+	std::vector<std::tuple<int, uint16_t, std::vector<uint8_t>>> created;
+	int count = THIRDEYE::savegame::loadAreaInstances(
+	    dir, [&](int slot, uint16_t cls, const std::vector<uint8_t> &data) {
+		    created.emplace_back(slot, cls, data);
+	    });
+	EXPECT_EQ(4, count);                       // 4 non-empty entries in 1..14
+	ASSERT_EQ(4u, created.size());
+	EXPECT_EQ(1, std::get<0>(created[0]));     // mauslvl1 first
+	EXPECT_EQ(2409, std::get<1>(created[0]));
+	EXPECT_EQ(std::vector<uint8_t>({0x01, 0x02, 0x03}), std::get<2>(created[0]));
+	EXPECT_EQ(14, std::get<0>(created[3]));    // templvl4 last (slot 15 dropped)
+	EXPECT_EQ(2447, std::get<1>(created[3]));
+}
+
+// No file -> no callback fires, no crash. Returns 0.
+TEST(AreaInstances_Test, MissingFileReturnsZero) {
+	auto dir = makeScratchDir("area_missing");
+	int calls = 0;
+	int n = THIRDEYE::savegame::loadAreaInstances(
+	    dir, [&](int, uint16_t, const std::vector<uint8_t> &) { ++calls; });
+	EXPECT_EQ(0, n);
+	EXPECT_EQ(0, calls);
+}
+
+// Empty / wrong-magic file -> no callback fires (the loader refuses to parse
+// unrecognised formats rather than guessing).
+TEST(AreaInstances_Test, WrongMagicReturnsZero) {
+	auto dir = makeScratchDir("area_badmagic");
+	writeBytes(dir / "ITEMS_00.BIN", {0x00, 0x01, 0x02}); // not 0x1A
+	int calls = 0;
+	int n = THIRDEYE::savegame::loadAreaInstances(
+	    dir, [&](int, uint16_t, const std::vector<uint8_t> &) { ++calls; });
+	EXPECT_EQ(0, n);
+	EXPECT_EQ(0, calls);
+}
+
+// Truncated mid-record -> stops cleanly without invoking the callback for
+// the partial record.
+TEST(AreaInstances_Test, TruncatedRecordStopsParse) {
+	auto dir = makeScratchDir("area_trunc");
+	{
+		std::ofstream f(dir / "ITEMS_00.BIN", std::ios::binary);
+		f.put(static_cast<char>(0x1A));
+		// slot 1 mauslvl1, size = 100, but only write 3 bytes of data
+		auto u16 = [&](uint16_t v) { f.put(v & 0xFF); f.put((v >> 8) & 0xFF); };
+		auto u32 = [&](uint32_t v) {
+			for (int i = 0; i < 4; ++i) f.put((v >> (8 * i)) & 0xFF);
+		};
+		u16(1); u32(2409); u16(100); // claims 100-byte data
+		f.put(0x01); f.put(0x02); f.put(0x03); // but only 3 bytes follow
+	}
+	int calls = 0;
+	int n = THIRDEYE::savegame::loadAreaInstances(
+	    dir, [&](int, uint16_t, const std::vector<uint8_t> &) { ++calls; });
+	EXPECT_EQ(0, n);
+	EXPECT_EQ(0, calls);
+}
+
+// The bundled ITEMS_00.BIN from a real EOB3 install: 14 area-class records
+// at slots 1..14, with the conventional class IDs. Skipped if the data dir
+// isn't pointed at by THIRDEYE_TEST_DATA_DIR (same gate as
+// SaveDir.ParsesQuickStartPartyDir).
+TEST(AreaInstances_Test, ParsesBundledItems00Bin) {
+	const char *base = std::getenv("THIRDEYE_TEST_DATA_DIR");
+	if (!base) GTEST_SKIP() << "set THIRDEYE_TEST_DATA_DIR=/path/to/eob3 data dir";
+	auto dir = std::filesystem::path(base) / "SAVEGAME";
+	if (!std::filesystem::exists(dir / "ITEMS_00.BIN"))
+		GTEST_SKIP() << "no ITEMS_00.BIN at " << dir;
+
+	std::map<int, uint16_t> slotClass;
+	int n = THIRDEYE::savegame::loadAreaInstances(
+	    dir, [&](int slot, uint16_t cls, const std::vector<uint8_t> &) {
+		    slotClass[slot] = cls;
+	    });
+	// Real ITEMS_00.BIN has 13 area instances (slot 8 / level 8 is empty).
+	EXPECT_GE(n, 12);   // tolerate small variation across installs
+	EXPECT_LE(n, 14);
+	EXPECT_EQ(2409, slotClass[1]);  // mauslvl1
+	EXPECT_EQ(2412, slotClass[2]);  // mauslvl2
+	EXPECT_EQ(2415, slotClass[3]);  // graveyrd
 }

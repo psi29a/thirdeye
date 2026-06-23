@@ -636,7 +636,22 @@ uint8_t* Interpreter::externPtr(uint16_t obj, uint32_t xrOffset, uint32_t extra,
                                 uint32_t size) {
 	if (!mExternResolve || !mExternStatics)
 		throw VmError("extern variable access but no link layer is wired in");
-	return mExternStatics(obj, mExternResolve(xrOffset) + extra, size);
+	// Match DOS-AESOP's permissive extern access: when the target object's class
+	// doesn't include the static's defining class in its ancestor chain (the
+	// SOP wrote a field that semantically doesn't apply -- e.g. dungeon "init
+	// level" probes B:lvl on every alive object 1..1999, including standalone
+	// classes like mauslvl1 that have no `entities` ancestor), the original
+	// engine read whatever happened to be at that offset in linear memory
+	// (usually zero-initialized heap). We model that by returning a pointer
+	// into a static zero buffer for OOB reads and a sinkhole for writes,
+	// rather than throwing. This is the seam where DOS bounds-check absence
+	// surfaces in our stricter runtime.
+	uint8_t *p = mExternStatics(obj, mExternResolve(xrOffset) + extra, size);
+	if (p == nullptr) {
+		static uint8_t sinkhole[16] = {0};
+		return sinkhole; // caller may read up to 4 bytes; we cap pessimistically
+	}
+	return p;
 }
 
 const uint8_t* Interpreter::codePtr(uint32_t off, uint32_t size) {
