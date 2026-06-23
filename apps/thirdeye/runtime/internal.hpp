@@ -18,6 +18,7 @@
 #include "../vm/vm.hpp"
 
 #include <chrono>
+#include <cstdint>
 #include <iosfwd>
 #include <map>
 #include <string>

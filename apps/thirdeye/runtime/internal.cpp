@@ -4,6 +4,7 @@
 #include "../resources/res.hpp"
 #include "../vm/objects.hpp"
 
+#include <cctype>
 #include <cstdlib>
 #include <cstring>
 #include <cstdio>
@@ -101,16 +102,12 @@ bool loadDungeonLevel(int level, VM::ObjectSystem &objects,
 		// gradient (near->far wall shading) for 176-191, loaded at base 0xB0.
 		if (gfx && pal >= 0)
 			gfx->setPaletteRange(res.getAsset(static_cast<uint16_t>(pal)), 0xB0);
-		// Creature palettes (THIRDEYE_TESTMON bring-up): each monster sprite has its
-		// own palette loaded into a high range -- e.g. "Sword wraith palette" (337)
-		// at indices 192-223. The native change_level loads these per level; load the
-		// wraith's here so the rendered creature is coloured, not placeholder-white.
-		// (TODO: derive per-creature from the level's monster set instead of hard-coding.)
-		if (gfx && std::getenv("THIRDEYE_TESTMON")) {
-			int cp = res.getResourceNumber("Sword wraith palette");
-			if (cp >= 0)
-				gfx->setPaletteRange(res.getAsset(static_cast<uint16_t>(cp)), 0xC0);
-		}
+		// (Creature palettes are loaded by the SOP "enter level" cascade --
+		// the dungeon's "init level" handler SENDs each area-class instance
+		// its "enter level" message, which calls set_palette(2, ...) for the
+		// level's PAL_M1 creature and set_palette(3, ...) for PAL_M2. The
+		// area-class singletons are pre-created from ITEMS_00.BIN; see
+		// THIRDEYE::savegame::loadAreaInstances.)
 		std::cout << "  [loadDungeonLevel " << level << " = \"" << mapName << "\" ("
 		          << area << ": map " << map << ", walls " << walls << ", palette "
 		          << pal << ")]" << std::endl;

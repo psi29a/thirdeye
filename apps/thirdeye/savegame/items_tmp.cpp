@@ -266,4 +266,45 @@ int restoreLevels(const std::filesystem::path &saveDir, int slotIdx) {
 	return copied;
 }
 
+int loadAreaInstances(const std::filesystem::path &saveDir,
+                      const CdescCreate &create) {
+	// Read ITEMS_00.BIN (the slot-0 scaffold that ships with the install),
+	// parse the native CDESC stream, and hand off the first 15 slots
+	// (0..14: kernel + 14 area-class singletons). Larger slots (item objects,
+	// PCs) are restored elsewhere by our own ITEMS.TMP path -- the SOP
+	// equivalent would be `restore_items` over the full 0..999 range, but we
+	// only need the area instances to make the SOP "enter level" cascade fire.
+	auto path = saveDir / "ITEMS_00.BIN";
+	std::ifstream f(path, std::ios::binary);
+	if (!f) return 0;
+	std::vector<uint8_t> d((std::istreambuf_iterator<char>(f)),
+	                       std::istreambuf_iterator<char>());
+	if (d.empty() || d[0] != 0x1a) return 0; // not the native binary format
+	size_t off = 1;
+	int created = 0;
+	constexpr int kFirstAreaSlot = 1, kLastAreaSlot = 14;
+	while (off + 8 <= d.size()) {
+		uint16_t slot = d[off] | (uint16_t(d[off + 1]) << 8);
+		uint32_t cls  = d[off + 2] | (uint32_t(d[off + 3]) << 8) |
+		                (uint32_t(d[off + 4]) << 16) |
+		                (uint32_t(d[off + 5]) << 24);
+		uint16_t size = d[off + 6] | (uint16_t(d[off + 7]) << 8);
+		off += 8;
+		if (off + size > d.size()) break;
+		// 0xFFFFFFFFu = empty slot sentinel; > 0xFFFF = corrupt / future-format
+		// (every real EOB3 class number fits in 16 bits, and the VM's class
+		// table is keyed by uint16_t -- the on-disk u32 is just the AESOP
+		// container's natural width). Skip rather than silently truncate.
+		if (cls != 0xFFFFFFFFu && cls <= 0xFFFFu &&
+		    slot >= kFirstAreaSlot && slot <= kLastAreaSlot) {
+			std::vector<uint8_t> data(d.begin() + off, d.begin() + off + size);
+			create(static_cast<int>(slot), static_cast<uint16_t>(cls), data);
+			++created;
+		}
+		off += size;
+		if (slot >= kLastAreaSlot) break; // done -- no need to scan further
+	}
+	return created;
+}
+
 } // namespace THIRDEYE::savegame
