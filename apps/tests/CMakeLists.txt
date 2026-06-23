@@ -8,6 +8,7 @@ set(UNITTEST
     main.cpp
     savegame_tests.cpp
     chargen_tests.cpp
+    clip_tests.cpp
 )
 
 set(UNITTEST_HEADER

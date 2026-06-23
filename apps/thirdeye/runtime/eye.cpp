@@ -553,7 +553,11 @@ bool tryHandle(Context &ctx, const std::string &fn,
 			};
 			uint8_t *lvlP = ctx.objects.classStaticPtr(kernel, kKernelClass, kPartyLvl, 1);
 			if (lvlP && *lvlP == 0) { // don't clobber a level a real save provided
-				// Priority: THIRDEYE_PARTY/GOTO env vars > ITEMS.TMP > default (lvl 1 (15,15)).
+				// Priority: ITEMS.TMP > default (lvl 1 (15,15)). Drive level
+				// changes via the normal SOP path (menu / AUTOWALK) rather than
+				// a debug override -- THIRDEYE_GOTO bypassed program/window
+				// state the SOP relies on and produced page-numbering and HUD
+				// glitches that didn't reproduce in real gameplay.
 				uint8_t startLvl = 1;
 				int px = 15, py = 15, pf = 0;
 				bool seededFromSave = false;
@@ -564,10 +568,6 @@ bool tryHandle(Context &ctx, const std::string &fn,
 					py = items.position.y;
 					pf = items.position.facing & 3;
 					seededFromSave = true;
-				}
-				if (const char *g = std::getenv("THIRDEYE_GOTO")) { // debug override
-					int n = std::atoi(g);
-					if (n >= 1 && n <= 14) { startLvl = static_cast<uint8_t>(n); seededFromSave = false; }
 				}
 				if (const char *pp = std::getenv("THIRDEYE_PARTY")) { // debug override
 					std::sscanf(pp, "%d,%d,%d", &px, &py, &pf);
