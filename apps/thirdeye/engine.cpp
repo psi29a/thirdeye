@@ -683,9 +683,15 @@ void THIRDEYE::Engine::bootObject(RESOURCES::Resource &resource,
 		// Run the sub-program OUTSIDE the catch above (a throw from within a catch
 		// handler escapes its own try): it may itself QuitRequested (window closed
 		// during the intro), which must be caught here. Then loop to re-boot start.
+		// Returns false on cancel (Esc out of chargen) -- override mem[1264] so
+		// the next start lands on the title menu rather than the chargen-transfer.
 		if (!relaunch.empty()) {
 			try {
-				runExternalProgram(relaunch, gfx.get(), resource);
+				if (!runExternalProgram(relaunch, gfx.get(), resource)) {
+					mem.insert_or_assign(1264, MODE_INTR);
+					std::cout << "  [sub-program cancelled -- next start: INTR]"
+					          << std::endl;
+				}
 			} catch (const QuitRequested &) {
 				std::cout << "\nWindow closed -- quitting." << std::endl;
 				quit = true;
@@ -701,7 +707,7 @@ void THIRDEYE::Engine::bootObject(RESOURCES::Resource &resource,
 // run those binaries; instead we play thirdeye's own equivalent. The chain
 // (re-boot start on the poked mode) is what makes the selection do the right
 // thing; here we drive the rich behaviour for the programs we can.
-void THIRDEYE::Engine::runExternalProgram(const std::string &program,
+bool THIRDEYE::Engine::runExternalProgram(const std::string &program,
                                           GRAPHICS::Graphics *gfx,
                                           RESOURCES::Resource &resource) {
 	std::string p = program;
@@ -711,31 +717,29 @@ void THIRDEYE::Engine::runExternalProgram(const std::string &program,
 		// "Introduction": the original launches CINE.EXE to play INTRO.GFF, then
 		// chain-launches back to the title menu. Drive thirdeye's own GFF player.
 		playCinematic(gfx, resource, "INTRO.GFF");
-	} else if (p.find("chgen") != std::string::npos ||
-	           p.find("chargen") != std::string::npos ||
-	           p.find("charge") != std::string::npos) {
-		// "Gather a New Party": CHGEN.EXE builds a party and writes CHARGEN\CREATE.SAV,
-		// then chains back with mode "CHGN" so start's xfer object reads it and enters
-		// the game. Drive our in-engine stand-in for the entry screen; the per-slot
-		// flow (race -> ... -> name) is still pending, so on accept we fall through
-		// to whichever CREATE.SAV is already on disk (Westwood's sample party on a
-		// fresh install) and the transfer (player_attrib etc.) runs for real.
+		return true;
+	}
+	if (p.find("chgen") != std::string::npos ||
+	    p.find("chargen") != std::string::npos ||
+	    p.find("charge") != std::string::npos) {
+		// "Gather a New Party": CHGEN.EXE builds a party + writes CREATE.SAV,
+		// then chains back with mode "CHGN" so start's xfer reads it.
 		std::filesystem::path chargenDir =
 		    resource.resourcePath().parent_path() / "CHARGEN";
 		std::cout << "  [program chain: \"" << program
 		          << "\" -> entering chargen screen (dir: " << chargenDir
 		          << ", gfx=" << (gfx ? "yes" : "no") << ")]" << std::endl;
 		if (gfx)
-			THIRDEYE::chargen::runChargenScreen(*gfx, chargenDir);
-		else
-			std::cout << "  [program chain: \"" << program
-			          << "\" -> headless; using the existing CREATE.SAV]"
-			          << std::endl;
-	} else {
+			return THIRDEYE::chargen::runChargenScreen(*gfx, chargenDir);
 		std::cout << "  [program chain: \"" << program
-		          << "\" -> no thirdeye equivalent yet; re-booting start]"
+		          << "\" -> headless; using the existing CREATE.SAV]"
 		          << std::endl;
+		return true;
 	}
+	std::cout << "  [program chain: \"" << program
+	          << "\" -> no thirdeye equivalent yet; re-booting start]"
+	          << std::endl;
+	return true;
 }
 
 // Play a GFF cinematic (INTRO.GFF/FINALE.GFF/...) that lives beside the game's

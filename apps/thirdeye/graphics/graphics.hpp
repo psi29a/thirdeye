@@ -184,6 +184,18 @@ public:
 	void drawText(std::vector<uint8_t> &fnt, std::string text, uint16_t posX,
 			uint16_t posY);
 
+	// drawText variant that tints the glyphs to a chosen palette index colour
+	// (the font glyphs themselves are masks; SDL_SetSurfaceColorMod modulates
+	// the white pixels to (r,g,b) drawn from the live palette). Used by
+	// pickers that need a red "selected" entry over white siblings.
+	// `pitch` (default 0 = use the glyph's full width) advances the cursor
+	// by exactly that many pixels per character -- handy for FONT6 whose
+	// glyphs are 8-wide but only ~5 cols of visible content, so a pitch of
+	// 6 gives a tighter look for button labels.
+	void drawTextColored(std::vector<uint8_t> &fnt, std::string text,
+			uint16_t posX, uint16_t posY, uint8_t paletteIndex,
+			int pitch = 0);
+
 	void playVideo(sequence);
 	void stopVideo();
 	bool isVideoPlaying();

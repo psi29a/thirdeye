@@ -770,6 +770,25 @@ void GRAPHICS::Graphics::drawText(std::vector<uint8_t> &fnt, std::string text,
 	}
 }
 
+void GRAPHICS::Graphics::drawTextColored(std::vector<uint8_t> &fnt,
+		std::string text, uint16_t posX, uint16_t posY, uint8_t paletteIndex,
+		int pitch) {
+	Font font(fnt);
+	SDL_Color c = mPalette->colors[paletteIndex];
+	SDL_Rect rect = { posX, posY, 0, 0 };
+	for (char ch : text) {
+		int ascii = (unsigned char) ch;
+		SDL_Surface *glyph = font.getCharacter(ascii);
+		if (!glyph) continue;
+		// Modulate (255,255,255) -> (c.r,c.g,c.b) at blit time. Font glyphs
+		// are SDL_FreeSurface'd by ~Font(), so we don't need to restore.
+		SDL_SetSurfaceColorMod(glyph, c.r, c.g, c.b);
+		rect.w = glyph->w; rect.h = glyph->h;
+		SDL_BlitSurface(glyph, NULL, mScreen, &rect);
+		rect.x += pitch > 0 ? pitch : glyph->w;
+	}
+}
+
 /*
  * Set the hardware cursor with a specified bitmap.
  * Warning: Possible bug in SDL2, as we cannot use 8-bit RGB image.

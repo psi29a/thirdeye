@@ -21,12 +21,13 @@ namespace GRAPHICS { class Graphics; }
 namespace THIRDEYE::chargen {
 
 // Run the chargen entry screen. `chargenDir` is the path containing
-// CHARPICS.BMP / PALETTE.COL / FONT6.FNT (alongside the game's .RES). The
-// function returns when the user accepts (Enter / P / Play button) or
-// cancels. It throws QuitRequested if the user closes the window. If the
-// chargen assets are missing it logs a note and returns immediately --
-// callers should still proceed to the CREATE.SAV transfer.
-void runChargenScreen(GRAPHICS::Graphics &gfx,
+// CHARPICS.BMP / PALETTE.COL / FONT6.FNT (alongside the game's .RES).
+// Returns true if the user accepted (Play -> go into the game with the
+// rolled CREATE.SAV), false if cancelled (Esc -> go back to title menu).
+// Throws QuitRequested if the user closes the window. If the chargen
+// assets are missing it logs a note and returns true (caller proceeds
+// with whatever CREATE.SAV is already on disk).
+bool runChargenScreen(GRAPHICS::Graphics &gfx,
                       const std::filesystem::path &chargenDir);
 
 } // namespace THIRDEYE::chargen

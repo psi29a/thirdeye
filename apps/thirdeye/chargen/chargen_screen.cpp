@@ -7,9 +7,14 @@
 
 #include <SDL.h>
 
+#include <algorithm>
+#include <array>
+#include <cstring>
 #include <fstream>
 #include <iostream>
 #include <iterator>
+#include <random>
+#include <string>
 #include <vector>
 
 namespace {
@@ -21,119 +26,1154 @@ std::vector<uint8_t> readFile(const std::filesystem::path &p) {
 	                            std::istreambuf_iterator<char>());
 }
 
-} // namespace
+// Slot frames are baked into the CPS backdrop. Both rows have the same
+// layout: left slot at x=17, right slot at x=81, 32-px decorative gap
+// between them. Frame lines at y=63/96 (top row) and y=127/160 (bottom row).
+// 32x32 portraits centered on the frame line so the portrait's top-row
+// stone-blend padding (palette 0xac) merges into the frame visually.
+struct Slot { int x, y; };
+constexpr Slot kSlots[4] = { {17, 64}, {81, 64}, {17, 128}, {81, 128} };
 
-void THIRDEYE::chargen::runChargenScreen(GRAPHICS::Graphics &gfx,
-                                         const std::filesystem::path &chargenDir) {
-	// Required chargen assets sit beside the game's .RES (e.g. ../data/CHARGEN/).
-	// PALETTE.COL: 256-colour 6-bit VGA palette (768 bytes, no header).
-	// CHARPICS.BMP: 90 portrait sheet (see graphics/bitmap.cpp).
-	// FONT8.FNT: 8x8 bit-packed font, has real lowercase glyphs (vs FONT6
-	//            which is uppercase-only and used for menu labels).
-	auto palBytes = readFile(chargenDir / "PALETTE.COL");
-	auto picBytes = readFile(chargenDir / "CHARPICS.BMP");
-	auto fntBytes = readFile(chargenDir / "FONT8.FNT");
-	if (palBytes.empty() || picBytes.empty()) {
-		std::cout << "  [chargen: missing assets in " << chargenDir
-		          << " (need PALETTE.COL + CHARPICS.BMP); skipping screen]"
-		          << std::endl;
-		return;
+// 12 race-gender combinations, listed in the order the original chargen
+// shows them. Names are uppercase to match FONT6/FONT8 menu rendering.
+const std::array<const char *, 12> kRaceNames = { {
+	"HUMAN MALE",    "HUMAN FEMALE",
+	"ELF MALE",      "ELF FEMALE",
+	"HALF-ELF MALE", "HALF-ELF FEMALE",
+	"DWARF MALE",    "DWARF FEMALE",
+	"GNOME MALE",    "GNOME FEMALE",
+	"HALFLING MALE", "HALFLING FEMALE",
+} };
+
+// 6 base classes in the order the original chargen shows them. The real
+// game filters by race/alignment (a half-elf can't be a paladin, etc.) --
+// not yet implemented; the picker accepts any combination for now.
+const std::array<const char *, 6> kClassNames = { {
+	"FIGHTER", "RANGER", "PALADIN", "MAGE", "CLERIC", "THIEF",
+} };
+
+// 9 AD&D alignments in the chargen's listing order.
+const std::array<const char *, 9> kAlignmentNames = { {
+	"LAWFUL GOOD",    "NEUTRAL GOOD",    "CHAOTIC GOOD",
+	"LAWFUL NEUTRAL", "TRUE NEUTRAL",    "CHAOTIC NEUTRAL",
+	"LAWFUL EVIL",    "NEUTRAL EVIL",    "CHAOTIC EVIL",
+} };
+
+enum class Step {
+	EntryScreen,    // 4-slot picker, "Select the box of..." prompt
+	PickRace,       // race list in right panel
+	PickClass,      // class list
+	PickAlignment,  // 9 AD&D alignments
+	ShowStats,      // rolled abilities + REROLL/MODIFY/FACES/KEEP
+	ModifyStats,    // per-ability +/-, selected stat value shown red
+	PickPortrait,   // 4x4 grid of CHARPICS portraits with paging
+	EnterName,      // type a name (max 10 chars), Enter commits + writes CREATE.SAV
+};
+
+// Ability indices, in the order they appear on screen.
+enum Abil { STR=0, INTEL, WIS, DEX, CON, CHA, NUM_ABIL };
+
+struct CharSheet {
+	bool filled    = false;  // true when a complete character is rolled
+	int  race      = -1;     // 0..11
+	int  klass     = -1;     // 0..5
+	int  alignment = -1;     // 0..8
+	int  abil[NUM_ABIL] = {0, 0, 0, 0, 0, 0};
+	int  hp = 0, ac = 10, lvl = 1;
+	int  portrait = 1;  // CHARPICS index; placeholder until picker lands
+	char name[11] = {0}; // NUL-terminated, max 10 chars
+};
+
+struct State {
+	Step step             = Step::EntryScreen;
+	int  activeSlot       = -1;   // 0..3 when in a sub-step
+	int  raceCursor       = 0;    // 0..11 in PickRace
+	int  classCursor      = 0;    // 0..5  in PickClass
+	int  alignmentCursor  = 0;    // 0..8  in PickAlignment
+	int  statCursor       = 0;    // 0..5  in ModifyStats (STR..CHA)
+	int  portraitCursor   = 0;    // 0..89 in PickPortrait (linear index)
+	CharSheet party[4];
+	bool done             = false; // exit chargen entirely
+	bool cancelled        = false; // true if user Esc'd out (return to title)
+};
+
+// Roll 3d6. Used for each ability score on the stats screen.
+int roll3d6(std::mt19937 &rng) {
+	std::uniform_int_distribution<int> d6(1, 6);
+	return d6(rng) + d6(rng) + d6(rng);
+}
+
+// AD&D 1e CON bonus to HP per hit die. Fighters/Paladins/Rangers get the
+// full bonus; other classes cap at +2 per traditional rules, but EOB-era
+// simplified -- we use the warrior bonus across the board (the in-game
+// HP cap will trim if it matters).
+int conHpBonus(int con) {
+	if (con <= 3)  return -2;
+	if (con <= 5)  return -1;
+	if (con <= 14) return  0;
+	if (con == 15) return  1;
+	if (con == 16) return  2;
+	if (con == 17) return  3;
+	return  4;  // 18+
+}
+
+// HP die per class (chargen UI order: F, R, P, M, C, T).
+int classHpDie(int chargenClass) {
+	switch (chargenClass) {
+	case 0: return 10; // FIGHTER  -- d10
+	case 1: return  8; // RANGER   -- d8
+	case 2: return 10; // PALADIN  -- d10
+	case 3: return  4; // MAGE     -- d4
+	case 4: return  8; // CLERIC   -- d8
+	case 5: return  6; // THIEF    -- d6
 	}
+	return 8;
+}
 
-	gfx.loadPalette(palBytes, /*isRes=*/false);
-	// drawImage takes the raw container + sub-shape index (it builds its own
-	// Bitmap internally for the cache key). The Bitmap below is only used to
-	// bounds-check the indices before we ask for them.
-	GRAPHICS::Bitmap portraits(picBytes);
+// Roll a fresh character sheet for the given race/class/alignment. EOB3's
+// campaign opens at ~level 11; we roll N hit dice (one per level) plus the
+// CON bonus per HD. Fixed level 11 for now -- the original CHGEN.EXE has
+// a configurable start-level we haven't RE'd yet.
+void rollStats(CharSheet &c, std::mt19937 &rng) {
+	for (int i = 0; i < NUM_ABIL; ++i)
+		c.abil[i] = roll3d6(rng);
+	c.lvl = 11;
+	int die = classHpDie(c.klass);
+	int bonusPerHd = conHpBonus(c.abil[CON]);
+	std::uniform_int_distribution<int> hpRoll(1, die);
+	int hp = 0;
+	for (int hd = 0; hd < c.lvl; ++hd)
+		hp += hpRoll(rng) + bonusPerHd;
+	c.hp = std::max(1, hp);  // never below 1
+	c.ac = 10;
+}
 
-	// CHARGEN.CPS is the full-screen 320x200 backdrop: stone-textured frame +
-	// gold "Character Generation" title baked in + the empty slot/info panels.
-	// The original program decompresses it (Westwood Format80/LCW) into video
-	// memory before drawing anything else. Fall back to a flat grey if the
-	// file is missing -- we still want a usable placeholder.
-	GRAPHICS::Cps backdrop = GRAPHICS::loadCps(chargenDir / "CHARGEN.CPS");
+// Hit-test the four slot rectangles. Returns 0..3 on hit, -1 otherwise.
+int slotAt(int x, int y) {
+	for (int i = 0; i < 4; ++i) {
+		if (x >= kSlots[i].x && x < kSlots[i].x + 32 &&
+		    y >= kSlots[i].y && y < kSlots[i].y + 32) {
+			return i;
+		}
+	}
+	return -1;
+}
+
+// Read a logical (320x200) mouse position from an SDL mouse event.
+void mousePos(GRAPHICS::Graphics &gfx, const SDL_Event &e, int &lx, int &ly) {
+	int wx = (e.type == SDL_MOUSEMOTION) ? e.motion.x : e.button.x;
+	int wy = (e.type == SDL_MOUSEMOTION) ? e.motion.y : e.button.y;
+	gfx.mouseToLogical(wx, wy, lx, ly);
+}
+
+// Draw text with a drop-shadow at (+1, +1) in a dark palette index, then the
+// foreground glyphs over it. Matches the original chargen's text look --
+// the engine drew every label this way to make text pop off the stone
+// backdrop. paletteIndex==0xff means "default white" (use drawText).
+void drawShadowed(GRAPHICS::Graphics &gfx, std::vector<uint8_t> &fnt,
+                  const std::string &text, int x, int y,
+                  uint8_t fgIndex = 0xff) {
+	// Shadow: palette 0 (true black in the chargen palette).
+	gfx.drawTextColored(fnt, text, x + 1, y + 1, 0x00);
+	// Foreground: white via drawText if fgIndex is sentinel, else tinted.
+	if (fgIndex == 0xff)
+		gfx.drawText(fnt, text, x, y);
+	else
+		gfx.drawTextColored(fnt, text, x, y, fgIndex);
+}
+
+// Blit a sub-rect of an indexed (8 bpp) source buffer onto the screen.
+// Used to grab individual button sprites out of CHARGENB.CPS without
+// needing a full Bitmap container around it.
+void drawSubIndexed(GRAPHICS::Graphics &gfx,
+                    const std::vector<uint8_t> &src, int srcW,
+                    int srcX, int srcY, int w, int h,
+                    int destX, int destY) {
+	if (src.empty()) return;
+	std::vector<uint8_t> sub(static_cast<size_t>(w) * h);
+	for (int y = 0; y < h; ++y) {
+		size_t row = static_cast<size_t>(srcY + y) * srcW + srcX;
+		std::memcpy(sub.data() + y * w, src.data() + row, w);
+	}
+	gfx.drawIndexed(sub, w, h, destX, destY);
+}
+
+// Source-rect of the blank blue button sprite inside CHARGENB.CPS (small
+// 32x14 button, top-left at native 128,128). The wider PLAY/DELETE
+// composite sprites sit next to it; we draw text on top of this blank
+// to compose BACK/KEEP/REROLL etc.
+constexpr int kButtonW = 32;
+constexpr int kButtonH = 14;
+constexpr int kButtonSrcX = 128;
+constexpr int kButtonSrcY = 128;
+
+// Where the BACK button lands on screen (measured against the dosbox
+// class picker -- bottom-right of the right info panel).
+constexpr int kBackBtnX = 272;
+constexpr int kBackBtnY = 172;
+
+// Stats-screen button layout: 2x2 grid at the bottom-right of the right
+// panel (REROLL/MODIFY in the top row, FACES/KEEP in the bottom). Per
+// user feedback the buttons are tight against each other (no gap) -- 44
+// wide each, side-by-side -- and the gold labels render with a tight
+// 6-px pitch so 6-char labels fit centered. Synthesized from the 32-wide
+// blank sprite by drawWideButton.
+constexpr int kStatsBtnW = 44;
+constexpr int kStatsBtnH = 14;
+constexpr int kStatsBtnPitch = 6; // tight FONT6 pitch for labels
+struct StatsBtn { int x, y; const char *label; };
+constexpr StatsBtn kStatsBtns[4] = {
+	{ 218, 158, "REROLL" },
+	{ 262, 158, "MODIFY" },
+	{ 218, 172, "FACES"  },  // = 158 + kStatsBtnH so rows touch
+	{ 262, 172, "KEEP"   },
+};
+enum StatsBtnId { BTN_REROLL=0, BTN_MODIFY, BTN_FACES, BTN_KEEP };
+
+int statsBtnAt(int lx, int ly) {
+	for (int i = 0; i < 4; ++i) {
+		const auto &b = kStatsBtns[i];
+		if (lx >= b.x && lx < b.x + kStatsBtnW &&
+		    ly >= b.y && ly < b.y + kStatsBtnH)
+			return i;
+	}
+	return -1;
+}
+
+// Modify-screen button row: +, -, OK at bottom-right of the right panel.
+constexpr int kModBtnY = 172;
+struct ModBtn { int x, w; const char *label; };
+constexpr ModBtn kModBtns[3] = {
+	{ 220, 22, "+"  },
+	{ 242, 22, "-"  },  // tight against +
+	{ 264, 42, "OK" },  // tight against -
+};
+enum ModBtnId { BTN_PLUS=0, BTN_MINUS, BTN_OK };
+
+int modBtnAt(int lx, int ly) {
+	if (ly < kModBtnY || ly >= kModBtnY + kStatsBtnH) return -1;
+	for (int i = 0; i < 3; ++i) {
+		if (lx >= kModBtns[i].x && lx < kModBtns[i].x + kModBtns[i].w)
+			return i;
+	}
+	return -1;
+}
+
+// Portrait carousel: horizontal strip of 4 portraits with two arrow buttons
+// stacked vertically to the left (prev on top, next on bottom). The cursor
+// portrait is the leftmost visible cell; the arrows scroll the visible
+// window through all 90 portraits.
+constexpr int kPortraitVisible = 4;
+constexpr int kPortraitStride = 32;
+constexpr int kArrowX = 140;
+constexpr int kArrowYTop = 50;
+constexpr int kArrowYBot = 66;
+constexpr int kArrowW = 16;
+constexpr int kArrowH = 14;
+constexpr int kPortraitStripX = 160;
+constexpr int kPortraitStripY = 50;
+
+void portraitCellXY(int cellIdx, int &x, int &y) {
+	x = kPortraitStripX + cellIdx * kPortraitStride;
+	y = kPortraitStripY;
+}
+
+int portraitCellAt(int lx, int ly) {
+	if (ly < kPortraitStripY || ly >= kPortraitStripY + 32) return -1;
+	int col = (lx - kPortraitStripX) / kPortraitStride;
+	if (col < 0 || col >= kPortraitVisible) return -1;
+	return col;
+}
+
+bool inArrow(int lx, int ly, int y) {
+	return lx >= kArrowX && lx < kArrowX + kArrowW &&
+	       ly >= y && ly < y + kArrowH;
+}
+
+void drawBackButton(GRAPHICS::Graphics &gfx,
+                    const std::vector<uint8_t> &chargenbPx,
+                    std::vector<uint8_t> &fnt6Bytes,
+                    std::vector<uint8_t> &fntBytes) {
+	drawSubIndexed(gfx, chargenbPx, 320, kButtonSrcX, kButtonSrcY,
+	               kButtonW, kButtonH, kBackBtnX, kBackBtnY);
+	// "BACK" centered on the 32-wide button using a tight 6-px pitch (FONT6
+	// glyphs are 8-wide but only ~5 cols visible). 4 chars * 6 = 24 px,
+	// centred at (32 - 24) / 2 = 4. Gold (palette 0x1b).
+	auto &fnt = fnt6Bytes.empty() ? fntBytes : fnt6Bytes;
+	gfx.drawTextColored(fnt, "BACK", kBackBtnX + 4, kBackBtnY + 4, 0x1b, 6);
+}
+
+bool inBackButton(int lx, int ly) {
+	return lx >= kBackBtnX && lx < kBackBtnX + kButtonW &&
+	       ly >= kBackBtnY && ly < kBackBtnY + kButtonH;
+}
+
+// Synthesize a wider button by tiling the 32-wide blank sprite: left half
+// (16 cols) + right half (16 cols) + the seam column repeated to fill the
+// middle. Works because the blank blue button is a left-bordered + middle
+// gradient + right-bordered design -- stretching the mid column reads as
+// "wider button" without an obvious seam.
+void drawWideButton(GRAPHICS::Graphics &gfx,
+                    const std::vector<uint8_t> &src,
+                    int destX, int destY, int destW) {
+	if (src.empty() || destW < kButtonW) return;
+	constexpr int halfW = kButtonW / 2; // 16
+	// Left half from sprite cols 0..15
+	drawSubIndexed(gfx, src, 320, kButtonSrcX, kButtonSrcY,
+	               halfW, kButtonH, destX, destY);
+	// Right half from sprite cols 16..31
+	drawSubIndexed(gfx, src, 320, kButtonSrcX + halfW, kButtonSrcY,
+	               halfW, kButtonH, destX + destW - halfW, destY);
+	// Middle stretch: column-strip from the sprite's seam at col 15.
+	int midSpan = destW - 2 * halfW;
+	for (int dx = 0; dx < midSpan; ++dx) {
+		drawSubIndexed(gfx, src, 320, kButtonSrcX + halfW - 1, kButtonSrcY,
+		               1, kButtonH, destX + halfW + dx, destY);
+	}
+}
+
+// --- rendering -------------------------------------------------------
+
+// Repaint the whole screen from the CPS backdrop + party portraits +
+// step-specific overlay. Cheaper than tracking dirty rects, and the
+// chargen screen isn't perf-sensitive (one update per input event).
+void render(GRAPHICS::Graphics &gfx,
+            const std::vector<uint8_t> &picBytes,
+            std::vector<uint8_t> &fntBytes,
+            std::vector<uint8_t> &fnt6Bytes,
+            const GRAPHICS::Cps &backdrop,
+            const GRAPHICS::Cps &chargenb,
+            const std::vector<uint8_t> &previewIdxPlaceholder,
+            const State &state) {
+	// Backdrop: full CPS or grey fallback.
 	if (!backdrop.pixels.empty())
 		gfx.drawIndexed(backdrop.pixels, backdrop.width, backdrop.height, 0, 0);
 	else
 		gfx.fillRect(0, 0, WIDTH - 1, HEIGHT - 1, 0);
 
-	// Drop a few real portraits into the slots so the user can see the
-	// decoder working. Portrait 0 is the bundled file's blank template, so
-	// preview a meaningful sample: portrait 1 (the bundled wizard), 2, 3, 4.
-	// Slot frames are baked into the CPS backdrop. Measured authoritatively
-	// by scanning the rendered CHARGEN.CPS (byte-identical to source) for
-	// solid frame lines that span the slot's full width.
-	//
-	// Both rows have the SAME layout: left slot at x=16, right slot at x=80,
-	// with a 32-px decorative gap between them. Verified by dark-run scans
-	// at the row frame Ys:
-	//   y=63  (top row top frame):    [16..48], [80..112]
-	//   y=96  (top row bottom frame): [17..48], [80..112]
-	//   y=127 (bot row top frame):    [16..48], [80..112]
-	//   y=160 (bot row bottom frame): [16..48], [80..104]
-	// Portrait top sits at the frame line (y=63 / y=127) -- portrait rows
-	// 0..N have palette index 0xac (stone-blend padding) that merges into
-	// the frame visually, so the visible "content" starts a few rows lower.
-	struct Slot { int x, y; };
-	const Slot slots[4] = { {17, 64}, {81, 64}, {17, 128}, {81, 128} };
-	const uint16_t previewIdx[4] = { 1, 2, 3, 4 };
-	// Set THIRDEYE_CHARGEN_NO_PORTRAITS=1 to render JUST the CPS backdrop
-	// (used to eyeball where the baked-in slot frames actually land).
-	if (!std::getenv("THIRDEYE_CHARGEN_NO_PORTRAITS")) {
-		for (int i = 0; i < 4; ++i) {
-			if (previewIdx[i] < portraits.getNumberOfBitmaps()) {
-				// slots[i] is the portrait top-left (inside the baked frame).
-				gfx.drawImage(picBytes, previewIdx[i],
-				              slots[i].x, slots[i].y,
-				              /*transparency=*/true, /*mirror=*/0,
-				              /*cacheId=*/0);
+	// Slot portraits. Only filled slots draw a portrait -- empty slots show
+	// the bare backdrop. The active slot during a sub-step gets a sparkles
+	// overlay (extracted from CHARGENB.CPS's top decorative strip) so the
+	// user can see which slot they're working on.
+	auto picCopy = picBytes;
+	for (int i = 0; i < 4; ++i) {
+		bool isActive = (state.step != Step::EntryScreen && state.activeSlot == i);
+		if (isActive && !chargenb.pixels.empty()) {
+			// Sparkles: CHARGENB.CPS has a 320x32 sparkle strip across the
+			// top. Take the leftmost 32x32 block (consistent per-slot).
+			drawSubIndexed(gfx, chargenb.pixels, 320, 0, 0, 32, 32,
+			               kSlots[i].x, kSlots[i].y);
+			continue;
+		}
+		if (!state.party[i].filled) continue;
+		uint16_t portraitIdx = static_cast<uint16_t>(state.party[i].portrait);
+		gfx.drawImage(picCopy, portraitIdx,
+		              kSlots[i].x, kSlots[i].y,
+		              /*transparency=*/true, /*mirror=*/0, /*cacheId=*/0);
+	}
+
+	// Step-specific right-panel content.
+	switch (state.step) {
+	case Step::EntryScreen: {
+		if (fntBytes.empty()) break;
+		// Body text positioned to match dosbox: drop-shadowed (+1,+1 black
+		// under white), starts at x=156, y=90, with 10-px line spacing.
+		drawShadowed(gfx, fntBytes, "Select the box of",  156,  90);
+		drawShadowed(gfx, fntBytes, "the character you",  156, 100);
+		drawShadowed(gfx, fntBytes, "wish to create or",  156, 110);
+		drawShadowed(gfx, fntBytes, "view.",               156, 120);
+		break;
+	}
+	case Step::PickRace:
+	case Step::PickClass:
+	case Step::PickAlignment: {
+		if (fntBytes.empty()) break;
+		// Header + list layout is shared across pickers; the per-step bits
+		// are the header text, the entry array, and which cursor selects.
+		const char *header;
+		const char *const *entries;
+		int numEntries, cursor;
+		switch (state.step) {
+		case Step::PickRace:
+			header     = "SELECT RACE:";
+			entries    = kRaceNames.data();
+			numEntries = static_cast<int>(kRaceNames.size());
+			cursor     = state.raceCursor;
+			break;
+		case Step::PickClass:
+			header     = "SELECT CLASS:";
+			entries    = kClassNames.data();
+			numEntries = static_cast<int>(kClassNames.size());
+			cursor     = state.classCursor;
+			break;
+		case Step::PickAlignment:
+		default:
+			header     = "SELECT ALIGNMENT:";
+			entries    = kAlignmentNames.data();
+			numEntries = static_cast<int>(kAlignmentNames.size());
+			cursor     = state.alignmentCursor;
+			break;
+		}
+		// Header in FONT8 (taller), drop-shadowed.
+		drawShadowed(gfx, fntBytes, header, 144, 70);
+		// Entries in FONT6 (uppercase, tighter). 8-px line spacing matches
+		// dosbox exactly; the drop shadow adds 1 px, so going tighter
+		// collides (FONT6 glyphs are 6 tall).
+		auto &listFnt = fnt6Bytes.empty()
+			? const_cast<std::vector<uint8_t> &>(fntBytes) : fnt6Bytes;
+		const int kListX = 144;
+		const int kListY0 = 82;
+		const int kListStep = 8;
+		for (int i = 0; i < numEntries; ++i) {
+			int y = kListY0 + i * kListStep;
+			// Selected row: palette 0x90 (light blue 80,196,252) -- matches
+			// the original chargen's accent colour for the cursor row.
+			uint8_t fg = (i == cursor) ? 0x90 : 0xff;
+			drawShadowed(gfx, listFnt, entries[i], kListX, y, fg);
+		}
+		// BACK button at the bottom-right of the right panel. Sprite from
+		// CHARGENB.CPS, gold "BACK" text overlaid. Click handler treats it
+		// as Esc for the active picker.
+		if (!chargenb.pixels.empty())
+			drawBackButton(gfx, chargenb.pixels, fnt6Bytes, fntBytes);
+		break;
+	}
+	case Step::PickPortrait: {
+		// Horizontal carousel: 4 portraits visible, 2 arrow buttons stacked
+		// to the left. Cursor scrolls through the 90 CHARPICS portraits;
+		// the leftmost visible cell holds the cursor portrait.
+		int total = static_cast<int>(GRAPHICS::Bitmap(picBytes).getNumberOfBitmaps());
+		int strip0 = state.portraitCursor;
+		auto picCopy = picBytes;
+		// Draw 4 visible portraits (wrap if past the end).
+		for (int i = 0; i < kPortraitVisible; ++i) {
+			int idx = (strip0 + i) % total;
+			int x, y; portraitCellXY(i, x, y);
+			gfx.drawImage(picCopy, static_cast<uint16_t>(idx), x, y,
+			              /*transparency=*/true, 0, 0);
+		}
+		// Cursor outline around cell 0 (the chosen portrait).
+		{
+			int x, y; portraitCellXY(0, x, y);
+			gfx.fillRect(x - 1, y - 1, x + 32, y - 1, 0x90);
+			gfx.fillRect(x - 1, y + 32, x + 32, y + 32, 0x90);
+			gfx.fillRect(x - 1, y - 1, x - 1, y + 32, 0x90);
+			gfx.fillRect(x + 32, y - 1, x + 32, y + 32, 0x90);
+		}
+		// Two arrow buttons stacked left: prev (top), next (bottom). Use the
+		// blank-blue 32-wide sprite cropped to 16 wide, with a gold "<" / ">"
+		// label centered.
+		if (!chargenb.pixels.empty()) {
+			drawSubIndexed(gfx, chargenb.pixels, 320, kButtonSrcX, kButtonSrcY,
+			               kArrowW, kArrowH, kArrowX, kArrowYTop);
+			drawSubIndexed(gfx, chargenb.pixels, 320, kButtonSrcX, kButtonSrcY,
+			               kArrowW, kArrowH, kArrowX, kArrowYBot);
+			gfx.drawTextColored(fntBytes, "<", kArrowX + 5, kArrowYTop + 4, 0x1b);
+			gfx.drawTextColored(fntBytes, ">", kArrowX + 5, kArrowYBot + 4, 0x1b);
+		}
+		// Race + class labels + LARGE stats below (matches the "keep" layout
+		// preview the user wants -- portrait at top, info below).
+		if (!fntBytes.empty()) {
+			const auto &c = state.party[state.activeSlot];
+			const char *raceName  = (c.race  >= 0) ? kRaceNames[c.race]   : "";
+			const char *className = (c.klass >= 0) ? kClassNames[c.klass] : "";
+			drawShadowed(gfx, fntBytes, raceName,  176, 92);
+			drawShadowed(gfx, fntBytes, className, 188, 104);
+			auto statLine = [&](int row, const char *name, int value) {
+				char buf[16]; std::snprintf(buf, sizeof(buf), "%s%3d", name, value);
+				drawShadowed(gfx, fntBytes, buf, 140, 120 + row * 12);
+			};
+			auto rightLine = [&](int row, const char *name, int value) {
+				char buf[16]; std::snprintf(buf, sizeof(buf), "%s%3d", name, value);
+				drawShadowed(gfx, fntBytes, buf, 230, 120 + row * 12);
+			};
+			statLine(0, "STR ", c.abil[STR]);
+			statLine(1, "INT ", c.abil[INTEL]);
+			statLine(2, "WIS ", c.abil[WIS]);
+			statLine(3, "DEX ", c.abil[DEX]);
+			statLine(4, "CON ", c.abil[CON]);
+			statLine(5, "CHA ", c.abil[CHA]);
+			rightLine(0, "AC ",  c.ac);
+			rightLine(1, "HP ",  c.hp);
+			rightLine(2, "LVL ", c.lvl);
+		}
+		break;
+	}
+	case Step::EnterName:
+	case Step::ShowStats:
+	case Step::ModifyStats: {
+		if (fntBytes.empty()) break;
+		const auto &c = state.party[state.activeSlot];
+		const bool modifying = (state.step == Step::ModifyStats);
+		// Portrait centered at top of right panel.
+		gfx.drawImage(const_cast<std::vector<uint8_t> &>(picBytes),
+		              static_cast<uint16_t>(c.portrait),
+		              204, 48, /*transparency=*/true, 0, 0);
+		// Race + class labels centered below portrait (FONT8 for size).
+		const char *raceName  = (c.race  >= 0) ? kRaceNames[c.race]   : "";
+		const char *className = (c.klass >= 0) ? kClassNames[c.klass] : "";
+		// Crude horizontal centering by char count * 8 (FONT8 glyph width).
+		auto centerX = [](const char *s, int cx) {
+			return cx - static_cast<int>(std::strlen(s)) * 4;
+		};
+		drawShadowed(gfx, fntBytes, raceName,  centerX(raceName,  220), 88);
+		drawShadowed(gfx, fntBytes, className, centerX(className, 220), 100);
+		// Ability scores in FONT8 (larger), 2 columns: STR..CHA on the left,
+		// AC/HP/LVL on the right. Selected stat's value tinted in ModifyStats.
+		auto abilLine = [&](int row, const char *name, int value, bool sel) {
+			char nameBuf[8]; std::snprintf(nameBuf, sizeof(nameBuf), "%s", name);
+			char valBuf[8];  std::snprintf(valBuf, sizeof(valBuf), "%3d", value);
+			int y = 114 + row * 10;
+			drawShadowed(gfx, fntBytes, nameBuf, 140, y);
+			if (sel)
+				drawShadowed(gfx, fntBytes, valBuf, 172, y, 0x12);
+			else
+				drawShadowed(gfx, fntBytes, valBuf, 172, y);
+		};
+		auto rightLine = [&](int row, const char *name, int value) {
+			char buf[16];
+			std::snprintf(buf, sizeof(buf), "%s%3d", name, value);
+			int y = 114 + row * 10;
+			drawShadowed(gfx, fntBytes, buf, 232, y);
+		};
+		auto &listFnt = fnt6Bytes.empty() ? fntBytes : fnt6Bytes;
+		for (int i = 0; i < NUM_ABIL; ++i) {
+			static const char *names[NUM_ABIL] = {
+				"STR ", "INT ", "WIS ", "DEX ", "CON ", "CHA "
+			};
+			abilLine(i, names[i], c.abil[i],
+			         modifying && state.statCursor == i);
+		}
+		rightLine(0, "AC ",  c.ac);
+		rightLine(1, "HP ",  c.hp);
+		rightLine(2, "LVL ", c.lvl);
+		// Button row(s) -- different per sub-state.
+		if (state.step == Step::EnterName) {
+			// Name-entry prompt over where the buttons would be. "Name: <typed>_"
+			// with the typed text in cyan-ish (palette 0x0b is the chargen cyan)
+			// and a blinking-style trailing underscore as the cursor.
+			drawShadowed(gfx, fntBytes, "Name:", 140, 152);
+			char buf[16];
+			std::snprintf(buf, sizeof(buf), "%s_", c.name);
+			gfx.drawTextColored(fntBytes, buf, 180, 152, 0x12); // red, like dosbox
+			drawShadowed(gfx, listFnt, "Enter=OK  Esc=back", 140, 172);
+		} else if (modifying) {
+			if (!chargenb.pixels.empty()) {
+				for (const auto &b : kModBtns) {
+					drawWideButton(gfx, chargenb.pixels, b.x, kModBtnY, b.w);
+					int textW = static_cast<int>(std::strlen(b.label)) * kStatsBtnPitch;
+					int tx = b.x + (b.w - textW) / 2;
+					gfx.drawTextColored(listFnt, b.label,
+					                    tx, kModBtnY + 4, 0x1b,
+					                    kStatsBtnPitch);
+				}
+			}
+		} else {
+			if (!chargenb.pixels.empty()) {
+				for (const auto &b : kStatsBtns) {
+					drawWideButton(gfx, chargenb.pixels, b.x, b.y, kStatsBtnW);
+					int textW = static_cast<int>(std::strlen(b.label)) * kStatsBtnPitch;
+					int tx = b.x + (kStatsBtnW - textW) / 2;
+					gfx.drawTextColored(listFnt, b.label, tx, b.y + 4, 0x1b,
+					                    kStatsBtnPitch);
+				}
+			}
+		}
+		break;
+	}
+	}
+}
+
+// --- CREATE.SAV writer -----------------------------------------------
+//
+// Overlay our chargen-rolled fields onto the bundled CREATE.SAV template.
+// Field offsets within each 345-byte PC record (rec_off = attr - 2, with
+// the record starting at file 0x16 + pc*345). Verified live by tracing
+// the xfer SOP's player_attrib calls in --debug mode:
+//
+//   rec  attr  size  field
+//     0     2    11   name (NUL-padded)
+//    12    14     1   STR
+//    14    16     1   STR% (exceptional)
+//    16    18     1   INT
+//    18    20     1   WIS
+//    20    22     1   DEX
+//    22    24     1   CON
+//    24    26     1   CHA
+//    25-26 -      2   HP cur (unused by xfer -- set from hmax - lost_hp)
+//    27    29     2   hmax (HP max)
+//    31    33     1   race      (0..11 in our chargen order matches Bob=0)
+//    32    34     1   classes   (single-class 0..5; multi-class uses higher)
+//    33    35     1   alignment (0..8)
+//    34    36     1   portrait  (CHARPICS index)
+//    36    38     1   levels[0] (primary class level)
+//    37    39     1   levels[1]
+//    38    40     1   levels[2]
+//    39    41     4   experience[0] (u32)
+//    43    45     4   experience[1] (-1 if single-class)
+//    47    49     4   experience[2] (-1 if single-class)
+//
+// Class remap: our chargen UI lists FIGHTER/RANGER/PALADIN/MAGE/CLERIC/
+// THIEF, but the EOB1 byte uses F/M/C/T/P/R. Map at write time.
+//
+// HP / XP fall back to plausible level-11 fighter values (matching the
+// default party's Bob); class-aware tables are a follow-up.
+bool writeCreateSav(const std::filesystem::path &chargenDir,
+                    const State &state) {
+	auto path = chargenDir / "CREATE.SAV";
+	auto bytes = readFile(path);
+	if (bytes.size() < 0x894) {
+		std::cout << "  [chargen: " << path
+		          << " missing or too small to overlay]" << std::endl;
+		return false;
+	}
+	constexpr size_t kPcBase = 0x16;
+	constexpr size_t kPcStride = 345;
+	// Chargen class index (UI order) -> EOB1 class byte. F=0,M=1,C=2,T=3,P=4,R=5.
+	// Multi-class (default party's Alice has class byte 6 = some F/T variant)
+	// uses values 6+; the exact bitmask/table isn't RE'd yet, so our chargen
+	// only emits single-class (0..5). TODO: dual/multi-class UI + encoding.
+	constexpr int kClassToEob1[6] = { 0, 5, 4, 1, 2, 3 };
+	// Base XP values per EOB1 class @ level 11 (rough -- adequate for HUD
+	// purposes; the game accepts a wide range here, won't reject the party).
+	auto baseXp = [](int eob1Class) -> uint32_t {
+		switch (eob1Class) {
+		case 0: return 750000;  // FIGHTER
+		case 1: return 600000;  // MAGE
+		case 2: return 375000;  // CLERIC
+		case 3: return 500000;  // THIEF
+		case 4: return 750000;  // PALADIN
+		case 5: return 750000;  // RANGER
+		}
+		return 750000;
+	};
+	auto patchU8 = [&](size_t off, uint8_t v) { bytes[off] = v; };
+	auto patchU16 = [&](size_t off, uint16_t v) {
+		bytes[off]     = v & 0xFF;
+		bytes[off + 1] = (v >> 8) & 0xFF;
+	};
+	auto patchI32 = [&](size_t off, int32_t v) {
+		bytes[off]     = v & 0xFF;
+		bytes[off + 1] = (v >> 8) & 0xFF;
+		bytes[off + 2] = (v >> 16) & 0xFF;
+		bytes[off + 3] = (v >> 24) & 0xFF;
+	};
+	for (int pc = 0; pc < 4; ++pc) {
+		const auto &c = state.party[pc];
+		if (!c.filled) continue;
+		size_t rec = kPcBase + pc * kPcStride;
+		// Name (11 bytes NUL-padded).
+		std::memset(bytes.data() + rec, 0, 11);
+		std::memcpy(bytes.data() + rec, c.name,
+		            std::min<size_t>(10, std::strlen(c.name)));
+		// Ability pairs (max, current); write both bytes to the same value.
+		auto writePair = [&](size_t pairOff, int val) {
+			uint8_t v = static_cast<uint8_t>(std::max(0, std::min(99, val)));
+			patchU8(rec + pairOff,     v);
+			patchU8(rec + pairOff + 1, v);
+		};
+		writePair(11, c.abil[STR]);
+		writePair(13, 0);              // STR%
+		writePair(15, c.abil[INTEL]);
+		writePair(17, c.abil[WIS]);
+		writePair(19, c.abil[DEX]);
+		writePair(21, c.abil[CON]);
+		writePair(23, c.abil[CHA]);
+		// HP: write both cur (rec+25) and max (rec+27) -- the xfer reads
+		// only max, but Bob's template has them equal so let's match.
+		uint16_t hp = static_cast<uint16_t>(std::max(0, c.hp));
+		patchU16(rec + 25, hp);
+		patchU16(rec + 27, hp);
+		// race / class / alignment / portrait
+		int eob1Class = (c.klass >= 0 && c.klass < 6) ? kClassToEob1[c.klass] : 0;
+		patchU8(rec + 31, static_cast<uint8_t>(std::max(0, c.race)));
+		patchU8(rec + 32, static_cast<uint8_t>(eob1Class));
+		patchU8(rec + 33, static_cast<uint8_t>(std::max(0, c.alignment)));
+		patchU8(rec + 34, static_cast<uint8_t>(c.portrait & 0xff));
+		// levels[3]: single-class -> [c.lvl, 0, 0]
+		patchU8(rec + 36, static_cast<uint8_t>(c.lvl));
+		patchU8(rec + 37, 0);
+		patchU8(rec + 38, 0);
+		// experience[3]: XP1 = class-baseline, XP2/XP3 = -1
+		patchI32(rec + 39, static_cast<int32_t>(baseXp(eob1Class)));
+		patchI32(rec + 43, -1);
+		patchI32(rec + 47, -1);
+	}
+	std::ofstream f(path, std::ios::binary | std::ios::trunc);
+	if (!f) {
+		std::cout << "  [chargen: failed to open " << path
+		          << " for write]" << std::endl;
+		return false;
+	}
+	f.write(reinterpret_cast<const char *>(bytes.data()),
+	        static_cast<std::streamsize>(bytes.size()));
+	std::cout << "  [chargen: wrote " << bytes.size() << " bytes to "
+	          << path << "]" << std::endl;
+	return true;
+}
+
+// --- input handling --------------------------------------------------
+
+void handleEntryEvent(const SDL_Event &e, GRAPHICS::Graphics &gfx,
+                      State &state) {
+	if (e.type == SDL_KEYDOWN) {
+		auto k = e.key.keysym.sym;
+		if (k == SDLK_RETURN || k == SDLK_KP_ENTER || k == SDLK_p) {
+			state.done = true;          // proceed to game
+		} else if (k == SDLK_ESCAPE) {
+			// Cancel: hand control back to the engine with a "go to title
+			// menu" signal so the boot loop can reset mem[1264] = INTR.
+			state.done      = true;
+			state.cancelled = true;
+		}
+	} else if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
+		int lx, ly;
+		mousePos(gfx, e, lx, ly);
+		int s = slotAt(lx, ly);
+		if (s >= 0) {
+			state.step       = Step::PickRace;
+			state.activeSlot = s;
+			state.raceCursor = (state.party[s].race >= 0)
+			                        ? state.party[s].race : 0;
+		}
+	}
+}
+
+// Shared list-picker input handler. Returns true if the user committed,
+// false if cancelled (Esc) or no transition.
+struct PickerResult { bool committed = false; bool cancelled = false; };
+
+PickerResult handleListPicker(const SDL_Event &e, GRAPHICS::Graphics &gfx,
+                              int &cursor, int numEntries) {
+	PickerResult res;
+	if (e.type == SDL_KEYDOWN) {
+		auto k = e.key.keysym.sym;
+		if (k == SDLK_UP)
+			cursor = (cursor + numEntries - 1) % numEntries;
+		else if (k == SDLK_DOWN)
+			cursor = (cursor + 1) % numEntries;
+		else if (k == SDLK_RETURN || k == SDLK_KP_ENTER)
+			res.committed = true;
+		else if (k == SDLK_ESCAPE)
+			res.cancelled = true;
+	} else if (e.type == SDL_MOUSEMOTION) {
+		int lx, ly;
+		mousePos(gfx, e, lx, ly);
+		// List rendered at y=82 + i*8 (FONT6, 8-px line height).
+		if (lx >= 140 && lx < 305 && ly >= 82 && ly < 82 + 8 * numEntries) {
+			int idx = (ly - 82) / 8;
+			if (idx >= 0 && idx < numEntries)
+				cursor = idx;
+		}
+	} else if (e.type == SDL_MOUSEBUTTONDOWN &&
+	           e.button.button == SDL_BUTTON_LEFT) {
+		int lx, ly;
+		mousePos(gfx, e, lx, ly);
+		// BACK button takes priority — it's overlaid on the panel.
+		if (inBackButton(lx, ly)) {
+			res.cancelled = true;
+		} else if (lx >= 140 && lx < 305 && ly >= 82 &&
+		           ly < 82 + 8 * numEntries) {
+			int idx = (ly - 82) / 8;
+			if (idx >= 0 && idx < numEntries) {
+				cursor = idx;
+				res.committed = true;
 			}
 		}
 	}
+	return res;
+}
 
-	// Right-side info panel text. The original screenshot reads:
-	//   "Select the box of the character you wish to create or view."
-	// Right panel inner area sits at roughly x=128..308, y=50..180 in the
-	// CPS backdrop. drawText uses the live palette; glyphs are masks tinted
-	// to the current text colour (white by default).
-	if (!fntBytes.empty()) {
-		gfx.drawText(fntBytes, "Select the box of",   140,  60);
-		gfx.drawText(fntBytes, "the character you",   140,  72);
-		gfx.drawText(fntBytes, "wish to create or",   140,  84);
-		gfx.drawText(fntBytes, "view.",                140,  96);
-		gfx.drawText(fntBytes, "(per-slot flow WIP)", 140, 120);
-		gfx.drawText(fntBytes, "P/Enter = play,",     140, 152);
-		gfx.drawText(fntBytes, "Esc = cancel.",       140, 164);
+void handleRacePickEvent(const SDL_Event &e, GRAPHICS::Graphics &gfx,
+                         State &state) {
+	auto r = handleListPicker(e, gfx, state.raceCursor,
+	                          static_cast<int>(kRaceNames.size()));
+	if (r.committed) {
+		state.party[state.activeSlot].race = state.raceCursor;
+		std::cout << "  [chargen: slot " << state.activeSlot
+		          << " race set to " << kRaceNames[state.raceCursor]
+		          << "]" << std::endl;
+		// Advance to class picker; the active slot stays the same. Reset
+		// the class cursor to the previously-chosen class if any, else 0.
+		state.classCursor = (state.party[state.activeSlot].klass >= 0)
+		                        ? state.party[state.activeSlot].klass : 0;
+		state.step = Step::PickClass;
+	} else if (r.cancelled) {
+		state.step       = Step::EntryScreen;
+		state.activeSlot = -1;
+	}
+}
+
+void handleClassPickEvent(const SDL_Event &e, GRAPHICS::Graphics &gfx,
+                          State &state) {
+	auto r = handleListPicker(e, gfx, state.classCursor,
+	                          static_cast<int>(kClassNames.size()));
+	if (r.committed) {
+		state.party[state.activeSlot].klass = state.classCursor;
+		std::cout << "  [chargen: slot " << state.activeSlot
+		          << " class set to " << kClassNames[state.classCursor]
+		          << "]" << std::endl;
+		// Advance to alignment picker; active slot stays.
+		state.alignmentCursor =
+			(state.party[state.activeSlot].alignment >= 0)
+			    ? state.party[state.activeSlot].alignment : 0;
+		state.step = Step::PickAlignment;
+	} else if (r.cancelled) {
+		// Step back to race picker (so user can change race without
+		// retracing everything). Active slot stays.
+		state.step = Step::PickRace;
+	}
+}
+
+void handleAlignmentPickEvent(const SDL_Event &e, GRAPHICS::Graphics &gfx,
+                              State &state, std::mt19937 &rng) {
+	auto r = handleListPicker(e, gfx, state.alignmentCursor,
+	                          static_cast<int>(kAlignmentNames.size()));
+	if (r.committed) {
+		state.party[state.activeSlot].alignment = state.alignmentCursor;
+		std::cout << "  [chargen: slot " << state.activeSlot
+		          << " alignment set to "
+		          << kAlignmentNames[state.alignmentCursor] << "]"
+		          << std::endl;
+		// Roll stats + advance to portrait carousel. After the user picks
+		// a portrait, the flow lands on ShowStats with REROLL/MODIFY/
+		// FACES/KEEP buttons.
+		rollStats(state.party[state.activeSlot], rng);
+		state.portraitCursor =
+			(state.party[state.activeSlot].portrait >= 0)
+				? state.party[state.activeSlot].portrait : 0;
+		state.step = Step::PickPortrait;
+	} else if (r.cancelled) {
+		state.step = Step::PickClass;
+	}
+}
+
+void enterNameStep(State &state) {
+	// Pre-seed name input with the previous name (if any) so KEEP -> name
+	// retains what was typed; otherwise blank.
+	state.step = Step::EnterName;
+	// SDL_StartTextInput must be enabled to receive SDL_TEXTINPUT events.
+	SDL_StartTextInput();
+}
+
+void handleStatsEvent(const SDL_Event &e, GRAPHICS::Graphics &gfx,
+                      State &state, std::mt19937 &rng) {
+	if (e.type == SDL_KEYDOWN) {
+		auto k = e.key.keysym.sym;
+		if (k == SDLK_r)
+			rollStats(state.party[state.activeSlot], rng);
+		else if (k == SDLK_RETURN || k == SDLK_KP_ENTER ||
+		         k == SDLK_k) {
+			// KEEP -> proceed to name entry. The slot only flips to
+			// `filled` once a name is committed and CREATE.SAV is written.
+			enterNameStep(state);
+		} else if (k == SDLK_ESCAPE) {
+			// Back to alignment.
+			state.step = Step::PickAlignment;
+		}
+	} else if (e.type == SDL_MOUSEBUTTONDOWN &&
+	           e.button.button == SDL_BUTTON_LEFT) {
+		int lx, ly;
+		mousePos(gfx, e, lx, ly);
+		int btn = statsBtnAt(lx, ly);
+		switch (btn) {
+		case BTN_REROLL:
+			rollStats(state.party[state.activeSlot], rng);
+			break;
+		case BTN_MODIFY:
+			state.statCursor = 0;
+			state.step = Step::ModifyStats;
+			break;
+		case BTN_FACES:
+			state.portraitCursor = state.party[state.activeSlot].portrait;
+			state.step = Step::PickPortrait;
+			break;
+		case BTN_KEEP:
+			enterNameStep(state);
+			break;
+		default: break;
+		}
+	}
+}
+
+void handleNameEvent(const SDL_Event &e, State &state,
+                     const std::filesystem::path &chargenDir) {
+	auto &c = state.party[state.activeSlot];
+	if (e.type == SDL_TEXTINPUT) {
+		// Append printable ASCII (filter the rest -- DOS save format is
+		// 7-bit). Cap at 10 chars + NUL.
+		for (const char *p = e.text.text; *p; ++p) {
+			size_t len = std::strlen(c.name);
+			if (len >= 10) break;
+			unsigned char ch = static_cast<unsigned char>(*p);
+			if (ch >= 0x20 && ch < 0x7f) {
+				c.name[len] = static_cast<char>(ch);
+				c.name[len + 1] = '\0';
+			}
+		}
+	} else if (e.type == SDL_KEYDOWN) {
+		auto k = e.key.keysym.sym;
+		if (k == SDLK_BACKSPACE) {
+			size_t len = std::strlen(c.name);
+			if (len > 0) c.name[len - 1] = '\0';
+		} else if (k == SDLK_RETURN || k == SDLK_KP_ENTER) {
+			if (std::strlen(c.name) == 0) {
+				// Empty name -- give the slot a default so we don't write
+				// a zero-name record.
+				std::snprintf(c.name, sizeof(c.name), "PC%d", state.activeSlot + 1);
+			}
+			c.filled = true;
+			SDL_StopTextInput();
+			std::cout << "  [chargen: slot " << state.activeSlot
+			          << " name=\"" << c.name << "\" -- writing CREATE.SAV]"
+			          << std::endl;
+			writeCreateSav(chargenDir, state);
+			state.step       = Step::EntryScreen;
+			state.activeSlot = -1;
+		} else if (k == SDLK_ESCAPE) {
+			SDL_StopTextInput();
+			state.step = Step::ShowStats; // back to stats
+		}
+	}
+}
+
+void handlePortraitPickEvent(const SDL_Event &e, GRAPHICS::Graphics &gfx,
+                             State &state,
+                             const std::vector<uint8_t> &picBytes) {
+	int total = static_cast<int>(GRAPHICS::Bitmap(const_cast<std::vector<uint8_t> &>(picBytes)).getNumberOfBitmaps());
+	if (total <= 0) total = 1;
+	auto commit = [&]() {
+		state.party[state.activeSlot].portrait = state.portraitCursor;
+		std::cout << "  [chargen: slot " << state.activeSlot
+		          << " portrait set to " << state.portraitCursor << "]"
+		          << std::endl;
+		state.step = Step::ShowStats;
+	};
+	auto scrollPrev = [&]() {
+		state.portraitCursor = (state.portraitCursor + total - 1) % total;
+	};
+	auto scrollNext = [&]() {
+		state.portraitCursor = (state.portraitCursor + 1) % total;
+	};
+	if (e.type == SDL_KEYDOWN) {
+		auto k = e.key.keysym.sym;
+		if (k == SDLK_LEFT || k == SDLK_UP) scrollPrev();
+		else if (k == SDLK_RIGHT || k == SDLK_DOWN) scrollNext();
+		else if (k == SDLK_PAGEDOWN)
+			state.portraitCursor = std::min(total - 1,
+			                                state.portraitCursor + kPortraitVisible);
+		else if (k == SDLK_PAGEUP)
+			state.portraitCursor = std::max(0,
+			                                state.portraitCursor - kPortraitVisible);
+		else if (k == SDLK_RETURN || k == SDLK_KP_ENTER) commit();
+		else if (k == SDLK_ESCAPE) state.step = Step::ShowStats;
+	} else if (e.type == SDL_MOUSEBUTTONDOWN &&
+	           e.button.button == SDL_BUTTON_LEFT) {
+		int lx, ly;
+		mousePos(gfx, e, lx, ly);
+		if (inArrow(lx, ly, kArrowYTop)) scrollPrev();
+		else if (inArrow(lx, ly, kArrowYBot)) scrollNext();
+		else {
+			int cell = portraitCellAt(lx, ly);
+			if (cell >= 0) {
+				// Clicking any visible portrait sets the cursor to it and
+				// commits in one step.
+				state.portraitCursor = (state.portraitCursor + cell) % total;
+				commit();
+			}
+		}
+	}
+}
+
+void handleModifyEvent(const SDL_Event &e, GRAPHICS::Graphics &gfx,
+                       State &state) {
+	auto &c = state.party[state.activeSlot];
+	auto bump = [&](int delta) {
+		int &v = c.abil[state.statCursor];
+		v = std::max(3, std::min(18, v + delta));
+	};
+	if (e.type == SDL_KEYDOWN) {
+		auto k = e.key.keysym.sym;
+		if (k == SDLK_UP)
+			state.statCursor = (state.statCursor + NUM_ABIL - 1) % NUM_ABIL;
+		else if (k == SDLK_DOWN)
+			state.statCursor = (state.statCursor + 1) % NUM_ABIL;
+		else if (k == SDLK_RIGHT || k == SDLK_PLUS || k == SDLK_EQUALS)
+			bump(+1);
+		else if (k == SDLK_LEFT || k == SDLK_MINUS)
+			bump(-1);
+		else if (k == SDLK_RETURN || k == SDLK_KP_ENTER || k == SDLK_ESCAPE)
+			state.step = Step::ShowStats;
+	} else if (e.type == SDL_MOUSEBUTTONDOWN &&
+	           e.button.button == SDL_BUTTON_LEFT) {
+		int lx, ly;
+		mousePos(gfx, e, lx, ly);
+		int btn = modBtnAt(lx, ly);
+		if (btn == BTN_PLUS)  bump(+1);
+		else if (btn == BTN_MINUS) bump(-1);
+		else if (btn == BTN_OK)    state.step = Step::ShowStats;
+		else {
+			// Click on a stat row picks that stat as cursor.
+			// Rows at y = 108..108+8*5; left column starts at x=144.
+			if (lx >= 144 && lx < 232 && ly >= 108 && ly < 108 + 8 * NUM_ABIL) {
+				int row = (ly - 108) / 8;
+				if (row >= 0 && row < NUM_ABIL) state.statCursor = row;
+			}
+		}
+	}
+}
+
+} // namespace
+
+bool THIRDEYE::chargen::runChargenScreen(GRAPHICS::Graphics &gfx,
+                                         const std::filesystem::path &chargenDir) {
+	// Required chargen assets sit beside the game's .RES (e.g. ../data/CHARGEN/).
+	// PALETTE.COL: 256-colour 6-bit VGA palette (768 bytes, no header).
+	// CHARPICS.BMP: 90 portrait sheet (see graphics/bitmap.cpp).
+	// FONT8.FNT: 8x8 bit-packed font with lowercase glyphs (FONT6 is
+	//            uppercase-only). The race-picker uses uppercase, but
+	//            FONT8 handles both -- one font for the whole flow.
+	auto palBytes = readFile(chargenDir / "PALETTE.COL");
+	auto picBytes = readFile(chargenDir / "CHARPICS.BMP");
+	auto fntBytes = readFile(chargenDir / "FONT8.FNT");  // body text (mixed case)
+	auto fnt6Bytes = readFile(chargenDir / "FONT6.FNT"); // menu list (uppercase, tighter)
+	if (palBytes.empty() || picBytes.empty()) {
+		std::cout << "  [chargen: missing assets in " << chargenDir
+		          << " (need PALETTE.COL + CHARPICS.BMP); skipping screen]"
+		          << std::endl;
+		// Caller proceeds with whatever CREATE.SAV is on disk (accept).
+		return true;
 	}
 
+	gfx.loadPalette(palBytes, /*isRes=*/false);
+	GRAPHICS::Bitmap portraits(picBytes);
+	GRAPHICS::Cps backdrop = GRAPHICS::loadCps(chargenDir / "CHARGEN.CPS");
+	// CHARGENB.CPS holds the chargen UI sprites (blank blue/red buttons,
+	// PLAY/DELETE composites, stone separators, sparkles). We grab the
+	// blank blue button at (128,128,32,14) and overlay text to compose
+	// BACK / KEEP / REROLL / etc.
+	GRAPHICS::Cps chargenb = GRAPHICS::loadCps(chargenDir / "CHARGENB.CPS");
+
+	// Sample portraits shown in empty slots until the per-slot flow finishes.
+	// (Once a real character is rolled, we'll use its chosen portrait instead.)
+	std::vector<uint8_t> previewIdx = { 1, 2, 3, 4 };
+
+	State state;
+	std::mt19937 rng{std::random_device{}()};
+	// Headless verification: skip straight into a sub-step to snapshot it.
+	if (const char *s = std::getenv("THIRDEYE_CHARGEN_STEP")) {
+		std::string step = s;
+		if (step == "race") {
+			state.step = Step::PickRace; state.activeSlot = 0;
+		} else if (step == "class") {
+			state.step = Step::PickClass; state.activeSlot = 0;
+		} else if (step == "alignment") {
+			state.step = Step::PickAlignment; state.activeSlot = 0;
+		} else if (step == "stats") {
+			state.activeSlot = 0;
+			state.party[0].race  = 0;   // HUMAN MALE
+			state.party[0].klass = 0;   // FIGHTER
+			state.party[0].alignment = 0;
+			rollStats(state.party[0], rng);
+			state.step = Step::ShowStats;
+		} else if (step == "modify") {
+			state.activeSlot = 0;
+			state.party[0].race  = 0;
+			state.party[0].klass = 0;
+			state.party[0].alignment = 0;
+			rollStats(state.party[0], rng);
+			state.step = Step::ModifyStats;
+		} else if (step == "portrait" || step == "faces") {
+			state.activeSlot = 0;
+			state.party[0].race  = 0;
+			state.party[0].klass = 0;
+			state.party[0].alignment = 0;
+			state.step = Step::PickPortrait;
+		} else if (step == "name") {
+			state.activeSlot = 0;
+			state.party[0].race  = 0;
+			state.party[0].klass = 0;
+			state.party[0].alignment = 0;
+			rollStats(state.party[0], rng);
+			enterNameStep(state);
+		} else if (step == "write") {
+			// Headless: roll char + write CREATE.SAV in one shot.
+			for (int pc = 0; pc < 4; ++pc) {
+				state.party[pc].race  = 0;
+				state.party[pc].klass = 0;
+				state.party[pc].alignment = 0;
+				rollStats(state.party[pc], rng);
+				std::snprintf(state.party[pc].name,
+				              sizeof(state.party[pc].name),
+				              "Foo%d", pc + 1);
+				state.party[pc].filled = true;
+			}
+			writeCreateSav(chargenDir, state);
+			state.done = true;
+		}
+	}
+	render(gfx, picBytes, fntBytes, fnt6Bytes, backdrop, chargenb, previewIdx, state);
 	gfx.update();
-	std::cout << "  [chargen: entry screen up -- press P/Enter to play, "
-	             "Esc to cancel]" << std::endl;
-	// Headless / regression aid: drop a snapshot of the rendered screen when
-	// the env var is set. Lets the autowalk + dump harness verify the
-	// portraits land in the right slots without driving the live UI.
+	std::cout << "  [chargen: entry screen up -- click a slot to pick a "
+	             "race, P/Enter to play, Esc to cancel]" << std::endl;
 	if (const char *p = std::getenv("THIRDEYE_DUMP_CHARGEN"))
 		gfx.saveScreenshot(p);
 
-	// Wait for the user to commit or cancel. Cancel is best-effort: returning
-	// without resetting the SOP's mem[1264] still re-enters `start` in mode
-	// CHGN, so we currently always fall through to the game. A proper cancel
-	// path needs to write mem[1264] = MODE_INTR -- deferred with the rest of
-	// the chargen flow.
+	// Event loop. Re-render after any input that mutates state. Cancel and
+	// accept both currently fall through to whichever CREATE.SAV is on disk;
+	// a proper accept path will write the rolled party out.
 	SDL_Event event;
-	bool done = false;
-	while (!done) {
+	while (!state.done) {
 		while (SDL_PollEvent(&event)) {
 			if (event.type == SDL_QUIT)
 				throw THIRDEYE::runtime::QuitRequested{};
-			if (event.type == SDL_KEYDOWN) {
-				auto k = event.key.keysym.sym;
-				if (k == SDLK_RETURN || k == SDLK_KP_ENTER ||
-				    k == SDLK_p      || k == SDLK_ESCAPE)
-					done = true;
+			Step before = state.step;
+			int beforeRace = state.raceCursor;
+			int beforeClass = state.classCursor;
+			int beforeAlign = state.alignmentCursor;
+			int beforeStat = state.statCursor;
+			int beforePortrait = state.portraitCursor;
+			int beforeSlot = state.activeSlot;
+			// Snapshot the active char's name length so typed chars / backspace
+			// drive a redraw.
+			size_t beforeNameLen = (state.activeSlot >= 0)
+				? std::strlen(state.party[state.activeSlot].name) : 0;
+			int beforeStr = state.party[std::max(0, state.activeSlot)].abil[STR];
+			// Snapshot the whole ability vector so MODIFY +/- triggers a redraw
+			// even when only one ability changes (and especially when the
+			// "STR" element happens to be the same after a +1/-1 round-trip).
+			int beforeAbilSum = 0;
+			for (int i = 0; i < NUM_ABIL; ++i)
+				beforeAbilSum += state.party[std::max(0, state.activeSlot)].abil[i];
+			switch (state.step) {
+			case Step::EntryScreen:   handleEntryEvent(event, gfx, state); break;
+			case Step::PickRace:      handleRacePickEvent(event, gfx, state); break;
+			case Step::PickClass:     handleClassPickEvent(event, gfx, state); break;
+			case Step::PickAlignment: handleAlignmentPickEvent(event, gfx, state, rng); break;
+			case Step::ShowStats:     handleStatsEvent(event, gfx, state, rng); break;
+			case Step::ModifyStats:   handleModifyEvent(event, gfx, state); break;
+			case Step::PickPortrait:  handlePortraitPickEvent(event, gfx, state, picBytes); break;
+			case Step::EnterName:     handleNameEvent(event, state, chargenDir); break;
 			}
+			int afterStr = state.party[std::max(0, state.activeSlot)].abil[STR];
+			int afterAbilSum = 0;
+			for (int i = 0; i < NUM_ABIL; ++i)
+				afterAbilSum += state.party[std::max(0, state.activeSlot)].abil[i];
+			size_t afterNameLen = (state.activeSlot >= 0)
+				? std::strlen(state.party[state.activeSlot].name) : 0;
+			if (state.step != before || state.raceCursor != beforeRace ||
+			    state.classCursor != beforeClass ||
+			    state.alignmentCursor != beforeAlign ||
+			    state.statCursor != beforeStat ||
+			    state.portraitCursor != beforePortrait ||
+			    state.activeSlot != beforeSlot ||
+			    afterStr != beforeStr ||
+			    afterAbilSum != beforeAbilSum ||
+			    afterNameLen != beforeNameLen)
+				render(gfx, picBytes, fntBytes, fnt6Bytes, backdrop, chargenb, previewIdx, state);
 		}
 		gfx.update();
 		SDL_Delay(16);
 	}
+	return !state.cancelled;
 }
