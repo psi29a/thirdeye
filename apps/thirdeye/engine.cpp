@@ -8,6 +8,7 @@
 #include "vm/events.hpp"
 #include "savegame/transfer.hpp"
 #include "savegame/lvl_tmp.hpp"
+#include "chargen/chargen_screen.hpp"
 #include "runtime/internal.hpp"
 
 #include <components/files/configurationmanager.hpp>
@@ -67,6 +68,9 @@ void THIRDEYE::Engine::setSkipIntro(bool skipIntro) {
 }
 void THIRDEYE::Engine::setChargen(bool chargen) {
 	mChargen = chargen;
+}
+void THIRDEYE::Engine::setChargenTest(bool chargenTest) {
+	mChargenTest = chargenTest;
 }
 
 // The game-data path may be either a directory (in which case we append the
@@ -712,13 +716,21 @@ void THIRDEYE::Engine::runExternalProgram(const std::string &program,
 	           p.find("charge") != std::string::npos) {
 		// "Gather a New Party": CHGEN.EXE builds a party and writes CHARGEN\CREATE.SAV,
 		// then chains back with mode "CHGN" so start's xfer object reads it and enters
-		// the game. We have no char-gen UI yet, so we reuse the existing CREATE.SAV
-		// (the default party Bob/Carol/Ted/Alice) -- the transfer (player_attrib etc.)
-		// then runs for real. TODO: an actual character-creation UI to author it.
+		// the game. Drive our in-engine stand-in for the entry screen; the per-slot
+		// flow (race -> ... -> name) is still pending, so on accept we fall through
+		// to whichever CREATE.SAV is already on disk (Westwood's sample party on a
+		// fresh install) and the transfer (player_attrib etc.) runs for real.
+		std::filesystem::path chargenDir =
+		    resource.resourcePath().parent_path() / "CHARGEN";
 		std::cout << "  [program chain: \"" << program
-		          << "\" -> no char-gen UI yet; using the existing CHARGEN\\CREATE.SAV "
-		             "(default party) and entering the game]"
-		          << std::endl;
+		          << "\" -> entering chargen screen (dir: " << chargenDir
+		          << ", gfx=" << (gfx ? "yes" : "no") << ")]" << std::endl;
+		if (gfx)
+			THIRDEYE::chargen::runChargenScreen(*gfx, chargenDir);
+		else
+			std::cout << "  [program chain: \"" << program
+			          << "\" -> headless; using the existing CREATE.SAV]"
+			          << std::endl;
 	} else {
 		std::cout << "  [program chain: \"" << program
 		          << "\" -> no thirdeye equivalent yet; re-booting start]"
@@ -825,6 +837,21 @@ void THIRDEYE::Engine::go() {
 		auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
 		              std::chrono::steady_clock::now() - _t0).count();
 		std::cout << "[timing] resource load: " << ms << " ms" << std::endl;
+	}
+
+	// --chargen-test: render the chargen entry screen in isolation (no SOP, no
+	// menu, no transfer). Used to verify the chargen UI / portrait decoder
+	// without driving the title menu, since headless autowalk doesn't currently
+	// reach the menu's mouse-region handler.
+	if (mChargenTest) {
+		GRAPHICS::Graphics gfx(mScale);
+		std::filesystem::path chargenDir = resFile.parent_path() / "CHARGEN";
+		try {
+			THIRDEYE::chargen::runChargenScreen(gfx, chargenDir);
+		} catch (const THIRDEYE::runtime::QuitRequested &) {
+			std::cout << "\nWindow closed -- quitting." << std::endl;
+		}
+		return;
 	}
 
 	// --vm (or the --skip-* flags, which only make sense here): boot the SOP

@@ -23,7 +23,7 @@ add_thirdeye_dir (sound
     )
 
 add_thirdeye_dir (graphics
-    graphics font palette bitmap
+    graphics font palette bitmap cps
     )
 
 add_thirdeye_dir (vm
@@ -35,7 +35,7 @@ add_thirdeye_dir (savegame
     )
 
 add_thirdeye_dir (chargen
-    item_dat itemtype_dat charpics
+    item_dat itemtype_dat chargen_screen
     )
 
 add_thirdeye_dir (runtime

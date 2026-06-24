@@ -159,6 +159,12 @@ public:
 			int posY, bool transparency = false, int mirror = 0,
 			uint32_t cacheId = 0);
 
+	// Blit a raw indexed (8 bpp) pixel buffer onto the screen at (posX, posY),
+	// using the live palette. Used for full-screen CPS backdrops and any other
+	// art that's already a flat width*height byte stream (no RLE container).
+	void drawIndexed(const std::vector<uint8_t> &pixels, int width, int height,
+			int posX, int posY);
+
 	// Constrain subsequent blits to a rectangle on the screen surface (used to
 	// clip the dungeon 3D view to its window so wide wall shapes don't bleed into
 	// the character panels). clearClip() removes the constraint.

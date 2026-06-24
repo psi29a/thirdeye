@@ -216,6 +216,38 @@ void GRAPHICS::Graphics::clearClip() {
 	SDL_SetClipRect(mScreen, nullptr);
 }
 
+// Blit a flat width*height byte buffer (8 bpp indexed) onto the screen
+// surface using the live palette. Used for CPS backdrops and any other art
+// that comes as raw indexed pixels (no RLE container). Empty pixel buffers
+// are a no-op so a missing/short backdrop doesn't crash the caller.
+void GRAPHICS::Graphics::drawIndexed(const std::vector<uint8_t> &pixels,
+                                      int width, int height, int posX, int posY) {
+	if (pixels.empty() || width <= 0 || height <= 0) return;
+	if (static_cast<size_t>(width) * height > pixels.size()) return;
+
+	SDL_Surface *surface = SDL_CreateRGBSurfaceFrom(
+		const_cast<uint8_t *>(pixels.data()), width, height, 8, width,
+		0, 0, 0, 0);
+	if (!surface) return;
+	SDL_SetPaletteColors(surface->format->palette, mPalette->colors, 0, 256);
+
+	SDL_Rect dest = { posX, posY, width, height };
+	SDL_BlitSurface(surface, NULL, mScreen, &dest);
+	SDL_FreeSurface(surface);
+
+	// Keep mBackdrop in sync with the visible art so later text-window restores
+	// don't ghost over the CPS. Matches drawImage's mirror-rect logic.
+	if (mBackdrop == nullptr)
+		mBackdrop = SDL_CreateRGBSurface(0, WIDTH, HEIGHT, 32, 0, 0, 0, 0);
+	SDL_Rect clip;
+	SDL_GetClipRect(mScreen, &clip);
+	SDL_Rect mirror_rect = dest;
+	if (SDL_IntersectRect(&mirror_rect, &clip, &mirror_rect)) {
+		SDL_SetSurfaceBlendMode(mScreen, SDL_BLENDMODE_NONE);
+		SDL_BlitSurface(mScreen, &mirror_rect, mBackdrop, &mirror_rect);
+	}
+}
+
 // The compass occupies the bottom-left of the HUD, left of the movement arrows
 // (which start at x=117); the disc spans y~120-168. Capture/restore that rect.
 static const SDL_Rect kCompassRect = { 0, 120, 116, 49 };

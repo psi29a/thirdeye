@@ -44,6 +44,7 @@ class Engine
 	bool mSkipMenu = false;  // boot straight into the game (skip the title menu)
 	bool mSkipIntro = false; // skip the intro cinematic
 	bool mChargen   = false; // --chargen: force the chargen path even if a save exists
+	bool mChargenTest = false; // --chargen-test: run chargen entry screen in isolation
 	bool mRenderer;
 	uint8_t mGame;
 	uint16_t mScale;
@@ -75,6 +76,7 @@ public:
 	void setSkipMenu(bool skipMenu);
 	void setSkipIntro(bool skipIntro);
 	void setChargen(bool chargen);
+	void setChargenTest(bool chargenTest);
 	void setDebugMode(bool debug);
 	void setSoundUsage(bool nosound);
 	void setRenderer(bool renderer);
