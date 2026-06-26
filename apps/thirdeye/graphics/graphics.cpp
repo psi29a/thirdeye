@@ -221,7 +221,8 @@ void GRAPHICS::Graphics::clearClip() {
 // that comes as raw indexed pixels (no RLE container). Empty pixel buffers
 // are a no-op so a missing/short backdrop doesn't crash the caller.
 void GRAPHICS::Graphics::drawIndexed(const std::vector<uint8_t> &pixels,
-                                      int width, int height, int posX, int posY) {
+                                      int width, int height, int posX, int posY,
+                                      bool transparent) {
 	if (pixels.empty() || width <= 0 || height <= 0) return;
 	if (static_cast<size_t>(width) * height > pixels.size()) return;
 
@@ -230,6 +231,11 @@ void GRAPHICS::Graphics::drawIndexed(const std::vector<uint8_t> &pixels,
 		0, 0, 0, 0);
 	if (!surface) return;
 	SDL_SetPaletteColors(surface->format->palette, mPalette->colors, 0, 256);
+	if (transparent) {
+		// Palette index 0 -> transparent. Sparkles use this so the slot
+		// frame shows through the empty parts of the sprite.
+		SDL_SetColorKey(surface, SDL_TRUE, 0);
+	}
 
 	SDL_Rect dest = { posX, posY, width, height };
 	SDL_BlitSurface(surface, NULL, mScreen, &dest);

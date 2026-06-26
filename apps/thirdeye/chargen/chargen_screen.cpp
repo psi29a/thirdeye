@@ -92,6 +92,7 @@ struct State {
 	int  alignmentCursor  = 0;    // 0..8  in PickAlignment
 	int  statCursor       = 0;    // 0..5  in ModifyStats (STR..CHA)
 	int  portraitCursor   = 0;    // 0..89 in PickPortrait (linear index)
+	int  sparkleFrame     = 0;    // animation tick for active-slot sparkles
 	CharSheet party[4];
 	bool done             = false; // exit chargen entirely
 	bool cancelled        = false; // true if user Esc'd out (return to title)
@@ -188,14 +189,14 @@ void drawShadowed(GRAPHICS::Graphics &gfx, std::vector<uint8_t> &fnt,
 void drawSubIndexed(GRAPHICS::Graphics &gfx,
                     const std::vector<uint8_t> &src, int srcW,
                     int srcX, int srcY, int w, int h,
-                    int destX, int destY) {
+                    int destX, int destY, bool transparent = false) {
 	if (src.empty()) return;
 	std::vector<uint8_t> sub(static_cast<size_t>(w) * h);
 	for (int y = 0; y < h; ++y) {
 		size_t row = static_cast<size_t>(srcY + y) * srcW + srcX;
 		std::memcpy(sub.data() + y * w, src.data() + row, w);
 	}
-	gfx.drawIndexed(sub, w, h, destX, destY);
+	gfx.drawIndexed(sub, w, h, destX, destY, transparent);
 }
 
 // Source-rect of the blank blue button sprite inside CHARGENB.CPS (small
@@ -223,10 +224,10 @@ constexpr int kStatsBtnH = 14;
 constexpr int kStatsBtnPitch = 6; // tight FONT6 pitch for labels
 struct StatsBtn { int x, y; const char *label; };
 constexpr StatsBtn kStatsBtns[4] = {
-	{ 218, 158, "REROLL" },
-	{ 262, 158, "MODIFY" },
-	{ 218, 172, "FACES"  },  // = 158 + kStatsBtnH so rows touch
-	{ 262, 172, "KEEP"   },
+	{ 218, 162, "REROLL" },
+	{ 262, 162, "MODIFY" },
+	{ 218, 176, "FACES"  },  // = 162 + kStatsBtnH so rows touch
+	{ 262, 176, "KEEP"   },
 };
 enum StatsBtnId { BTN_REROLL=0, BTN_MODIFY, BTN_FACES, BTN_KEEP };
 
@@ -265,13 +266,19 @@ int modBtnAt(int lx, int ly) {
 // window through all 90 portraits.
 constexpr int kPortraitVisible = 4;
 constexpr int kPortraitStride = 32;
-constexpr int kArrowX = 140;
-constexpr int kArrowYTop = 50;
-constexpr int kArrowYBot = 66;
-constexpr int kArrowW = 16;
-constexpr int kArrowH = 14;
-constexpr int kPortraitStripX = 160;
-constexpr int kPortraitStripY = 50;
+// Arrows use the full 32-wide blank-blue sprite so their right border
+// isn't cropped (a 16-wide crop showed only the left half). 16 tall each
+// and stacked exactly touching so the strip reads as one tall button
+// pair, matching the height of the 32-tall portrait row.
+constexpr int kArrowX = 142;        // +2 right per user feedback
+constexpr int kArrowYTop = 64;
+constexpr int kArrowYBot = 80;      // = kArrowYTop + kArrowH (no gap)
+constexpr int kArrowW = 32;
+constexpr int kArrowH = 16;
+// Strip starts after the arrows; 4 * 32 = 128 wide, fits in the panel.
+// +1 right + 1 down nudge per user feedback for visual centering.
+constexpr int kPortraitStripX = 177;
+constexpr int kPortraitStripY = 65;
 
 void portraitCellXY(int cellIdx, int &x, int &y) {
 	x = kPortraitStripX + cellIdx * kPortraitStride;
@@ -359,17 +366,23 @@ void render(GRAPHICS::Graphics &gfx,
 	for (int i = 0; i < 4; ++i) {
 		bool isActive = (state.step != Step::EntryScreen && state.activeSlot == i);
 		if (isActive && !chargenb.pixels.empty()) {
-			// Sparkles: CHARGENB.CPS has a 320x32 sparkle strip across the
-			// top. Take the leftmost 32x32 block (consistent per-slot).
-			drawSubIndexed(gfx, chargenb.pixels, 320, 0, 0, 32, 32,
-			               kSlots[i].x, kSlots[i].y);
+			// Sparkles: CHARGENB.CPS top strip (y=0..31, x=0..319) holds a
+			// row of star sprites. We slice a 32x32 window from it and
+			// shift the source X over time (driven by state.sparkleFrame
+			// in the main loop) so the stars appear to twinkle. Palette
+			// index 0 is transparent so the slot frame shows through.
+			constexpr int kStripFrames = 320 / 32; // 10 distinct windows
+			int srcX = (state.sparkleFrame % kStripFrames) * 32;
+			drawSubIndexed(gfx, chargenb.pixels, 320, srcX, 0, 32, 32,
+			               kSlots[i].x, kSlots[i].y,
+			               /*transparent=*/true);
 			continue;
 		}
 		if (!state.party[i].filled) continue;
 		uint16_t portraitIdx = static_cast<uint16_t>(state.party[i].portrait);
 		gfx.drawImage(picCopy, portraitIdx,
 		              kSlots[i].x, kSlots[i].y,
-		              /*transparency=*/true, /*mirror=*/0, /*cacheId=*/0);
+		              /*transparency=*/false, /*mirror=*/0, /*cacheId=*/0);
 	}
 
 	// Step-specific right-panel content.
@@ -414,8 +427,10 @@ void render(GRAPHICS::Graphics &gfx,
 			cursor     = state.alignmentCursor;
 			break;
 		}
-		// Header in FONT8 (taller), drop-shadowed.
-		drawShadowed(gfx, fntBytes, header, 144, 70);
+		// Header in FONT8 (taller), drop-shadowed in light blue
+		// (palette 0x90 = 80,196,252). Matches the dosbox accent colour
+		// for picker titles.
+		drawShadowed(gfx, fntBytes, header, 144, 70, 0x90);
 		// Entries in FONT6 (uppercase, tighter). 8-px line spacing matches
 		// dosbox exactly; the drop shadow adds 1 px, so going tighter
 		// collides (FONT6 glyphs are 6 tall).
@@ -426,9 +441,9 @@ void render(GRAPHICS::Graphics &gfx,
 		const int kListStep = 8;
 		for (int i = 0; i < numEntries; ++i) {
 			int y = kListY0 + i * kListStep;
-			// Selected row: palette 0x90 (light blue 80,196,252) -- matches
-			// the original chargen's accent colour for the cursor row.
-			uint8_t fg = (i == cursor) ? 0x90 : 0xff;
+			// Selected row in red (palette 0x12 = 220,48,44). Header is
+			// blue, selected entry is red -- the dosbox convention.
+			uint8_t fg = (i == cursor) ? 0x12 : 0xff;
 			drawShadowed(gfx, listFnt, entries[i], kListX, y, fg);
 		}
 		// BACK button at the bottom-right of the right panel. Sprite from
@@ -450,7 +465,7 @@ void render(GRAPHICS::Graphics &gfx,
 			int idx = (strip0 + i) % total;
 			int x, y; portraitCellXY(i, x, y);
 			gfx.drawImage(picCopy, static_cast<uint16_t>(idx), x, y,
-			              /*transparency=*/true, 0, 0);
+			              /*transparency=*/false, 0, 0);
 		}
 		// Cursor outline around cell 0 (the chosen portrait).
 		{
@@ -460,37 +475,43 @@ void render(GRAPHICS::Graphics &gfx,
 			gfx.fillRect(x - 1, y - 1, x - 1, y + 32, 0x90);
 			gfx.fillRect(x + 32, y - 1, x + 32, y + 32, 0x90);
 		}
-		// Two arrow buttons stacked left: prev (top), next (bottom). Use the
-		// blank-blue 32-wide sprite cropped to 16 wide, with a gold "<" / ">"
-		// label centered.
+		// Two arrow buttons stacked left: prev (top), next (bottom). Full
+		// 32-wide blank-blue sprite (so the right border isn't cropped).
+		// Gold "<" / ">" centered in the button.
 		if (!chargenb.pixels.empty()) {
 			drawSubIndexed(gfx, chargenb.pixels, 320, kButtonSrcX, kButtonSrcY,
 			               kArrowW, kArrowH, kArrowX, kArrowYTop);
 			drawSubIndexed(gfx, chargenb.pixels, 320, kButtonSrcX, kButtonSrcY,
 			               kArrowW, kArrowH, kArrowX, kArrowYBot);
-			// FONT8.FNT is optional at boot (runChargenScreen doesn't hard-fail
-			// on a missing font); skip the < / > glyphs rather than feed
-			// `Font(empty)` and crash in the legacy parser path.
 			if (!fntBytes.empty()) {
-				gfx.drawTextColored(fntBytes, "<", kArrowX + 5, kArrowYTop + 4, 0x1b);
-				gfx.drawTextColored(fntBytes, ">", kArrowX + 5, kArrowYBot + 4, 0x1b);
+				// Glyph is ~5 px visually; centre in 32-wide button.
+				gfx.drawTextColored(fntBytes, "<", kArrowX + 13, kArrowYTop + 4, 0x1b);
+				gfx.drawTextColored(fntBytes, ">", kArrowX + 13, kArrowYBot + 4, 0x1b);
 			}
 		}
-		// Race + class labels + LARGE stats below (matches the "keep" layout
-		// preview the user wants -- portrait at top, info below).
+		// Race + class labels + LARGE stats below. All text shifted right
+		// +16 px from previous layout per user feedback.
 		if (!fntBytes.empty()) {
 			const auto &c = state.party[state.activeSlot];
 			const char *raceName  = (c.race  >= 0) ? kRaceNames[c.race]   : "";
 			const char *className = (c.klass >= 0) ? kClassNames[c.klass] : "";
-			drawShadowed(gfx, fntBytes, raceName,  176, 92);
-			drawShadowed(gfx, fntBytes, className, 188, 104);
+			// All carousel-page text moved up 2 px per user feedback.
+			drawShadowed(gfx, fntBytes, raceName,  192, 106);
+			drawShadowed(gfx, fntBytes, className, 204, 118);
+			// 10-px line height; name + value at fixed X each so the
+			// AC/HP/LVL values stay column-aligned despite LVL being
+			// one char longer than AC/HP.
 			auto statLine = [&](int row, const char *name, int value) {
-				char buf[16]; std::snprintf(buf, sizeof(buf), "%s%3d", name, value);
-				drawShadowed(gfx, fntBytes, buf, 140, 120 + row * 12);
+				char valBuf[8]; std::snprintf(valBuf, sizeof(valBuf), "%2d", value);
+				int y = 130 + row * 10;
+				drawShadowed(gfx, fntBytes, name, 156, y);
+				drawShadowed(gfx, fntBytes, valBuf, 188, y);
 			};
 			auto rightLine = [&](int row, const char *name, int value) {
-				char buf[16]; std::snprintf(buf, sizeof(buf), "%s%3d", name, value);
-				drawShadowed(gfx, fntBytes, buf, 230, 120 + row * 12);
+				char valBuf[8]; std::snprintf(valBuf, sizeof(valBuf), "%2d", value);
+				int y = 130 + row * 10;
+				drawShadowed(gfx, fntBytes, name, 240, y);
+				drawShadowed(gfx, fntBytes, valBuf, 280, y);
 			};
 			statLine(0, "STR ", c.abil[STR]);
 			statLine(1, "INT ", c.abil[INTEL]);
@@ -510,36 +531,41 @@ void render(GRAPHICS::Graphics &gfx,
 		if (fntBytes.empty()) break;
 		const auto &c = state.party[state.activeSlot];
 		const bool modifying = (state.step == Step::ModifyStats);
-		// Portrait centered at top of right panel.
+		// Layout (consistent across ShowStats / ModifyStats / EnterName).
+		// Portrait sits INSIDE the stone window, then the Name row, race,
+		// class, the 6-row stat block, and the button grid (original
+		// position y=162). Everything below the portrait is shifted down
+		// by 8 px from the previous layout per user request.
+		//   portrait    y=66 .. 98
+		//   Name row    y=100         (blank in ShowStats/Modify, prompt in EnterName)
+		//   Race        y=110
+		//   Class       y=120
+		//   Stats       y=130..175    (6 rows, 9-px FONT8 pitch)
+		//   Buttons     y=162         (rows 5-6 of stats overlap the button area)
 		gfx.drawImage(const_cast<std::vector<uint8_t> &>(picBytes),
 		              static_cast<uint16_t>(c.portrait),
-		              204, 48, /*transparency=*/true, 0, 0);
-		// Race + class labels centered below portrait (FONT8 for size).
+		              220, 66, /*transparency=*/false, 0, 0);
 		const char *raceName  = (c.race  >= 0) ? kRaceNames[c.race]   : "";
 		const char *className = (c.klass >= 0) ? kClassNames[c.klass] : "";
-		// Crude horizontal centering by char count * 8 (FONT8 glyph width).
-		auto centerX = [](const char *s, int cx) {
-			return cx - static_cast<int>(std::strlen(s)) * 4;
-		};
-		drawShadowed(gfx, fntBytes, raceName,  centerX(raceName,  220), 88);
-		drawShadowed(gfx, fntBytes, className, centerX(className, 220), 100);
-		// Ability scores in FONT8 (larger), 2 columns: STR..CHA on the left,
-		// AC/HP/LVL on the right. Selected stat's value tinted in ModifyStats.
+		drawShadowed(gfx, fntBytes, raceName,  192, 110);
+		drawShadowed(gfx, fntBytes, className, 204, 120);
+		// Ability scores in FONT8 (larger), 2 columns. 10-px line height
+		// keeps FONT8's 8-tall glyphs from colliding while still hugging
+		// the class label tightly (first stat row at y=102, right under
+		// the class label). Name + value at fixed X each so right-column
+		// AC/HP/LVL values column-align despite name lengths differing.
 		auto abilLine = [&](int row, const char *name, int value, bool sel) {
-			char nameBuf[8]; std::snprintf(nameBuf, sizeof(nameBuf), "%s", name);
-			char valBuf[8];  std::snprintf(valBuf, sizeof(valBuf), "%3d", value);
-			int y = 114 + row * 10;
-			drawShadowed(gfx, fntBytes, nameBuf, 140, y);
-			if (sel)
-				drawShadowed(gfx, fntBytes, valBuf, 172, y, 0x12);
-			else
-				drawShadowed(gfx, fntBytes, valBuf, 172, y);
+			char valBuf[8]; std::snprintf(valBuf, sizeof(valBuf), "%2d", value);
+			int y = 130 + row * 9;
+			drawShadowed(gfx, fntBytes, name, 156, y);
+			uint8_t fg = sel ? 0x12 : 0xff;
+			drawShadowed(gfx, fntBytes, valBuf, 188, y, fg);
 		};
 		auto rightLine = [&](int row, const char *name, int value) {
-			char buf[16];
-			std::snprintf(buf, sizeof(buf), "%s%3d", name, value);
-			int y = 114 + row * 10;
-			drawShadowed(gfx, fntBytes, buf, 232, y);
+			char valBuf[8]; std::snprintf(valBuf, sizeof(valBuf), "%2d", value);
+			int y = 130 + row * 9;
+			drawShadowed(gfx, fntBytes, name, 240, y);
+			drawShadowed(gfx, fntBytes, valBuf, 280, y);
 		};
 		auto &listFnt = fnt6Bytes.empty() ? fntBytes : fnt6Bytes;
 		for (int i = 0; i < NUM_ABIL; ++i) {
@@ -554,14 +580,14 @@ void render(GRAPHICS::Graphics &gfx,
 		rightLine(2, "LVL ", c.lvl);
 		// Button row(s) -- different per sub-state.
 		if (state.step == Step::EnterName) {
-			// Name-entry prompt over where the buttons would be. "Name: <typed>_"
-			// with the typed text in cyan-ish (palette 0x0b is the chargen cyan)
-			// and a blinking-style trailing underscore as the cursor.
-			drawShadowed(gfx, fntBytes, "Name:", 140, 152);
+			// "Name:" label sits BETWEEN portrait and race (y=82, the
+			// dedicated name slot in the shared layout). Blue label
+			// (palette 0x90, matches picker headers), typed text + cursor
+			// in red. Centered horizontally with the race/class labels.
+			drawShadowed(gfx, fntBytes, "Name:", 156, 100, 0x90);
 			char buf[16];
 			std::snprintf(buf, sizeof(buf), "%s_", c.name);
-			gfx.drawTextColored(fntBytes, buf, 180, 152, 0x12); // red, like dosbox
-			drawShadowed(gfx, listFnt, "Enter=OK  Esc=back", 140, 172);
+			gfx.drawTextColored(fntBytes, buf, 200, 100, 0x12);
 		} else if (modifying) {
 			if (!chargenb.pixels.empty()) {
 				for (const auto &b : kModBtns) {
@@ -916,28 +942,31 @@ void handleNameEvent(const SDL_Event &e, State &state,
                      const std::filesystem::path &chargenDir) {
 	auto &c = state.party[state.activeSlot];
 	if (e.type == SDL_TEXTINPUT) {
-		// Append printable ASCII (filter the rest -- DOS save format is
-		// 7-bit). Cap at 10 chars + NUL.
-		for (const char *p = e.text.text; *p; ++p) {
-			size_t len = std::strlen(c.name);
-			if (len >= 10) break;
-			unsigned char ch = static_cast<unsigned char>(*p);
-			if (ch >= 0x20 && ch < 0x7f) {
-				c.name[len] = static_cast<char>(ch);
-				c.name[len + 1] = '\0';
-			}
+		// Accept any byte SDL feeds us -- UTF-8 multi-byte sequences and
+		// emoji included. Cap by name buffer size (10 bytes + NUL); a
+		// multi-byte char may not fit, in which case we skip the whole
+		// SDL_TEXTINPUT to avoid splitting a code point mid-sequence.
+		size_t curLen = std::strlen(c.name);
+		size_t inLen  = std::strlen(e.text.text);
+		if (curLen + inLen <= 10) {
+			std::memcpy(c.name + curLen, e.text.text, inLen);
+			c.name[curLen + inLen] = '\0';
 		}
 	} else if (e.type == SDL_KEYDOWN) {
 		auto k = e.key.keysym.sym;
 		if (k == SDLK_BACKSPACE) {
+			// Drop the last UTF-8 code point (trail bytes start with 10xxxxxx).
 			size_t len = std::strlen(c.name);
-			if (len > 0) c.name[len - 1] = '\0';
-		} else if (k == SDLK_RETURN || k == SDLK_KP_ENTER) {
-			if (std::strlen(c.name) == 0) {
-				// Empty name -- give the slot a default so we don't write
-				// a zero-name record.
-				std::snprintf(c.name, sizeof(c.name), "PC%d", state.activeSlot + 1);
+			while (len > 0) {
+				unsigned char b = static_cast<unsigned char>(c.name[len - 1]);
+				c.name[--len] = '\0';
+				if ((b & 0xC0) != 0x80) break; // stop on lead/single byte
 			}
+		} else if (k == SDLK_RETURN || k == SDLK_KP_ENTER) {
+			// Name cannot be empty: ignore Enter until the user types
+			// something. (Esc backs out instead.)
+			if (std::strlen(c.name) == 0)
+				return;
 			SDL_StopTextInput();
 			std::cout << "  [chargen: slot " << state.activeSlot
 			          << " name=\"" << c.name << "\" -- writing CREATE.SAV]"
@@ -1207,6 +1236,17 @@ bool THIRDEYE::chargen::runChargenScreen(GRAPHICS::Graphics &gfx,
 			    afterAbilSum != beforeAbilSum ||
 			    afterNameLen != beforeNameLen)
 				render(gfx, picBytes, fntBytes, fnt6Bytes, backdrop, chargenb, previewIdx, state);
+		}
+		// Sparkle animation. Advance the strip every ~150 ms (every 9 pumps
+		// at 16 ms each) so the stars twinkle visibly without strobing.
+		// Only re-render when we're in a sub-step (the entry screen has no
+		// active slot, so nothing to animate).
+		static int pumpTick = 0;
+		++pumpTick;
+		if (state.activeSlot >= 0 && pumpTick % 9 == 0) {
+			++state.sparkleFrame;
+			render(gfx, picBytes, fntBytes, fnt6Bytes, backdrop, chargenb,
+			       previewIdx, state);
 		}
 		gfx.update();
 		SDL_Delay(16);
