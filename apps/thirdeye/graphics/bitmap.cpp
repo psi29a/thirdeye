@@ -50,6 +50,12 @@ GRAPHICS::Bitmap::Bitmap(const std::vector<uint8_t> &vec) {
 	//
 	// Sanity checks before committing to this read: file-size match + count*4
 	// bytes of monotonically-increasing in-file offsets.
+	// Each CHARPICS sub-header is 4 bytes (width-1, height); the operator[] /
+	// getWidth / getHeight readers all index `off`, `off+2`, `off+4`. So an
+	// offset is only acceptable if at least 4 bytes are available at that
+	// position. A bare `< vec.size()` check would let a truncated table point
+	// at the last 1-3 bytes of the file and over-read on decode.
+	constexpr uint32_t kSubHdrBytes = 4;
 	auto looksLikeCharPicsDir = [&]() {
 		if (vec.size() < 12) return false;
 		if (rd32(0) != vec.size()) return false;
@@ -57,10 +63,10 @@ GRAPHICS::Bitmap::Bitmap(const std::vector<uint8_t> &vec) {
 		uint16_t tableEnd = vec[6] | (vec[7] << 8);
 		if (count < 2 || count > 4096) return false;
 		if (tableEnd != 10 + (count - 1) * 4) return false;
-		if (tableEnd >= vec.size()) return false;
-		// First table entry must be > tableEnd and within the file.
+		if (tableEnd + kSubHdrBytes > vec.size()) return false;
+		// First table entry must be > tableEnd and leave room for a sub-header.
 		uint32_t o0 = rd32(10);
-		return o0 > tableEnd && o0 < vec.size();
+		return o0 > tableEnd && o0 + kSubHdrBytes <= vec.size();
 	};
 	if (looksLikeCharPicsDir()) {
 		mIsCharPics = true;
@@ -73,7 +79,7 @@ GRAPHICS::Bitmap::Bitmap(const std::vector<uint8_t> &vec) {
 			size_t pos = 10 + (i - 1) * 4;
 			if (pos + 4 > vec.size()) break;
 			uint32_t v = rd32(pos);
-			if (v <= lastOff || v >= vec.size()) break;
+			if (v <= lastOff || v + kSubHdrBytes > vec.size()) break;
 			mBitmapOffets.insert_or_assign(mNumSubBitmaps++, v);
 			lastOff = v;
 		}

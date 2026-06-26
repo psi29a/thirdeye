@@ -95,7 +95,10 @@ Cps loadCps(const std::filesystem::path &path) {
 
 	size_t off = 10;
 	Cps out;
-	if (paletteSize > 0 && off + paletteSize <= data.size()) {
+	if (paletteSize > 0) {
+		// Header claimed a palette block but the file's too short to hold it
+		// -- treat as malformed (don't return a partial Cps with no pixels).
+		if (off + paletteSize > data.size()) return {};
 		out.palette.assign(data.begin() + off,
 		                   data.begin() + off + paletteSize);
 		off += paletteSize;
@@ -103,8 +106,8 @@ Cps loadCps(const std::filesystem::path &path) {
 
 	if (compression == 0) {
 		// Raw indexed pixels.
-		size_t take = std::min<size_t>(uncompSize, data.size() - off);
-		out.pixels.assign(data.begin() + off, data.begin() + off + take);
+		if (off + uncompSize > data.size()) return {};
+		out.pixels.assign(data.begin() + off, data.begin() + off + uncompSize);
 	} else if (compression == 4) {
 		out.pixels = decompressLCW(data.data() + off, data.size() - off,
 		                            uncompSize);
@@ -113,9 +116,11 @@ Cps loadCps(const std::filesystem::path &path) {
 		return {};
 	}
 
-	// Dimensions are implicit at 320x200 for the chargen CPS files; if the
-	// decompressed buffer is smaller (a malformed file) we let the caller
-	// detect it via pixels.size().
+	// Dimensions are implicit at 320x200 for the chargen CPS files. Refuse a
+	// short pixel buffer so callers don't have to defend against partial
+	// decodes -- the chargen path memcpy-slices any non-empty result and a
+	// short buffer would over-read.
+	if (out.pixels.size() != static_cast<size_t>(uncompSize)) return {};
 	out.width  = 320;
 	out.height = 200;
 	return out;

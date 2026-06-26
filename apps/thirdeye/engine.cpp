@@ -130,6 +130,32 @@ using THIRDEYE::runtime::gBootStart;    // set at go(); for timing prints
 using THIRDEYE::runtime::gPerf;         // THIRDEYE_PERF=1 -- per-present timing
 using THIRDEYE::runtime::gLastPresent;  // wall-clock of previous present
 
+// Resolve a child directory case-insensitively: try the exact name first
+// (the fast path on macOS/Windows and Linux installs that already match),
+// fall back to scanning the parent for any entry whose name compares
+// equal under tolower(). Returns the resolved path on success, or
+// `parent/name` unchanged (so callers still get a stable path for error
+// messages) when no match is found. Used for CHARGEN/, SAVEGAME/, etc.
+// where the install's on-disk casing varies (see existing chargen/savegame
+// case-checks elsewhere in this TU).
+std::filesystem::path resolveChildCI(const std::filesystem::path &parent,
+                                     const std::string &name) {
+	std::error_code ec;
+	auto exact = parent / name;
+	if (std::filesystem::exists(exact, ec)) return exact;
+	if (!std::filesystem::is_directory(parent, ec)) return exact;
+	std::string lower = name;
+	for (auto &c : lower) c = static_cast<char>(std::tolower(
+	    static_cast<unsigned char>(c)));
+	for (auto &entry : std::filesystem::directory_iterator(parent, ec)) {
+		auto candidate = entry.path().filename().string();
+		std::string cl = candidate;
+		for (auto &c : cl) c = static_cast<char>(std::tolower(
+		    static_cast<unsigned char>(c)));
+		if (cl == lower) return entry.path();
+	}
+	return exact;
+}
 
 } // close anon namespace -- pumpHost lives in THIRDEYE::runtime so the
   // dispatch_event handler in runtime/event.cpp can call it via internal.hpp.
@@ -724,8 +750,8 @@ bool THIRDEYE::Engine::runExternalProgram(const std::string &program,
 	    p.find("charge") != std::string::npos) {
 		// "Gather a New Party": CHGEN.EXE builds a party + writes CREATE.SAV,
 		// then chains back with mode "CHGN" so start's xfer reads it.
-		std::filesystem::path chargenDir =
-		    resource.resourcePath().parent_path() / "CHARGEN";
+		std::filesystem::path chargenDir = resolveChildCI(
+		    resource.resourcePath().parent_path(), "CHARGEN");
 		std::cout << "  [program chain: \"" << program
 		          << "\" -> entering chargen screen (dir: " << chargenDir
 		          << ", gfx=" << (gfx ? "yes" : "no") << ")]" << std::endl;
@@ -849,7 +875,8 @@ void THIRDEYE::Engine::go() {
 	// reach the menu's mouse-region handler.
 	if (mChargenTest) {
 		GRAPHICS::Graphics gfx(mScale);
-		std::filesystem::path chargenDir = resFile.parent_path() / "CHARGEN";
+		std::filesystem::path chargenDir =
+		    resolveChildCI(resFile.parent_path(), "CHARGEN");
 		try {
 			THIRDEYE::chargen::runChargenScreen(gfx, chargenDir);
 		} catch (const THIRDEYE::runtime::QuitRequested &) {

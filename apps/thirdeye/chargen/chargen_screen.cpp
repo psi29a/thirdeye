@@ -468,8 +468,13 @@ void render(GRAPHICS::Graphics &gfx,
 			               kArrowW, kArrowH, kArrowX, kArrowYTop);
 			drawSubIndexed(gfx, chargenb.pixels, 320, kButtonSrcX, kButtonSrcY,
 			               kArrowW, kArrowH, kArrowX, kArrowYBot);
-			gfx.drawTextColored(fntBytes, "<", kArrowX + 5, kArrowYTop + 4, 0x1b);
-			gfx.drawTextColored(fntBytes, ">", kArrowX + 5, kArrowYBot + 4, 0x1b);
+			// FONT8.FNT is optional at boot (runChargenScreen doesn't hard-fail
+			// on a missing font); skip the < / > glyphs rather than feed
+			// `Font(empty)` and crash in the legacy parser path.
+			if (!fntBytes.empty()) {
+				gfx.drawTextColored(fntBytes, "<", kArrowX + 5, kArrowYTop + 4, 0x1b);
+				gfx.drawTextColored(fntBytes, ">", kArrowX + 5, kArrowYBot + 4, 0x1b);
+			}
 		}
 		// Race + class labels + LARGE stats below (matches the "keep" layout
 		// preview the user wants -- portrait at top, info below).
@@ -707,6 +712,17 @@ bool writeCreateSav(const std::filesystem::path &chargenDir,
 	}
 	f.write(reinterpret_cast<const char *>(bytes.data()),
 	        static_cast<std::streamsize>(bytes.size()));
+	// Flush before checking: write() buffers, and a disk-full / I/O failure
+	// only surfaces in the stream state after the buffer's been drained. A
+	// successful open is not enough -- the SOP transfer reads this file
+	// byte-for-byte and a short / corrupt CREATE.SAV silently mis-rolls the
+	// imported party.
+	f.flush();
+	if (!f) {
+		std::cout << "  [chargen: write to " << path << " failed (disk full?)]"
+		          << std::endl;
+		return false;
+	}
 	std::cout << "  [chargen: wrote " << bytes.size() << " bytes to "
 	          << path << "]" << std::endl;
 	return true;
@@ -922,14 +938,22 @@ void handleNameEvent(const SDL_Event &e, State &state,
 				// a zero-name record.
 				std::snprintf(c.name, sizeof(c.name), "PC%d", state.activeSlot + 1);
 			}
-			c.filled = true;
 			SDL_StopTextInput();
 			std::cout << "  [chargen: slot " << state.activeSlot
 			          << " name=\"" << c.name << "\" -- writing CREATE.SAV]"
 			          << std::endl;
-			writeCreateSav(chargenDir, state);
-			state.step       = Step::EntryScreen;
-			state.activeSlot = -1;
+			// Only flip `filled` after CREATE.SAV is on disk. Otherwise an
+			// I/O failure leaves the UI showing a completed slot while the
+			// xfer reads stale bytes -- silently mis-rolling the party.
+			if (writeCreateSav(chargenDir, state)) {
+				c.filled = true;
+				state.step       = Step::EntryScreen;
+				state.activeSlot = -1;
+			} else {
+				std::cout << "  [chargen: keeping slot " << state.activeSlot
+				          << " open -- save failed, character not finalised]"
+				          << std::endl;
+			}
 		} else if (k == SDLK_ESCAPE) {
 			SDL_StopTextInput();
 			state.step = Step::ShowStats; // back to stats
@@ -1047,6 +1071,16 @@ bool THIRDEYE::chargen::runChargenScreen(GRAPHICS::Graphics &gfx,
 
 	gfx.loadPalette(palBytes, /*isRes=*/false);
 	GRAPHICS::Bitmap portraits(picBytes);
+	// `picBytes.empty()` (above) doesn't catch a malformed-but-nonzero
+	// CHARPICS.BMP -- the parser may decline every header path and leave
+	// `numberOfBitmaps == 0`. The portrait picker later does
+	// `(strip0 + i) % total`, which divides by zero if we don't bail here.
+	if (portraits.getNumberOfBitmaps() == 0) {
+		std::cout << "  [chargen: CHARPICS.BMP at " << chargenDir
+		          << " parsed to 0 portraits (truncated / unknown format);"
+		          << " skipping screen]" << std::endl;
+		return true;
+	}
 	GRAPHICS::Cps backdrop = GRAPHICS::loadCps(chargenDir / "CHARGEN.CPS");
 	// CHARGENB.CPS holds the chargen UI sprites (blank blue/red buttons,
 	// PLAY/DELETE composites, stone separators, sparkles). We grab the
@@ -1097,7 +1131,10 @@ bool THIRDEYE::chargen::runChargenScreen(GRAPHICS::Graphics &gfx,
 			rollStats(state.party[0], rng);
 			enterNameStep(state);
 		} else if (step == "write") {
-			// Headless: roll char + write CREATE.SAV in one shot.
+			// Headless: roll char + write CREATE.SAV in one shot. `done` only
+			// flips on a successful save so a failing chargen-test exits with
+			// the loop still running and the operator sees the [chargen: ...
+			// failed] log.
 			for (int pc = 0; pc < 4; ++pc) {
 				state.party[pc].race  = 0;
 				state.party[pc].klass = 0;
@@ -1108,8 +1145,7 @@ bool THIRDEYE::chargen::runChargenScreen(GRAPHICS::Graphics &gfx,
 				              "Foo%d", pc + 1);
 				state.party[pc].filled = true;
 			}
-			writeCreateSav(chargenDir, state);
-			state.done = true;
+			state.done = writeCreateSav(chargenDir, state);
 		}
 	}
 	render(gfx, picBytes, fntBytes, fnt6Bytes, backdrop, chargenb, previewIdx, state);

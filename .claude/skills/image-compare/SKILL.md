@@ -113,6 +113,10 @@ structural pixels directly:
 # Find vertical frame lines: columns that are dark across many rows
 from PIL import Image
 im = Image.open('/tmp/backdrop.bmp').convert('RGB')
+# Restrict the scan to the band you care about (e.g. the slot strip on
+# the chargen backdrop). Tune these to the region under investigation.
+x_min, x_max = 0, im.width
+y_min, y_max = 0, im.height
 counts = {}
 for x in range(im.width):
     counts[x] = sum(1 for y in range(y_min, y_max)
@@ -140,7 +144,7 @@ When you're tuning a position, draw your candidate rect on the
 backdrop and look at it upscaled NEAREST:
 
 ```python
-from PIL import ImageDraw
+from PIL import Image, ImageDraw
 im = Image.open('/tmp/backdrop.bmp').convert('RGB')
 draw = ImageDraw.Draw(im)
 for (x, y, w, h), color in zip(rects, ['red', 'green', 'blue', 'yellow']):
