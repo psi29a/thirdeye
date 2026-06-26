@@ -45,12 +45,61 @@ const std::array<const char *, 12> kRaceNames = { {
 	"HALFLING MALE", "HALFLING FEMALE",
 } };
 
-// 6 base classes in the order the original chargen shows them. The real
-// game filters by race/alignment (a half-elf can't be a paladin, etc.) --
+// 15 chargen classes in the order EOB3's CHGEN.EXE shows them: 6 single
+// classes (F/R/P/M/C/T) followed by 9 multi-class combos. The real game
+// filters by race (humans can't multi-class, half-elves get F/M etc.) --
 // not yet implemented; the picker accepts any combination for now.
-const std::array<const char *, 6> kClassNames = { {
+const std::array<const char *, 15> kClassNames = { {
 	"FIGHTER", "RANGER", "PALADIN", "MAGE", "CLERIC", "THIEF",
+	"FIGHTER/CLERIC", "FIGHTER/THIEF", "FIGHTER/MAGE",
+	"FIGHTER/MAGE/THIEF", "THIEF/MAGE", "CLERIC/THIEF",
+	"FIGHTER/CLERIC/MAGE", "RANGER/CLERIC", "CLERIC/MAGE",
 } };
+
+// Component single-classes that make up each chargen entry, terminated with
+// -1. Single-class entries (0..5) carry just themselves; multi-class entries
+// (6..14) list 2 or 3 component classes for HP/XP rolls and per-class level
+// tracking. Components reference the chargen UI's single-class indices
+// (0=F, 1=R, 2=P, 3=M, 4=C, 5=T).
+constexpr int kClassComponents[15][3] = {
+	{ 0, -1, -1 },   // FIGHTER
+	{ 1, -1, -1 },   // RANGER
+	{ 2, -1, -1 },   // PALADIN
+	{ 3, -1, -1 },   // MAGE
+	{ 4, -1, -1 },   // CLERIC
+	{ 5, -1, -1 },   // THIEF
+	{ 0,  4, -1 },   // FIGHTER/CLERIC
+	{ 0,  5, -1 },   // FIGHTER/THIEF
+	{ 0,  3, -1 },   // FIGHTER/MAGE
+	{ 0,  3,  5 },   // FIGHTER/MAGE/THIEF
+	{ 5,  3, -1 },   // THIEF/MAGE
+	{ 4,  5, -1 },   // CLERIC/THIEF
+	{ 0,  4,  3 },   // FIGHTER/CLERIC/MAGE
+	{ 1,  4, -1 },   // RANGER/CLERIC
+	{ 4,  3, -1 },   // CLERIC/MAGE
+};
+
+int classComponentCount(int chargenClass) {
+	if (chargenClass < 0 || chargenClass >= 15) return 0;
+	int n = 0;
+	for (int i = 0; i < 3; ++i)
+		if (kClassComponents[chargenClass][i] >= 0) ++n;
+	return n;
+}
+
+// Picker viewport: the list area between the header (y=82) and the BACK
+// button (y=172) fits 11 rows at 8 px each. Lists shorter than this draw
+// in place; the 15-entry class list scrolls to keep the cursor visible.
+constexpr int kListMaxVisible = 11;
+
+int listFirstVisible(int cursor, int numEntries) {
+	if (numEntries <= kListMaxVisible) return 0;
+	int first = cursor - kListMaxVisible / 2;
+	if (first < 0) first = 0;
+	int maxFirst = numEntries - kListMaxVisible;
+	if (first > maxFirst) first = maxFirst;
+	return first;
+}
 
 // 9 AD&D alignments in the chargen's listing order.
 const std::array<const char *, 9> kAlignmentNames = { {
@@ -118,9 +167,9 @@ int conHpBonus(int con) {
 	return  4;  // 18+
 }
 
-// HP die per class (chargen UI order: F, R, P, M, C, T).
-int classHpDie(int chargenClass) {
-	switch (chargenClass) {
+// HP die per single class (chargen UI order: F, R, P, M, C, T).
+int singleClassHpDie(int singleClass) {
+	switch (singleClass) {
 	case 0: return 10; // FIGHTER  -- d10
 	case 1: return  8; // RANGER   -- d8
 	case 2: return 10; // PALADIN  -- d10
@@ -129,6 +178,19 @@ int classHpDie(int chargenClass) {
 	case 5: return  6; // THIEF    -- d6
 	}
 	return 8;
+}
+
+// HP die for a chargen entry (single or multi). AD&D 2e rule: multi-class
+// characters roll each class's HD and average them (rounded down). We
+// approximate by averaging the dice sizes -- the rolled HP smooths over
+// the difference well enough for HUD purposes.
+int classHpDie(int chargenClass) {
+	int n = classComponentCount(chargenClass);
+	if (n <= 1) return singleClassHpDie(chargenClass);
+	int sum = 0;
+	for (int i = 0; i < n; ++i)
+		sum += singleClassHpDie(kClassComponents[chargenClass][i]);
+	return sum / n;
 }
 
 // Roll a fresh character sheet for the given race/class/alignment. EOB3's
@@ -204,14 +266,17 @@ void drawSubIndexed(GRAPHICS::Graphics &gfx,
 // composite sprites sit next to it; we draw text on top of this blank
 // to compose BACK/KEEP/REROLL etc.
 constexpr int kButtonW = 32;
-constexpr int kButtonH = 14;
+// 16 rows -- the sprite at (128,128) carries a stone-pattern border on
+// both the top (row 0) and bottom (row 15). Slicing only 14 rows clipped
+// the bottom border, which read as "cut off" on the wide OK button.
+constexpr int kButtonH = 16;
 constexpr int kButtonSrcX = 128;
 constexpr int kButtonSrcY = 128;
 
-// Where the BACK button lands on screen (measured against the dosbox
-// class picker -- bottom-right of the right info panel).
+// Where the BACK button lands on screen: bottom of the 16-tall sprite sits
+// at y=190, flush against the right info panel's stone frame at y=191.
 constexpr int kBackBtnX = 272;
-constexpr int kBackBtnY = 172;
+constexpr int kBackBtnY = 175;
 
 // Stats-screen button layout: 2x2 grid at the bottom-right of the right
 // panel (REROLL/MODIFY in the top row, FACES/KEEP in the bottom). Per
@@ -220,14 +285,14 @@ constexpr int kBackBtnY = 172;
 // 6-px pitch so 6-char labels fit centered. Synthesized from the 32-wide
 // blank sprite by drawWideButton.
 constexpr int kStatsBtnW = 44;
-constexpr int kStatsBtnH = 14;
+constexpr int kStatsBtnH = 16;
 constexpr int kStatsBtnPitch = 6; // tight FONT6 pitch for labels
 struct StatsBtn { int x, y; const char *label; };
 constexpr StatsBtn kStatsBtns[4] = {
-	{ 218, 162, "REROLL" },
-	{ 262, 162, "MODIFY" },
-	{ 218, 176, "FACES"  },  // = 162 + kStatsBtnH so rows touch
-	{ 262, 176, "KEEP"   },
+	{ 218, 159, "REROLL" },
+	{ 262, 159, "MODIFY" },
+	{ 218, 175, "FACES"  },  // = 159 + kStatsBtnH so rows touch; bottom row
+	{ 262, 175, "KEEP"   },  // bottoms at y=190, flush with stone frame y=191
 };
 enum StatsBtnId { BTN_REROLL=0, BTN_MODIFY, BTN_FACES, BTN_KEEP };
 
@@ -241,8 +306,27 @@ int statsBtnAt(int lx, int ly) {
 	return -1;
 }
 
+// PLAY button on the entry screen, shown only when all 4 slots are filled.
+// Sits below the bottom slot row's name labels, narrower than the slot grid
+// (8 px of slot frame visible on each side).
+constexpr int kPlayBtnX = 25;
+constexpr int kPlayBtnY = 181;
+constexpr int kPlayBtnW = 82;
+
+bool inPlayButton(int lx, int ly) {
+	return lx >= kPlayBtnX && lx < kPlayBtnX + kPlayBtnW &&
+	       ly >= kPlayBtnY && ly < kPlayBtnY + kButtonH;
+}
+
+bool partyComplete(const State &state) {
+	for (int i = 0; i < 4; ++i)
+		if (!state.party[i].filled) return false;
+	return true;
+}
+
 // Modify-screen button row: +, -, OK at bottom-right of the right panel.
-constexpr int kModBtnY = 172;
+// Same y as the stats screen's bottom row -- flush with the stone frame.
+constexpr int kModBtnY = 175;
 struct ModBtn { int x, w; const char *label; };
 constexpr ModBtn kModBtns[3] = {
 	{ 220, 22, "+"  },
@@ -307,7 +391,7 @@ void drawBackButton(GRAPHICS::Graphics &gfx,
 	// glyphs are 8-wide but only ~5 cols visible). 4 chars * 6 = 24 px,
 	// centred at (32 - 24) / 2 = 4. Gold (palette 0x1b).
 	auto &fnt = fnt6Bytes.empty() ? fntBytes : fnt6Bytes;
-	gfx.drawTextColored(fnt, "BACK", kBackBtnX + 4, kBackBtnY + 4, 0x1b, 6);
+	gfx.drawTextColored(fnt, "BACK", kBackBtnX + 4, kBackBtnY + 5, 0x1b, 6);
 }
 
 bool inBackButton(int lx, int ly) {
@@ -323,7 +407,20 @@ bool inBackButton(int lx, int ly) {
 void drawWideButton(GRAPHICS::Graphics &gfx,
                     const std::vector<uint8_t> &src,
                     int destX, int destY, int destW) {
-	if (src.empty() || destW < kButtonW) return;
+	if (src.empty() || destW <= 0) return;
+	// Narrow buttons (e.g. +/- at 22 wide) just take a left slice + right
+	// slice from the sprite — no middle stretch needed, the borders meet
+	// in the centre.
+	if (destW < kButtonW) {
+		int leftW  = destW / 2;
+		int rightW = destW - leftW;
+		drawSubIndexed(gfx, src, 320, kButtonSrcX, kButtonSrcY,
+		               leftW, kButtonH, destX, destY);
+		drawSubIndexed(gfx, src, 320, kButtonSrcX + kButtonW - rightW,
+		               kButtonSrcY, rightW, kButtonH,
+		               destX + leftW, destY);
+		return;
+	}
 	constexpr int halfW = kButtonW / 2; // 16
 	// Left half from sprite cols 0..15
 	drawSubIndexed(gfx, src, 320, kButtonSrcX, kButtonSrcY,
@@ -383,6 +480,22 @@ void render(GRAPHICS::Graphics &gfx,
 		gfx.drawImage(picCopy, portraitIdx,
 		              kSlots[i].x, kSlots[i].y,
 		              /*transparency=*/false, /*mirror=*/0, /*cacheId=*/0);
+		// Name label below the portrait, centred in the 32-wide slot. Blue
+		// (palette 0x90, the picker-header accent), drop-shadowed, in FONT6
+		// at a tight 6-px pitch so longer names fit under the slot. Falls
+		// back to FONT8 if FONT6 didn't load.
+		if (state.party[i].name[0] != 0) {
+			auto &lblFnt = fnt6Bytes.empty() ? fntBytes : fnt6Bytes;
+			if (!lblFnt.empty()) {
+				const char *nm = state.party[i].name;
+				int pitch = fnt6Bytes.empty() ? 8 : 6;
+				int textW = static_cast<int>(std::strlen(nm)) * pitch;
+				int nx = kSlots[i].x + 16 - textW / 2;
+				int ny = kSlots[i].y + 43;
+				gfx.drawTextColored(lblFnt, nm, nx + 1, ny + 1, 0x00, pitch);
+				gfx.drawTextColored(lblFnt, nm, nx,     ny,     0x90, pitch);
+			}
+		}
 	}
 
 	// Step-specific right-panel content.
@@ -395,6 +508,26 @@ void render(GRAPHICS::Graphics &gfx,
 		drawShadowed(gfx, fntBytes, "the character you",  156, 100);
 		drawShadowed(gfx, fntBytes, "wish to create or",  156, 110);
 		drawShadowed(gfx, fntBytes, "view.",               156, 120);
+		// "Party is complete" prompt + PLAY button appear once all 4 slots
+		// are filled. Matches the dosbox flow -- you can't start the game
+		// until every PC has been rolled.
+		if (partyComplete(state)) {
+			drawShadowed(gfx, fntBytes, "Your party is",      156, 140);
+			drawShadowed(gfx, fntBytes, "complete. Select",   156, 150);
+			drawShadowed(gfx, fntBytes, "the PLAY button",    156, 160);
+			drawShadowed(gfx, fntBytes, "or press 'P' to",    156, 170);
+			drawShadowed(gfx, fntBytes, "start the game.",    156, 180);
+			if (!chargenb.pixels.empty()) {
+				drawWideButton(gfx, chargenb.pixels,
+				               kPlayBtnX, kPlayBtnY, kPlayBtnW);
+				auto &listFnt = fnt6Bytes.empty() ? fntBytes : fnt6Bytes;
+				int textW = 4 * kStatsBtnPitch; // "PLAY"
+				int tx = kPlayBtnX + (kPlayBtnW - textW) / 2;
+				gfx.drawTextColored(listFnt, "PLAY", tx,
+				                    kPlayBtnY + 5, 0x1b,
+				                    kStatsBtnPitch);
+			}
+		}
 		break;
 	}
 	case Step::PickRace:
@@ -439,8 +572,10 @@ void render(GRAPHICS::Graphics &gfx,
 		const int kListX = 144;
 		const int kListY0 = 82;
 		const int kListStep = 8;
-		for (int i = 0; i < numEntries; ++i) {
-			int y = kListY0 + i * kListStep;
+		int firstVis = listFirstVisible(cursor, numEntries);
+		int lastVis  = std::min(numEntries, firstVis + kListMaxVisible);
+		for (int i = firstVis; i < lastVis; ++i) {
+			int y = kListY0 + (i - firstVis) * kListStep;
 			// Selected row in red (palette 0x12 = 220,48,44). Header is
 			// blue, selected entry is red -- the dosbox convention.
 			uint8_t fg = (i == cursor) ? 0x12 : 0xff;
@@ -485,8 +620,8 @@ void render(GRAPHICS::Graphics &gfx,
 			               kArrowW, kArrowH, kArrowX, kArrowYBot);
 			if (!fntBytes.empty()) {
 				// Glyph is ~5 px visually; centre in 32-wide button.
-				gfx.drawTextColored(fntBytes, "<", kArrowX + 13, kArrowYTop + 4, 0x1b);
-				gfx.drawTextColored(fntBytes, ">", kArrowX + 13, kArrowYBot + 4, 0x1b);
+				gfx.drawTextColored(fntBytes, "<", kArrowX + 13, kArrowYTop + 5, 0x1b);
+				gfx.drawTextColored(fntBytes, ">", kArrowX + 13, kArrowYBot + 5, 0x1b);
 			}
 		}
 		// Race + class labels + LARGE stats below. All text shifted right
@@ -496,20 +631,20 @@ void render(GRAPHICS::Graphics &gfx,
 			const char *raceName  = (c.race  >= 0) ? kRaceNames[c.race]   : "";
 			const char *className = (c.klass >= 0) ? kClassNames[c.klass] : "";
 			// All carousel-page text moved up 2 px per user feedback.
-			drawShadowed(gfx, fntBytes, raceName,  192, 106);
-			drawShadowed(gfx, fntBytes, className, 204, 118);
-			// 10-px line height; name + value at fixed X each so the
-			// AC/HP/LVL values stay column-aligned despite LVL being
-			// one char longer than AC/HP.
+			// Race/class/stat positions held identical to the stats page
+			// (race y=110, class y=120, stat pitch 9 px) so switching
+			// between pages doesn't shuffle the text.
+			drawShadowed(gfx, fntBytes, raceName,  192, 110);
+			drawShadowed(gfx, fntBytes, className, 204, 120);
 			auto statLine = [&](int row, const char *name, int value) {
 				char valBuf[8]; std::snprintf(valBuf, sizeof(valBuf), "%2d", value);
-				int y = 130 + row * 10;
+				int y = 130 + row * 9;
 				drawShadowed(gfx, fntBytes, name, 156, y);
 				drawShadowed(gfx, fntBytes, valBuf, 188, y);
 			};
 			auto rightLine = [&](int row, const char *name, int value) {
 				char valBuf[8]; std::snprintf(valBuf, sizeof(valBuf), "%2d", value);
-				int y = 130 + row * 10;
+				int y = 130 + row * 9;
 				drawShadowed(gfx, fntBytes, name, 240, y);
 				drawShadowed(gfx, fntBytes, valBuf, 280, y);
 			};
@@ -583,11 +718,11 @@ void render(GRAPHICS::Graphics &gfx,
 			// "Name:" label sits BETWEEN portrait and race (y=82, the
 			// dedicated name slot in the shared layout). Blue label
 			// (palette 0x90, matches picker headers), typed text + cursor
-			// in red. Centered horizontally with the race/class labels.
+			// rendered shadowed white to match the rest of the chargen text.
 			drawShadowed(gfx, fntBytes, "Name:", 156, 100, 0x90);
 			char buf[16];
 			std::snprintf(buf, sizeof(buf), "%s_", c.name);
-			gfx.drawTextColored(fntBytes, buf, 200, 100, 0x12);
+			drawShadowed(gfx, fntBytes, buf, 200, 100);
 		} else if (modifying) {
 			if (!chargenb.pixels.empty()) {
 				for (const auto &b : kModBtns) {
@@ -595,7 +730,7 @@ void render(GRAPHICS::Graphics &gfx,
 					int textW = static_cast<int>(std::strlen(b.label)) * kStatsBtnPitch;
 					int tx = b.x + (b.w - textW) / 2;
 					gfx.drawTextColored(listFnt, b.label,
-					                    tx, kModBtnY + 4, 0x1b,
+					                    tx, kModBtnY + 5, 0x1b,
 					                    kStatsBtnPitch);
 				}
 			}
@@ -605,7 +740,7 @@ void render(GRAPHICS::Graphics &gfx,
 					drawWideButton(gfx, chargenb.pixels, b.x, b.y, kStatsBtnW);
 					int textW = static_cast<int>(std::strlen(b.label)) * kStatsBtnPitch;
 					int tx = b.x + (kStatsBtnW - textW) / 2;
-					gfx.drawTextColored(listFnt, b.label, tx, b.y + 4, 0x1b,
+					gfx.drawTextColored(listFnt, b.label, tx, b.y + 5, 0x1b,
 					                    kStatsBtnPitch);
 				}
 			}
@@ -660,11 +795,15 @@ bool writeCreateSav(const std::filesystem::path &chargenDir,
 	}
 	constexpr size_t kPcBase = 0x16;
 	constexpr size_t kPcStride = 345;
-	// Chargen class index (UI order) -> EOB1 class byte. F=0,M=1,C=2,T=3,P=4,R=5.
-	// Multi-class (default party's Alice has class byte 6 = some F/T variant)
-	// uses values 6+; the exact bitmask/table isn't RE'd yet, so our chargen
-	// only emits single-class (0..5). TODO: dual/multi-class UI + encoding.
-	constexpr int kClassToEob1[6] = { 0, 5, 4, 1, 2, 3 };
+	// Chargen UI index -> EOB1 PC class byte. Single classes get reordered
+	// (UI F/R/P/M/C/T -> EOB1 F/M/C/T/P/R = 0/1/2/3/4/5); multi-class entries
+	// keep their chargen index (6..14 map identically because both lists use
+	// the same multi-class ordering: F/C, F/T, F/M, F/M/T, T/M, C/T, F/C/M,
+	// R/C, C/M -- confirmed against CHGEN's string table).
+	constexpr int kClassToEob1[15] = {
+		0, 5, 4, 1, 2, 3,
+		6, 7, 8, 9, 10, 11, 12, 13, 14,
+	};
 	// Base XP values per EOB1 class @ level 11 (rough -- adequate for HUD
 	// purposes; the game accepts a wide range here, won't reject the party).
 	auto baseXp = [](int eob1Class) -> uint32_t {
@@ -716,19 +855,29 @@ bool writeCreateSav(const std::filesystem::path &chargenDir,
 		patchU16(rec + 25, hp);
 		patchU16(rec + 27, hp);
 		// race / class / alignment / portrait
-		int eob1Class = (c.klass >= 0 && c.klass < 6) ? kClassToEob1[c.klass] : 0;
+		int eob1Class = (c.klass >= 0 && c.klass < 15) ? kClassToEob1[c.klass] : 0;
 		patchU8(rec + 31, static_cast<uint8_t>(std::max(0, c.race)));
 		patchU8(rec + 32, static_cast<uint8_t>(eob1Class));
 		patchU8(rec + 33, static_cast<uint8_t>(std::max(0, c.alignment)));
 		patchU8(rec + 34, static_cast<uint8_t>(c.portrait & 0xff));
-		// levels[3]: single-class -> [c.lvl, 0, 0]
-		patchU8(rec + 36, static_cast<uint8_t>(c.lvl));
-		patchU8(rec + 37, 0);
-		patchU8(rec + 38, 0);
-		// experience[3]: XP1 = class-baseline, XP2/XP3 = -1
-		patchI32(rec + 39, static_cast<int32_t>(baseXp(eob1Class)));
-		patchI32(rec + 43, -1);
-		patchI32(rec + 47, -1);
+		// levels[3] + experience[3]: one entry per component class for multi-
+		// class characters, level/XP duplicated (we don't track per-class XP in
+		// the UI). Unused slots get level 0 and XP -1 to match the default
+		// party's "no class" sentinel.
+		int nComp = std::max(1, classComponentCount(c.klass));
+		for (int i = 0; i < 3; ++i) {
+			if (i < nComp) {
+				patchU8(rec + 36 + i, static_cast<uint8_t>(c.lvl));
+				int compClass = kClassComponents[c.klass][i];
+				int compEob1  = (compClass >= 0 && compClass < 6)
+				              ? kClassToEob1[compClass] : eob1Class;
+				patchI32(rec + 39 + i * 4,
+				         static_cast<int32_t>(baseXp(compEob1)));
+			} else {
+				patchU8(rec + 36 + i, 0);
+				patchI32(rec + 39 + i * 4, -1);
+			}
+		}
 	}
 	std::ofstream f(path, std::ios::binary | std::ios::trunc);
 	if (!f) {
@@ -760,7 +909,8 @@ void handleEntryEvent(const SDL_Event &e, GRAPHICS::Graphics &gfx,
                       State &state) {
 	if (e.type == SDL_KEYDOWN) {
 		auto k = e.key.keysym.sym;
-		if (k == SDLK_RETURN || k == SDLK_KP_ENTER || k == SDLK_p) {
+		if ((k == SDLK_RETURN || k == SDLK_KP_ENTER || k == SDLK_p)
+		    && partyComplete(state)) {
 			state.done = true;          // proceed to game
 		} else if (k == SDLK_ESCAPE) {
 			// Cancel: hand control back to the engine with a "go to title
@@ -771,6 +921,10 @@ void handleEntryEvent(const SDL_Event &e, GRAPHICS::Graphics &gfx,
 	} else if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
 		int lx, ly;
 		mousePos(gfx, e, lx, ly);
+		if (partyComplete(state) && inPlayButton(lx, ly)) {
+			state.done = true;
+			return;
+		}
 		int s = slotAt(lx, ly);
 		if (s >= 0) {
 			state.step       = Step::PickRace;
@@ -801,9 +955,11 @@ PickerResult handleListPicker(const SDL_Event &e, GRAPHICS::Graphics &gfx,
 	} else if (e.type == SDL_MOUSEMOTION) {
 		int lx, ly;
 		mousePos(gfx, e, lx, ly);
-		// List rendered at y=82 + i*8 (FONT6, 8-px line height).
-		if (lx >= 140 && lx < 305 && ly >= 82 && ly < 82 + 8 * numEntries) {
-			int idx = (ly - 82) / 8;
+		// List rendered at y=82 + (i - firstVis)*8 (FONT6, 8-px line height).
+		int firstVis = listFirstVisible(cursor, numEntries);
+		int visCount = std::min(numEntries - firstVis, kListMaxVisible);
+		if (lx >= 140 && lx < 305 && ly >= 82 && ly < 82 + 8 * visCount) {
+			int idx = firstVis + (ly - 82) / 8;
 			if (idx >= 0 && idx < numEntries)
 				cursor = idx;
 		}
@@ -814,12 +970,16 @@ PickerResult handleListPicker(const SDL_Event &e, GRAPHICS::Graphics &gfx,
 		// BACK button takes priority — it's overlaid on the panel.
 		if (inBackButton(lx, ly)) {
 			res.cancelled = true;
-		} else if (lx >= 140 && lx < 305 && ly >= 82 &&
-		           ly < 82 + 8 * numEntries) {
-			int idx = (ly - 82) / 8;
-			if (idx >= 0 && idx < numEntries) {
-				cursor = idx;
-				res.committed = true;
+		} else {
+			int firstVis = listFirstVisible(cursor, numEntries);
+			int visCount = std::min(numEntries - firstVis, kListMaxVisible);
+			if (lx >= 140 && lx < 305 && ly >= 82 &&
+			    ly < 82 + 8 * visCount) {
+				int idx = firstVis + (ly - 82) / 8;
+				if (idx >= 0 && idx < numEntries) {
+					cursor = idx;
+					res.committed = true;
+				}
 			}
 		}
 	}
@@ -946,10 +1106,18 @@ void handleNameEvent(const SDL_Event &e, State &state,
 		// emoji included. Cap by name buffer size (10 bytes + NUL); a
 		// multi-byte char may not fit, in which case we skip the whole
 		// SDL_TEXTINPUT to avoid splitting a code point mid-sequence.
+		// ASCII letters are folded to uppercase to match the original game's
+		// name display; multi-byte sequences pass through unchanged (toupper
+		// is a byte op and would corrupt UTF-8 trail bytes).
 		size_t curLen = std::strlen(c.name);
 		size_t inLen  = std::strlen(e.text.text);
 		if (curLen + inLen <= 10) {
-			std::memcpy(c.name + curLen, e.text.text, inLen);
+			for (size_t i = 0; i < inLen; ++i) {
+				unsigned char b = static_cast<unsigned char>(e.text.text[i]);
+				c.name[curLen + i] = (b < 0x80)
+					? static_cast<char>(std::toupper(b))
+					: static_cast<char>(b);
+			}
 			c.name[curLen + inLen] = '\0';
 		}
 	} else if (e.type == SDL_KEYDOWN) {
@@ -971,14 +1139,18 @@ void handleNameEvent(const SDL_Event &e, State &state,
 			std::cout << "  [chargen: slot " << state.activeSlot
 			          << " name=\"" << c.name << "\" -- writing CREATE.SAV]"
 			          << std::endl;
-			// Only flip `filled` after CREATE.SAV is on disk. Otherwise an
-			// I/O failure leaves the UI showing a completed slot while the
-			// xfer reads stale bytes -- silently mis-rolling the party.
+			// Flip `filled` BEFORE writing so the write loop actually
+			// includes the slot we just finished -- otherwise the last
+			// character to be made gets skipped and the default party's
+			// stale Alice record persists in CREATE.SAV. Roll back on I/O
+			// failure so the UI doesn't show a finished slot for a save
+			// that didn't make it to disk.
+			c.filled = true;
 			if (writeCreateSav(chargenDir, state)) {
-				c.filled = true;
 				state.step       = Step::EntryScreen;
 				state.activeSlot = -1;
 			} else {
+				c.filled = false;
 				std::cout << "  [chargen: keeping slot " << state.activeSlot
 				          << " open -- save failed, character not finalised]"
 				          << std::endl;

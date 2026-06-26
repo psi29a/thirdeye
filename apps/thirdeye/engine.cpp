@@ -755,8 +755,35 @@ bool THIRDEYE::Engine::runExternalProgram(const std::string &program,
 		std::cout << "  [program chain: \"" << program
 		          << "\" -> entering chargen screen (dir: " << chargenDir
 		          << ", gfx=" << (gfx ? "yes" : "no") << ")]" << std::endl;
-		if (gfx)
-			return THIRDEYE::chargen::runChargenScreen(*gfx, chargenDir);
+		if (gfx) {
+			bool ok = THIRDEYE::chargen::runChargenScreen(*gfx, chargenDir);
+			if (ok) {
+				// New party means a new game: wipe SAVEGAME/*.TMP so the CHGN
+				// boot doesn't read stale kernel state (party position, level
+				// progress) from a previous session. Otherwise the kernel
+				// hydrates from the old ITEMS.TMP and the fresh party lands
+				// on whatever level/cell the prior save was at.
+				auto saveDir = resolveChildCI(
+				    resource.resourcePath().parent_path(), "SAVEGAME");
+				std::error_code ec;
+				if (std::filesystem::is_directory(saveDir, ec)) {
+					int wiped = 0;
+					for (auto &entry : std::filesystem::directory_iterator(saveDir, ec)) {
+						auto ext = entry.path().extension().string();
+						std::transform(ext.begin(), ext.end(), ext.begin(),
+						               [](unsigned char c){ return std::tolower(c); });
+						if (ext == ".tmp") {
+							std::filesystem::remove(entry.path(), ec);
+							if (!ec) ++wiped;
+						}
+					}
+					std::cout << "  [chargen success: wiped " << wiped
+					          << " stale *.TMP from " << saveDir << "]"
+					          << std::endl;
+				}
+			}
+			return ok;
+		}
 		std::cout << "  [program chain: \"" << program
 		          << "\" -> headless; using the existing CREATE.SAV]"
 		          << std::endl;

@@ -374,20 +374,22 @@ bool tryHandle(Context &ctx, const std::string &fn,
 		};
 
 		// Step 2 -- patch party position.
-		// If the kernel is live (continue path), copy its saved position. If not
-		// (new-game chargen), write level 1 (15,15,N) -- the same starting cell
-		// resume_level uses when no save data is present.
+		// This function is only ever called from the chargen-transfer flow, so
+		// it always represents a fresh "Gather a New Party": force the start
+		// cell to level 1 (15,15,N) and ignore any live kernel state. The
+		// kernel may have been hydrated from a leftover ITEMS.TMP (a previous
+		// session's save), which would otherwise land the new party on the
+		// old level / position.
 		if (buf.size() > kPosOff + 4) {
+			buf[kPosOff]     = 15; // x
+			buf[kPosOff + 1] = 15; // y
+			buf[kPosOff + 2] = 0;  // facing N
+			buf[kPosOff + 3] = 1;  // level 1
 			int kn = ctx.objects.firstObjectOfClass(kKernelClass);
 			if (kn >= 0) {
 				if (uint8_t *kp = ctx.objects.classStaticPtr(kn, kKernelClass,
 				                                             kPartyPosOff, 4))
-					std::memcpy(&buf[kPosOff], kp, 4);
-			} else {
-				buf[kPosOff]     = 15; // x
-				buf[kPosOff + 1] = 15; // y
-				buf[kPosOff + 2] = 0;  // facing N
-				buf[kPosOff + 3] = 1;  // level 1
+					std::memcpy(kp, &buf[kPosOff], 4);
 			}
 		}
 
