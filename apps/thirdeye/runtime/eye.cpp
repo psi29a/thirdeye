@@ -498,18 +498,14 @@ bool tryHandle(Context &ctx, const std::string &fn,
 		result = 0;
 		return true;
 	}
-	// change_level(old_level, new_level): the native EYE.C function that swaps the
-	// dungeon to a new level. The bytecode then sets party_lvl=new_level + SENDs
-	// "init level" (which reads the loaded tiles). We load the new level's maze +
-	// tileset AND its objects AND each creature's sprite palette; the
-	// bytecode/stairs logic owns the party's landing position.
+	// change_level(old_level, new_level): the native EYE.C function that swaps
+	// the dungeon to a new level. We just refresh the level's objects from
+	// LVLnn.TMP; everything else (maze data, wall-set bitmap number, walls +
+	// creature palettes) is loaded by the SOP "enter level" cascade that the
+	// kernel's SEND "init level" triggers right after this call returns.
 	if (fn == "change_level" && args.size() >= 2) {
 		int newLvl = static_cast<int>(args[1]);
-		loadDungeonLevel(newLvl, ctx.objects, ctx.res, ctx.gfx);
 		THIRDEYE::savegame::loadLevelObjects(newLvl, ctx.objects, ctx.res);
-		// Creature palettes load via the SOP "enter level" cascade (kernel
-		// SEND "init level" -> dungeon -> SEND area, "enter level" -> set_palette
-		// region 2/3). Same path as the boot-time resume_level case.
 		result = 0;
 		return true;
 	}
@@ -808,16 +804,14 @@ bool tryHandle(Context &ctx, const std::string &fn,
 			     << " party members in player[] (stand-in for savegame load)]"
 			     << std::endl;
 		}
-		// Load the level's tiles (maze + wall set + palette) AND its level objects
-		// (doors/levers/monsters/items from LVLnn.TMP) into the dungeon. Doing both
-		// here keeps the saved level's maze + objects atomic -- the previous one-shot
-		// in pumpHost raced this and loaded LVL01.TMP into whatever maze change_level
-		// had switched to, leaving the visible level monster-less.
+		// Load the level's objects (doors/levers/monsters/items from LVLnn.TMP)
+		// into the dungeon. The maze data, wall-set bitmap number, and all
+		// three palettes (walls + PAL_M1 + PAL_M2) are loaded by the SOP
+		// "enter level" cascade -- see the loadAreaInstances comment below.
 		uint8_t lvl = 1;
 		if (kernel >= 0)
 			if (uint8_t *p = ctx.objects.classStaticPtr(kernel, kKernelClass, 246, 1))
 				lvl = *p ? *p : 1;
-		loadDungeonLevel(lvl, ctx.objects, ctx.res, ctx.gfx);
 		THIRDEYE::savegame::loadLevelObjects(lvl, ctx.objects, ctx.res);
 		// Pre-create the 14 area-class singletons from ITEMS_00.BIN. They live
 		// at object slots 1..14 in the native CDESC format and are what dungeon's
