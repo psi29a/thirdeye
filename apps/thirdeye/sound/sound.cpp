@@ -97,7 +97,7 @@ void MIXER::Mixer::playMusic(std::vector<uint8_t> xmidi) {
 }
 
 void MIXER::Mixer::playSound(std::vector<uint8_t> snd) {
-	uint8_t mSourceId = 0;
+	ALuint mSourceId = 0;
 	// find first unused source
 	for (std::map<ALuint, Sources>::iterator iter = mSources.begin();
 			iter != mSources.end(); iter++) {
@@ -113,15 +113,15 @@ void MIXER::Mixer::playSound(std::vector<uint8_t> snd) {
 		return;
 	}
 
-	mSources[mSourceId].buffer = std::move(snd);
-	alGenBuffers(1, &mSources[mSourceId].bufferId);
-	alBufferData(mSources[mSourceId].bufferId, AL_FORMAT_MONO8,
-			&mSources[mSourceId].buffer[0],
-			static_cast<ALsizei>(mSources[mSourceId].buffer.size()),
+	auto &source = mSources.at(mSourceId);
+	source.buffer = std::move(snd);
+	alGenBuffers(1, &source.bufferId);
+	alBufferData(source.bufferId, AL_FORMAT_MONO8,
+			source.buffer.data(),
+			static_cast<ALsizei>(source.buffer.size()),
 			SOUND_RATE);
-	alSourcei(mSources[mSourceId].sourceId, AL_BUFFER,
-			mSources[mSourceId].bufferId);
-	alSourcePlay(mSources[mSourceId].sourceId);
+	alSourcei(source.sourceId, AL_BUFFER, source.bufferId);
+	alSourcePlay(source.sourceId);
 
 	/*
 	 std::cout << mSources[mSourceId].sourceId << " " << mSources[mSourceId].bufferId << " "

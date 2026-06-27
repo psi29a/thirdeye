@@ -349,7 +349,7 @@ WORD write_file(BYTE *filename, void *buf, ULONG len) {
 
 /*************************************************************/
 WORD append_file(BYTE *filename, void *buf, ULONG len) {
-	WORD i;
+	size_t i;
 	FILE *handle;
 
 	handle = fopen(filename, "a+b");
@@ -360,13 +360,8 @@ WORD append_file(BYTE *filename, void *buf, ULONG len) {
 
 	while (len >= 4096L) {
 		i = fwrite(buf, 1, 4096, handle);
-		if (i == -1) {
-			system_err = CANT_WRITE_FILE;
-			fclose(handle);
-			return (0);
-		}
 		if (i != 4096) {
-			system_err = DISK_FULL;
+			system_err = ferror(handle) ? CANT_WRITE_FILE : DISK_FULL;
 			fclose(handle);
 			return (0);
 		}
@@ -375,13 +370,8 @@ WORD append_file(BYTE *filename, void *buf, ULONG len) {
 	}
 
 	i = fwrite(buf, 1, (UWORD) len, handle);
-	if (i == -1) {
-		system_err = CANT_WRITE_FILE;
-		fclose(handle);
-		return (0);
-	}
 	if (i != (UWORD) len) {
-		system_err = DISK_FULL;
+		system_err = ferror(handle) ? CANT_WRITE_FILE : DISK_FULL;
 		fclose(handle);
 		return (0);
 	}

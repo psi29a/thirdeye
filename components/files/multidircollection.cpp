@@ -65,7 +65,7 @@ namespace Files
 
                 std::string filename = std::filesystem::path (path.filename()).string();
 
-                TIter result = mFiles.find (filename);
+                auto result = mFiles.find (filename);
 
                 if (result==mFiles.end())
                 {
@@ -73,7 +73,7 @@ namespace Files
                 }
                 else if (result->first==filename)
                 {
-                    mFiles[filename] = std::move(path);
+                    result->second = std::move(path);
                 }
                 else
                 {
