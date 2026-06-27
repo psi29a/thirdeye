@@ -1,9 +1,9 @@
 #include "gtest/gtest.h"
 
-#include "../thirdeye/chargen/charpics.hpp"
 #include "../thirdeye/chargen/item_dat.hpp"
 #include "../thirdeye/chargen/itemtype_dat.hpp"
 #include "../thirdeye/graphics/bitmap.hpp"
+#include "../thirdeye/graphics/cps.hpp"
 
 #include <cstdint>
 #include <cstdlib>
@@ -202,10 +202,14 @@ TEST(CharPics_Test, OlderFormatNotMisdetectedAsCharPics) {
 
 // --- CHARPICS via graphics::Bitmap ------------------------------------
 
-// graphics::Bitmap now auto-detects the CHARPICS variant and exposes each
-// portrait as a regular Bitmap shape. The pixel decoder is best-effort
-// (literal-bytes-clamped-to-width) until the per-row RLE grammar is RE'd --
-// the test pins dimensions + that the decode produces width*height bytes.
+// Bundled CHARGEN/CHARPICS.BMP: 90 32x32 portraits, encoded with the same
+// scanline RLE format every other AESOP/16 non-VFX bitmap uses (verified
+// byte-for-byte against the file -- see the format note in
+// graphics/bitmap.cpp's Bitmap ctor). The "yellow-pixels" portrait bug
+// regressed when the previous decoder assumed a custom 6-byte sub-header +
+// literal-byte rows; this test pins both shape geometry and a concrete
+// pixel from portrait 1 (Bob's beard) so a regression of the decoder lights
+// up here, not just on screen.
 TEST(CharPics_Test, BitmapDecodesAllBundledPortraits) {
 	const char *dataDir = std::getenv("THIRDEYE_TEST_DATA_DIR");
 	if (!dataDir) GTEST_SKIP() << "set THIRDEYE_TEST_DATA_DIR=/path/to/eob3 dir";
@@ -217,98 +221,82 @@ TEST(CharPics_Test, BitmapDecodesAllBundledPortraits) {
 	std::vector<uint8_t> bytes((std::istreambuf_iterator<char>(f)),
 	                            std::istreambuf_iterator<char>());
 	GRAPHICS::Bitmap bmp(bytes);
-	ASSERT_EQ(89u, bmp.getNumberOfBitmaps())
-	    << "expected 89 portraits in bundled CHARPICS.BMP";
+	ASSERT_EQ(90u, bmp.getNumberOfBitmaps())
+	    << "expected 90 portraits in bundled CHARPICS.BMP";
 	for (uint16_t i = 0; i < bmp.getNumberOfBitmaps(); ++i) {
 		EXPECT_EQ(32u, bmp.getWidth(i))  << "portrait " << i;
 		EXPECT_EQ(32u, bmp.getHeight(i)) << "portrait " << i;
 		auto px = bmp[i];
 		EXPECT_EQ(32u * 32u, px.size()) << "portrait " << i << " pixel buffer";
 	}
+
+	// Portrait 1, row 0 (the bundled file's first non-blank portrait, an
+	// old wizard): the RLE decodes to 14 pixels of color 0xac (x=0..13),
+	// then 11 mixed literal-copy pixels (0f 97 0f a4 0f 97 a4 8f c6 c7 c7,
+	// x=14..24), then 6 more of 0xac (x=25..30). Per-row rle_width is 31,
+	// so x=31 stays transparent (0) -- CHARPICS portraits fill only the
+	// left 31 of the 32-wide canvas, like a 1-px right padding column.
+	auto px1 = bmp[1];
+	ASSERT_EQ(32u * 32u, px1.size());
+	EXPECT_EQ(0xac, px1[0]);    // row 0, col 0  (fill run)
+	EXPECT_EQ(0x0f, px1[14]);   // row 0, col 14 (start of literal-copy)
+	EXPECT_EQ(0xc7, px1[24]);   // row 0, col 24 (end of literal-copy)
+	EXPECT_EQ(0xac, px1[30]);   // row 0, col 30 (trailing fill run)
+	EXPECT_EQ(0x00, px1[31]);   // row 0, col 31 (transparent right edge)
 }
 
-// --- CHARPICS.BMP ------------------------------------------------------
-
-TEST(CharPics_Test, EmptyBuffer) {
-	auto p = THIRDEYE::chargen::parseCharPics({});
-	EXPECT_TRUE(p.portraits.empty());
+// --- LCW / Format80 (Westwood) ---------------------------------------
+//
+// The four LCW command families, exercised with a hand-built stream so a
+// regression in any one of them lights up here (catching a bug at unit-test
+// time, not on a corrupted backdrop).
+TEST(Cps_Test, LcwHandBuiltCoversAllOpcodes) {
+	// Short-copy encoding: bits 6..4 = (count - 3), bits 3..0 = offset hi.
+	// 0x82 'A' 'B'   -- literal copy 2 bytes ("AB")
+	// 0x30 0x01      -- short rel copy: count=((0x30>>4)&7)+3=3+3=6,
+	//                   offset=((0x30&0x0F)<<8)|0x01 = 0x001 = 1
+	//                   (self-overlapping: writes 'B' six times -> "BBBBBB")
+	// 0xC3 0x00 0x00 -- medium copy from absolute output:
+	//                   count=(0xC3&0x3F)+3=6, pos=0 (read 6 from start of
+	//                   dest = "ABBBBB")
+	// 0xFE 0x04 0x00 0x5A         -- large fill: count=4, colour=0x5A
+	// 0xFF 0x03 0x00 0x00 0x00    -- large abs copy: count=3, pos=0 (-> "ABB")
+	// 0x80                        -- end of stream
+	std::vector<uint8_t> s = {
+		0x82, 'A', 'B',
+		0x30, 0x01,
+		0xC3, 0x00, 0x00,
+		0xFE, 0x04, 0x00, 0x5A,
+		0xFF, 0x03, 0x00, 0x00, 0x00,
+		0x80,
+	};
+	auto out = GRAPHICS::decompressLCW(s.data(), s.size(), 1024);
+	std::vector<uint8_t> want = { 'A', 'B' };
+	for (int i = 0; i < 6; ++i) want.push_back('B');                      // BBBBBB
+	for (int i = 0; i < 6; ++i) want.push_back(want[i]);                  // ABBBBB
+	for (int i = 0; i < 4; ++i) want.push_back(0x5A);                     // ZZZZ
+	for (int i = 0; i < 3; ++i) want.push_back(want[i]);                  // ABB
+	EXPECT_EQ(want, out);
 }
 
-// Hand-build a minimal CHARPICS-style file with 2 tiny portraits:
-//   header (10 bytes) + offset table (2 entries, 8 bytes) + portrait sub-headers + RLE bytes.
-TEST(CharPics_Test, ParsesHandBuilt) {
-	std::vector<uint8_t> b;
-	auto u32 = [&](uint32_t v) {
-		for (int i = 0; i < 4; ++i) b.push_back((v >> (i * 8)) & 0xFF);
-	};
-	auto u16 = [&](uint16_t v) {
-		b.push_back(v & 0xFF); b.push_back((v >> 8) & 0xFF);
-	};
-	auto skip = [&](size_t n) { b.resize(b.size() + n, 0); };
-
-	// Header (placeholder file size; we'll fix it later)
-	size_t headerStart = b.size();
-	u32(0); u16(0); u16(0); u16(0);
-
-	// Reserve offset table (2 × u32)
-	size_t tableStart = b.size();
-	u32(0); u32(0);
-
-	// Portrait 0: 4x4, RLE = 5 bytes of fake data
-	size_t off0 = b.size();
-	u16(3);          // boundsx = width-1
-	u16(4);          // boundsy = height
-	u16(0);          // reserved
-	for (int i = 0; i < 5; ++i) b.push_back(static_cast<uint8_t>(0xA0 + i));
-
-	// Portrait 1: 8x8, RLE = 3 bytes
-	size_t off1 = b.size();
-	u16(7); u16(8); u16(0);
-	b.push_back(0xB1); b.push_back(0xB2); b.push_back(0xB3);
-
-	// Patch offsets + file size
-	auto patchU32 = [&](size_t off, uint32_t v) {
-		for (int i = 0; i < 4; ++i) b[off + i] = (v >> (i * 8)) & 0xFF;
-	};
-	patchU32(tableStart + 0, static_cast<uint32_t>(off0));
-	patchU32(tableStart + 4, static_cast<uint32_t>(off1));
-	patchU32(headerStart, static_cast<uint32_t>(b.size()));
-
-	auto p = THIRDEYE::chargen::parseCharPics(b);
-	EXPECT_EQ(b.size(), p.declaredFileSize);
-	ASSERT_EQ(2u, p.portraits.size());
-	EXPECT_EQ(4,  p.portraits[0].width);
-	EXPECT_EQ(4,  p.portraits[0].height);
-	EXPECT_EQ(5u, p.portraits[0].rleData.size());
-	EXPECT_EQ(0xA0, p.portraits[0].rleData[0]);
-	EXPECT_EQ(0xA4, p.portraits[0].rleData[4]);
-	EXPECT_EQ(8,  p.portraits[1].width);
-	EXPECT_EQ(8,  p.portraits[1].height);
-	EXPECT_EQ(3u, p.portraits[1].rleData.size());
-}
-
-// Real-data: bundled CHARGEN/CHARPICS.BMP has 89 32x32 portraits.
-TEST(CharPics_Test, ParsesBundledCharPics) {
+// Real-data: bundled CHARGEN/CHARGEN.CPS decompresses to a 64000-byte
+// 320x200 indexed image with no embedded palette. Pin both.
+TEST(Cps_Test, LoadsBundledChargenBackdrop) {
 	const char *dataDir = std::getenv("THIRDEYE_TEST_DATA_DIR");
 	if (!dataDir) GTEST_SKIP() << "set THIRDEYE_TEST_DATA_DIR=/path/to/eob3 dir";
-	auto path = std::filesystem::path(dataDir) / "CHARGEN" / "CHARPICS.BMP";
+	auto path = std::filesystem::path(dataDir) / "CHARGEN" / "CHARGEN.CPS";
 	if (!std::filesystem::exists(path)) GTEST_SKIP() << path << " not found";
 
-	auto p = THIRDEYE::chargen::loadCharPics(path);
-	EXPECT_EQ(82005u, p.declaredFileSize);
-	ASSERT_EQ(89u,    p.portraits.size());
-	// All 89 are 32x32 in this file (a chargen invariant).
-	for (size_t i = 0; i < p.portraits.size(); ++i) {
-		EXPECT_EQ(32, p.portraits[i].width)
-		    << "portrait " << i << " width";
-		EXPECT_EQ(32, p.portraits[i].height)
-		    << "portrait " << i << " height";
-		EXPECT_GT(p.portraits[i].rleData.size(), 0u);
-	}
-	// 14 of the 89 are "empty"-shaped (~229 - 6 header = ~223-byte RLE).
-	// Pin the distribution loosely.
-	int small = 0;
-	for (const auto &q : p.portraits)
-		if (q.rleData.size() < 300) ++small;
-	EXPECT_EQ(14, small) << "expected 14 'empty' portrait slots";
+	auto cps = GRAPHICS::loadCps(path);
+	EXPECT_EQ(320, cps.width);
+	EXPECT_EQ(200, cps.height);
+	EXPECT_EQ(64000u, cps.pixels.size());
+	EXPECT_TRUE(cps.palette.empty());
+	// Spot-check that the upper-left corner is a stone tone (not all zero):
+	// the title bar / frame border in the bundled backdrop ends up near
+	// palette index 0x44-ish at (0, 0). Tightening to a specific palette
+	// index would couple us to the file's exact palette mapping; the loose
+	// "not zero" check just guards against a decoder that fills everything
+	// with the sentinel byte from a malformed back-reference.
+	EXPECT_NE(0u, cps.pixels[0]);
 }

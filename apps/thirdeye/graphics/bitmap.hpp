@@ -47,17 +47,6 @@ private:
 	// every EYE.RES bitmap uses). See bitmap.cpp for the token grammar.
 	std::vector<uint8_t> decodeVFXShape(uint16_t index);
 
-	// Decode one shape of a CHARGEN/CHARPICS.BMP-style portrait sheet.
-	// Format: u32 fileSize + u16×3 header + u32[N] offset table; per-shape
-	// 6-byte sub-header (u16 boundsx, u16 boundsy, u16 reserved) followed by
-	// per-row RLE bytes bracketed by `<row u16> 0x1f80` markers. The
-	// per-row pixel encoding inside those markers is NOT fully RE'd; today
-	// we walk the row brackets correctly but emit each row's bytes as
-	// literal pixel values (clamped to width). Good enough to confirm
-	// shape geometry / cross-portrait sanity; for proper rendering, see
-	// the comment in bitmap.cpp on what's left to RE.
-	std::vector<uint8_t> decodeCharPicsShape(uint16_t index);
-
 	// Defensive default-init: the constructor's three format branches all
 	// assign mNumSubBitmaps explicitly today, but an early-return on a
 	// malformed input would otherwise leave it garbage (this is the bug the

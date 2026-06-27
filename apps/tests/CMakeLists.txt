@@ -17,7 +17,7 @@ set(UNITTEST_HEADER
 source_group(game FILES ${UNITTEST} ${UNITTEST_HEADER})
 
 add_runtests_dir (graphics
-    graphics font palette bitmap
+    graphics font palette bitmap cps
     )
 
 add_runtests_dir (resources
@@ -33,7 +33,7 @@ add_runtests_dir (savegame
     )
 
 add_runtests_dir (chargen
-    item_dat itemtype_dat charpics
+    item_dat itemtype_dat
     )
 
 # Main executable

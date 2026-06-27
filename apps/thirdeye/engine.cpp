@@ -8,6 +8,7 @@
 #include "vm/events.hpp"
 #include "savegame/transfer.hpp"
 #include "savegame/lvl_tmp.hpp"
+#include "chargen/chargen_screen.hpp"
 #include "runtime/internal.hpp"
 
 #include <components/files/configurationmanager.hpp>
@@ -68,6 +69,9 @@ void THIRDEYE::Engine::setSkipIntro(bool skipIntro) {
 void THIRDEYE::Engine::setChargen(bool chargen) {
 	mChargen = chargen;
 }
+void THIRDEYE::Engine::setChargenTest(bool chargenTest) {
+	mChargenTest = chargenTest;
+}
 
 // The game-data path may be either a directory (in which case we append the
 // selected game's main .RES) or a direct path to a .RES file (used as-is, with
@@ -126,6 +130,32 @@ using THIRDEYE::runtime::gBootStart;    // set at go(); for timing prints
 using THIRDEYE::runtime::gPerf;         // THIRDEYE_PERF=1 -- per-present timing
 using THIRDEYE::runtime::gLastPresent;  // wall-clock of previous present
 
+// Resolve a child directory case-insensitively: try the exact name first
+// (the fast path on macOS/Windows and Linux installs that already match),
+// fall back to scanning the parent for any entry whose name compares
+// equal under tolower(). Returns the resolved path on success, or
+// `parent/name` unchanged (so callers still get a stable path for error
+// messages) when no match is found. Used for CHARGEN/, SAVEGAME/, etc.
+// where the install's on-disk casing varies (see existing chargen/savegame
+// case-checks elsewhere in this TU).
+std::filesystem::path resolveChildCI(const std::filesystem::path &parent,
+                                     const std::string &name) {
+	std::error_code ec;
+	auto exact = parent / name;
+	if (std::filesystem::exists(exact, ec)) return exact;
+	if (!std::filesystem::is_directory(parent, ec)) return exact;
+	std::string lower = name;
+	for (auto &c : lower) c = static_cast<char>(std::tolower(
+	    static_cast<unsigned char>(c)));
+	for (auto &entry : std::filesystem::directory_iterator(parent, ec)) {
+		auto candidate = entry.path().filename().string();
+		std::string cl = candidate;
+		for (auto &c : cl) c = static_cast<char>(std::tolower(
+		    static_cast<unsigned char>(c)));
+		if (cl == lower) return entry.path();
+	}
+	return exact;
+}
 
 } // close anon namespace -- pumpHost lives in THIRDEYE::runtime so the
   // dispatch_event handler in runtime/event.cpp can call it via internal.hpp.
@@ -679,9 +709,15 @@ void THIRDEYE::Engine::bootObject(RESOURCES::Resource &resource,
 		// Run the sub-program OUTSIDE the catch above (a throw from within a catch
 		// handler escapes its own try): it may itself QuitRequested (window closed
 		// during the intro), which must be caught here. Then loop to re-boot start.
+		// Returns false on cancel (Esc out of chargen) -- override mem[1264] so
+		// the next start lands on the title menu rather than the chargen-transfer.
 		if (!relaunch.empty()) {
 			try {
-				runExternalProgram(relaunch, gfx.get(), resource);
+				if (!runExternalProgram(relaunch, gfx.get(), resource)) {
+					mem.insert_or_assign(1264, MODE_INTR);
+					std::cout << "  [sub-program cancelled -- next start: INTR]"
+					          << std::endl;
+				}
 			} catch (const QuitRequested &) {
 				std::cout << "\nWindow closed -- quitting." << std::endl;
 				quit = true;
@@ -697,7 +733,7 @@ void THIRDEYE::Engine::bootObject(RESOURCES::Resource &resource,
 // run those binaries; instead we play thirdeye's own equivalent. The chain
 // (re-boot start on the poked mode) is what makes the selection do the right
 // thing; here we drive the rich behaviour for the programs we can.
-void THIRDEYE::Engine::runExternalProgram(const std::string &program,
+bool THIRDEYE::Engine::runExternalProgram(const std::string &program,
                                           GRAPHICS::Graphics *gfx,
                                           RESOURCES::Resource &resource) {
 	std::string p = program;
@@ -707,23 +743,75 @@ void THIRDEYE::Engine::runExternalProgram(const std::string &program,
 		// "Introduction": the original launches CINE.EXE to play INTRO.GFF, then
 		// chain-launches back to the title menu. Drive thirdeye's own GFF player.
 		playCinematic(gfx, resource, "INTRO.GFF");
-	} else if (p.find("chgen") != std::string::npos ||
-	           p.find("chargen") != std::string::npos ||
-	           p.find("charge") != std::string::npos) {
-		// "Gather a New Party": CHGEN.EXE builds a party and writes CHARGEN\CREATE.SAV,
-		// then chains back with mode "CHGN" so start's xfer object reads it and enters
-		// the game. We have no char-gen UI yet, so we reuse the existing CREATE.SAV
-		// (the default party Bob/Carol/Ted/Alice) -- the transfer (player_attrib etc.)
-		// then runs for real. TODO: an actual character-creation UI to author it.
-		std::cout << "  [program chain: \"" << program
-		          << "\" -> no char-gen UI yet; using the existing CHARGEN\\CREATE.SAV "
-		             "(default party) and entering the game]"
-		          << std::endl;
-	} else {
-		std::cout << "  [program chain: \"" << program
-		          << "\" -> no thirdeye equivalent yet; re-booting start]"
-		          << std::endl;
+		return true;
 	}
+	if (p.find("chgen") != std::string::npos ||
+	    p.find("chargen") != std::string::npos ||
+	    p.find("charge") != std::string::npos) {
+		// "Gather a New Party": CHGEN.EXE builds a party + writes CREATE.SAV,
+		// then chains back with mode "CHGN" so start's xfer reads it.
+		std::filesystem::path chargenDir = resolveChildCI(
+		    resource.resourcePath().parent_path(), "CHARGEN");
+		std::cout << "  [program chain: \"" << program
+		          << "\" -> entering chargen screen (dir: " << chargenDir
+		          << ", gfx=" << (gfx ? "yes" : "no") << ")]" << std::endl;
+		if (gfx) {
+			bool ok = THIRDEYE::chargen::runChargenScreen(*gfx, chargenDir);
+			if (ok) {
+				// Paint the game's main stone Backdrop over the chargen's last
+				// frame before start.create's CHGN path begins drawing. The
+				// SOP draws specific UI elements (portraits, compass, dialog
+				// text) on top of whatever's already there and never issues
+				// a full-screen clear, so a leftover chargen frame leaks
+				// through the gaps. The CINE path doesn't see this because
+				// the title menu had already drawn the stone Backdrop into
+				// those areas. fillRect-to-black "fixes" the leak but leaves
+				// the gaps reading as black voids (visible under the dialog
+				// text panel); drawing the actual Backdrop matches CINE.
+				try {
+					auto &bmp = resource.getAsset("Backdrop");
+					gfx->drawImage(bmp, 0, 0, 0, /*transparency=*/false,
+					               /*mirror=*/0, /*cacheId=*/0);
+				} catch (const std::exception &) {
+					// Backdrop missing -- fall back to a black wipe rather
+					// than leak the chargen frame.
+					gfx->fillRect(0, 0, WIDTH - 1, HEIGHT - 1, 0);
+				}
+				// New party means a new game: wipe SAVEGAME/*.TMP so the CHGN
+				// boot doesn't read stale kernel state (party position, level
+				// progress) from a previous session. Otherwise the kernel
+				// hydrates from the old ITEMS.TMP and the fresh party lands
+				// on whatever level/cell the prior save was at.
+				auto saveDir = resolveChildCI(
+				    resource.resourcePath().parent_path(), "SAVEGAME");
+				std::error_code ec;
+				if (std::filesystem::is_directory(saveDir, ec)) {
+					int wiped = 0;
+					for (auto &entry : std::filesystem::directory_iterator(saveDir, ec)) {
+						auto ext = entry.path().extension().string();
+						std::transform(ext.begin(), ext.end(), ext.begin(),
+						               [](unsigned char c){ return std::tolower(c); });
+						if (ext == ".tmp") {
+							std::filesystem::remove(entry.path(), ec);
+							if (!ec) ++wiped;
+						}
+					}
+					std::cout << "  [chargen success: wiped " << wiped
+					          << " stale *.TMP from " << saveDir << "]"
+					          << std::endl;
+				}
+			}
+			return ok;
+		}
+		std::cout << "  [program chain: \"" << program
+		          << "\" -> headless; using the existing CREATE.SAV]"
+		          << std::endl;
+		return true;
+	}
+	std::cout << "  [program chain: \"" << program
+	          << "\" -> no thirdeye equivalent yet; re-booting start]"
+	          << std::endl;
+	return true;
 }
 
 // Play a GFF cinematic (INTRO.GFF/FINALE.GFF/...) that lives beside the game's
@@ -825,6 +913,22 @@ void THIRDEYE::Engine::go() {
 		auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
 		              std::chrono::steady_clock::now() - _t0).count();
 		std::cout << "[timing] resource load: " << ms << " ms" << std::endl;
+	}
+
+	// --chargen-test: render the chargen entry screen in isolation (no SOP, no
+	// menu, no transfer). Used to verify the chargen UI / portrait decoder
+	// without driving the title menu, since headless autowalk doesn't currently
+	// reach the menu's mouse-region handler.
+	if (mChargenTest) {
+		GRAPHICS::Graphics gfx(mScale);
+		std::filesystem::path chargenDir =
+		    resolveChildCI(resFile.parent_path(), "CHARGEN");
+		try {
+			THIRDEYE::chargen::runChargenScreen(gfx, chargenDir);
+		} catch (const THIRDEYE::runtime::QuitRequested &) {
+			std::cout << "\nWindow closed -- quitting." << std::endl;
+		}
+		return;
 	}
 
 	// --vm (or the --skip-* flags, which only make sense here): boot the SOP

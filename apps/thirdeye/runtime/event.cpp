@@ -19,9 +19,9 @@ namespace THIRDEYE::runtime::event {
 namespace {
 
 void runDebugHooks(VM::ObjectSystem &objects, RESOURCES::Resource &res) {
-	// (Level-object loading now lives in resume_level alongside loadDungeonLevel
-	// -- having a one-shot here too raced resume_level's party_lvl patch and
-	// loaded LVL01.TMP into whatever maze had been swapped in.)
+	// (Level-object loading lives in resume_level + change_level. A one-shot
+	// here previously raced resume_level's party_lvl patch and loaded
+	// LVL01.TMP into whatever maze had been swapped in -- don't reintroduce.)
 	(void)res;
 
 	// Creature notes: the 3D view redraws ~4 Hz even when idle (the kernel "timer

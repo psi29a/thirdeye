@@ -44,6 +44,7 @@ class Engine
 	bool mSkipMenu = false;  // boot straight into the game (skip the title menu)
 	bool mSkipIntro = false; // skip the intro cinematic
 	bool mChargen   = false; // --chargen: force the chargen path even if a save exists
+	bool mChargenTest = false; // --chargen-test: run chargen entry screen in isolation
 	bool mRenderer;
 	uint8_t mGame;
 	uint16_t mScale;
@@ -75,6 +76,7 @@ public:
 	void setSkipMenu(bool skipMenu);
 	void setSkipIntro(bool skipIntro);
 	void setChargen(bool chargen);
+	void setChargenTest(bool chargenTest);
 	void setDebugMode(bool debug);
 	void setSoundUsage(bool nosound);
 	void setRenderer(bool renderer);
@@ -100,7 +102,10 @@ private:
 	/// intro cinematic, character generation, ...). Called when a menu choice
 	/// hands off via launch(); after it returns, bootObject re-boots `start` on
 	/// the mode the bytecode poked into cell 1264 (AESOP's program chain).
-	void runExternalProgram(const std::string &program, GRAPHICS::Graphics *gfx,
+	/// Returns true normally; false if the sub-program cancelled (e.g. user
+	/// hit Esc out of the chargen entry screen) -- caller then resets
+	/// mem[1264] to MODE_INTR so the next start lands on the title menu.
+	bool runExternalProgram(const std::string &program, GRAPHICS::Graphics *gfx,
 	                        RESOURCES::Resource &resource);
 
 	/// Play a GFF cinematic (e.g. INTRO.GFF) that sits beside the game's .RES,

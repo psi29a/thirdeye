@@ -373,23 +373,20 @@ bool tryHandle(Context &ctx, const std::string &fn,
 			           | (uint32_t(p[2]) << 16) | (uint32_t(p[3]) << 24) : 0;
 		};
 
-		// Step 2 -- patch party position.
-		// If the kernel is live (continue path), copy its saved position. If not
-		// (new-game chargen), write level 1 (15,15,N) -- the same starting cell
-		// resume_level uses when no save data is present.
-		if (buf.size() > kPosOff + 4) {
-			int kn = ctx.objects.firstObjectOfClass(kKernelClass);
-			if (kn >= 0) {
-				if (uint8_t *kp = ctx.objects.classStaticPtr(kn, kKernelClass,
-				                                             kPartyPosOff, 4))
-					std::memcpy(&buf[kPosOff], kp, 4);
-			} else {
-				buf[kPosOff]     = 15; // x
-				buf[kPosOff + 1] = 15; // y
-				buf[kPosOff + 2] = 0;  // facing N
-				buf[kPosOff + 3] = 1;  // level 1
-			}
-		}
+		// Step 2 -- party position.
+		// The scaffold ITEMS_00.BIN we seeded buf from already contains the
+		// canonical starting cell -- file offsets 252..255 = (x=7, y=24,
+		// fdir=1, lvl=3) on a fresh EOB3 install. This is where the shipped
+		// Quick Start Party lives, and it's the same cell a freshly-rolled
+		// party should appear in: the graveyard entrance (LVL03's "graveyard
+		// to forest" area, the actual narrative start of the game). The
+		// mausoleum on LVL01 is NOT the beginning; it's a later location.
+		// We deliberately do NOT overwrite buf[252..255] -- the scaffold's
+		// position is the right answer. We also leave the live kernel alone
+		// because the kernel is created later in the boot (start.enter_game
+		// -> create_program(kernel)) and its statics start at 0; resume_level
+		// will seed them from this file in its own pass.
+		(void) kPosOff; // (intentionally unused now; the scaffold carries pos)
 
 		// Step 3 -- write live PC records. Zero-fill the 10-slot block first
 		// so empty slots are recognisably empty (classNumber == 0).
@@ -498,18 +495,14 @@ bool tryHandle(Context &ctx, const std::string &fn,
 		result = 0;
 		return true;
 	}
-	// change_level(old_level, new_level): the native EYE.C function that swaps the
-	// dungeon to a new level. The bytecode then sets party_lvl=new_level + SENDs
-	// "init level" (which reads the loaded tiles). We load the new level's maze +
-	// tileset AND its objects AND each creature's sprite palette; the
-	// bytecode/stairs logic owns the party's landing position.
+	// change_level(old_level, new_level): the native EYE.C function that swaps
+	// the dungeon to a new level. We just refresh the level's objects from
+	// LVLnn.TMP; everything else (maze data, wall-set bitmap number, walls +
+	// creature palettes) is loaded by the SOP "enter level" cascade that the
+	// kernel's SEND "init level" triggers right after this call returns.
 	if (fn == "change_level" && args.size() >= 2) {
 		int newLvl = static_cast<int>(args[1]);
-		loadDungeonLevel(newLvl, ctx.objects, ctx.res, ctx.gfx);
 		THIRDEYE::savegame::loadLevelObjects(newLvl, ctx.objects, ctx.res);
-		// Creature palettes load via the SOP "enter level" cascade (kernel
-		// SEND "init level" -> dungeon -> SEND area, "enter level" -> set_palette
-		// region 2/3). Same path as the boot-time resume_level case.
 		result = 0;
 		return true;
 	}
@@ -780,8 +773,16 @@ bool tryHandle(Context &ctx, const std::string &fn,
 				// a debug override -- THIRDEYE_GOTO bypassed program/window
 				// state the SOP relies on and produced page-numbering and HUD
 				// glitches that didn't reproduce in real gameplay.
-				uint8_t startLvl = 1;
-				int px = 15, py = 15, pf = 0;
+				// Default start: matches the shipped Quick Start Party cell in
+				// SAVEGAME/ITEMS_00.BIN -- (7, 24) facing east on the graveyard
+				// (LVL03). LVL01 (mausoleum) is NOT the narrative beginning of
+				// EOB3; the graveyard is. The chargen-transfer's
+				// write_initial_tempfiles preserves this position from the
+				// scaffold, so the only time this default kicks in is when
+				// resume_level is called with a fresh kernel but no save data
+				// at all (rare; mostly debugging).
+				uint8_t startLvl = 3;
+				int px = 7, py = 24, pf = 1;
 				bool seededFromSave = false;
 				if (wantContinue && items.position.level >= 1 &&
 				    items.position.level <= 14) {
@@ -808,16 +809,14 @@ bool tryHandle(Context &ctx, const std::string &fn,
 			     << " party members in player[] (stand-in for savegame load)]"
 			     << std::endl;
 		}
-		// Load the level's tiles (maze + wall set + palette) AND its level objects
-		// (doors/levers/monsters/items from LVLnn.TMP) into the dungeon. Doing both
-		// here keeps the saved level's maze + objects atomic -- the previous one-shot
-		// in pumpHost raced this and loaded LVL01.TMP into whatever maze change_level
-		// had switched to, leaving the visible level monster-less.
+		// Load the level's objects (doors/levers/monsters/items from LVLnn.TMP)
+		// into the dungeon. The maze data, wall-set bitmap number, and all
+		// three palettes (walls + PAL_M1 + PAL_M2) are loaded by the SOP
+		// "enter level" cascade -- see the loadAreaInstances comment below.
 		uint8_t lvl = 1;
 		if (kernel >= 0)
 			if (uint8_t *p = ctx.objects.classStaticPtr(kernel, kKernelClass, 246, 1))
 				lvl = *p ? *p : 1;
-		loadDungeonLevel(lvl, ctx.objects, ctx.res, ctx.gfx);
 		THIRDEYE::savegame::loadLevelObjects(lvl, ctx.objects, ctx.res);
 		// Pre-create the 14 area-class singletons from ITEMS_00.BIN. They live
 		// at object slots 1..14 in the native CDESC format and are what dungeon's

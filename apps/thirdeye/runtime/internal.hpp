@@ -111,13 +111,6 @@ void pumpHost(GRAPHICS::Graphics &gfx, VM::EventSystem &events);
 std::string formatSop(const std::string &fmt, const std::vector<VM::Value> &args,
                       size_t start, VM::Interpreter &vm);
 
-// Load a dungeon level's tiles (the map resource -> lvlmap, wall-set bitmap
-// number -> wallset, palette into the 0xB0 region). Used by both resume_level
-// (initial) and change_level (in-game transitions). Returns false if the
-// dungeon object or map isn't found.
-bool loadDungeonLevel(int level, VM::ObjectSystem &objects,
-                      RESOURCES::Resource &res, GRAPHICS::Graphics *gfx);
-
 // --- Category dispatch entries -------------------------------------------
 //
 // Each returns true iff `fn` matches a name this category owns (whether the

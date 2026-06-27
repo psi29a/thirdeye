@@ -159,6 +159,14 @@ public:
 			int posY, bool transparency = false, int mirror = 0,
 			uint32_t cacheId = 0);
 
+	// Blit a raw indexed (8 bpp) pixel buffer onto the screen at (posX, posY),
+	// using the live palette. Used for full-screen CPS backdrops and any other
+	// art that's already a flat width*height byte stream (no RLE container).
+	// transparent=true treats palette index 0 as see-through (skipped during
+	// the blit), so sprite art over a backdrop reads cleanly.
+	void drawIndexed(const std::vector<uint8_t> &pixels, int width, int height,
+			int posX, int posY, bool transparent = false);
+
 	// Constrain subsequent blits to a rectangle on the screen surface (used to
 	// clip the dungeon 3D view to its window so wide wall shapes don't bleed into
 	// the character panels). clearClip() removes the constraint.
@@ -177,6 +185,18 @@ public:
 	void fillRect(int x0, int y0, int x1, int y1, uint8_t color);
 	void drawText(std::vector<uint8_t> &fnt, std::string text, uint16_t posX,
 			uint16_t posY);
+
+	// drawText variant that tints the glyphs to a chosen palette index colour
+	// (the font glyphs themselves are masks; SDL_SetSurfaceColorMod modulates
+	// the white pixels to (r,g,b) drawn from the live palette). Used by
+	// pickers that need a red "selected" entry over white siblings.
+	// `pitch` (default 0 = use the glyph's full width) advances the cursor
+	// by exactly that many pixels per character -- handy for FONT6 whose
+	// glyphs are 8-wide but only ~5 cols of visible content, so a pitch of
+	// 6 gives a tighter look for button labels.
+	void drawTextColored(std::vector<uint8_t> &fnt, std::string text,
+			uint16_t posX, uint16_t posY, uint8_t paletteIndex,
+			int pitch = 0);
 
 	void playVideo(sequence);
 	void stopVideo();
