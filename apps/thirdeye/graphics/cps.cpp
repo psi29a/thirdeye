@@ -1,5 +1,6 @@
 #include "cps.hpp"
 
+#include <algorithm>
 #include <fstream>
 #include <iterator>
 
@@ -48,18 +49,20 @@ std::vector<uint8_t> decompressLCW(const uint8_t *src, size_t srcSize,
 		} else if (c == 0xFE) {
 			// large fill: u16 count, u8 colour
 			if (src + 3 > end) break;
-			uint16_t count = src[0] | (src[1] << 8);
+			size_t count = src[0] | (src[1] << 8);
 			uint8_t colour = src[2];
 			src += 3;
-			for (uint16_t i = 0; i < count && dest.size() < destSize; ++i)
+			count = std::min(count, destSize - dest.size());
+			for (size_t i = 0; i < count; ++i)
 				dest.push_back(colour);
 		} else if (c == 0xFF) {
 			// large copy from absolute output: u16 count, u16 position
 			if (src + 4 > end) break;
-			uint16_t count = src[0] | (src[1] << 8);
+			size_t count = src[0] | (src[1] << 8);
 			uint16_t pos   = src[2] | (src[3] << 8);
 			src += 4;
-			for (uint16_t i = 0; i < count && dest.size() < destSize; ++i)
+			count = std::min(count, destSize - dest.size());
+			for (size_t i = 0; i < count; ++i)
 				pushAt(pos + i);
 		} else {
 			// medium copy from absolute output: u16 position

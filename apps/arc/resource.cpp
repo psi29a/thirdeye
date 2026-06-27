@@ -104,6 +104,10 @@ ULONG RES_store_resource(RF_class *RF, ULONG entry, void *source,
 
 	case RTYP_RAW_FILE:
 		file = open((BYTE*) source, O_RDWR);
+		if (file < 0) {
+			err = 1;
+			break;
+		}
 		ptr = (UBYTE*) mem_alloc(BLK_SIZE);
 
 		while (len > BLK_SIZE) {

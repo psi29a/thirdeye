@@ -313,7 +313,7 @@ ULONG RS_parse_attribute_list(RS_class *RS) {
 
 	do {
 		if (!RS_next_attribute_specifier(RS)) {
-			report(E_ERROR, LEX_line(RS->LEX, LEX_NXT), MSG_MAS, NULL);
+			report(E_ERROR, LEX_line(RS->LEX, LEX_NXT), MSG_MAS);
 			return (attrib);
 		}
 
@@ -322,12 +322,12 @@ ULONG RS_parse_attribute_list(RS_class *RS) {
 		switch (LEX_token(RS->LEX, LEX_CUR)) {
 		case RS_FIXED:
 			if (af)
-				report(E_WARN, LEX_line(RS->LEX, LEX_CUR), MSG_RAT, NULL);
+				report(E_WARN, LEX_line(RS->LEX, LEX_CUR), MSG_RAT);
 			else if (am)
-				report(E_ERROR, LEX_line(RS->LEX, LEX_CUR), MSG_CAT, NULL);
+				report(E_ERROR, LEX_line(RS->LEX, LEX_CUR), MSG_CAT);
 			else if (at)
 				report(E_WARN, LEX_line(RS->LEX, LEX_CUR), MSG_MTT,
-						LEX_lexeme(RS->LEX, LEX_CUR), NULL);
+						LEX_lexeme(RS->LEX, LEX_CUR));
 			else {
 				attrib |= DA_FIXED;
 				af++;
@@ -336,12 +336,12 @@ ULONG RS_parse_attribute_list(RS_class *RS) {
 
 		case RS_MOVEABLE:
 			if (am)
-				report(E_WARN, LEX_line(RS->LEX, LEX_CUR), MSG_RAT, NULL);
+				report(E_WARN, LEX_line(RS->LEX, LEX_CUR), MSG_RAT);
 			else if (af)
-				report(E_ERROR, LEX_line(RS->LEX, LEX_CUR), MSG_CAT, NULL);
+				report(E_ERROR, LEX_line(RS->LEX, LEX_CUR), MSG_CAT);
 			else if (at)
 				report(E_WARN, LEX_line(RS->LEX, LEX_CUR), MSG_MTT,
-						LEX_lexeme(RS->LEX, LEX_CUR), NULL);
+						LEX_lexeme(RS->LEX, LEX_CUR));
 			else {
 				attrib &= (~DA_FIXED);
 				am++;
@@ -350,12 +350,12 @@ ULONG RS_parse_attribute_list(RS_class *RS) {
 
 		case RS_PRECIOUS:
 			if (ap)
-				report(E_WARN, LEX_line(RS->LEX, LEX_CUR), MSG_RAT, NULL);
+				report(E_WARN, LEX_line(RS->LEX, LEX_CUR), MSG_RAT);
 			else if (ad)
-				report(E_ERROR, LEX_line(RS->LEX, LEX_CUR), MSG_CAT, NULL);
+				report(E_ERROR, LEX_line(RS->LEX, LEX_CUR), MSG_CAT);
 			else if (at)
 				report(E_WARN, LEX_line(RS->LEX, LEX_CUR), MSG_MTT,
-						LEX_lexeme(RS->LEX, LEX_CUR), NULL);
+						LEX_lexeme(RS->LEX, LEX_CUR));
 			else {
 				attrib |= DA_PRECIOUS;
 				ap++;
@@ -364,12 +364,12 @@ ULONG RS_parse_attribute_list(RS_class *RS) {
 
 		case RS_DISCARDABLE:
 			if (ad)
-				report(E_WARN, LEX_line(RS->LEX, LEX_CUR), MSG_RAT, NULL);
+				report(E_WARN, LEX_line(RS->LEX, LEX_CUR), MSG_RAT);
 			else if (ap)
-				report(E_ERROR, LEX_line(RS->LEX, LEX_CUR), MSG_CAT, NULL);
+				report(E_ERROR, LEX_line(RS->LEX, LEX_CUR), MSG_CAT);
 			else if (at)
 				report(E_WARN, LEX_line(RS->LEX, LEX_CUR), MSG_MTT,
-						LEX_lexeme(RS->LEX, LEX_CUR), NULL);
+						LEX_lexeme(RS->LEX, LEX_CUR));
 			else {
 				attrib |= DA_DISCARDABLE;
 				ad++;
@@ -378,9 +378,9 @@ ULONG RS_parse_attribute_list(RS_class *RS) {
 
 		case RS_TEMPORARY:
 			if (at)
-				report(E_WARN, LEX_line(RS->LEX, LEX_CUR), MSG_RAT, NULL);
+				report(E_WARN, LEX_line(RS->LEX, LEX_CUR), MSG_RAT);
 			else if (af || am || ap || ad)
-				report(E_WARN, LEX_line(RS->LEX, LEX_CUR), MSG_MAT, NULL);
+				report(E_WARN, LEX_line(RS->LEX, LEX_CUR), MSG_MAT);
 			else {
 				attrib = DA_TEMPORARY;
 				at++;
@@ -480,7 +480,7 @@ static void RS_parse_attribute_specification(RS_class *RS) {
 
 	if ((LEX_type(RS->LEX, LEX_NXT) != TTYP_KEYWORD) || (type >= RDAT_NTYPES)
 			|| (type < 0)) {
-		report(E_ERROR, LEX_line(RS->LEX, LEX_NXT), MSG_ERS, NULL);
+		report(E_ERROR, LEX_line(RS->LEX, LEX_NXT), MSG_ERS);
 		return;
 	}
 
@@ -892,8 +892,7 @@ void IDR_compile(IDR_class *IDR) {
 
 	if (!verify_file(IDR->fn)) {
 		DICT_delete(IDR->RS->dict[RDEP], IDR->name);
-		report(E_ERROR, LEX_line(IDR->RS->LEX, LEX_CUR), MSG_SNF, IDR->fn,
-				NULL);
+		report(E_ERROR, LEX_line(IDR->RS->LEX, LEX_CUR), MSG_SNF, IDR->fn);
 		return;
 	}
 

@@ -793,8 +793,8 @@ bool tryHandle(Context &ctx, const std::string &fn,
 					seededFromSave = true;
 				}
 				if (const char *pp = std::getenv("THIRDEYE_PARTY")) { // debug override
-					std::sscanf(pp, "%d,%d,%d", &px, &py, &pf);
-					seededFromSave = false;
+					if (std::sscanf(pp, "%d,%d,%d", &px, &py, &pf) == 3)
+						seededFromSave = false;
 				}
 				setKByte(kPartyX, static_cast<uint8_t>(px));
 				setKByte(kPartyY, static_cast<uint8_t>(py));

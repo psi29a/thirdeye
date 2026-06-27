@@ -1337,6 +1337,10 @@ int convertOldAndStoreNewCharacter(unsigned char *aOldCharacterDefinition,
 	// loOldColumns is number of pixels in line / 2
 	loOldColumns = aOldCharacterDefinition[0]
 			| (aOldCharacterDefinition[1] << 8);
+	if (loOldColumns < 0 || loOldColumns > 1024) {
+		printf("Old character has implausible column count: %d\n", loOldColumns);
+		return (false);
+	}
 	loOldCharacterDefinitionSizeInBytes = 2 + (loOldColumns * aFontHeight);
 
 	// in new font format, one byte is used for two pixels
