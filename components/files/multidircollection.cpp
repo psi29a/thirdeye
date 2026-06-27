@@ -73,7 +73,7 @@ namespace Files
                 }
                 else if (result->first==filename)
                 {
-                    mFiles[filename] = path;
+                    mFiles[filename] = std::move(path);
                 }
                 else
                 {

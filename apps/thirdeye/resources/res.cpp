@@ -230,7 +230,7 @@ uint16_t RESOURCES::Resource::getAssets(std::ifstream &resourceFile) {
 				id,
 				dictionary->second.first, mEntryHeaders[id].storage_time,
 				mEntryHeaders[id].data_attributes, mEntryHeaders[id].data_size,
-				start, offset, table1, table2, data);
+				start, offset, table1, table2, std::move(data));
 	}
 	return (static_cast<uint16_t>(mAssets.size()));
 }
@@ -295,7 +295,7 @@ std::string RESOURCES::Resource::searchDictionary(
 
 std::vector<uint8_t> &RESOURCES::Resource::getAsset(std::string name) {
 	return getAsset(
-			static_cast<uint16_t>(std::stoi(searchDictionary(mTable0, name))));
+			static_cast<uint16_t>(std::stoi(searchDictionary(mTable0, std::move(name)))));
 }
 
 std::vector<uint8_t> &RESOURCES::Resource::getAsset(uint16_t number) {

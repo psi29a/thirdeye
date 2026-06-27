@@ -47,7 +47,7 @@ bool tryHandle(Context &ctx, const std::string &fn,
 			std::string s = ctx.vm.readCodeString(static_cast<uint32_t>(a));
 			if (!s.empty()) { program = s; break; }
 		}
-		throw Relaunch{program};
+		throw Relaunch{std::move(program)};
 	}
 	return false;
 }

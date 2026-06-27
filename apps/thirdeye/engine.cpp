@@ -843,7 +843,7 @@ void THIRDEYE::Engine::playCinematic(GRAPHICS::Graphics *gfx,
 	// QuitRequested (below) is not a std::exception, so window-close still unwinds.
 	try {
 		MIXER::Mixer mixer;
-		RESOURCES::GFFI video(gffPath);
+		RESOURCES::GFFI video(std::move(gffPath));
 		mixer.playMusic(video.getMusic());
 		gfx->playVideo(video.getSequence());
 

@@ -113,7 +113,7 @@ void MIXER::Mixer::playSound(std::vector<uint8_t> snd) {
 		return;
 	}
 
-	mSources[mSourceId].buffer = snd;
+	mSources[mSourceId].buffer = std::move(snd);
 	alGenBuffers(1, &mSources[mSourceId].bufferId);
 	alBufferData(mSources[mSourceId].bufferId, AL_FORMAT_MONO8,
 			&mSources[mSourceId].buffer[0],
