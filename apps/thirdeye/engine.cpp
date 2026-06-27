@@ -758,6 +758,25 @@ bool THIRDEYE::Engine::runExternalProgram(const std::string &program,
 		if (gfx) {
 			bool ok = THIRDEYE::chargen::runChargenScreen(*gfx, chargenDir);
 			if (ok) {
+				// Paint the game's main stone Backdrop over the chargen's last
+				// frame before start.create's CHGN path begins drawing. The
+				// SOP draws specific UI elements (portraits, compass, dialog
+				// text) on top of whatever's already there and never issues
+				// a full-screen clear, so a leftover chargen frame leaks
+				// through the gaps. The CINE path doesn't see this because
+				// the title menu had already drawn the stone Backdrop into
+				// those areas. fillRect-to-black "fixes" the leak but leaves
+				// the gaps reading as black voids (visible under the dialog
+				// text panel); drawing the actual Backdrop matches CINE.
+				try {
+					auto &bmp = resource.getAsset("Backdrop");
+					gfx->drawImage(bmp, 0, 0, 0, /*transparency=*/false,
+					               /*mirror=*/0, /*cacheId=*/0);
+				} catch (const std::exception &) {
+					// Backdrop missing -- fall back to a black wipe rather
+					// than leak the chargen frame.
+					gfx->fillRect(0, 0, WIDTH - 1, HEIGHT - 1, 0);
+				}
 				// New party means a new game: wipe SAVEGAME/*.TMP so the CHGN
 				// boot doesn't read stale kernel state (party position, level
 				// progress) from a previous session. Otherwise the kernel

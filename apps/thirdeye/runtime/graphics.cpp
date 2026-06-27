@@ -274,15 +274,22 @@ bool tryHandle(Context &ctx, const std::string &fn,
 		result = 0;
 		return true;
 	}
-	// wipe_window(wnd, color) -- repaint the bound subwindow's rectangle.
-	// Matches GIL2VFX_wipe_window: it's the explicit "clear before redraw"
-	// the SOP uses (e.g. for HUD redraws). text_window itself NO LONGER
-	// wipes (matching GIL2VFX_select_text_window), so the save-picker's
-	// many rebinds don't erase the slot names between draws.
-	if (fn == "wipe_window" && args.size() >= 1) {
+	// wipe_window(wnd, color) -- fill the bound subwindow's rectangle with
+	// the given palette index. Matches the original GIL2VFX_wipe_window /
+	// VFX_pane_wipe: a flat-colour fill, not a backdrop restore. The encounter
+	// "prepare outtake box" handler calls this with color 20 (the stone-panel
+	// palette index) to clear the bottom dialog box before drawing the border
+	// lines + text -- using wipeTextBox here brought back whatever HUD art
+	// (compass / portraits) was last drawn into the box instead of a clean
+	// stone background, so the Florin dialog read as floating over the HUD.
+	// The save-picker contract about text_window not wiping is unaffected;
+	// that's a separate handler.
+	if (fn == "wipe_window" && args.size() >= 2) {
 		int32_t x0, y0, x1, y1;
-		if (ctx.gfx && ctx.events.windowRect(args[0], x0, y0, x1, y1))
-			ctx.gfx->wipeTextBox(x0, y0, x1, y1);
+		if (ctx.gfx && ctx.events.windowRect(args[0], x0, y0, x1, y1)) {
+			uint8_t color = static_cast<uint8_t>(args[1] & 0xFF);
+			ctx.gfx->fillRect(x0, y0, x1, y1, color);
+		}
 		result = 0;
 		return true;
 	}

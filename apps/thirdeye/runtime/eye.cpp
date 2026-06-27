@@ -373,25 +373,20 @@ bool tryHandle(Context &ctx, const std::string &fn,
 			           | (uint32_t(p[2]) << 16) | (uint32_t(p[3]) << 24) : 0;
 		};
 
-		// Step 2 -- patch party position.
-		// This function is only ever called from the chargen-transfer flow, so
-		// it always represents a fresh "Gather a New Party": force the start
-		// cell to level 1 (15,15,N) and ignore any live kernel state. The
-		// kernel may have been hydrated from a leftover ITEMS.TMP (a previous
-		// session's save), which would otherwise land the new party on the
-		// old level / position.
-		if (buf.size() > kPosOff + 4) {
-			buf[kPosOff]     = 15; // x
-			buf[kPosOff + 1] = 15; // y
-			buf[kPosOff + 2] = 0;  // facing N
-			buf[kPosOff + 3] = 1;  // level 1
-			int kn = ctx.objects.firstObjectOfClass(kKernelClass);
-			if (kn >= 0) {
-				if (uint8_t *kp = ctx.objects.classStaticPtr(kn, kKernelClass,
-				                                             kPartyPosOff, 4))
-					std::memcpy(kp, &buf[kPosOff], 4);
-			}
-		}
+		// Step 2 -- party position.
+		// The scaffold ITEMS_00.BIN we seeded buf from already contains the
+		// canonical starting cell -- file offsets 252..255 = (x=7, y=24,
+		// fdir=1, lvl=3) on a fresh EOB3 install. This is where the shipped
+		// Quick Start Party lives, and it's the same cell a freshly-rolled
+		// party should appear in: the graveyard entrance (LVL03's "graveyard
+		// to forest" area, the actual narrative start of the game). The
+		// mausoleum on LVL01 is NOT the beginning; it's a later location.
+		// We deliberately do NOT overwrite buf[252..255] -- the scaffold's
+		// position is the right answer. We also leave the live kernel alone
+		// because the kernel is created later in the boot (start.enter_game
+		// -> create_program(kernel)) and its statics start at 0; resume_level
+		// will seed them from this file in its own pass.
+		(void) kPosOff; // (intentionally unused now; the scaffold carries pos)
 
 		// Step 3 -- write live PC records. Zero-fill the 10-slot block first
 		// so empty slots are recognisably empty (classNumber == 0).
@@ -778,8 +773,16 @@ bool tryHandle(Context &ctx, const std::string &fn,
 				// a debug override -- THIRDEYE_GOTO bypassed program/window
 				// state the SOP relies on and produced page-numbering and HUD
 				// glitches that didn't reproduce in real gameplay.
-				uint8_t startLvl = 1;
-				int px = 15, py = 15, pf = 0;
+				// Default start: matches the shipped Quick Start Party cell in
+				// SAVEGAME/ITEMS_00.BIN -- (7, 24) facing east on the graveyard
+				// (LVL03). LVL01 (mausoleum) is NOT the narrative beginning of
+				// EOB3; the graveyard is. The chargen-transfer's
+				// write_initial_tempfiles preserves this position from the
+				// scaffold, so the only time this default kicks in is when
+				// resume_level is called with a fresh kernel but no save data
+				// at all (rare; mostly debugging).
+				uint8_t startLvl = 3;
+				int px = 7, py = 24, pf = 1;
 				bool seededFromSave = false;
 				if (wantContinue && items.position.level >= 1 &&
 				    items.position.level <= 14) {
