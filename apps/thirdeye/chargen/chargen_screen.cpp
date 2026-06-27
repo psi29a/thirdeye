@@ -502,7 +502,15 @@ void drawSubIndexed(GRAPHICS::Graphics &gfx,
                     const std::vector<uint8_t> &src, int srcW,
                     int srcX, int srcY, int w, int h,
                     int destX, int destY, bool transparent = false) {
-	if (src.empty()) return;
+	if (src.empty() || srcW <= 0 || w <= 0 || h <= 0) return;
+	if (srcX < 0 || srcY < 0) return;
+	// Bounds-check the source rectangle so a short / malformed CPS buffer
+	// can't trigger an OOB memcpy. CodeRabbit nit + correct: src.empty()
+	// only guards against the all-empty case; a non-empty-but-short buffer
+	// (e.g. a truncated CHARGENB.CPS) would otherwise let row+w sail past
+	// src.size().
+	size_t lastRow = static_cast<size_t>(srcY + h - 1) * srcW + srcX + w;
+	if (lastRow > src.size()) return;
 	std::vector<uint8_t> sub(static_cast<size_t>(w) * h);
 	for (int y = 0; y < h; ++y) {
 		size_t row = static_cast<size_t>(srcY + y) * srcW + srcX;
