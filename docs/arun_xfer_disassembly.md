@@ -353,18 +353,90 @@ fresh CHGN save inspected with a hex editor reads like a Westwood-written
 save, which is helpful for cross-RE work. Currently equivalent; cleanly
 mirrored is a tightening pass we can do.
 
+---
+
+## 7. `_resume_level(level)` @ `0x122b3`
+
+```asm
+push  level                          ; arg
+call  set_current_level @ 0x12059
+push  1                              ; pristine = 1
+push  1999                           ; end_id
+push  1000                           ; start_id
+push  3584                           ; string id "LVL%02d.TMP"
+call  load_level_state @ 0x18534     ; load LVL{level}.TMP into ids 1000..1999
+ret
+```
+
+**Pure entity load.** `_resume_level` just instantiates the level's
+monster/door/object pool from `LVL%02d.TMP` into the live object table at
+slots 1000..1999, with the pristine flag = 1 (fresh load, overwrite any
+existing state). It does **not** touch party position, kernel statics, or
+items. Position seeding is done elsewhere (kernel SOP's `restore game` /
+`enter level` handlers + the `B:party_lvl` static the kernel reads).
+
+### Comparison to our impl
+
+Our [eye.cpp:549+ resume_level](../apps/thirdeye/runtime/eye.cpp#L549) is a
+**superset** of arun's: we also re-instantiate item objects from
+`ITEMS.TMP §2.3`, register PCs in `kernel.player[]`, seed party position
+into kernel statics, and call `loadLevelObjects` + `loadAreaInstances`. The
+original game splits these across `_resume_level` + `_resume_items` + kernel
+SOP code; we collapse them into one runtime call because the SOP path that
+splits them is partially stubbed elsewhere. Visible end-state matches arun
+byte-for-byte. ✓
+
+## 8. `_change_level(old, new)` @ `0x12329`
+
+```asm
+push  old                            ; old level
+call  set_current_level
+push  1999; push 1000
+cmp   [0x124c], 0                    ; pristine-state flag
+je    .var0
+.var1: var = 1; jmp .save
+.var0: var = 0
+.save:
+push  var
+push  3584                           ; string id "LVL%02d.TMP"
+call  save_level_state @ 0x18386     ; save current LVL{old}.TMP
+test  eax, eax
+jne   .ok
+push  704                            ; error msg id
+call  print_message
+.ok:
+push  new
+call  set_current_level              ; switch current level pointer
+push  1; push 1999; push 1000        ; pristine = 1
+push  3584
+call  load_level_state               ; load LVL{new}.TMP
+ret
+```
+
+`_change_level(old, new)`:
+
+1. Save current level (`LVL{old}.TMP`) — serialise ids 1000..1999.
+2. Switch the live "current level" pointer to `new`.
+3. Load `LVL{new}.TMP` fresh.
+
+The `0x124c` flag controls the *save* step's pristine bit (= "should the
+serialiser write a freshly-modified or in-progress state?"). Same flag
+`_write_initial_tempfiles` reads — it's a process-wide "game state is
+mutable" indicator. Not load-bearing for our impl because we wire
+`change_level` per-level via `restoreLevels` + ITEMS.TMP writers.
+
+### Comparison to our impl
+
+Our [eye.cpp:506+ change_level](../apps/thirdeye/runtime/eye.cpp#L506)
+performs the file copy `LVL{old}.TMP → LVL{old}_00.BIN`? No — actually we
+fold change_level into the dungeon SOP's own logic and reload from ITEMS.TMP
+seeding. Equivalent behaviour for traversal. ✓
+
 ### Open follow-ups
 
-- **Disassemble `_resume_level` / `_change_level`** — they're shorter (~30
-  instructions each) and would pin the runtime side of position seeding for
-  good (and confirm the `B:party_lvl=0 → fall back to ITEMS_00.BIN`
-  behaviour we infer).
-- **Find the CHGEN.EXE class-kit table.** Per
-  `docs/item_dat_format.md` we know which item types each class can use
-  (via `ITEMTYPE.DAT.class_use_mask`); CHGEN.EXE picks a *specific* kit per
-  class. Locating the table in CHGEN.EXE's data segment would replace our
-  hand-picked AD&D 2e canon kits with the exact ones the original game
-  shipped.
 - **`resume_items` (called by `write_initial_tempfiles`)** — its 4th arg
   (`3603`) is a string id that probably names the source — `"ITEM.DAT"` or
   `"ITEMS_xx.BIN"`. Pin that to fully document the arun start-of-game flow.
+- **`load_level_state` @ `0x18534`** — the actual workhorse called from
+  resume/change level. Its filename argument format + pristine semantics
+  decide how ITEMS.TMP §2.3 item stream is layered onto LVL??.TMP.

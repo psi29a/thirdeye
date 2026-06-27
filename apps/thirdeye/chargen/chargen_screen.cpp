@@ -197,6 +197,125 @@ int classHolySymbolUnid(int chargenClass) {
 	return (chargenClass == 2) ? 23 : 9;
 }
 
+// ITEMTYPE.DAT runtime table. 64 × 16-byte records loaded once at chargen
+// entry from CHARGEN/ITEMTYPE.DAT. We use byte +5 (class_use_mask) to
+// validate each class kit at boot -- if a Fighter kit ever emits a type
+// whose class_use_mask doesn't include the Fighter bit, we assert + log.
+// Format documented in docs/item_dat_format.md.
+struct ItemTypeRec {
+	uint16_t mask_a, mask_b;
+	int8_t   ac_bonus;
+	uint8_t  class_use_mask;
+	uint8_t  flag_x;
+	uint8_t  sm_n, sm_d, sm_plus;
+	uint8_t  lg_n, lg_d, lg_plus;
+	uint8_t  pad;
+	uint8_t  slot_hint;
+	uint8_t  pad2;
+};
+constexpr int kItemTypeCount = 64;
+ItemTypeRec gItemType[kItemTypeCount] = {};
+bool        gItemTypeLoaded = false;
+
+void loadItemTypeDat(const std::filesystem::path &chargenDir) {
+	if (gItemTypeLoaded) return;
+	auto path = chargenDir / "ITEMTYPE.DAT";
+	auto bytes = readFile(path);
+	if (bytes.size() < 2 + kItemTypeCount * 16) {
+		std::cout << "  [chargen: ITEMTYPE.DAT missing or short ("
+		          << bytes.size() << " B); class_use_mask validation disabled]"
+		          << std::endl;
+		return;
+	}
+	uint16_t hdr = bytes[0] | (bytes[1] << 8);
+	if (hdr != kItemTypeCount) {
+		std::cout << "  [chargen: ITEMTYPE.DAT header says " << hdr
+		          << " types, expected " << kItemTypeCount
+		          << "; reading anyway]" << std::endl;
+	}
+	for (int i = 0; i < kItemTypeCount; ++i) {
+		const uint8_t *p = bytes.data() + 2 + i * 16;
+		ItemTypeRec &r = gItemType[i];
+		r.mask_a         = p[0] | (p[1] << 8);
+		r.mask_b         = p[2] | (p[3] << 8);
+		r.ac_bonus       = static_cast<int8_t>(p[4]);
+		r.class_use_mask = p[5];
+		r.flag_x         = p[6];
+		r.sm_n           = p[7];
+		r.sm_d           = p[8];
+		r.sm_plus        = p[9];
+		r.lg_n           = p[10];
+		r.lg_d           = p[11];
+		r.lg_plus        = p[12];
+		r.pad            = p[13];
+		r.slot_hint      = p[14];
+		r.pad2           = p[15];
+	}
+	gItemTypeLoaded = true;
+	std::cout << "  [chargen: ITEMTYPE.DAT loaded (" << kItemTypeCount
+	          << " types, class_use_mask validation enabled)]" << std::endl;
+}
+
+// Bit position in ITEMTYPE.DAT.class_use_mask per SINGLE class
+// (0=Fighter, 1=Mage, 2=Cleric, 3=Thief, 4=Paladin, 5=Ranger).
+// Our chargen UI uses a different ORDER (F/R/P/M/C/T = 0..5), so map.
+constexpr uint8_t kSingleClassUseBit[6] = {
+	0x01, // 0 FIGHTER → bit 0
+	0x20, // 1 RANGER  → bit 5
+	0x10, // 2 PALADIN → bit 4
+	0x02, // 3 MAGE    → bit 1
+	0x04, // 4 CLERIC  → bit 2
+	0x08, // 5 THIEF   → bit 3
+};
+
+// Class-use bitmask combining all component classes for a chargen-UI
+// class (single or multi). A multi-class character can wield any item
+// usable by ANY of their components (AD&D 2e rule).
+uint8_t chargenClassUseMask(int chargenClass) {
+	int n = std::max(1, classComponentCount(chargenClass));
+	uint8_t mask = 0;
+	for (int i = 0; i < n; ++i) {
+		int comp = (n == 1) ? chargenClass : kClassComponents[chargenClass][i];
+		if (comp >= 0 && comp < 6) mask |= kSingleClassUseBit[comp];
+	}
+	return mask;
+}
+
+// At chargen start, walk every kit and assert that every item type's
+// class_use_mask includes at least one of the chargen class's component
+// classes. Catches typos / class-mismatched kits at boot before any
+// player rolls a "Fighter equipped with spellbook" surprise.
+void validateClassKits() {
+	if (!gItemTypeLoaded) return;
+	int problems = 0;
+	for (int cls = 0; cls < 15; ++cls) {
+		uint8_t classMask = chargenClassUseMask(cls);
+		for (int s = 0; s < 6; ++s) {
+			int type = kClassKit[cls][s];
+			if (type < 0) break;
+			if (type >= kItemTypeCount) {
+				std::cout << "  [chargen-validate: " << kClassNames[cls]
+				          << " kit item " << s << " type " << type
+				          << " out of ITEMTYPE.DAT bounds]" << std::endl;
+				++problems; continue;
+			}
+			uint8_t typeMask = gItemType[type].class_use_mask;
+			if ((typeMask & classMask) == 0) {
+				std::cout << "  [chargen-validate: " << kClassNames[cls]
+				          << " kit type " << type
+				          << " (class_use_mask=0x" << std::hex
+				          << static_cast<int>(typeMask)
+				          << ") not usable by chargen class (mask=0x"
+				          << static_cast<int>(classMask) << std::dec
+				          << ")]" << std::endl;
+				++problems;
+			}
+		}
+	}
+	std::cout << "  [chargen-validate: " << problems
+	          << " kit/class mismatches across 15 classes]" << std::endl;
+}
+
 int kitItemCount(int chargenClass) {
 	if (chargenClass < 0 || chargenClass >= 15) return 0;
 	int n = 0;
@@ -1802,6 +1921,14 @@ bool THIRDEYE::chargen::runChargenScreen(GRAPHICS::Graphics &gfx,
 	}
 
 	gfx.loadPalette(palBytes, /*isRes=*/false);
+
+	// Load ITEMTYPE.DAT once + validate every class kit against it. If
+	// validation fails the chargen still runs (the kit produces playable
+	// items either way) but we log so a future kit edit doesn't silently
+	// give the Mage a long sword.
+	loadItemTypeDat(chargenDir);
+	validateClassKits();
+
 	GRAPHICS::Bitmap portraits(picBytes);
 	// `picBytes.empty()` (above) doesn't catch a malformed-but-nonzero
 	// CHARPICS.BMP -- the parser may decline every header path and leave
