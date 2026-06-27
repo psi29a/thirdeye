@@ -46,9 +46,10 @@ const std::array<const char *, 12> kRaceNames = { {
 } };
 
 // 15 chargen classes in the order EOB3's CHGEN.EXE shows them: 6 single
-// classes (F/R/P/M/C/T) followed by 9 multi-class combos. The real game
-// filters by race (humans can't multi-class, half-elves get F/M etc.) --
-// not yet implemented; the picker accepts any combination for now.
+// classes (F/R/P/M/C/T) followed by 9 multi-class combos. The picker
+// filters by race via kRaceClassAllowed (humans can't multi-class,
+// dwarves only get F/T, half-elves get the widest combo list, etc. -- the
+// AD&D 2e PHB chapter 2 table).
 const std::array<const char *, 15> kClassNames = { {
 	"FIGHTER", "RANGER", "PALADIN", "MAGE", "CLERIC", "THIEF",
 	"FIGHTER/CLERIC", "FIGHTER/THIEF", "FIGHTER/MAGE",
@@ -84,6 +85,123 @@ int classComponentCount(int chargenClass) {
 	int n = 0;
 	for (int i = 0; i < 3; ++i)
 		if (kClassComponents[chargenClass][i] >= 0) ++n;
+	return n;
+}
+
+// AD&D 2e race/class restrictions. Race index is the chargen UI race / 2
+// (M/F pairs collapse): 0=Human, 1=Elf, 2=Half-Elf, 3=Dwarf, 4=Gnome,
+// 5=Halfling. Each row is the 15 chargen-UI classes (6 single + 9 multi).
+// True = race can be that class. Sourced from AD&D 2e PHB chapter 2 and
+// the EOB3 chargen behaviour (humans never multi-class; demihumans get
+// race-specific combos). EOB3's CHGEN.EXE has the exact table in its
+// data segment -- this matches the canon and the bundled Quick Start
+// Party (Alice = Dwarf F/C, Carol = Elf Mage, etc.).
+constexpr bool kRaceClassAllowed[6][15] = {
+	// F  R  P  M  C  T  F/C F/T F/M F/M/T T/M C/T F/C/M R/C C/M
+	{  1, 1, 1, 1, 1, 1, 0,  0,  0,  0,    0,  0,  0,    0,  0  }, // Human
+	{  1, 1, 0, 1, 0, 1, 0,  0,  1,  1,    1,  0,  0,    0,  0  }, // Elf
+	{  1, 1, 0, 1, 1, 1, 1,  0,  1,  1,    1,  0,  1,    1,  1  }, // Half-Elf
+	{  1, 0, 0, 0, 0, 1, 0,  1,  0,  0,    0,  0,  0,    0,  0  }, // Dwarf
+	{  1, 0, 0, 1, 1, 1, 1,  1,  1,  0,    1,  1,  0,    0,  0  }, // Gnome
+	{  1, 0, 0, 0, 0, 1, 0,  1,  0,  0,    0,  0,  0,    0,  0  }, // Halfling
+};
+
+int raceCategory(int chargenRace) {
+	return (chargenRace >= 0 && chargenRace < 12) ? chargenRace / 2 : 0;
+}
+
+bool classAllowedForRace(int chargenRace, int chargenClass) {
+	if (chargenClass < 0 || chargenClass >= 15) return false;
+	return kRaceClassAllowed[raceCategory(chargenRace)][chargenClass];
+}
+
+// AD&D 2e single-class ability minimums in chargen ability order
+// (STR, INT, WIS, DEX, CON, CHA -- the same order as enum Abil below; we
+// can't use NUM_ABIL here because the enum is declared later). 0 = no
+// minimum. Multi-class characters must satisfy ALL components' minimums
+// (in classSatisfiesAbilityMinima).
+constexpr int kSingleClassMinima[6][6] = {
+	// STR INT WIS DEX CON CHA
+	{   9,  0,  0,  0,  0,  0  }, // FIGHTER (S9)
+	{  13,  0, 14, 13, 14,  0  }, // RANGER  (S13/W14/D13/C14)
+	{  12,  0, 13,  0,  9, 17  }, // PALADIN (S12/W13/Con9/Cha17)
+	{   0,  9,  0,  0,  0,  0  }, // MAGE    (I9)
+	{   0,  0,  9,  0,  0,  0  }, // CLERIC  (W9)
+	{   0,  0,  0,  9,  0,  0  }, // THIEF   (D9)
+};
+
+bool classSatisfiesAbilityMinima(int chargenClass, const int *abil) {
+	int n = std::max(1, classComponentCount(chargenClass));
+	for (int i = 0; i < n; ++i) {
+		int comp = (n == 1) ? chargenClass : kClassComponents[chargenClass][i];
+		if (comp < 0 || comp >= 6) continue;
+		for (int a = 0; a < 6; ++a)
+			if (abil[a] < kSingleClassMinima[comp][a]) return false;
+	}
+	return true;
+}
+
+// Starting equipment templates per chargen class. Each row is up to 6
+// EOB1 item types (see TransferState::table123Lookup) the new character
+// gets in CREATE.SAV. Types are routed to body parts by the transfer's
+// categoryForClass (chainmail->body, long sword->weapon, shield->left
+// hand, etc.) so slot order here doesn't matter -- the transfer remaps.
+// Sentinel = -1.
+//
+// Type reference (see also docs/create_sav_and_item_format.md table123):
+//   1 long sword, 2 short sword, 5 dagger, 11 mace, 20 chain mail,
+//   22 leather armor, 27 shield, 28 lock picks, 29 spellbook,
+//   30 holy symbol, 31 rations, 41 robe.
+//
+// Holy-symbol unid varies: 9 = Cleric Holy symbol, 23 = Paladin's Holy
+// Symbol. Tracked separately via kClassHolySymbolUnid below.
+struct ItemType { int type; };
+constexpr int kClassKit[15][6] = {
+	// FIGHTER:   chainmail + long sword + shield + rations
+	{ 20,  1, 27, 31, -1, -1 },
+	// RANGER:    leather + short sword + dagger + rations
+	{ 22,  2,  5, 31, -1, -1 },
+	// PALADIN:   chainmail + long sword + shield + paladin holy + rations
+	{ 20,  1, 27, 30, 31, -1 },
+	// MAGE:      robe + dagger + spellbook + rations
+	{ 41,  5, 29, 31, -1, -1 },
+	// CLERIC:    chainmail + mace + shield + cleric holy + rations
+	{ 20, 11, 27, 30, 31, -1 },
+	// THIEF:     leather + short sword + dagger + lock picks + rations
+	{ 22,  2,  5, 28, 31, -1 },
+	// F/C:       chainmail + long sword + shield + cleric holy + rations
+	{ 20,  1, 27, 30, 31, -1 },
+	// F/T:       chainmail + long sword + dagger + lock picks + rations
+	{ 20,  1,  5, 28, 31, -1 },
+	// F/M:       chainmail + long sword + spellbook + dagger + rations
+	{ 20,  1, 29,  5, 31, -1 },
+	// F/M/T:     chainmail + long sword + spellbook + lock picks + rations
+	{ 20,  1, 29, 28, 31, -1 },
+	// T/M:       leather + short sword + spellbook + lock picks + rations
+	{ 22,  2, 29, 28, 31, -1 },
+	// C/T:       leather + mace + cleric holy + lock picks + rations
+	{ 22, 11, 30, 28, 31, -1 },
+	// F/C/M:     chainmail + long sword + cleric holy + spellbook + rations
+	{ 20,  1, 30, 29, 31, -1 },
+	// R/C:       leather + long sword + cleric holy + rations
+	{ 22,  1, 30, 31, -1, -1 },
+	// C/M:       chainmail + mace + cleric holy + spellbook + rations
+	{ 20, 11, 30, 29, 31, -1 },
+};
+
+// Which "holy symbol" name a class uses (only matters for entries whose
+// kit includes type 30). Paladin (UI class 2) uses Paladin's Holy Symbol
+// (ITEM.DAT name unid 23); everyone else gets the Cleric Holy symbol
+// (unid 9). All other types map to a single canonical ITEM.DAT name.
+int classHolySymbolUnid(int chargenClass) {
+	return (chargenClass == 2) ? 23 : 9;
+}
+
+int kitItemCount(int chargenClass) {
+	if (chargenClass < 0 || chargenClass >= 15) return 0;
+	int n = 0;
+	for (int i = 0; i < 6; ++i)
+		if (kClassKit[chargenClass][i] >= 0) ++n;
 	return n;
 }
 
@@ -197,9 +315,22 @@ int classHpDie(int chargenClass) {
 // campaign opens at ~level 11; we roll N hit dice (one per level) plus the
 // CON bonus per HD. Fixed level 11 for now -- the original CHGEN.EXE has
 // a configurable start-level we haven't RE'd yet.
+//
+// AD&D 2e classes have ability minima (Paladin needs Cha 17, Ranger needs
+// Str/Dex/Con/Wis, multi-class needs all components' minima). 3d6 ignoring
+// minima would make a Paladin/Ranger almost impossible to roll, so we
+// retry up to kMaxStatRolls times until the rolled stats satisfy
+// classSatisfiesAbilityMinima. If we exhaust retries (very rare with
+// modest classes), the last roll stands -- the user can then MODIFY to
+// patch up the missing stat. This matches the original DOS behaviour
+// where Paladins / Rangers reroll dozens of times under the hood.
+constexpr int kMaxStatRolls = 200;
 void rollStats(CharSheet &c, std::mt19937 &rng) {
-	for (int i = 0; i < NUM_ABIL; ++i)
-		c.abil[i] = roll3d6(rng);
+	for (int attempt = 0; attempt < kMaxStatRolls; ++attempt) {
+		for (int i = 0; i < NUM_ABIL; ++i)
+			c.abil[i] = roll3d6(rng);
+		if (classSatisfiesAbilityMinima(c.klass, c.abil)) break;
+	}
 	c.lvl = 11;
 	int die = classHpDie(c.klass);
 	int bonusPerHd = conHpBonus(c.abil[CON]);
@@ -546,12 +677,31 @@ void render(GRAPHICS::Graphics &gfx,
 			numEntries = static_cast<int>(kRaceNames.size());
 			cursor     = state.raceCursor;
 			break;
-		case Step::PickClass:
+		case Step::PickClass: {
 			header     = "SELECT CLASS:";
-			entries    = kClassNames.data();
-			numEntries = static_cast<int>(kClassNames.size());
+			// Filter the class list to only those allowed for this slot's
+			// race (per kRaceClassAllowed). The picker cursor indexes into
+			// the filtered view, NOT the underlying kClassNames; the click
+			// + commit handlers know to map back via filteredIndices.
+			// thread_local buffers (size 15 max) so we don't allocate per
+			// frame and the buffers stay valid through the switch's lifetime.
+			thread_local const char *fNames[15];
+			thread_local int        fIdx[15];
+			int fCount = 0;
+			int activeRace = (state.activeSlot >= 0)
+				? state.party[state.activeSlot].race : -1;
+			for (int i = 0; i < 15; ++i) {
+				if (activeRace < 0 || classAllowedForRace(activeRace, i)) {
+					fNames[fCount] = kClassNames[i];
+					fIdx[fCount]   = i;
+					++fCount;
+				}
+			}
+			entries    = fNames;
+			numEntries = fCount;
 			cursor     = state.classCursor;
 			break;
+		}
 		case Step::PickAlignment:
 		default:
 			header     = "SELECT ALIGNMENT:";
@@ -861,9 +1011,14 @@ bool writeCreateSav(const std::filesystem::path &chargenDir,
 		patchU8(rec + 33, static_cast<uint8_t>(std::max(0, c.alignment)));
 		patchU8(rec + 34, static_cast<uint8_t>(c.portrait & 0xff));
 		// levels[3] + experience[3]: one entry per component class for multi-
-		// class characters, level/XP duplicated (we don't track per-class XP in
-		// the UI). Unused slots get level 0 and XP -1 to match the default
-		// party's "no class" sentinel.
+		// class characters. AD&D 2e splits earned XP evenly between active
+		// classes, so a multi-class PC actually levels up slower per class.
+		// We approximate at chargen time by dividing the single-class
+		// baseline XP by component count -- a level-11 F/M ends up with
+		// 375000 XP per class instead of 750000 each, which preserves the
+		// HUD "appears as level 11" while keeping the next-level math sane.
+		// Unused slots get level 0 and XP -1 to match the default party's
+		// "no class" sentinel.
 		int nComp = std::max(1, classComponentCount(c.klass));
 		for (int i = 0; i < 3; ++i) {
 			if (i < nComp) {
@@ -871,12 +1026,142 @@ bool writeCreateSav(const std::filesystem::path &chargenDir,
 				int compClass = kClassComponents[c.klass][i];
 				int compEob1  = (compClass >= 0 && compClass < 6)
 				              ? kClassToEob1[compClass] : eob1Class;
-				patchI32(rec + 39 + i * 4,
-				         static_cast<int32_t>(baseXp(compEob1)));
+				uint32_t xp = baseXp(compEob1) / static_cast<uint32_t>(nComp);
+				patchI32(rec + 39 + i * 4, static_cast<int32_t>(xp));
 			} else {
 				patchU8(rec + 36 + i, 0);
 				patchI32(rec + 39 + i * 4, -1);
 			}
+		}
+	}
+
+	// --- Starting equipment ---
+	//
+	// Write a class-appropriate kit to the CREATE.SAV item array
+	// (offsets 0x894+, 14 bytes per record, ids running from 434) and
+	// point each PC's inventory[26] (at PC record offset 219) at it. The
+	// xfer SOP then routes each item to its EOB3 body-part slot via
+	// table123 + TransferState::categoryForClass at boot.
+	//
+	// Layout: we partition ids 434..(434 + 4*kMaxKitItems - 1) into 4
+	// equal-size blocks, one per PC. Unfilled PCs and unused slots leave
+	// the corresponding records as the scaffold's, which is benign --
+	// item_attrib only resolves slots that inventory[26] points at.
+	//
+	// Per-item template lookup: most types have an obvious ITEM.DAT entry
+	// (Long Sword = unid 30; Chainmail = unid 19; etc.). Picture indices
+	// come from ITEM.DAT for visual consistency in the equipment screen.
+	constexpr size_t kItemArrayBase = 0x894;
+	constexpr int    kItemBytes     = 14;
+	constexpr int    kMaxKitItems   = 6; // matches kClassKit row width
+	auto patchItemRec = [&](size_t off, uint8_t unid, uint8_t idn, uint8_t bits,
+	                        uint8_t pic, uint8_t type, int8_t value) {
+		if (off + kItemBytes > bytes.size()) return;
+		bytes[off + 0] = unid;
+		bytes[off + 1] = idn;
+		bytes[off + 2] = bits;
+		bytes[off + 3] = pic;
+		bytes[off + 4] = type;
+		bytes[off + 5] = 0;          // subpos = 0 (in inventory)
+		bytes[off + 6] = 0; bytes[off + 7] = 0; // pos = 0
+		bytes[off + 8] = 0; bytes[off + 9] = 0; // next = 0
+		bytes[off + 10] = 0; bytes[off + 11] = 0; // prev = 0
+		bytes[off + 12] = 0;         // level = 0 (in inventory)
+		bytes[off + 13] = static_cast<uint8_t>(value);
+	};
+	// Per-type ITEM.DAT template: (unid name index, identified name index,
+	// pic icon, default value). Picked from the canonical entries in
+	// ITEM.DAT (dumped against the bundled install). value is the EOB1
+	// "value/bonus" byte -- 0 for ordinary items, 50 for Iron Rations
+	// (matches the scaffold's id 11 entry).
+	struct ItemTpl { uint8_t unid, idn, pic; int8_t value; };
+	auto itemTpl = [](int type, int chargenClass) -> ItemTpl {
+		switch (type) {
+		case  1: return { 30, 30,  1, 0 }; // Long Sword
+		case  2: return {  6,  6,  2, 0 }; // Short sword
+		case  5: return {  5,  5, 15, 0 }; // Dagger
+		case 11: return { 22, 22,  4, 0 }; // Mace
+		case 20: return { 19, 19, 29, 0 }; // Chainmail
+		case 22: return {  2,  2, 31, 0 }; // Leather armor
+		case 27: return { 27, 27, 23, 0 }; // Shield
+		case 28: return {  7,  7, 56, 0 }; // Lock picks
+		case 29: return {  8,  8, 35, 0 }; // Spellbook
+		case 30: {
+			uint8_t u = static_cast<uint8_t>(classHolySymbolUnid(chargenClass));
+			uint8_t pic = (u == 23) ? 27 : 55; // Paladin (pic 27) vs Cleric (pic 55)
+			return { u, u, pic, 0 };
+		}
+		case 31: return { 11, 11, 38, 50 }; // Iron Rations
+		case 41: return {  3,  3, 32, 0 }; // Robe
+		default: return {  0,  0,  0, 0 };
+		}
+	};
+	// Categorise an EOB1 type into a CREATE.SAV raw-inventory slot.
+	// Mirrors the original CHGEN.EXE layout so the bundled QSP's slot
+	// pattern (body @ raw[17], weapon @ raw[0], shield @ raw[1], backpack
+	// @ raw[2..]) carries through to ours. Behaviourally equivalent to a
+	// sequential 0..N-1 write because the xfer SOP re-categorizes by item
+	// class -- but a hex-dump comparison against a Westwood-rolled save
+	// will line up byte for byte. See docs/arun_xfer_disassembly.md §2.
+	enum class RawCat { BODY, WEAPON, SHIELD, CARRIED };
+	auto rawCategory = [](int type) -> RawCat {
+		switch (type) {
+		case 19: case 20: case 22: case 24: case 25: case 41:
+			return RawCat::BODY;     // banded/chain/leather/plate/scale/robe
+		case 27: return RawCat::SHIELD;
+		case  0: case  1: case  2: case  5: case  7: case  9:
+		case 10: case 11: case 12: case 13: case 14: case 15:
+		case 16: case 18: case 23: case 45: case 60:
+			return RawCat::WEAPON;
+		default: return RawCat::CARRIED;
+		}
+	};
+	for (int pc = 0; pc < 4; ++pc) {
+		const auto &c = state.party[pc];
+		if (!c.filled) continue;
+		int kitN = kitItemCount(c.klass);
+		if (kitN <= 0) continue;
+		// Zero out this PC's inventory[26] first so leftover scaffold
+		// pointers (e.g. Bob's items at raw[0]/[2]/...) don't co-exist
+		// with our new equipment and double up in the transfer.
+		size_t invOff = kPcBase + pc * kPcStride + 219;
+		for (int s = 0; s < 26; ++s) patchU16(invOff + s * 2, 0);
+		uint16_t idBase = static_cast<uint16_t>(434 + pc * kMaxKitItems);
+		int nextBackpack = 2;       // first backpack raw slot (per the
+		                            // CHGEN.EXE layout; raw[0]=RH, raw[1]=LH)
+		bool rhTaken = false, lhTaken = false, bodyTaken = false;
+		for (int s = 0; s < kitN; ++s) {
+			int type = kClassKit[c.klass][s];
+			if (type < 0) break;
+			uint16_t id = static_cast<uint16_t>(idBase + s);
+			ItemTpl t = itemTpl(type, c.klass);
+			size_t recOff = kItemArrayBase + (id - 434) * kItemBytes;
+			patchItemRec(recOff, t.unid, t.idn, /*bits=*/0,
+			             t.pic, static_cast<uint8_t>(type), t.value);
+			int targetRaw = -1;
+			switch (rawCategory(type)) {
+			case RawCat::BODY:
+				targetRaw = bodyTaken ? nextBackpack++ : 17;
+				bodyTaken = true;
+				break;
+			case RawCat::WEAPON:
+				if (!rhTaken)      { targetRaw = 0;  rhTaken = true; }
+				else if (!lhTaken) { targetRaw = 1;  lhTaken = true; }
+				else                targetRaw = nextBackpack++;
+				break;
+			case RawCat::SHIELD:
+				if (!lhTaken)      { targetRaw = 1;  lhTaken = true; }
+				else if (!rhTaken) { targetRaw = 0;  rhTaken = true; }
+				else                targetRaw = nextBackpack++;
+				break;
+			case RawCat::CARRIED:
+				targetRaw = nextBackpack++;
+				break;
+			}
+			// Cap to inventory bounds; spill into the backpack range if
+			// we somehow overflow (shouldn't, kits are <= 6 items).
+			if (targetRaw < 0 || targetRaw >= 26) targetRaw = 2;
+			patchU16(invOff + targetRaw * 2, id);
 		}
 	}
 	std::ofstream f(path, std::ios::binary | std::ios::trunc);
@@ -986,19 +1271,37 @@ PickerResult handleListPicker(const SDL_Event &e, GRAPHICS::Graphics &gfx,
 	return res;
 }
 
+// Build the list of class indices allowed for `chargenRace`. Mirrors the
+// filter in the render path so the picker view and the commit handler
+// agree on what visible index N means.
+int buildAllowedClasses(int chargenRace, int outIdx[15]) {
+	int n = 0;
+	for (int i = 0; i < 15; ++i)
+		if (chargenRace < 0 || classAllowedForRace(chargenRace, i))
+			outIdx[n++] = i;
+	return n;
+}
+
 void handleRacePickEvent(const SDL_Event &e, GRAPHICS::Graphics &gfx,
                          State &state) {
 	auto r = handleListPicker(e, gfx, state.raceCursor,
 	                          static_cast<int>(kRaceNames.size()));
 	if (r.committed) {
-		state.party[state.activeSlot].race = state.raceCursor;
+		int newRace = state.raceCursor;
+		state.party[state.activeSlot].race = newRace;
 		std::cout << "  [chargen: slot " << state.activeSlot
-		          << " race set to " << kRaceNames[state.raceCursor]
-		          << "]" << std::endl;
+		          << " race set to " << kRaceNames[newRace] << "]" << std::endl;
 		// Advance to class picker; the active slot stays the same. Reset
-		// the class cursor to the previously-chosen class if any, else 0.
-		state.classCursor = (state.party[state.activeSlot].klass >= 0)
-		                        ? state.party[state.activeSlot].klass : 0;
+		// the class cursor to the previously-chosen class if it's still
+		// allowed for the (possibly-new) race, else 0.
+		int prevKlass = state.party[state.activeSlot].klass;
+		int allowed[15];
+		int n = buildAllowedClasses(newRace, allowed);
+		state.classCursor = 0;
+		if (prevKlass >= 0 && n > 0) {
+			for (int i = 0; i < n; ++i)
+				if (allowed[i] == prevKlass) { state.classCursor = i; break; }
+		}
 		state.step = Step::PickClass;
 	} else if (r.cancelled) {
 		state.step       = Step::EntryScreen;
@@ -1008,12 +1311,16 @@ void handleRacePickEvent(const SDL_Event &e, GRAPHICS::Graphics &gfx,
 
 void handleClassPickEvent(const SDL_Event &e, GRAPHICS::Graphics &gfx,
                           State &state) {
-	auto r = handleListPicker(e, gfx, state.classCursor,
-	                          static_cast<int>(kClassNames.size()));
+	int race = state.party[state.activeSlot].race;
+	int allowed[15];
+	int n = buildAllowedClasses(race, allowed);
+	auto r = handleListPicker(e, gfx, state.classCursor, n);
 	if (r.committed) {
-		state.party[state.activeSlot].klass = state.classCursor;
+		int realKlass = (state.classCursor >= 0 && state.classCursor < n)
+		                    ? allowed[state.classCursor] : 0;
+		state.party[state.activeSlot].klass = realKlass;
 		std::cout << "  [chargen: slot " << state.activeSlot
-		          << " class set to " << kClassNames[state.classCursor]
+		          << " class set to " << kClassNames[realKlass]
 		          << "]" << std::endl;
 		// Advance to alignment picker; active slot stays.
 		state.alignmentCursor =
@@ -1248,6 +1555,230 @@ void handleModifyEvent(const SDL_Event &e, GRAPHICS::Graphics &gfx,
 	}
 }
 
+// --- chargen autopilot for regression tests -----------------------------
+//
+// THIRDEYE_CHARGEN_AUTO drives the chargen UI deterministically by pushing
+// synthetic SDL events into the queue, one action per tick. Same pump that
+// THIRDEYE_AUTOWALK uses for the SOP, but routed to SDL since the chargen
+// reads SDL_PollEvent directly (not via the VM event system).
+//
+// Action grammar (semicolons separate; whitespace ignored):
+//   s<N>       click party slot N (0..3)        -> opens race picker
+//   r<N>      pick race N (set cursor + Enter)  -> advances to class
+//   c<N>      pick class N                       -> advances to alignment
+//   a<N>      pick alignment N                   -> rolls stats + shows
+//   K          press KEEP                        -> advances to portrait
+//   R          press REROLL                      -> re-rolls in place
+//   M          press MODIFY                      -> opens ModifyStats
+//   F          press FACES                       -> opens portrait picker
+//   O          press OK in ModifyStats           -> back to ShowStats
+//   +<I>       MODIFY: +1 ability I (0..5)
+//   -<I>       MODIFY: -1 ability I
+//   p<N>       portrait carousel select slot N (0..89)
+//   n<NAME>   enter NAME via SDL_TEXTINPUT + Enter (finalises slot)
+//   P          PLAY (only fires if partyComplete)
+//
+// Full party recipe (4 chars, all single-class Fighter Human Male LG, then
+// PLAY):
+//   "s0;r0;c0;a0;K;F;p0;nAlice;
+//    s1;r0;c0;a0;K;F;p1;nBob;
+//    s2;r0;c0;a0;K;F;p2;nCarol;
+//    s3;r0;c0;a0;K;F;p3;nDoe;
+//    P"
+//
+// A regression run:
+//   THIRDEYE_CHARGEN_AUTO="..." build/.../thirdeye EYE.RES --chargen-test
+//                                                  --skip-intro --vm
+// then hex-diff the resulting CREATE.SAV against a known-good golden file.
+
+struct AutoAction {
+	enum Kind { SLOT, RACE, CLASS, ALIGN, KEEP, REROLL, MODIFY, FACES, OK_BTN,
+	            ABIL_UP, ABIL_DOWN, PORTRAIT, NAME, PLAY } kind;
+	int  arg = 0;       // numeric arg
+	std::string text;   // for NAME
+};
+
+std::vector<AutoAction> parseChargenAuto(const char *src) {
+	std::vector<AutoAction> out;
+	if (!src) return out;
+	std::string s = src;
+	size_t i = 0;
+	auto skipWs = [&]() {
+		while (i < s.size() && (s[i] == ' ' || s[i] == '\t' || s[i] == '\n' ||
+		                        s[i] == '\r' || s[i] == ';' || s[i] == ','))
+			++i;
+	};
+	auto parseNum = [&]() -> int {
+		int v = 0; bool any = false;
+		while (i < s.size() && std::isdigit(static_cast<unsigned char>(s[i]))) {
+			v = v * 10 + (s[i] - '0'); ++i; any = true;
+		}
+		return any ? v : -1;
+	};
+	while (i < s.size()) {
+		skipWs();
+		if (i >= s.size()) break;
+		char c = s[i++];
+		AutoAction a{};
+		switch (c) {
+		case 's': a.kind = AutoAction::SLOT;    a.arg = parseNum(); break;
+		case 'r': a.kind = AutoAction::RACE;    a.arg = parseNum(); break;
+		case 'c': a.kind = AutoAction::CLASS;   a.arg = parseNum(); break;
+		case 'a': a.kind = AutoAction::ALIGN;   a.arg = parseNum(); break;
+		case 'K': a.kind = AutoAction::KEEP;    break;
+		case 'R': a.kind = AutoAction::REROLL;  break;
+		case 'M': a.kind = AutoAction::MODIFY;  break;
+		case 'F': a.kind = AutoAction::FACES;   break;
+		case 'O': a.kind = AutoAction::OK_BTN;  break;
+		case '+': a.kind = AutoAction::ABIL_UP;   a.arg = parseNum(); break;
+		case '-': a.kind = AutoAction::ABIL_DOWN; a.arg = parseNum(); break;
+		case 'p': a.kind = AutoAction::PORTRAIT;  a.arg = parseNum(); break;
+		case 'n': {
+			a.kind = AutoAction::NAME;
+			// Read until ';' or end. Strip trailing whitespace.
+			size_t end = s.find_first_of(",;\n\r", i);
+			if (end == std::string::npos) end = s.size();
+			a.text = s.substr(i, end - i);
+			i = end;
+			break;
+		}
+		case 'P': a.kind = AutoAction::PLAY; break;
+		default: continue; // skip unknown
+		}
+		out.push_back(std::move(a));
+	}
+	return out;
+}
+
+// Apply one action by mutating chargen State directly. Returns true if
+// applied; false if the action doesn't fit the current step (= caller can
+// retry / skip). Direct state-mutation rather than SDL-event injection
+// because it bypasses event timing entirely -- the autopilot completes
+// in N pumps for N actions, no race conditions.
+bool applyChargenAction(const AutoAction &a, State &state, std::mt19937 &rng,
+                        const std::filesystem::path &chargenDir,
+                        const std::vector<uint8_t> &picBytes) {
+	using K = AutoAction;
+	switch (a.kind) {
+	case K::SLOT:
+		if (state.step != Step::EntryScreen) return false;
+		if (a.arg < 0 || a.arg > 3) return false;
+		state.step       = Step::PickRace;
+		state.activeSlot = a.arg;
+		state.raceCursor = state.party[a.arg].race >= 0
+		                       ? state.party[a.arg].race : 0;
+		return true;
+	case K::RACE:
+		if (state.step != Step::PickRace || state.activeSlot < 0) return false;
+		state.raceCursor = std::clamp(a.arg, 0, 11);
+		// Commit (same as Enter in handleRacePickEvent).
+		state.party[state.activeSlot].race = state.raceCursor;
+		{
+			int allowed[15];
+			int n = buildAllowedClasses(state.raceCursor, allowed);
+			state.classCursor = 0;
+			int prev = state.party[state.activeSlot].klass;
+			if (prev >= 0 && n > 0)
+				for (int i = 0; i < n; ++i)
+					if (allowed[i] == prev) { state.classCursor = i; break; }
+		}
+		state.step = Step::PickClass;
+		return true;
+	case K::CLASS: {
+		if (state.step != Step::PickClass || state.activeSlot < 0) return false;
+		int allowed[15];
+		int n = buildAllowedClasses(state.party[state.activeSlot].race, allowed);
+		// arg here is the REAL class index (kClassNames index) -- map back
+		// to the filtered cursor position so the commit logic finds it.
+		int realIdx = std::clamp(a.arg, 0, 14);
+		int visIdx = 0;
+		for (int i = 0; i < n; ++i) if (allowed[i] == realIdx) { visIdx = i; break; }
+		state.classCursor = visIdx;
+		state.party[state.activeSlot].klass = (n > 0) ? allowed[visIdx] : 0;
+		state.alignmentCursor = state.party[state.activeSlot].alignment >= 0
+		                          ? state.party[state.activeSlot].alignment : 0;
+		state.step = Step::PickAlignment;
+		return true;
+	}
+	case K::ALIGN:
+		if (state.step != Step::PickAlignment || state.activeSlot < 0) return false;
+		state.alignmentCursor = std::clamp(a.arg, 0, 8);
+		state.party[state.activeSlot].alignment = state.alignmentCursor;
+		rollStats(state.party[state.activeSlot], rng);
+		state.step = Step::ShowStats;
+		return true;
+	case K::KEEP:
+		if (state.step != Step::ShowStats || state.activeSlot < 0) return false;
+		state.portraitCursor = state.party[state.activeSlot].portrait;
+		state.step = Step::PickPortrait;
+		return true;
+	case K::REROLL:
+		if (state.step != Step::ShowStats || state.activeSlot < 0) return false;
+		rollStats(state.party[state.activeSlot], rng);
+		return true;
+	case K::MODIFY:
+		if (state.step != Step::ShowStats || state.activeSlot < 0) return false;
+		state.statCursor = 0;
+		state.step = Step::ModifyStats;
+		return true;
+	case K::FACES:
+		// Same as KEEP -- opens portrait picker without committing the slot.
+		if (state.step != Step::ShowStats || state.activeSlot < 0) return false;
+		state.portraitCursor = state.party[state.activeSlot].portrait;
+		state.step = Step::PickPortrait;
+		return true;
+	case K::OK_BTN:
+		if (state.step != Step::ModifyStats) return false;
+		state.step = Step::ShowStats;
+		return true;
+	case K::ABIL_UP:
+	case K::ABIL_DOWN: {
+		if (state.step != Step::ModifyStats || state.activeSlot < 0) return false;
+		int i = std::clamp(a.arg, 0, NUM_ABIL - 1);
+		auto &v = state.party[state.activeSlot].abil[i];
+		v += (a.kind == K::ABIL_UP) ? 1 : -1;
+		v = std::clamp(v, 3, 18);
+		return true;
+	}
+	case K::PORTRAIT: {
+		if (state.step != Step::PickPortrait || state.activeSlot < 0) return false;
+		int total = static_cast<int>(GRAPHICS::Bitmap(picBytes).getNumberOfBitmaps());
+		state.portraitCursor = std::clamp(a.arg, 0, std::max(0, total - 1));
+		state.party[state.activeSlot].portrait = state.portraitCursor;
+		// Match handlePortraitPickEvent's Enter path: go to EnterName.
+		state.step = Step::EnterName;
+		SDL_StartTextInput();
+		return true;
+	}
+	case K::NAME: {
+		if (state.step != Step::EnterName || state.activeSlot < 0) return false;
+		auto &c = state.party[state.activeSlot];
+		std::strncpy(c.name, a.text.c_str(), sizeof(c.name) - 1);
+		c.name[sizeof(c.name) - 1] = 0;
+		// Uppercase ASCII (matches the SDL_TEXTINPUT handler's behaviour).
+		for (auto &ch : c.name)
+			if (ch && static_cast<unsigned char>(ch) < 0x80)
+				ch = static_cast<char>(std::toupper(static_cast<unsigned char>(ch)));
+		if (std::strlen(c.name) == 0) return false; // chargen rejects empty
+		SDL_StopTextInput();
+		c.filled = true;
+		if (writeCreateSav(chargenDir, state)) {
+			state.step       = Step::EntryScreen;
+			state.activeSlot = -1;
+		} else {
+			c.filled = false;
+		}
+		return true;
+	}
+	case K::PLAY:
+		if (state.step != Step::EntryScreen) return false;
+		if (!partyComplete(state)) return false;
+		state.done = true;
+		return true;
+	}
+	return false;
+}
+
 } // namespace
 
 bool THIRDEYE::chargen::runChargenScreen(GRAPHICS::Graphics &gfx,
@@ -1356,11 +1887,49 @@ bool THIRDEYE::chargen::runChargenScreen(GRAPHICS::Graphics &gfx,
 	if (const char *p = std::getenv("THIRDEYE_DUMP_CHARGEN"))
 		gfx.saveScreenshot(p);
 
+	// Chargen autopilot for regression testing. Parsed once from the env var
+	// at chargen entry; advanced one action per outer-loop iteration (we
+	// don't go through SDL events because the chargen state-mutation logic
+	// is fast enough and we want determinism across SDL versions / platforms).
+	auto autoActions = parseChargenAuto(std::getenv("THIRDEYE_CHARGEN_AUTO"));
+	size_t autoIdx = 0;
+	if (!autoActions.empty())
+		std::cout << "  [chargen: autopilot loaded with "
+		          << autoActions.size() << " actions]" << std::endl;
+
 	// Event loop. Re-render after any input that mutates state. Cancel and
 	// accept both currently fall through to whichever CREATE.SAV is on disk;
 	// a proper accept path will write the rolled party out.
 	SDL_Event event;
 	while (!state.done) {
+		// Drive the autopilot one step per outer pump. Each successful
+		// action moves the state machine; if an action doesn't fit the
+		// current step (programmer error in the script) we log + skip so
+		// the loop doesn't hang.
+		if (autoIdx < autoActions.size()) {
+			Step beforeAuto = state.step;
+			bool ok = applyChargenAction(autoActions[autoIdx], state, rng,
+			                             chargenDir, picBytes);
+			if (ok) {
+				++autoIdx;
+				std::cout << "  [chargen autopilot: action " << autoIdx
+				          << "/" << autoActions.size()
+				          << " applied; step now=" << static_cast<int>(state.step)
+				          << "]" << std::endl;
+				// Re-render after an auto action so DUMP captures it.
+				render(gfx, picBytes, fntBytes, fnt6Bytes, backdrop, chargenb,
+				       previewIdx, state);
+				gfx.update();
+				continue;
+			}
+			std::cout << "  [chargen autopilot: action " << (autoIdx + 1)
+			          << " (kind=" << static_cast<int>(autoActions[autoIdx].kind)
+			          << " arg=" << autoActions[autoIdx].arg
+			          << ") didn't fit current step "
+			          << static_cast<int>(beforeAuto) << "; skipping]"
+			          << std::endl;
+			++autoIdx;
+		}
 		while (SDL_PollEvent(&event)) {
 			if (event.type == SDL_QUIT)
 				throw THIRDEYE::runtime::QuitRequested{};
