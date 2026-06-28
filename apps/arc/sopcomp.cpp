@@ -744,6 +744,13 @@ UWORD SOP_import_symbol(SOP_class *SOP, BYTE *sym, BYTE *class_type,
 		strcat(def, ",");
 		strcat(def, class_type);
 		break;
+
+	default:
+		// Unsupported import type: ascnum(entry->def, 10) at the bottom of
+		// the function would dereference a NULL def. Bail cleanly.
+		report(E_ERROR, NULL, MSG_NCL);
+		mem_free(index);
+		return (0);
 	}
 
 	tag = (BYTE*) mem_alloc(3L + (ULONG) strlen(sym));

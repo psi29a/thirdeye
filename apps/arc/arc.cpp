@@ -107,7 +107,9 @@ int main(int argc, BYTE *argv[]) {
 			if (strlen(SCR_filename))
 				report(E_FATAL, NULL, MSG_ICO);
 			else {
-				if (strlen(argv[i]) >= sizeof(SCR_filename))
+				// Reserve room for RS_SUFFIX (".SCR") that gets strcat'd later.
+				// Worst case is a name without an extension to strip.
+				if (strlen(argv[i]) + sizeof(RS_SUFFIX) >= sizeof(SCR_filename))
 					report(E_FATAL, NULL, MSG_ICO);
 				else {
 					strncpy(SCR_filename, argv[i], sizeof(SCR_filename) - 1);

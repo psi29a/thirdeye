@@ -345,7 +345,12 @@ WORD write_file(BYTE *filename, void *buf, ULONG len) {
 		return (0);
 	}
 
-	fclose(handle);
+	// fclose() can fail when flushing buffered writes (disk full, IO error)
+	// even after every fwrite succeeded; propagate that as a write failure.
+	if (fclose(handle) != 0) {
+		system_err = CANT_WRITE_FILE;
+		return (0);
+	}
 
 	return (1);
 }
@@ -379,7 +384,11 @@ WORD append_file(BYTE *filename, void *buf, ULONG len) {
 		return (0);
 	}
 
-	fclose(handle);
+	// Same as write_file: catch flush errors on close.
+	if (fclose(handle) != 0) {
+		system_err = CANT_WRITE_FILE;
+		return (0);
+	}
 
 	return (1);
 }

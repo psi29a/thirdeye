@@ -511,8 +511,11 @@ void displayCodeResourceInformation(FILE *aResFile,
 
 	// Bound the resource name once so every strcpy/strcat below into the
 	// 256-byte buffers (possibly with a 5-char .IMPT/.EXPT suffix) is safe.
+	// Reserve strlen(".IMPT") = 5 bytes for the suffix plus 1 for the
+	// terminator; reject anything that would not fit.
 	if (aResourceName == NULL
-			|| strlen(aResourceName) + 8 >= sizeof(loImportResourceName)) {
+			|| strlen(aResourceName) + sizeof(IMPORT_EXTENSION)
+					> sizeof(loImportResourceName)) {
 		fprintf(aOutputFile, "Resource name missing or too long.\n");
 		return;
 	}
@@ -1178,7 +1181,8 @@ int getOffsetInformation(FILE *aResFile, DIRPOINTER *aDirectoryPointers,
 	if (strlen(aOffsetString) > 1 && aOffsetString[0] == '#') {
 		// hex number starting by #
 		char loHexadecimalNumber[256];
-		if (strlen(aOffsetString) + 2 >= sizeof(loHexadecimalNumber)) {
+		// "0x" (2 chars) + aOffsetString-without-leading-# + '\0'.
+		if (strlen(aOffsetString) + 2 > sizeof(loHexadecimalNumber)) {
 			printf("Hex offset too long: %s\n", aOffsetString);
 			return (false);
 		}
