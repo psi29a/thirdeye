@@ -88,6 +88,30 @@ short LEX_next_constant(LEX_class *LEX)
 }
 
 /* ------------------------------------------------------------------------- *
+ * daesop dictionary-array length (apps/daesop/dict.cpp)
+ *
+ * getNumberOfItems walks a NULL-terminated array and caps its own result at
+ * MAX_NUMBER_OF_DICTIONARY_ITEMS. The returned count is therefore bounded
+ * and safe for "+1, * sizeof(struct)" sizing math. Modeling it as a
+ * sanitized small non-negative integer cuts the INTEGER_OVERFLOW class
+ * across every caller that does `count + 1` then multiplies by a struct
+ * size for malloc.
+ *
+ * Forward-declare the entry pointer; the model file isn't compiled so we
+ * don't need the real struct definition.
+ * ------------------------------------------------------------------------- */
+
+struct INTERNAL_DICTIONARY_ENTRY;
+typedef struct INTERNAL_DICTIONARY_ENTRY *DICTENTRYPOINTER;
+
+int getNumberOfItems(DICTENTRYPOINTER *aArray)
+{
+	int v;
+	__coverity_tainted_data_sanitize__(&v);
+	return v;
+}
+
+/* ------------------------------------------------------------------------- *
  * arc varargs reporter (apps/arc/system.cpp)
  *
  * report() is a custom error printer. Modeling it without a
