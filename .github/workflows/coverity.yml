@@ -1,0 +1,54 @@
+name: Coverity Scan
+
+on:
+  schedule:
+    - cron: '0 3 * * *'  # nightly 03:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  coverity:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y cmake ninja-build build-essential libsdl2-dev libopenal-dev libwildmidi-dev curl
+
+      - name: Download Coverity Build Tool
+        run: |
+          curl -sS -L --fail \
+            --form token="$COVERITY_TOKEN" \
+            --form project="psi29a/thirdeye" \
+            -o cov-analysis-linux64.tar.gz \
+            https://scan.coverity.com/download/linux64
+          mkdir cov-analysis
+          tar xzf cov-analysis-linux64.tar.gz --strip-components=1 -C cov-analysis
+          echo "$PWD/cov-analysis/bin" >> "$GITHUB_PATH"
+        env:
+          COVERITY_TOKEN: ${{ secrets.COVERITY_SCAN_TOKEN }}
+
+      - name: Configure
+        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build with cov-build
+        run: cov-build --dir cov-int cmake --build build -- -j 2
+
+      - name: Tar results
+        run: tar czf thirdeye.tgz cov-int
+
+      - name: Upload to Coverity Scan
+        run: |
+          curl -sS --fail \
+            --form token="$COVERITY_TOKEN" \
+            --form email="psi29a@gmail.com" \
+            --form file=@thirdeye.tgz \
+            --form version="$GITHUB_SHA" \
+            --form description="latest development build" \
+            "https://scan.coverity.com/builds?project=psi29a%2Fthirdeye"
+        env:
+          COVERITY_TOKEN: ${{ secrets.COVERITY_SCAN_TOKEN }}
