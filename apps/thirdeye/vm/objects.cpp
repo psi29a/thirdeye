@@ -405,12 +405,12 @@ Value ObjectSystem::runHandler(uint16_t defClass, uint32_t offset, int objIndex,
 	}
 
 	// Nested SEND just re-enters dispatch from the top.
-	vm.setSendHook([this](int obj, int msg, std::vector<Value>& a) {
+	vm.setSendHook([this](int obj, int msg, std::vector<Value> a) {
 		return send(obj, msg, std::move(a));
 	});
 	// PASS continues the *current* message at this class's parent.
 	uint32_t parent = cls.header.parent;
-	vm.setPassHook([this, objIndex, message, parent](std::vector<Value>& a) {
+	vm.setPassHook([this, objIndex, message, parent](std::vector<Value> a) {
 		return pass(objIndex, message, parent, std::move(a));
 	});
 

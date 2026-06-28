@@ -453,12 +453,24 @@ void PP_process(PP_class *PP) {
 				else
 					text = (BYTE*) entry->def;
 
-				outbuf[out] = 0;                    // output identifier (or
-				strcat(outbuf, text);                // expanded macro)
-				out += strlen(text);
+				{
+					size_t textlen = strlen(text);
+					if (out + textlen >= MAX_OUT_LEN) {
+						// Identifier/macro expansion would overflow the
+						// output buffer. Force the line-overflow guard at
+						// the top of the loop to fire on the next iteration.
+						report(E_ERROR, TF_line_info(&PP->cur), MSG_OLL);
+						out = MAX_OUT_LEN - 1;
+						outbuf[out] = 0;
+						break;
+					}
+					outbuf[out] = 0;                // output identifier (or
+					strcat(outbuf, text);            // expanded macro)
+					out += textlen;
 
-				for (j = 0; j < (WORD) strlen(text); j++)
-					chr_cnt += (!is_whitespace[text[j]]);
+					for (j = 0; j < (WORD) textlen; j++)
+						chr_cnt += (!is_whitespace[text[j]]);
+				}
 				break;
 
 			case 1:                                // state 1: expecting

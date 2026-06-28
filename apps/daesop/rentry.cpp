@@ -4,6 +4,11 @@
 
 #include "rentry.hpp"
 
+// Upper bound for a single resource entry. Real EOB3/Dungeon Hack resources
+// top out in the low MBs (largest fonts/CPS frames), so 64 MB is a sanity
+// cap, not a tight limit -- it just rejects clearly-corrupt headers.
+#define MAX_RESOURCE_DATA_SIZE (64u * 1024u * 1024u)
+
 /*
  Get the file index of the specified resource (including the resource header)
  */
@@ -93,10 +98,20 @@ unsigned char *readResourceBinary(int aResourceNumber, FILE *aResFile,
 			aDirectoryPointers);
 	if (loResourceEntryIndex == -1 || loResEntryHeader == NULL) {
 		printf("Unable to access the resource: %d\n", aResourceNumber);
+		free(loResEntryHeader);
 		return (NULL);
 	}
 	loResourceEntryIndex += sizeof(struct RESEntryHeader); // behind the header
 	loDataSize = loResEntryHeader->data_size;
+
+	// Sanity cap: data_size comes from the resource file header, so cap it
+	// against a sane upper bound before feeding it to malloc.
+	if (loDataSize == 0 || loDataSize > MAX_RESOURCE_DATA_SIZE) {
+		printf("Resource %d has implausible data size: %u\n",
+				aResourceNumber, loDataSize);
+		free(loResEntryHeader);
+		return (NULL);
+	}
 
 	// now read the resource
 	printf("Reading %ld bytes from the position %ld...\n", (long) loDataSize,

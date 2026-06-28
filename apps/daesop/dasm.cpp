@@ -207,6 +207,7 @@ int processBytecodeDefinitionLine(char *aLine) {
 	if (loBytecodeEntryPointer->paramString == NULL) {
 		printf(
 				"Failure to allocate the memory for a parameter string in a bytecode entry!\n");
+		free(loBytecodeEntryPointer->name);
 		free(loBytecodeEntryPointer);
 		return (false);
 	}
@@ -217,10 +218,28 @@ int processBytecodeDefinitionLine(char *aLine) {
 		loNumberOfParameters = 0;
 	}
 
+	// Token layout: [0]=code, [1]=name, [2]=count, [3..3+N-1]=N param types,
+	// [3+N]=explanation. Make sure the token array can hold all of that
+	// before we read past the end.
+	if (3 + loNumberOfParameters + 1 > MAX_TOKENS) {
+		printf("Too many parameters for token array: %d\n", loNumberOfParameters);
+		free(loBytecodeEntryPointer->paramString);
+		free(loBytecodeEntryPointer->name);
+		free(loBytecodeEntryPointer);
+		return (false);
+	}
+
 	// now read parameters
 	for (i = 0; i < loNumberOfParameters; i++) {
 		char *loType;
 		loType = loTokens[3 + i];
+		if (loType == NULL) {
+			printf("Missing parameter type token %d\n", i);
+			free(loBytecodeEntryPointer->paramString);
+			free(loBytecodeEntryPointer->name);
+			free(loBytecodeEntryPointer);
+			return (false);
+		}
 		if (strcmpCS(loType, "byte") == 0) {
 			// one byte parameter
 			strcat(loBytecodeEntryPointer->paramString, "b");
@@ -239,6 +258,7 @@ int processBytecodeDefinitionLine(char *aLine) {
 		} else {
 			printf("Unknown parameter type: %s!\n", loType);
 			free(loBytecodeEntryPointer->paramString);
+			free(loBytecodeEntryPointer->name);
 			free(loBytecodeEntryPointer);
 			return (false);
 		}
@@ -249,7 +269,9 @@ int processBytecodeDefinitionLine(char *aLine) {
 	if (loBytecodeEntryPointer->explanation == NULL
 			|| strlen(loBytecodeEntryPointer->explanation) == 0) {
 		printf("The bytecode explanation is missing!\n");
+		free(loBytecodeEntryPointer->explanation);
 		free(loBytecodeEntryPointer->paramString);
+		free(loBytecodeEntryPointer->name);
 		free(loBytecodeEntryPointer);
 		return (false);
 	}
@@ -261,7 +283,9 @@ int processBytecodeDefinitionLine(char *aLine) {
 	if (bytecodeTable[loBytecodeEntryPointer->number] != NULL) {
 		printf("The bytecode entry %s is defined more than once!\n",
 				loTokens[0]);
+		free(loBytecodeEntryPointer->explanation);
 		free(loBytecodeEntryPointer->paramString);
+		free(loBytecodeEntryPointer->name);
 		free(loBytecodeEntryPointer);
 		return (false);
 	}

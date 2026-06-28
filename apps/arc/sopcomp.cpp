@@ -899,7 +899,9 @@ LONG SOP_fetch_literal_constant(SOP_class *SOP) {
 
 void SOP_fn_var_reference(SOP_class *SOP, UWORD op, PVAL *PV) {
 	DICT_entry *entry;
-	UWORD i, read_op, write_op, vsize, index, ndims;
+	UWORD i, vsize, index, ndims;
+	UWORD read_op = 0;
+	UWORD write_op = 0;
 	CSS_class *CSS;
 
 	if (PV->type == SOP->XTRN) {
@@ -913,6 +915,10 @@ void SOP_fn_var_reference(SOP_class *SOP, UWORD op, PVAL *PV) {
 		SOP_basic_error(SOP, MSG_IUD);
 
 	entry = DICT_lookup(PV->type, PV->val->tag);
+	if (entry == NULL) {
+		SOP_basic_error(SOP, MSG_NCL);
+		return;
+	}
 
 	CSS = CSS_construct((BYTE*) entry->def);
 
@@ -1462,7 +1468,7 @@ void SOP_expr_list(SOP_class *SOP, PVAL *PV) {
 
 void SOP_expr_assign(SOP_class *SOP, PVAL *PV) {
 	PVAL right_side;
-	WORD tkn, op;
+	WORD tkn, op = 0;
 
 	SOP_expr_cond(SOP, PV);
 

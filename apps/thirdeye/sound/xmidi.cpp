@@ -698,6 +698,8 @@ void XMIDI::DuplicateAndMerge(int num) {
 
 		track[i] = track[i]->next;
 	}
+
+	delete[] track;
 }
 
 // Converts Events
