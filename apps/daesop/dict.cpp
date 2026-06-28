@@ -1233,6 +1233,21 @@ DICTENTRYPOINTER *readMessageNamesDictionary(FILE *aResFile,
 // Walk a NULL-terminated dictionary array, freeing each entry's strings and
 // the entry struct itself, then the array. Used to clean up the per-call
 // special-array allocations from getSpecialArray on error paths.
+// Free a partially built RESINFO array: walks the NULL-initialized slots,
+// freeing each populated entry's owned strings before freeing the array.
+static void freeResInfoArray(RESINFOPOINTER *aArray, int aCapacity) {
+	if (aArray == NULL) return;
+	for (int i = 0; i < aCapacity; ++i) {
+		if (aArray[i] == NULL) continue;
+		free(aArray[i]->name);
+		free(aArray[i]->infoFromResource1);
+		free(aArray[i]->infoFromResource2);
+		free(aArray[i]->stringValue);
+		free(aArray[i]);
+	}
+	free(aArray);
+}
+
 static void freeDictArray(DICTENTRYPOINTER *aArray) {
 	if (aArray == NULL) return;
 	for (int i = 0; aArray[i] != NULL; ++i) {
@@ -1359,7 +1374,7 @@ RESINFOPOINTER *getResourcesInformationTable(FILE *aResFile,
 					loResourceName);
 			freeDictArray(loResourceTable1);
 			freeDictArray(loResourceTable2);
-			free(loResult);
+			freeResInfoArray(loResult, loAllocatedInfoEntries);
 			return (NULL);
 		}
 		loInfoEntry = (RESINFOPOINTER) malloc(
@@ -1368,7 +1383,7 @@ RESINFOPOINTER *getResourcesInformationTable(FILE *aResFile,
 			printf("The allocation of a resource info entry failed!\n");
 			freeDictArray(loResourceTable1);
 			freeDictArray(loResourceTable2);
-			free(loResult);
+			freeResInfoArray(loResult, loAllocatedInfoEntries);
 			return (NULL);
 		}
 

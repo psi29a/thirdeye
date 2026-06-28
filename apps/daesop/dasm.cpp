@@ -50,12 +50,25 @@ static std::filesystem::path getExecutableDir() {
 #endif
 }
 
+// Walk MAX_BYTECODES entries and free everything they own. Used to clean up
+// a partially populated bytecodeTable on error.
+static void freeBytecodeTable(BYTECODEPOINTER *aTable) {
+	if (aTable == NULL) return;
+	for (unsigned int i = 0; i < MAX_BYTECODES; ++i) {
+		if (aTable[i] == NULL) continue;
+		free(aTable[i]->name);
+		free(aTable[i]->paramString);
+		free(aTable[i]->explanation);
+		free(aTable[i]);
+	}
+	free(aTable);
+}
+
 /*
  Read bytecode definition file
  */
 BYTECODEPOINTER *readBytecodeDefinition(void) {
 	FILE *loDefinitionFile;
-	char loDefinitionFilePath[256];
 	char loLine[256];
 	int loBytecodeTableSize;
 
@@ -64,15 +77,13 @@ BYTECODEPOINTER *readBytecodeDefinition(void) {
 	// dev runs. (Previously this used an uninitialized path buffer and always
 	// failed, so disassembly was effectively broken.)
 	std::filesystem::path defPath = getExecutableDir() / BYTECODE_DEFINITION_FILE;
-	strncpy(loDefinitionFilePath, defPath.string().c_str(),
-			sizeof(loDefinitionFilePath) - 1);
-	loDefinitionFilePath[sizeof(loDefinitionFilePath) - 1] = '\0';
-	loDefinitionFile = fopen(loDefinitionFilePath, "r");
+	std::string loDefinitionFilePath = defPath.string();
+	loDefinitionFile = fopen(loDefinitionFilePath.c_str(), "r");
 	if (loDefinitionFile == NULL) // dev fallback: current directory
 		loDefinitionFile = fopen(BYTECODE_DEFINITION_FILE, "r");
 	if (loDefinitionFile == NULL) {
 		printf("The attempt to open the bytecode definion file %s failed!\n",
-				loDefinitionFilePath);
+				loDefinitionFilePath.c_str());
 		return (NULL);
 	}
 
@@ -110,12 +121,13 @@ BYTECODEPOINTER *readBytecodeDefinition(void) {
 			printf(
 					"The analysis of the following line in the bytecode definition file failed:\n  %s\n",
 					loLine);
-			free(bytecodeTable); // well, this does not free everything, there can be some items already
+			freeBytecodeTable(bytecodeTable);
 			fclose(loDefinitionFile);
 			bytecodeTable = NULL;
 			return (NULL);
 		}
 	}
+	fclose(loDefinitionFile);
 	return (bytecodeTable);
 }
 
@@ -166,6 +178,12 @@ int processBytecodeDefinitionLine(char *aLine) {
 	 }
 	 }
 	 */
+
+	// Need at least code, name, and param count before we touch loTokens[1]/[2].
+	if (loTokens[1] == NULL || loTokens[2] == NULL) {
+		printf("The line is missing required tokens: %s\n", loLine);
+		return (false);
+	}
 
 	loBytecodeCode = (int) strtol(loTokens[0], &loEndPtr, 16);
 	if (*loEndPtr != '\0') {
