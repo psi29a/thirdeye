@@ -1230,12 +1230,10 @@ DICTENTRYPOINTER *readMessageNamesDictionary(FILE *aResFile,
 /*
  Gets the information about resources
  */
-// Walk a NULL-terminated dictionary array, freeing each entry's strings and
-// the entry struct itself, then the array. Used to clean up the per-call
-// special-array allocations from getSpecialArray on error paths.
-// Free a partially built RESINFO array: walks the NULL-initialized slots,
-// freeing each populated entry's owned strings before freeing the array.
-static void freeResInfoArray(RESINFOPOINTER *aArray, int aCapacity) {
+// Free a RESINFO array allocated by getResourcesInformationTable.
+// Walks the NULL-terminated slots (also handles partial builds where later
+// slots are still NULL), freeing each populated entry's owned strings.
+void freeResInfoArray(RESINFOPOINTER *aArray, int aCapacity) {
 	if (aArray == NULL) return;
 	for (int i = 0; i < aCapacity; ++i) {
 		if (aArray[i] == NULL) continue;

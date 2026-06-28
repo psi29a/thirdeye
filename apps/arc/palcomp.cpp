@@ -172,7 +172,7 @@ void PAL_compile(PAL_class *PAL) {
 	void *pr;
 	pal orig;
 
-	file = (UBYTE *) read_file(PAL->IDR->fn, NULL);
+	file = (UBYTE *) read_file(PAL->IDR->fn);
 
 	if (file == NULL) {
 		PAL_error(PAL->IDR->RS, MSG_SNF, PAL->IDR->fn);

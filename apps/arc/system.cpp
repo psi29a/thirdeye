@@ -264,7 +264,7 @@ LONG file_size(BYTE *filename) {
 }
 
 /*************************************************************/
-ULONG *read_file(BYTE *filename, void *dest) {
+ULONG *read_file(BYTE *filename) {
 	WORD i;
 	FILE *handle;
 	ULONG len;
@@ -275,8 +275,15 @@ ULONG *read_file(BYTE *filename, void *dest) {
 		system_err = FILE_NOT_FOUND;
 		return (NULL);
 	}
+	// Sanity cap: arc compiles SOP/RS source files which are tiny in
+	// practice. 64 MB rejects clearly-broken file_size results before they
+	// reach mem_alloc / fread length truncation.
+	if (len > (64UL * 1024UL * 1024UL)) {
+		system_err = CANT_READ_FILE;
+		return (NULL);
+	}
 
-	buf = mem = (dest == NULL) ? (ULONG*) mem_alloc(len) : (ULONG*) dest;
+	buf = mem = (ULONG*) mem_alloc(len);
 
 	handle = fopen(filename, "rb");
 	if (handle == NULL) {
@@ -289,6 +296,7 @@ ULONG *read_file(BYTE *filename, void *dest) {
 		i = fread(buf, 1, 4096, handle);
 		if (i != 4096) {
 			mem_free(mem);
+			fclose(handle);
 			system_err = CANT_READ_FILE;
 			return (NULL);
 		}
@@ -299,6 +307,7 @@ ULONG *read_file(BYTE *filename, void *dest) {
 	i = fread(buf, 1, (UWORD) len, handle);
 	if (i != (UWORD) len) {
 		mem_free(mem);
+		fclose(handle);
 		system_err = CANT_READ_FILE;
 		return (NULL);
 	}
@@ -309,7 +318,7 @@ ULONG *read_file(BYTE *filename, void *dest) {
 
 /*************************************************************/
 WORD write_file(BYTE *filename, void *buf, ULONG len) {
-	WORD i;
+	size_t i;
 	FILE *handle;
 
 	handle = fopen(filename, "w+b");
@@ -320,12 +329,9 @@ WORD write_file(BYTE *filename, void *buf, ULONG len) {
 
 	while (len >= 4096L) {
 		i = fwrite(buf, 1, 4096, handle);
-		if (i == -1) {
-			system_err = CANT_WRITE_FILE;
-			return (0);
-		}
 		if (i != 4096) {
-			system_err = DISK_FULL;
+			system_err = ferror(handle) ? CANT_WRITE_FILE : DISK_FULL;
+			fclose(handle);
 			return (0);
 		}
 		len -= 4096L;
@@ -333,12 +339,9 @@ WORD write_file(BYTE *filename, void *buf, ULONG len) {
 	}
 
 	i = fwrite(buf, 1, (UWORD) len, handle);
-	if (i == -1) {
-		system_err = CANT_WRITE_FILE;
-		return (0);
-	}
 	if (i != (UWORD) len) {
-		system_err = DISK_FULL;
+		system_err = ferror(handle) ? CANT_WRITE_FILE : DISK_FULL;
+		fclose(handle);
 		return (0);
 	}
 

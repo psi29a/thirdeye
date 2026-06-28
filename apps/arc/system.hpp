@@ -70,7 +70,7 @@ void set_temp_deletion_policy(WORD delete_policy);
 
 WORD verify_file(BYTE *filename);
 LONG file_size(BYTE *filename);
-ULONG *read_file(BYTE *filename, void *dest);
+ULONG *read_file(BYTE *filename);
 BYTE *load_driver(BYTE *filename);
 WORD write_file(BYTE *filename, void *src, ULONG len);
 WORD append_file(BYTE *filename, void *src, ULONG len);

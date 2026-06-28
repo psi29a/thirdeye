@@ -173,6 +173,7 @@ char *getMessageName(char *aResult, char *aExportTableString, FILE *aResFile,
 		DIRPOINTER *aDirectoryPointers);
 RESINFOPOINTER *getResourcesInformationTable(FILE *aResFile,
 		DIRPOINTER *aDirectoryPointers, int aLookForStringResources);
+void freeResInfoArray(RESINFOPOINTER *aArray, int aCapacity);
 char* getSecondEntryForTheFirstEntry(DICTENTRYPOINTER *aResourceTable,
 		char *aResourceName);
 int getResourceType(FILE *aResFile, DIRPOINTER *aDirectoryPointers,
