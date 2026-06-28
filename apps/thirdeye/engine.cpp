@@ -149,7 +149,7 @@ std::filesystem::path resolveChildCI(const std::filesystem::path &parent,
 	    static_cast<unsigned char>(c)));
 	for (auto &entry : std::filesystem::directory_iterator(parent, ec)) {
 		auto candidate = entry.path().filename().string();
-		std::string cl = candidate;
+		std::string cl = std::move(candidate);
 		for (auto &c : cl) c = static_cast<char>(std::tolower(
 		    static_cast<unsigned char>(c)));
 		if (cl == lower) return entry.path();
@@ -843,7 +843,7 @@ void THIRDEYE::Engine::playCinematic(GRAPHICS::Graphics *gfx,
 	// QuitRequested (below) is not a std::exception, so window-close still unwinds.
 	try {
 		MIXER::Mixer mixer;
-		RESOURCES::GFFI video(gffPath);
+		RESOURCES::GFFI video(std::move(gffPath));
 		mixer.playMusic(video.getMusic());
 		gfx->playVideo(video.getSequence());
 

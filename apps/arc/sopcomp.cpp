@@ -688,7 +688,7 @@ WORD SOP_export_symbol(SOP_class *SOP, ULONG symbol, ULONG value, BYTE type,
 	if (asize != 1)
 		CSS_add_num(def, asize);
 
-	tag = (BYTE*) mem_alloc(3L + (ULONG) strlen(sym));
+	tag = (BYTE*) mem_alloc(3L + (sym != NULL ? (ULONG) strlen(sym) : 0));
 	tag[0] = type;
 	tag[1] = ':';
 	tag[2] = 0;
@@ -1708,7 +1708,7 @@ void SOP_expr_band(SOP_class *SOP, PVAL *PV) {
 /*************************************************************/
 
 void SOP_expr_eq(SOP_class *SOP, PVAL *PV) {
-	WORD op;
+	WORD op = 0;
 
 	SOP_expr_rel(SOP, PV);
 
@@ -1861,7 +1861,7 @@ void SOP_expr_add(SOP_class *SOP, PVAL *PV) {
 /*************************************************************/
 
 void SOP_expr_mul(SOP_class *SOP, PVAL *PV) {
-	WORD op;
+	WORD op = 0;
 
 	SOP_expr_exp(SOP, PV);
 
@@ -2198,7 +2198,8 @@ UWORD SOP_var_declaration(SOP_class *SOP, UWORD vsize, DICT_class *scope,
 	DICT_entry *entry;
 	CSS_class *CSS;
 	UWORD i, ndims, dims[MAX_DIMS];
-	ULONG ninit, tsize, dsize, asize, val;
+	ULONG ninit, tsize, dsize, val;
+	ULONG asize = 1L;
 
 	do {
 		class_type = str_alloc("");

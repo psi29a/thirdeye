@@ -12,7 +12,7 @@
 #include <cctype>
 
 RESOURCES::GFFI::GFFI(std::filesystem::path gffiPath) {
-	mGFFIFile = gffiPath;
+	mGFFIFile = std::move(gffiPath);
 
 	// does resource exist
 	if (std::filesystem::exists(mGFFIFile) == false)

@@ -1147,10 +1147,11 @@ bool writeCreateSav(const std::filesystem::path &chargenDir,
 		// Unused slots get level 0 and XP -1 to match the default party's
 		// "no class" sentinel.
 		int nComp = std::max(1, classComponentCount(c.klass));
+		bool klassInRange = (c.klass >= 0 && c.klass < 15);
 		for (int i = 0; i < 3; ++i) {
 			if (i < nComp) {
 				patchU8(rec + 36 + i, static_cast<uint8_t>(c.lvl));
-				int compClass = kClassComponents[c.klass][i];
+				int compClass = klassInRange ? kClassComponents[c.klass][i] : -1;
 				int compEob1  = (compClass >= 0 && compClass < 6)
 				              ? kClassToEob1[compClass] : eob1Class;
 				uint32_t xp = baseXp(compEob1) / static_cast<uint32_t>(nComp);

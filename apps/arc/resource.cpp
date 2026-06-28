@@ -64,15 +64,30 @@ ULONG RES_store_resource(RF_class *RF, ULONG entry, void *source,
 	WORD err;
 
 	err = 0;
+	file = -1;
+
+	len = RHDR->data_size;
+
+	// For RTYP_RAW_FILE we need a valid source fd before we commit the entry
+	// header to the archive; otherwise a failed open() leaves the archive
+	// with a half-written entry pointing at no data.
+	if (type == RTYP_RAW_FILE && len && !(RHDR->data_attrib & DA_PLACEHOLDER)) {
+		file = open((BYTE*) source, O_RDWR);
+		if (file < 0)
+			return ((ULONG) -1);
+	}
 
 	r_write(RF->file, RHDR, sizeof(RF_entry_hdr));
 
-	len = RHDR->data_size;
-	if (!len)
+	if (!len) {
+		if (file >= 0) close(file);
 		return (entry);
+	}
 
-	if (RHDR->data_attrib & DA_PLACEHOLDER)
+	if (RHDR->data_attrib & DA_PLACEHOLDER) {
+		if (file >= 0) close(file);
 		return (entry);
+	}
 
 	switch (type) {
 	case RTYP_HOUSECLEAN:
@@ -103,7 +118,6 @@ ULONG RES_store_resource(RF_class *RF, ULONG entry, void *source,
 		break;
 
 	case RTYP_RAW_FILE:
-		file = open((BYTE*) source, O_RDWR);
 		ptr = (UBYTE*) mem_alloc(BLK_SIZE);
 
 		while (len > BLK_SIZE) {

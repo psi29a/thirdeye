@@ -53,8 +53,8 @@ struct Assets {
 	Assets(uint16_t fst, std::string snd, uint32_t thr, uint32_t frt,
 			uint32_t fth, uint32_t sxt, uint32_t svt, std::string ect,
 			std::string nth, std::vector<uint8_t> ten) :
-			id(fst), name(snd), date(thr), attributes(frt), size(fth), start(
-					sxt), offset(svt), table1(ect), table2(nth), data(ten)
+			id(fst), name(std::move(snd)), date(thr), attributes(frt), size(fth), start(
+					sxt), offset(svt), table1(std::move(ect)), table2(std::move(nth)), data(std::move(ten))
 
 	{
 	}
