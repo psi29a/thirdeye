@@ -522,7 +522,7 @@ BYTE *temp_filename(BYTE *path) {
 			strcat(fp, "\\");
 			fp = &fn[strlen(fn)];
 		} else
-			fn[0] = NULL;
+			fn[0] = '\0';
 
 		sprintf(fp, "TEMPFILE.%.03u", n);
 		n = (n + 1) % 1000;
