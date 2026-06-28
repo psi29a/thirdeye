@@ -146,8 +146,8 @@ public:
 	// message to the parent class. Both return the handler's result; if unset,
 	// the corresponding opcode throws.
 	using SendHook =
-		std::function<Value(int objIndex, int message, std::vector<Value>& args)>;
-	using PassHook = std::function<Value(std::vector<Value>& args)>;
+		std::function<Value(int objIndex, int message, std::vector<Value> args)>;
+	using PassHook = std::function<Value(std::vector<Value> args)>;
 	void setSendHook(SendHook fn) { mSendHook = std::move(fn); }
 	void setPassHook(PassHook fn) { mPassHook = std::move(fn); }
 

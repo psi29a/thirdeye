@@ -79,15 +79,13 @@ ULONG RES_store_resource(RF_class *RF, ULONG entry, void *source,
 
 	r_write(RF->file, RHDR, sizeof(RF_entry_hdr));
 
-	if (!len) {
-		if (file >= 0) close(file);
+	// file is only opened when len > 0 and not a placeholder, so these
+	// early-returns can never have an fd to close.
+	if (!len)
 		return (entry);
-	}
 
-	if (RHDR->data_attrib & DA_PLACEHOLDER) {
-		if (file >= 0) close(file);
+	if (RHDR->data_attrib & DA_PLACEHOLDER)
 		return (entry);
-	}
 
 	switch (type) {
 	case RTYP_HOUSECLEAN:

@@ -549,7 +549,6 @@ IMPORTENTRYPOINTER *getFullImportArray(DICTENTRYPOINTER *aRawImportArray,
 		FILE *aResFile, DIRPOINTER *aDirectoryPointers) {
 	IMPORTENTRYPOINTER *loResult;
 	int loNumberOfItems;
-	int loImportArraySizeInBytes;
 	int loAllocatedImportEntries;
 	int i;
 
@@ -564,12 +563,17 @@ IMPORTENTRYPOINTER *getFullImportArray(DICTENTRYPOINTER *aRawImportArray,
 				"Unable to determine the number of the items in the raw import array!");
 		return (NULL);
 	}
+	if (loNumberOfItems < 0
+			|| loNumberOfItems >= MAX_NUMBER_OF_DICTIONARY_ITEMS) {
+		printf("Import item count %d out of range\n", loNumberOfItems);
+		return (NULL);
+	}
 
 	// at the end of the array there is always NULL element
 	loAllocatedImportEntries = loNumberOfItems + 1;
-	loImportArraySizeInBytes = loAllocatedImportEntries
+	size_t loImportArraySize = (size_t) loAllocatedImportEntries
 			* sizeof(struct INTERNAL_IMPORT_ENTRY);
-	loResult = (IMPORTENTRYPOINTER *) malloc(loImportArraySizeInBytes);
+	loResult = (IMPORTENTRYPOINTER *) malloc(loImportArraySize);
 
 	if (loResult == NULL) {
 		printf(
@@ -700,7 +704,6 @@ EXPORTENTRYPOINTER *getFullExportArray(DICTENTRYPOINTER *aRawExportArray,
 		FILE *aResFile, DIRPOINTER *aDirectoryPointers) {
 	EXPORTENTRYPOINTER *loResult;
 	int loNumberOfItems;
-	int loExportArraySizeInBytes;
 	int loAllocatedExportEntries;
 	int i;
 
@@ -715,12 +718,17 @@ EXPORTENTRYPOINTER *getFullExportArray(DICTENTRYPOINTER *aRawExportArray,
 				"Unable to determine the number of the items in the raw export array!");
 		return (NULL);
 	}
+	if (loNumberOfItems < 0
+			|| loNumberOfItems >= MAX_NUMBER_OF_DICTIONARY_ITEMS) {
+		printf("Export item count %d out of range\n", loNumberOfItems);
+		return (NULL);
+	}
 
 	// at the end of the array there is always NULL element
 	loAllocatedExportEntries = loNumberOfItems + 1;
-	loExportArraySizeInBytes = loAllocatedExportEntries
+	size_t loExportArraySize = (size_t) loAllocatedExportEntries
 			* sizeof(struct INTERNAL_EXPORT_ENTRY);
-	loResult = (EXPORTENTRYPOINTER *) malloc(loExportArraySizeInBytes);
+	loResult = (EXPORTENTRYPOINTER *) malloc(loExportArraySize);
 
 	if (loResult == NULL) {
 		printf(
@@ -1172,6 +1180,10 @@ char* getMessageName(char *aResult, char *aExportTableString, FILE *aResFile,
 				aExportTableString);
 		return (NULL);
 	}
+	if (strlen(aExportTableString + 2) >= sizeof(loNumberString)) {
+		printf("Error: M:<number> string too long: %s!\n", aExportTableString);
+		return (NULL);
+	}
 	strcpy(loNumberString, aExportTableString + 2);  // copy behind M:
 	loNumber = atoi(loNumberString);
 	if (loNumber == 0 && strcmp(loNumberString, "0") != 0) {
@@ -1218,6 +1230,34 @@ DICTENTRYPOINTER *readMessageNamesDictionary(FILE *aResFile,
 /*
  Gets the information about resources
  */
+// Walk a NULL-terminated dictionary array, freeing each entry's strings and
+// the entry struct itself, then the array. Used to clean up the per-call
+// special-array allocations from getSpecialArray on error paths.
+// Free a partially built RESINFO array: walks the NULL-initialized slots,
+// freeing each populated entry's owned strings before freeing the array.
+static void freeResInfoArray(RESINFOPOINTER *aArray, int aCapacity) {
+	if (aArray == NULL) return;
+	for (int i = 0; i < aCapacity; ++i) {
+		if (aArray[i] == NULL) continue;
+		free(aArray[i]->name);
+		free(aArray[i]->infoFromResource1);
+		free(aArray[i]->infoFromResource2);
+		free(aArray[i]->stringValue);
+		free(aArray[i]);
+	}
+	free(aArray);
+}
+
+static void freeDictArray(DICTENTRYPOINTER *aArray) {
+	if (aArray == NULL) return;
+	for (int i = 0; aArray[i] != NULL; ++i) {
+		free(aArray[i]->first);
+		free(aArray[i]->second);
+		free(aArray[i]);
+	}
+	free(aArray);
+}
+
 RESINFOPOINTER *getResourcesInformationTable(FILE *aResFile,
 		DIRPOINTER *aDirectoryPointers, int aLookForStringResources) {
 	int loNumberOfResources;
@@ -1225,12 +1265,15 @@ RESINFOPOINTER *getResourcesInformationTable(FILE *aResFile,
 	int loNumberOfEntriesInTable2;
 	RESINFOPOINTER *loResult;
 	int loAllocatedInfoEntries;
-	int loAllocatedInfoEntriesSizeInBytes;
+	size_t loAllocatedInfoEntriesSizeInBytes;
 	int i;
 	DICTENTRYPOINTER *loResourceNameArray;
-	DICTENTRYPOINTER *loResourceTable1;
-	DICTENTRYPOINTER *loResourceTable2;
+	DICTENTRYPOINTER *loResourceTable1 = NULL;
+	DICTENTRYPOINTER *loResourceTable2 = NULL;
 
+	// getResourceNameArray caches into myResourceNamesDictionary, so it's
+	// process-lifetime and we never free it. Tables 1/2 are re-allocated on
+	// every call and must be freed before any early return.
 	loResourceNameArray = getResourceNameArray(aResFile, aDirectoryPointers);
 	if (loResourceNameArray == NULL) {
 		printf("Unable to read the resource name dictionary (resource 0)!\n");
@@ -1248,6 +1291,7 @@ RESINFOPOINTER *getResourcesInformationTable(FILE *aResFile,
 	loResourceTable2 = getSpecialArray(2, aResFile, aDirectoryPointers);
 	if (loResourceTable2 == NULL) {
 		printf("Unable to read the special AESOP resource 2\n");
+		freeDictArray(loResourceTable1);
 		return (NULL);
 	}
 
@@ -1255,18 +1299,24 @@ RESINFOPOINTER *getResourcesInformationTable(FILE *aResFile,
 	if (loNumberOfResources == -1) {
 		printf(
 				"Failed to get the number of entries in the table of resource names.\n");
+		freeDictArray(loResourceTable1);
+		freeDictArray(loResourceTable2);
 		return (NULL);
 	}
 	loNumberOfEntriesInTable1 = getNumberOfItems(loResourceTable1);
 	if (loNumberOfEntriesInTable1 == -1) {
 		printf(
 				"Failed to get the number of entries in the resource table 1.\n");
+		freeDictArray(loResourceTable1);
+		freeDictArray(loResourceTable2);
 		return (NULL);
 	}
 	loNumberOfEntriesInTable2 = getNumberOfItems(loResourceTable2);
 	if (loNumberOfEntriesInTable2 == -1) {
 		printf(
 				"Failed to get the number of entries in the resource table 2.\n");
+		freeDictArray(loResourceTable1);
+		freeDictArray(loResourceTable2);
 		return (NULL);
 	}
 	printf(
@@ -1274,17 +1324,30 @@ RESINFOPOINTER *getResourcesInformationTable(FILE *aResFile,
 			loNumberOfResources, loNumberOfEntriesInTable1,
 			loNumberOfEntriesInTable2);
 
+	// Sanity bound: getNumberOfItems is already capped at
+	// MAX_NUMBER_OF_DICTIONARY_ITEMS, so loNumberOfResources is well under
+	// any malloc overflow threshold. Belt-and-braces guard here for Coverity.
+	if (loNumberOfResources < 0
+			|| loNumberOfResources >= MAX_NUMBER_OF_DICTIONARY_ITEMS) {
+		printf("Resource count %d out of range\n", loNumberOfResources);
+		freeDictArray(loResourceTable1);
+		freeDictArray(loResourceTable2);
+		return (NULL);
+	}
+
 	// There is always at least one NULL entry (end marker)
 	loAllocatedInfoEntries = loNumberOfResources + 1;
 
 	// allocate space for the dictionary array
-	loAllocatedInfoEntriesSizeInBytes = loAllocatedInfoEntries
+	loAllocatedInfoEntriesSizeInBytes = (size_t) loAllocatedInfoEntries
 			* sizeof(struct INTERNAL_RESOURCE_INFO);
 	loResult = (RESINFOPOINTER *) malloc(loAllocatedInfoEntriesSizeInBytes);
 	if (loResult == NULL) {
 		printf(
 				"The allocation of the resource info array with the size %d failed!\n",
 				loAllocatedInfoEntries);
+		freeDictArray(loResourceTable1);
+		freeDictArray(loResourceTable2);
 		return (NULL);
 	}
 
@@ -1309,12 +1372,18 @@ RESINFOPOINTER *getResourcesInformationTable(FILE *aResFile,
 		if (loResourceNumber == -1) {
 			printf("Unable to get the resource number for the resource: %s!\n",
 					loResourceName);
+			freeDictArray(loResourceTable1);
+			freeDictArray(loResourceTable2);
+			freeResInfoArray(loResult, loAllocatedInfoEntries);
 			return (NULL);
 		}
 		loInfoEntry = (RESINFOPOINTER) malloc(
 				sizeof(struct INTERNAL_RESOURCE_INFO));
 		if (loInfoEntry == NULL) {
 			printf("The allocation of a resource info entry failed!\n");
+			freeDictArray(loResourceTable1);
+			freeDictArray(loResourceTable2);
+			freeResInfoArray(loResult, loAllocatedInfoEntries);
 			return (NULL);
 		}
 
@@ -1338,6 +1407,10 @@ RESINFOPOINTER *getResourcesInformationTable(FILE *aResFile,
 
 		loResult[i] = loInfoEntry;
 	}
+	// Tables 1/2 are no longer needed: getSecondEntryForTheFirstEntry copies
+	// the matched strings via makeString, so loResult owns its own data.
+	freeDictArray(loResourceTable1);
+	freeDictArray(loResourceTable2);
 	return (loResult);
 }
 

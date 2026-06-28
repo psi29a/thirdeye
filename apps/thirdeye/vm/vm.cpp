@@ -336,7 +336,7 @@ Value Interpreter::run() {
 			Value instance = topVal(); // object handle below the args
 			if (!mSendHook)
 				throw VmError("SEND but no object system is wired in");
-			setTop(mSendHook(static_cast<int>(instance), message, args));
+			setTop(mSendHook(static_cast<int>(instance), message, std::move(args)));
 			break;
 		}
 		// PASS <argc>: re-dispatch the CURRENT message to the parent class, using
@@ -348,7 +348,7 @@ Value Interpreter::run() {
 				args[i] = popVal();
 			if (!mPassHook)
 				throw VmError("PASS but no object system is wired in");
-			setTop(mPassHook(args));
+			setTop(mPassHook(std::move(args)));
 			break;
 		}
 

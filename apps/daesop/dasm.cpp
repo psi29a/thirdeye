@@ -50,12 +50,25 @@ static std::filesystem::path getExecutableDir() {
 #endif
 }
 
+// Walk MAX_BYTECODES entries and free everything they own. Used to clean up
+// a partially populated bytecodeTable on error.
+static void freeBytecodeTable(BYTECODEPOINTER *aTable) {
+	if (aTable == NULL) return;
+	for (unsigned int i = 0; i < MAX_BYTECODES; ++i) {
+		if (aTable[i] == NULL) continue;
+		free(aTable[i]->name);
+		free(aTable[i]->paramString);
+		free(aTable[i]->explanation);
+		free(aTable[i]);
+	}
+	free(aTable);
+}
+
 /*
  Read bytecode definition file
  */
 BYTECODEPOINTER *readBytecodeDefinition(void) {
 	FILE *loDefinitionFile;
-	char loDefinitionFilePath[256];
 	char loLine[256];
 	int loBytecodeTableSize;
 
@@ -64,15 +77,13 @@ BYTECODEPOINTER *readBytecodeDefinition(void) {
 	// dev runs. (Previously this used an uninitialized path buffer and always
 	// failed, so disassembly was effectively broken.)
 	std::filesystem::path defPath = getExecutableDir() / BYTECODE_DEFINITION_FILE;
-	strncpy(loDefinitionFilePath, defPath.string().c_str(),
-			sizeof(loDefinitionFilePath) - 1);
-	loDefinitionFilePath[sizeof(loDefinitionFilePath) - 1] = '\0';
-	loDefinitionFile = fopen(loDefinitionFilePath, "r");
+	std::string loDefinitionFilePath = defPath.string();
+	loDefinitionFile = fopen(loDefinitionFilePath.c_str(), "r");
 	if (loDefinitionFile == NULL) // dev fallback: current directory
 		loDefinitionFile = fopen(BYTECODE_DEFINITION_FILE, "r");
 	if (loDefinitionFile == NULL) {
 		printf("The attempt to open the bytecode definion file %s failed!\n",
-				loDefinitionFilePath);
+				loDefinitionFilePath.c_str());
 		return (NULL);
 	}
 
@@ -110,12 +121,13 @@ BYTECODEPOINTER *readBytecodeDefinition(void) {
 			printf(
 					"The analysis of the following line in the bytecode definition file failed:\n  %s\n",
 					loLine);
-			free(bytecodeTable); // well, this does not free everything, there can be some items already
+			freeBytecodeTable(bytecodeTable);
 			fclose(loDefinitionFile);
 			bytecodeTable = NULL;
 			return (NULL);
 		}
 	}
+	fclose(loDefinitionFile);
 	return (bytecodeTable);
 }
 
@@ -167,6 +179,12 @@ int processBytecodeDefinitionLine(char *aLine) {
 	 }
 	 */
 
+	// Need at least code, name, and param count before we touch loTokens[1]/[2].
+	if (loTokens[1] == NULL || loTokens[2] == NULL) {
+		printf("The line is missing required tokens: %s\n", loLine);
+		return (false);
+	}
+
 	loBytecodeCode = (int) strtol(loTokens[0], &loEndPtr, 16);
 	if (*loEndPtr != '\0') {
 		printf("The conversion of the hexadecimal number %s failed!\n",
@@ -207,6 +225,7 @@ int processBytecodeDefinitionLine(char *aLine) {
 	if (loBytecodeEntryPointer->paramString == NULL) {
 		printf(
 				"Failure to allocate the memory for a parameter string in a bytecode entry!\n");
+		free(loBytecodeEntryPointer->name);
 		free(loBytecodeEntryPointer);
 		return (false);
 	}
@@ -217,10 +236,28 @@ int processBytecodeDefinitionLine(char *aLine) {
 		loNumberOfParameters = 0;
 	}
 
+	// Token layout: [0]=code, [1]=name, [2]=count, [3..3+N-1]=N param types,
+	// [3+N]=explanation. Make sure the token array can hold all of that
+	// before we read past the end.
+	if (3 + loNumberOfParameters + 1 > MAX_TOKENS) {
+		printf("Too many parameters for token array: %d\n", loNumberOfParameters);
+		free(loBytecodeEntryPointer->paramString);
+		free(loBytecodeEntryPointer->name);
+		free(loBytecodeEntryPointer);
+		return (false);
+	}
+
 	// now read parameters
 	for (i = 0; i < loNumberOfParameters; i++) {
 		char *loType;
 		loType = loTokens[3 + i];
+		if (loType == NULL) {
+			printf("Missing parameter type token %d\n", i);
+			free(loBytecodeEntryPointer->paramString);
+			free(loBytecodeEntryPointer->name);
+			free(loBytecodeEntryPointer);
+			return (false);
+		}
 		if (strcmpCS(loType, "byte") == 0) {
 			// one byte parameter
 			strcat(loBytecodeEntryPointer->paramString, "b");
@@ -239,6 +276,7 @@ int processBytecodeDefinitionLine(char *aLine) {
 		} else {
 			printf("Unknown parameter type: %s!\n", loType);
 			free(loBytecodeEntryPointer->paramString);
+			free(loBytecodeEntryPointer->name);
 			free(loBytecodeEntryPointer);
 			return (false);
 		}
@@ -249,7 +287,9 @@ int processBytecodeDefinitionLine(char *aLine) {
 	if (loBytecodeEntryPointer->explanation == NULL
 			|| strlen(loBytecodeEntryPointer->explanation) == 0) {
 		printf("The bytecode explanation is missing!\n");
+		free(loBytecodeEntryPointer->explanation);
 		free(loBytecodeEntryPointer->paramString);
+		free(loBytecodeEntryPointer->name);
 		free(loBytecodeEntryPointer);
 		return (false);
 	}
@@ -261,7 +301,9 @@ int processBytecodeDefinitionLine(char *aLine) {
 	if (bytecodeTable[loBytecodeEntryPointer->number] != NULL) {
 		printf("The bytecode entry %s is defined more than once!\n",
 				loTokens[0]);
+		free(loBytecodeEntryPointer->explanation);
 		free(loBytecodeEntryPointer->paramString);
+		free(loBytecodeEntryPointer->name);
 		free(loBytecodeEntryPointer);
 		return (false);
 	}
