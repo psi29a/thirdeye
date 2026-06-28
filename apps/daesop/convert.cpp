@@ -292,8 +292,10 @@ int replaceResourceInOpenedFile(char *aResourceName, int aResourceNumber,
 			printf(
 					"Unable to write the resource entry header for the replaced resource: %d\n",
 					aResourceNumber);
+			free(loResEntryHeader);
 			return (false);
 		}
+		free(loResEntryHeader);
 		loNewFileLength += loResourceHeaderSize;
 	}
 

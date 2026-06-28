@@ -513,17 +513,26 @@ BYTE *temp_filename(BYTE *path) {
 	BYTE *fn;
 	BYTE *fp;
 	UWORD n;
+	const size_t fn_size = 256;
+	const size_t tail = sizeof("TEMPFILE.999") + 1; // reserve for sprintf
 
-	fn = (BYTE*) mem_alloc(256L);
+	fn = (BYTE*) mem_alloc(fn_size);
 
 	n = 0;
 	do {
 		fp = fn;
 
 		if (path != NULL) {
-			strcpy(fp, path);
-			strcat(fp, "\\");
-			fp = &fn[strlen(fn)];
+			size_t plen = strlen(path);
+			if (plen + 1 + tail >= fn_size) {
+				// path too long; fall back to the no-prefix form rather than
+				// overflowing the 256-byte buffer.
+				fn[0] = '\0';
+			} else {
+				strcpy(fp, path);
+				strcat(fp, "\\");
+				fp = &fn[strlen(fn)];
+			}
 		} else
 			fn[0] = '\0';
 

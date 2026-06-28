@@ -437,7 +437,13 @@ int getResource(FILE *aResFile, DIRPOINTER *aDirectoryPointers, int aFunction,
 	// length
 	loResEntryHeader = getResourceEntryHeader(loExtractedResourceNumber,
 			aResFile, aDirectoryPointers);
+	if (loResEntryHeader == NULL) {
+		printf("Unable to read the resource entry header for: %d\n",
+				loExtractedResourceNumber);
+		return (false);
+	}
 	loDataSize = loResEntryHeader->data_size;
+	free(loResEntryHeader);
 
 	// now set the position and length according to what should be stored
 	if (aFunction == GET_RESOURCE_BY_NUMBER || aFunction == GET_RESOURCE_BY_NAME) {
@@ -459,6 +465,7 @@ int getResource(FILE *aResFile, DIRPOINTER *aDirectoryPointers, int aFunction,
 		printf(
 				"Failure to set the file position %ld when reading a resource!\n",
 				loResourceEntryIndex);
+		free(loBuffer);
 		return (false);
 	}
 	loReadSize = static_cast<unsigned int>(fread(loBuffer, 1, loDataSize, aResFile));
@@ -653,6 +660,13 @@ void displayCodeResourceInformation(FILE *aResFile,
 				loFullExportResourceDictionary, loExportResourceSize, aResFile,
 				aDirectoryPointers, aOutputFile);
 	}
+
+	// Both raw arrays and the full Import/Export arrays are per-call
+	// allocations from get{Raw,Full}{Import,Export}Array, not cached.
+	freeDictArray(loRawImportResourceDictionary);
+	freeDictArray(loRawExportResourceDictionary);
+	freeImportArray(loFullImportResourceDictionary);
+	freeExportArray(loFullExportResourceDictionary);
 }
 
 /*
@@ -733,6 +747,7 @@ void displaySpecialAESOPResource(FILE *aResFile, DIRPOINTER *aDirectoryPointers,
 				aResourceNumber);
 		displayHexadecimalDump(aResourceNumber, aResFile, aDirectoryPointers,
 				aOutputFile);
+		freeDictArray(loSpecialDictionary);
 	}
 }
 
@@ -869,6 +884,7 @@ int getResourceInformation(FILE *aResFile, DIRPOINTER *aDirectoryPointers,
 	loOutputFile = fopen(aOutputFilename, "w");
 	if (loOutputFile == NULL) {
 		printf("The file could not be opened: %s!\n", aOutputFilename);
+		free(loResEntryHeader);
 		return (false);
 	}
 	fprintf(loOutputFile, "AESOP decompiler version: %s\n", DAESOP_VERSION);

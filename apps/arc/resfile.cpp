@@ -90,6 +90,7 @@ RF_class *RF_construct(BYTE *filename, WORD compacting) {
 	}
 
 	r_read(RF->file, &RF->hdr, sizeof(RF_file_hdr));
+	RF->hdr.signature[sizeof(RF->hdr.signature) - 1] = '\0';
 
 	if (strcmp(RF->hdr.signature, RF_SIGNATURE))
 		report(E_FATAL, NULL, MSG_OBF, filename);
@@ -331,6 +332,7 @@ ULONG RF_write_entry(RF_class *RF, ULONG entry, void *source,
 	if (RHDR == NULL) {
 		dummy.data_size = 0L;
 		dummy.data_attrib = DA_TEMPORARY;
+		dummy.timestamp = 0L;
 		RHDR = &dummy;
 	}
 

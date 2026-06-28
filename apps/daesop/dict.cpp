@@ -128,6 +128,7 @@ DICTENTRYPOINTER *readTheDictionary(int aResource, int aMaxDictionaryEntries,
 	if (aResourceSize != NULL) {
 		*aResourceSize = loDictionaryResourceHeader->data_size;
 	}
+	free(loDictionaryResourceHeader);
 
 	loDictionaryStart = getResourceEntryIndex(aResource, aDirectoryPointers)
 			+ sizeof(struct RESEntryHeader);
@@ -163,6 +164,7 @@ DICTENTRYPOINTER *readTheDictionary(int aResource, int aMaxDictionaryEntries,
 			printf(
 					"Failure to set the file position %ld when reading the dictionary resource %d!\n",
 					loDictionaryStart, aResource);
+			free(loDictionaryArray);
 			return (NULL);
 		}
 
@@ -174,6 +176,7 @@ DICTENTRYPOINTER *readTheDictionary(int aResource, int aMaxDictionaryEntries,
 			printf(
 					"Failure to read a string list index from the dictionary resource %d!\n",
 					aResource);
+			free(loDictionaryArray);
 			return (NULL);
 		}
 
@@ -187,6 +190,7 @@ DICTENTRYPOINTER *readTheDictionary(int aResource, int aMaxDictionaryEntries,
 				// something failed
 				printf("Error while reading dictionary resource: %d\n",
 						aResource);
+				free(loDictionaryArray);
 				return (NULL);
 			}
 		}
@@ -505,6 +509,7 @@ DICTENTRYPOINTER *getResourceNameArray(FILE *aResFile,
 			aDirectoryPointers, NULL);
 	if (loResult == NULL) {
 		printf("The attemp to read the resource name files failed!\n");
+		return (NULL);
 	}
 
 	// add info about 5 special tables
@@ -1230,6 +1235,32 @@ DICTENTRYPOINTER *readMessageNamesDictionary(FILE *aResFile,
 /*
  Gets the information about resources
  */
+// Free a NULL-terminated array of IMPORTENTRY pointers (from getFullImportArray).
+void freeImportArray(IMPORTENTRYPOINTER *aArray) {
+	if (aArray == NULL) return;
+	for (int i = 0; aArray[i] != NULL; ++i) {
+		free(aArray[i]->firstOriginal);
+		free(aArray[i]->secondOriginal);
+		free(aArray[i]->originalResourceName);
+		free(aArray[i]);
+	}
+	free(aArray);
+}
+
+// Free a NULL-terminated array of EXPORTENTRY pointers (from getFullExportArray).
+void freeExportArray(EXPORTENTRYPOINTER *aArray) {
+	if (aArray == NULL) return;
+	for (int i = 0; aArray[i] != NULL; ++i) {
+		free(aArray[i]->firstOriginal);
+		free(aArray[i]->secondOriginal);
+		free(aArray[i]->messageHandlerName);
+		free(aArray[i]->objectName);
+		free(aArray[i]->parentResourceName);
+		free(aArray[i]);
+	}
+	free(aArray);
+}
+
 // Free a RESINFO array allocated by getResourcesInformationTable.
 // Walks the NULL-terminated slots (also handles partial builds where later
 // slots are still NULL), freeing each populated entry's owned strings.
@@ -1246,7 +1277,7 @@ void freeResInfoArray(RESINFOPOINTER *aArray, int aCapacity) {
 	free(aArray);
 }
 
-static void freeDictArray(DICTENTRYPOINTER *aArray) {
+void freeDictArray(DICTENTRYPOINTER *aArray) {
 	if (aArray == NULL) return;
 	for (int i = 0; aArray[i] != NULL; ++i) {
 		free(aArray[i]->first);

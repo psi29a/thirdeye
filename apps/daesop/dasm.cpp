@@ -18,6 +18,7 @@
 #include "utils.hpp"
 #include "damap.hpp"
 #include "dvar.hpp"
+#include "dict.hpp"
 
 #include "dasm.hpp"
 
@@ -482,6 +483,7 @@ void disassembleCodeResource(int aCodeResourceNumber, unsigned char *aResource,
 
 	//displayCodeTableMap(aOutputFile);
 
+	freeResInfoArray(loResourcesInfoTable, MAX_NUMBER_OF_DICTIONARY_ITEMS);
 	printf("The second disassembly pass finished.\n");
 	printf("Ending disassembly.\n");
 }
@@ -1098,9 +1100,14 @@ int writeOneInstruction(unsigned char *aResource, int aLength,
 	int loParamCount;
 	int i;
 	int loInstructionStartAddress;
-	char loInstruction[256];
-	char loHexaCodes[256];
-	char loResultLine[256];
+	// loInstruction accumulates the mnemonic + a comma-separated list of
+	// formatted parameters (quoted import/var names, message refs, immediate
+	// values). Each parameter chunk comes from loTmp (up to ~288 bytes), so
+	// the running total can exceed 256. Size it large enough that the strcat
+	// chain in the parameter loop below can't overflow.
+	char loInstruction[2048];
+	char loHexaCodes[2048];
+	char loResultLine[4096];
 	// large enough to hold a quoted 256-byte name plus " ;" and an int suffix
 	char loTmp[288];
 	int loCurrentInstruction;
