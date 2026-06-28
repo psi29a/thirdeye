@@ -189,8 +189,9 @@ UWORD RES_read_entry(RF_class *RF, ULONG entry, void *dest, RF_entry_hdr *RHDR,
 			if (!tl)
 				continue;
 
-			tag = (BYTE*) mem_alloc(tl);
+			tag = (BYTE*) mem_alloc(tl + 1);
 			r_read(RF->file, tag, (UWORD) tl);
+			tag[tl] = '\0';
 
 			cur = DICT_enter((DICT_class*) dest, tag, D_DEFHEAP);
 			mem_free(tag);

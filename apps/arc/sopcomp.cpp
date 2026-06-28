@@ -721,9 +721,10 @@ WORD SOP_export_symbol(SOP_class *SOP, ULONG symbol, ULONG value, BYTE type,
 
 UWORD SOP_import_symbol(SOP_class *SOP, BYTE *sym, BYTE *class_type,
 		BYTE type) {
-	BYTE *tag, *def, *index;
+	BYTE *tag, *index;
+	BYTE *def = NULL;
 	DICT_entry *entry;
-	UWORD size;
+	UWORD size = 0;
 
 	index = str(SOP->import_index);
 
@@ -743,6 +744,13 @@ UWORD SOP_import_symbol(SOP_class *SOP, BYTE *sym, BYTE *class_type,
 		strcat(def, ",");
 		strcat(def, class_type);
 		break;
+
+	default:
+		// Unsupported import type: ascnum(entry->def, 10) at the bottom of
+		// the function would dereference a NULL def. Bail cleanly.
+		report(E_ERROR, NULL, MSG_NCL);
+		mem_free(index);
+		return (0);
 	}
 
 	tag = (BYTE*) mem_alloc(3L + (ULONG) strlen(sym));
@@ -1752,7 +1760,7 @@ void SOP_expr_eq(SOP_class *SOP, PVAL *PV) {
 /*************************************************************/
 
 void SOP_expr_rel(SOP_class *SOP, PVAL *PV) {
-	WORD op;
+	WORD op = 0;
 
 	SOP_expr_shift(SOP, PV);
 
@@ -1794,7 +1802,7 @@ void SOP_expr_rel(SOP_class *SOP, PVAL *PV) {
 /*************************************************************/
 
 void SOP_expr_shift(SOP_class *SOP, PVAL *PV) {
-	WORD op;
+	WORD op = 0;
 
 	SOP_expr_add(SOP, PV);
 
@@ -1830,7 +1838,7 @@ void SOP_expr_shift(SOP_class *SOP, PVAL *PV) {
 /*************************************************************/
 
 void SOP_expr_add(SOP_class *SOP, PVAL *PV) {
-	WORD op;
+	WORD op = 0;
 
 	SOP_expr_mul(SOP, PV);
 
@@ -2203,7 +2211,8 @@ UWORD SOP_var_declaration(SOP_class *SOP, UWORD vsize, DICT_class *scope,
 	BYTE *class_type;
 	DICT_entry *entry;
 	CSS_class *CSS;
-	UWORD i, ndims, dims[MAX_DIMS];
+	UWORD i, dims[MAX_DIMS];
+	UWORD ndims = 0;
 	ULONG ninit, tsize, dsize, val;
 	ULONG asize = 1L;
 

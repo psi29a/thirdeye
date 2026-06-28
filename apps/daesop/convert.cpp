@@ -260,7 +260,14 @@ int replaceResourceInOpenedFile(char *aResourceName, int aResourceNumber,
 	DIRPOINTER loModifiedDirectoryBlock;
 
 	fseek(aNewFile, 0, SEEK_END);  // to the end of the new file
-	loNewFileOriginalLength = ftell(aNewFile);
+	{
+		long loEnd = ftell(aNewFile);
+		if (loEnd < 0) {
+			printf("Unable to determine the new file length!\n");
+			return (false);
+		}
+		loNewFileOriginalLength = (int) loEnd;
+	}
 	loNewFileLength = loNewFileOriginalLength;
 
 	// add header if needed (use the original, just fix the length)
@@ -285,8 +292,10 @@ int replaceResourceInOpenedFile(char *aResourceName, int aResourceNumber,
 			printf(
 					"Unable to write the resource entry header for the replaced resource: %d\n",
 					aResourceNumber);
+			free(loResEntryHeader);
 			return (false);
 		}
+		free(loResEntryHeader);
 		loNewFileLength += loResourceHeaderSize;
 	}
 

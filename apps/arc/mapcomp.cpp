@@ -160,7 +160,7 @@ void MAP_compile(MAP_class *MAP) {
 	UWORD width, height;
 	UWORD x, y, ox, oy, dx, dy, sx, sy, m, i;
 
-	file = (UBYTE *) read_file(MAP->IDR->fn, NULL);
+	file = (UBYTE *) read_file(MAP->IDR->fn);
 
 	if (file == NULL) {
 		MAP_error(MAP->IDR->RS, MSG_SNF, MAP->IDR->fn);

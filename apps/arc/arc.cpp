@@ -106,8 +106,16 @@ int main(int argc, BYTE *argv[]) {
 		if ((argv[i][0] != '/') && (argv[i][0] != '-'))
 			if (strlen(SCR_filename))
 				report(E_FATAL, NULL, MSG_ICO);
-			else
-				strcpy(SCR_filename, argv[i]);
+			else {
+				// Reserve room for RS_SUFFIX (".SCR") that gets strcat'd later.
+				// Worst case is a name without an extension to strip.
+				if (strlen(argv[i]) + sizeof(RS_SUFFIX) >= sizeof(SCR_filename))
+					report(E_FATAL, NULL, MSG_ICO);
+				else {
+					strncpy(SCR_filename, argv[i], sizeof(SCR_filename) - 1);
+					SCR_filename[sizeof(SCR_filename) - 1] = '\0';
+				}
+			}
 		else if (!strcasecmp(&argv[i][1], "n"))
 			flags |= RS_REBUILD;
 
@@ -135,8 +143,14 @@ int main(int argc, BYTE *argv[]) {
 		else if (!strcasecmp(&argv[i][1], "kp"))
 			set_temp_deletion_policy(0);
 
-		else if (tolower(argv[i][1]) == 'o')
-			strcpy(RES_filename, &argv[i][2]);
+		else if (tolower(argv[i][1]) == 'o') {
+			if (strlen(&argv[i][2]) >= sizeof(RES_filename))
+				report(E_FATAL, NULL, MSG_ICO);
+			else {
+				strncpy(RES_filename, &argv[i][2], sizeof(RES_filename) - 1);
+				RES_filename[sizeof(RES_filename) - 1] = '\0';
+			}
+		}
 
 		else if (tolower(argv[i][1]) == 'c')
 			if ((n = ascnum(&argv[i][2], 10)) == -1L)

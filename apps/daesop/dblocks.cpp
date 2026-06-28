@@ -89,6 +89,9 @@ FILE* openAESOPResourceAndSetToFirstDirectoryBlock(char *aResName,
 		fclose(loResFile);
 		return (NULL);
 	}
+	// Force a null terminator: the on-disk signature can fill all 16 bytes
+	// without a trailing 0, so strcmp would read past the array.
+	aHeaderPointer->signature[sizeof(aHeaderPointer->signature) - 1] = '\0';
 
 	if (strcmp((char *) (aHeaderPointer->signature), AESOP_ID) != 0) {
 		printf("The resource file does not start with the signature %s!\n",
