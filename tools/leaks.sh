@@ -25,7 +25,6 @@ if [ "$(uname -s)" != "Darwin" ]; then
 fi
 
 BUILD_DIR=${LEAKS_BUILD_DIR:-build}
-APP=$BUILD_DIR/thirdeye.app/Contents/MacOS
 
 target=thirdeye
 case "${1:-}" in
@@ -58,4 +57,11 @@ if [ "$target" = "thirdeye" ] && [ "$#" -eq 0 ]; then
   set -- --skip-intro --skip-menu
 fi
 
-exec leaks -atExit -- "$APP/$target" "$@"
+# The macOS APPLE_BUNDLE_ENABLED config puts everything under
+# thirdeye.app/Contents/MacOS/; the non-bundle config drops binaries straight
+# into the build root. Try both.
+exe="$BUILD_DIR/thirdeye.app/Contents/MacOS/$target"
+[ -x "$exe" ] || exe="$BUILD_DIR/$target"
+[ -x "$exe" ] || { echo "Could not find executable for target '$target' under $BUILD_DIR" >&2; exit 1; }
+
+exec leaks -atExit -- "$exe" "$@"

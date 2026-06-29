@@ -51,7 +51,12 @@ case "${1:-test}" in
     ;;
   --)
     shift
-    exec "$BUILD_DIR/thirdeye.app/Contents/MacOS/thirdeye" "$@"
+    # macOS APPLE_BUNDLE_ENABLED puts the binary inside the .app; the
+    # non-bundle config (and Linux) drops it in the build root.
+    exe="$BUILD_DIR/thirdeye.app/Contents/MacOS/thirdeye"
+    [ -x "$exe" ] || exe="$BUILD_DIR/thirdeye"
+    [ -x "$exe" ] || { echo "thirdeye binary not found under $BUILD_DIR" >&2; exit 1; }
+    exec "$exe" "$@"
     ;;
   test|"")
     ctest --test-dir "$BUILD_DIR" --output-on-failure

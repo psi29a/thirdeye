@@ -1,5 +1,7 @@
 #include "palette.hpp"
 
+#include <stdexcept>
+
 GRAPHICS::Palette::Palette(const std::vector<uint8_t> &pal, bool isRes) {
 
 	if (isRes){
@@ -7,12 +9,23 @@ GRAPHICS::Palette::Palette(const std::vector<uint8_t> &pal, bool isRes) {
 		// earlier code read at 0, 1, 2 -- misaligned (UB on strict-alignment
 		// CPUs) and wrong: mColorArray and mFadeIndexArray00 got smeared
 		// bytes from adjacent fields.
+		if (pal.size() < 6)
+			throw std::runtime_error(
+				"palette resource header is truncated (<6 bytes)");
+
 		auto rd16 = [&](size_t off) -> uint16_t {
 			return static_cast<uint16_t>(pal[off] | (pal[off + 1] << 8));
 		};
 		mNumOfColours = rd16(0);
 		mColorArray = rd16(2);
 		mFadeIndexArray00 = rd16(4);
+
+		// RGB data starts at PALHEADEROFFSET (26) and is 3 bytes per colour;
+		// catch a corrupt mNumOfColours before the loop walks off the end.
+		const size_t paletteBytes = static_cast<size_t>(mNumOfColours) * 3;
+		if (pal.size() < PALHEADEROFFSET + paletteBytes)
+			throw std::runtime_error(
+				"palette resource data is truncated for declared colour count");
 
 		//std::cout << "Colours: " << mNumOfColours << std::endl;
 
