@@ -15,7 +15,7 @@
 
 
 RESOURCES::Resource::Resource(std::filesystem::path resourcePath) {
-	mResFile = resourcePath;
+	mResFile = std::move(resourcePath);
 
 	std::cout << "Initializing Resources:" << std::endl;
 	// does resource exist
@@ -159,7 +159,7 @@ uint16_t RESOURCES::Resource::getEntries(std::ifstream &resourceFile) {
 }
 
 uint16_t RESOURCES::Resource::getAssets(std::ifstream &resourceFile) {
-	DirectoryBlock block = mDirBlocks.begin()->second;
+	const DirectoryBlock &block = mDirBlocks.begin()->second;
 	uint16_t id = 0;
 	std::string table1 = "";
 	std::string table2 = "";
@@ -302,7 +302,7 @@ std::vector<uint8_t> &RESOURCES::Resource::getAsset(uint16_t number) {
 	return (mAssets[number].data);
 }
 
-std::string RESOURCES::Resource::getTableEntry(std::string name,
+std::string RESOURCES::Resource::getTableEntry(const std::string &name,
 		uint8_t table) {
 	return getTableEntry(
 			static_cast<uint16_t>(std::stoi(searchDictionary(mTable0, name))),

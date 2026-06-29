@@ -129,14 +129,14 @@ void RF_destroy(RF_class *RF, WORD compact_threshold) {
 	BYTE *RF_filename, *temp_fn;
 
 	if (RF->touched) {
-		lseek(RF->file, 0L, SEEK_SET);
+		(void) lseek(RF->file, 0L, SEEK_SET);
 		r_write(RF->file, &RF->hdr, sizeof(RF_file_hdr));
 	}
 
 	link = RF->root;
 	while (link != NULL) {
 		if (link->touched) {
-			lseek(RF->file, link->origin, SEEK_SET);
+			(void) lseek(RF->file, link->origin, SEEK_SET);
 			r_write(RF->file, &link->blk, sizeof(OD_block));
 		}
 
@@ -145,10 +145,12 @@ void RF_destroy(RF_class *RF, WORD compact_threshold) {
 		link = next;
 	}
 
-	close(RF->file);
+	(void) close(RF->file);
 
 	lost_space = RF->hdr.lost_space;
-	lost_percent = (WORD) ((lost_space * 100L) / RF->hdr.file_size);
+	// file_size is read from the archive header; a corrupt zero would divide.
+	lost_percent = RF->hdr.file_size
+			? (WORD) ((lost_space * 100L) / RF->hdr.file_size) : 0;
 	RF_filename = str_alloc(RF->filename);
 
 	mem_free(RF->filename);
@@ -285,7 +287,7 @@ ULONG RF_new_entry(RF_class *RF, void *source, RF_entry_hdr *RHDR, UWORD type) {
 			newlink->blk.index[i] = 0;
 		}
 
-		newlink->origin = lseek(RF->file, 0L, SEEK_END);
+		newlink->origin = lseek(RF->file, 0L, SEEK_END);  // origin captured deliberately
 		r_write(RF->file, &newlink->blk, sizeof(OD_block));
 		RF->hdr.file_size += sizeof(OD_block);
 		RF->touched = 1;
@@ -344,7 +346,7 @@ ULONG RF_write_entry(RF_class *RF, ULONG entry, void *source,
 		RHDR->timestamp = RF->hdr.modify_time = current_time();
 	}
 
-	lseek(RF->file, link->blk.index[i], SEEK_SET);
+	(void) lseek(RF->file, link->blk.index[i], SEEK_SET);
 
 	if (link->blk.index[i] == RF->hdr.file_size) {
 		RF->hdr.file_size += (sizeof(RF_entry_hdr) + RHDR->data_size);
@@ -357,11 +359,11 @@ ULONG RF_write_entry(RF_class *RF, ULONG entry, void *source,
 		RF->hdr.lost_space += (cur.data_size + sizeof(RF_entry_hdr));
 		link->blk.index[i] = RF->hdr.file_size;
 		link->touched = 1;
-		lseek(RF->file, 0L, SEEK_END);
+		(void) lseek(RF->file, 0L, SEEK_END);
 		RF->hdr.file_size += (sizeof(RF_entry_hdr) + RHDR->data_size);
 	} else {
 		RF->hdr.lost_space += (cur.data_size - RHDR->data_size);
-		lseek(RF->file, link->blk.index[i], SEEK_SET);
+		(void) lseek(RF->file, link->blk.index[i], SEEK_SET);
 	}
 
 	return (RES_store_resource(RF, entry, source, RHDR, type));
@@ -394,7 +396,7 @@ void RF_delete_entry(RF_class *RF, ULONG entry) {
 	if (link->blk.flags[i] & (SA_UNUSED | SA_DELETED))
 		return;
 
-	lseek(RF->file, link->blk.index[i], SEEK_SET);
+	(void) lseek(RF->file, link->blk.index[i], SEEK_SET);
 	r_read(RF->file, &RHDR, sizeof(RF_entry_hdr));
 
 	link->blk.flags[i] |= SA_DELETED;
@@ -405,7 +407,7 @@ void RF_delete_entry(RF_class *RF, ULONG entry) {
 
 	RHDR.data_size = 0L;
 
-	lseek(RF->file, link->blk.index[i], SEEK_SET);
+	(void) lseek(RF->file, link->blk.index[i], SEEK_SET);
 	r_write(RF->file, &RHDR, sizeof(RF_entry_hdr));
 }
 
@@ -433,7 +435,7 @@ RF_entry_hdr *RF_header(RF_class *RF, ULONG entry) {
 	if (link->blk.flags[i] & SA_UNUSED)
 		return (NULL);
 
-	lseek(RF->file, link->blk.index[i], SEEK_SET);
+	(void) lseek(RF->file, link->blk.index[i], SEEK_SET);
 	r_read(RF->file, &RHDR, sizeof(RF_entry_hdr));
 
 	return (&RHDR);

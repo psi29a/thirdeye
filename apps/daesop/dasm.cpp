@@ -1880,6 +1880,7 @@ void writeInfoAboutReferredResourceIfAvailable(long aParameterValue,
 	if (aResourcesInfoTable == NULL) {
 		printf(
 				"writeInfoAboutReferredResourceIfAvailable(...): aResourcesInfoTable is NULL!\n");
+		return;
 	}
 	if (aParameterValue < NUMBER_OF_SPECIAL_TABLES) {
 		// a special AESOP table cannot be ever referred in the bytecode

@@ -8,6 +8,7 @@
 #include "../thirdeye/vm/events.hpp"
 
 #include <filesystem>
+#include <iostream>
 #include <string>
 #include <vector>
 
@@ -403,7 +404,7 @@ VM::ObjectSystem makeExternPair() {
 	});
 	provider.exportedVars["W:foo"] = 0;
 	provider.exportedVars["B:arr"] = 0;
-	os.addClass(provider);
+	os.addClass(std::move(provider));
 
 	VM::SopClass consumer = makeClassMulti(2, 0xFFFFFFFFu, 0, {
 		// msg0(obj): return obj's W:foo        (extern scalar load)
@@ -417,7 +418,7 @@ VM::ObjectSystem makeExternPair() {
 	});
 	consumer.externs[0] = {"W:foo", /*sourceClass*/ 1};
 	consumer.externs[2] = {"B:arr", /*sourceClass*/ 1};
-	os.addClass(consumer);
+	os.addClass(std::move(consumer));
 	return os;
 }
 }
@@ -834,6 +835,14 @@ TEST (Object_Test, DynamicStaticsHookBoundsCheckedByHook) {
 }
 
 int main(int argc, char **argv) {
-  ::testing::InitGoogleTest(&argc, argv);
-  return RUN_ALL_TESTS();
+  try {
+    ::testing::InitGoogleTest(&argc, argv);
+    return RUN_ALL_TESTS();
+  } catch (const std::exception &e) {
+    std::cerr << "Uncaught exception in test runner: " << e.what() << std::endl;
+    return 1;
+  } catch (...) {
+    std::cerr << "Uncaught non-std exception in test runner." << std::endl;
+    return 1;
+  }
 }

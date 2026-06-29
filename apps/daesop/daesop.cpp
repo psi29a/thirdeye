@@ -434,6 +434,11 @@ int getResource(FILE *aResFile, DIRPOINTER *aDirectoryPointers, int aFunction,
 	// start of the resource
 	loResourceEntryIndex = getResourceEntryIndex(loExtractedResourceNumber,
 			aDirectoryPointers);
+	if (loResourceEntryIndex < 0) {
+		printf("Invalid resource entry index for: %d\n",
+				loExtractedResourceNumber);
+		return (false);
+	}
 	// length
 	loResEntryHeader = getResourceEntryHeader(loExtractedResourceNumber,
 			aResFile, aDirectoryPointers);
@@ -444,6 +449,13 @@ int getResource(FILE *aResFile, DIRPOINTER *aDirectoryPointers, int aFunction,
 	}
 	loDataSize = loResEntryHeader->data_size;
 	free(loResEntryHeader);
+
+	// data_size came from the resource header on disk; cap at 64 MB so a
+	// corrupt entry can't drive malloc into the gigabytes.
+	if (loDataSize > (64u * 1024u * 1024u)) {
+		printf("Refusing to extract %u-byte resource: too large\n", loDataSize);
+		return (false);
+	}
 
 	// now set the position and length according to what should be stored
 	if (aFunction == GET_RESOURCE_BY_NUMBER || aFunction == GET_RESOURCE_BY_NAME) {
@@ -1181,13 +1193,13 @@ int getOffsetInformation(FILE *aResFile, DIRPOINTER *aDirectoryPointers,
 	if (strlen(aOffsetString) > 1 && aOffsetString[0] == '#') {
 		// hex number starting by #
 		char loHexadecimalNumber[256];
-		// "0x" (2 chars) + aOffsetString-without-leading-# + '\0'.
-		if (strlen(aOffsetString) + 2 > sizeof(loHexadecimalNumber)) {
+		// "0x" + aOffsetString-without-leading-# (rejected by snprintf if it
+		// wouldn't fit, which is the same condition the strcpy/strcat needed).
+		if (snprintf(loHexadecimalNumber, sizeof(loHexadecimalNumber), "0x%s",
+				aOffsetString + 1) >= (int) sizeof(loHexadecimalNumber)) {
 			printf("Hex offset too long: %s\n", aOffsetString);
 			return (false);
 		}
-		strcpy(loHexadecimalNumber, "0x");
-		strcat(loHexadecimalNumber, aOffsetString + 1);
 		if (sscanf(loHexadecimalNumber, "%i", &loOffset) != 1) {
 			printf("Failed to convert the hexadecimal number: %s\n",
 					aOffsetString);

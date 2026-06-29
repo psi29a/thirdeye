@@ -179,6 +179,14 @@ void MAP_compile(MAP_class *MAP) {
 	width = ((*(UBYTE *) prop) * 256) + (*(UBYTE *) (prop + 1));
 	height = ((*(UBYTE *) (prop + 2)) * 256) + (*(UBYTE *) (prop + 3));
 
+	// width/height come straight from the LBM header. A zero width would
+	// mem_alloc(0) and any x >= width would walk off buffer; reject.
+	if (width == 0 || height == 0) {
+		MAP_error(MAP->IDR->RS, MSG_BFT, NULL);
+		mem_free(file);
+		return;
+	}
+
 	body = (UBYTE*) IFF_property("BODY", file, flen);
 	if (body == NULL) {
 		MAP_error(MAP->IDR->RS, MSG_BFT, NULL);

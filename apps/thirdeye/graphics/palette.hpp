@@ -40,9 +40,9 @@ public:
 	uint16_t getFadeIndexArray00() const;
 	const SDL_Color& operator[](uint16_t index);
 private:
-	uint16_t mNumOfColours;
-	uint16_t mColorArray;
-	uint16_t mFadeIndexArray00;
+	uint16_t mNumOfColours = 0;
+	uint16_t mColorArray = 0;
+	uint16_t mFadeIndexArray00 = 0;
 	std::map<uint8_t,SDL_Color> mPalette;
 };
 

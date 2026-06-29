@@ -231,6 +231,12 @@ int readDictionaryStringList(DICTENTRYPOINTER *aDictionaryArray,
 			// end of the string list
 			break;
 		}
+		// loStringLength is on-disk; cap so an unsigned short up to 65535
+		// can't blow past the 256-byte sink buffers.
+		if (loStringLength >= sizeof(loReadString)) {
+			printf("Dictionary string length %u exceeds buffer!\n", loStringLength);
+			return (false);
+		}
 		//printf("string length: %u\n",loStringLength);
 
 		loReadSize = static_cast<int>(fread(loReadString, 1, loStringLength, aResFile));
@@ -421,12 +427,8 @@ void displayDictionary(char *aText, char *aHeader, char *aFormat,
 		return;
 	}
 
-	if (aFormat != NULL) {
-		strcpy(loFormat, aFormat);
-	} else {
-		strcpy(loFormat, "%30s     %20s");
-	}
-	strcat(loFormat, "\n");
+	snprintf(loFormat, sizeof(loFormat), "%s\n",
+			aFormat != NULL ? aFormat : "%30s     %20s");
 
 	for (i = 0; i < MAX_NUMBER_OF_DICTIONARY_ITEMS && aDictionary[i] != NULL;
 			i++) {
@@ -434,13 +436,13 @@ void displayDictionary(char *aText, char *aHeader, char *aFormat,
 		if (aSecondIsDecimalNumber) {
 			if (strchr(aDictionary[i]->second, ',') != NULL) {
 				// not a number
-				strcpy(loTmp, aDictionary[i]->second);
+				snprintf(loTmp, sizeof(loTmp), "%s", aDictionary[i]->second);
 			} else {
 				// probably a number
 				int loNum = atoi(aDictionary[i]->second);
 				if (loNum == 0 && strcmp(aDictionary[i]->second, "0") != 0) {
 					// not a number
-					strcpy(loTmp, aDictionary[i]->second);
+					snprintf(loTmp, sizeof(loTmp), "%s", aDictionary[i]->second);
 				} else {
 					// number
 					snprintf(loTmp, sizeof(loTmp), "%4s  (%04x)", aDictionary[i]->second,
@@ -448,7 +450,7 @@ void displayDictionary(char *aText, char *aHeader, char *aFormat,
 				}
 			}
 		} else {
-			strcpy(loTmp, aDictionary[i]->second);
+			snprintf(loTmp, sizeof(loTmp), "%s", aDictionary[i]->second);
 		}
 		fprintf(aOutputFile, loFormat, aDictionary[i]->first, loTmp);
 	}
@@ -648,7 +650,9 @@ IMPORTENTRYPOINTER *getFullImportArray(DICTENTRYPOINTER *aRawImportArray,
 
 			// convert the imported variable number
 			loNumberLength = loCommaPos - loSecond;
-			strncpy(loTmp, loSecond, loNumberLength);
+			if (loNumberLength < 0 || loNumberLength >= (int) sizeof(loTmp))
+				loNumberLength = sizeof(loTmp) - 1;
+			memcpy(loTmp, loSecond, (size_t) loNumberLength);
 			loTmp[loNumberLength] = '\0';
 			loImportedVariableNumber = atoi(loTmp);
 			if (loImportedVariableNumber == 0 && strcmp(loTmp, "0") != 0) {
@@ -659,7 +663,7 @@ IMPORTENTRYPOINTER *getFullImportArray(DICTENTRYPOINTER *aRawImportArray,
 				loResult[i]->importedVariableNumber = loImportedVariableNumber;
 			}
 			// convert the number of the resource from which the variable is imported
-			strcpy(loTmp, loCommaPos + 1);
+			snprintf(loTmp, sizeof(loTmp), "%s", loCommaPos + 1);
 			loOriginalResourceNumber = atoi(loTmp);
 			if (loOriginalResourceNumber == 0 && strcmp(loTmp, "0") != 0) {
 				printf(
@@ -868,7 +872,9 @@ EXPORTENTRYPOINTER *getFullExportArray(DICTENTRYPOINTER *aRawExportArray,
 			}
 			// convert the exported array position
 			loNumberLength = loCommaPos - loSecond;
-			strncpy(loTmp, loSecond, loNumberLength);
+			if (loNumberLength < 0 || loNumberLength >= (int) sizeof(loTmp))
+				loNumberLength = sizeof(loTmp) - 1;
+			memcpy(loTmp, loSecond, (size_t) loNumberLength);
 			loTmp[loNumberLength] = '\0';
 			loExportedArrayPosition = atoi(loTmp);
 			if (loExportedArrayPosition == 0 && strcmp(loTmp, "0") != 0) {
@@ -879,7 +885,7 @@ EXPORTENTRYPOINTER *getFullExportArray(DICTENTRYPOINTER *aRawExportArray,
 				loResult[i]->exportedArrayPosition = loExportedArrayPosition;
 			}
 			// convert the number of the resource from which the variable is imported
-			strcpy(loTmp, loCommaPos + 1);
+			snprintf(loTmp, sizeof(loTmp), "%s", loCommaPos + 1);
 			loExportedArraySizeInElements = atoi(loTmp);
 			if (loExportedArraySizeInElements == 0 && strcmp(loTmp, "0") != 0) {
 				printf(
@@ -1504,9 +1510,10 @@ int getResourceType(FILE *aResFile, DIRPOINTER *aDirectoryPointers,
 
 	// info string 1
 	if (aInfoString1 != NULL) {
-		strcpy(aInfoString1UpperCase, aInfoString1);
+		snprintf(aInfoString1UpperCase, sizeof(aInfoString1UpperCase), "%s",
+				aInfoString1);
 	} else {
-		strcpy(aInfoString1UpperCase, "");
+		aInfoString1UpperCase[0] = '\0';
 	}
 	toUpperCase(aInfoString1UpperCase);
 
@@ -1524,9 +1531,10 @@ int getResourceType(FILE *aResFile, DIRPOINTER *aDirectoryPointers,
 
 	// info string 2
 	if (aInfoString2 != NULL) {
-		strcpy(aInfoString2UpperCase, aInfoString2);
+		snprintf(aInfoString2UpperCase, sizeof(aInfoString2UpperCase), "%s",
+				aInfoString2);
 	} else {
-		strcpy(aInfoString2UpperCase, "");
+		aInfoString2UpperCase[0] = '\0';
 	}
 	toUpperCase(aInfoString2UpperCase);
 
@@ -1550,8 +1558,11 @@ int getResourceType(FILE *aResFile, DIRPOINTER *aDirectoryPointers,
 	if (stringEndsWith(aInfoString2UpperCase, FONT_FILE_EXTENSION)) {
 		return (RESOURCE_TYPE_FONT);
 	}
-	strcpy(loExportResource, aResourceName);
-	strcat(loExportResource, EXPORT_EXTENSION);
+	if (snprintf(loExportResource, sizeof(loExportResource), "%s%s",
+			aResourceName, EXPORT_EXTENSION) >= (int) sizeof(loExportResource)) {
+		// resource name + ".exp" wouldn't fit; can't match an export entry
+		return (RESOURCE_TYPE_UNKNOWN);
+	}
 	for (i = 0;
 			i < MAX_NUMBER_OF_DICTIONARY_ITEMS && aResourceNameArray[i] != NULL;
 			i++) {
@@ -1575,7 +1586,7 @@ int getResourceType(FILE *aResFile, DIRPOINTER *aDirectoryPointers,
 			return (RESOURCE_TYPE_UNKNOWN);
 		}
 		loDataSize = loResEntryHeader->data_size;
-		if (loDataSize < 2 && loDataSize > MAX_LENGTH_OF_TESTED_STRING_RESOURCE) {
+		if (loDataSize < 2 || loDataSize > MAX_LENGTH_OF_TESTED_STRING_RESOURCE) {
 			// too short or too long to be string, silently ignore
 			free(loResEntryHeader);
 			return (RESOURCE_TYPE_UNKNOWN);
@@ -1642,7 +1653,7 @@ void displayResourcesInfoEntries(FILE *aOutputFile,
 		loInfoFromResource1 = aResourcesInfoTable[i]->infoFromResource1;
 		loInfoFromResource2 = aResourcesInfoTable[i]->infoFromResource2;
 		loStringValue = aResourcesInfoTable[i]->stringValue;
-		if (loInfoFromResource1 != NULL || loInfoFromResource1 != NULL) {
+		if (loInfoFromResource1 != NULL || loInfoFromResource2 != NULL) {
 			loAdditionalInfoPresent = true;
 		}
 		// basic info

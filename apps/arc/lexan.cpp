@@ -387,7 +387,7 @@ void LEX_fetch(LEX_class *LEX) {
 	LST = &LEX->state[LEX->cur];        // get pointer to "current" state
 	LEX->cur ^= 1;                      // toggle state for next fetch
 
-	while (is_whitespace[LEX->chrnxt]) {
+	while (is_whitespace[(UBYTE)LEX->chrnxt]) {
 		LEX_chrget(LEX);
 
 		if (clear_system_error()) {
@@ -417,11 +417,11 @@ void LEX_fetch(LEX_class *LEX) {
 	} else if ((init == '[') && (LEX->flags & LEX_TXTLIT)) {
 		t = TTYP_TXTLIT;
 		LEX_chrget(LEX);
-	} else if (is_digit[init])
+	} else if (is_digit[(UBYTE)init])
 		t = TTYP_NUM;
-	else if (is_namechar[init] && (!is_digit[init]))
+	else if (is_namechar[(UBYTE)init] && (!is_digit[(UBYTE)init]))
 		t = TTYP_NAME;
-	else if (LEX->symbol_key[init] != -1)
+	else if (LEX->symbol_key[(UBYTE)init] != -1)
 		t = TTYP_SYMBOL;
 	else if (init == EOF_CHAR) {
 		LST->lexeme[0] = 0;
@@ -437,7 +437,7 @@ void LEX_fetch(LEX_class *LEX) {
 	switch (t)                                      // process each token type
 	{
 	case TTYP_NAME:
-		for (i = 0; is_namechar[LEX->chrnxt]; i++)
+		for (i = 0; is_namechar[(UBYTE)LEX->chrnxt]; i++)
 			LST->lexeme[i] = LEX_chrget(LEX);
 
 		LST->lexeme[i] = 0;
@@ -465,7 +465,7 @@ void LEX_fetch(LEX_class *LEX) {
 
 			done = 1;
 			if (j == '"') {
-				while (is_whitespace[LEX->chrnxt])
+				while (is_whitespace[(UBYTE)LEX->chrnxt])
 					LEX_chrget(LEX);
 
 				if (LEX->chrnxt == '"') {
@@ -483,9 +483,9 @@ void LEX_fetch(LEX_class *LEX) {
 		LST->lexeme[1] = 0;
 		i = 1;
 
-		if (LEX->symbol_key[init] >= 0)           // do fast lookup for
+		if (LEX->symbol_key[(UBYTE)init] >= 0)    // do fast lookup for
 				{                                      // single-BYTE symbols
-			LST->token = LEX->symbol_key[init];
+			LST->token = LEX->symbol_key[(UBYTE)init];
 			LEX_chrget(LEX);
 			break;
 		}
@@ -533,7 +533,7 @@ void LEX_fetch(LEX_class *LEX) {
 		default:                               // get numeric constant
 			do                                  // in 80x86 byte order
 			{
-				while ((i = hex_val[j = LEX->chrnxt] - 1) != -1) {
+				while ((i = hex_val[j = (UBYTE)LEX->chrnxt] - 1) != -1) {
 					if ((!is_digit[j]) && (base != 16L))
 						break;
 

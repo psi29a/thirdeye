@@ -259,7 +259,7 @@ int replaceResourceInOpenedFile(char *aResourceName, int aResourceNumber,
 	unsigned int loDirBlockSize;
 	DIRPOINTER loModifiedDirectoryBlock;
 
-	fseek(aNewFile, 0, SEEK_END);  // to the end of the new file
+	(void) fseek(aNewFile, 0, SEEK_END);  // to the end of the new file
 	{
 		long loEnd = ftell(aNewFile);
 		if (loEnd < 0) {
@@ -286,7 +286,7 @@ int replaceResourceInOpenedFile(char *aResourceName, int aResourceNumber,
 		// fix the data size
 		loResEntryHeader->data_size = aAddedResourceSize;
 		// write the header
-		fseek(aNewFile, 0, SEEK_END);  // to the end of the new file
+		(void) fseek(aNewFile, 0, SEEK_END);  // to the end of the new file
 		if (fwrite(loResEntryHeader, 1, loResourceHeaderSize, aNewFile)
 				!= loResourceHeaderSize) {
 			printf(
@@ -300,7 +300,7 @@ int replaceResourceInOpenedFile(char *aResourceName, int aResourceNumber,
 	}
 
 	// now write the resource
-	fseek(aNewFile, 0, SEEK_END);  // to the end of the new file
+	(void) fseek(aNewFile, 0, SEEK_END);  // to the end of the new file
 	if (fwrite(aAddedResourceBuffer, 1, aAddedResourceSize, aNewFile)
 			!= aAddedResourceSize) {
 		printf("Unable to write the content of the replaced resource: %d\n",
@@ -436,6 +436,12 @@ unsigned char *getNewBitmapForOldBitmap(unsigned char *aOldResourceBuffer,
 	}
 	loSubPictures = aOldResourceBuffer[4] | (aOldResourceBuffer[5] << 8);
 	printf("  %d sub picture(s) found\n", loSubPictures);
+	// loSubPictures is read from disk; we also need 6 + i*4 + 3 to stay inside
+	// aOldResourceBuffer, so cap to whatever the resource length can fit.
+	if (loSubPictures == 0 || (size_t) 6 + (size_t) loSubPictures * 4 > aOldResourceLength) {
+		printf("Implausible sub-picture count: %u\n", loSubPictures);
+		return (NULL);
+	}
 	loOldStartOffsets = (unsigned int *) malloc(
 			sizeof(unsigned int) * loSubPictures);
 	if (loOldStartOffsets == NULL) {
@@ -1091,8 +1097,15 @@ unsigned char *allocateNewFontBuffer(unsigned int aOldFontHeaderSize,
 		unsigned int *aNewFontBufferLength) {
 	int loAllocatedSize;
 	unsigned char *loResult;
+	// Old font size is whatever was on disk; clamp before the *2+overhead
+	// math so a corrupt resource can't request an absurd allocation.
+	if (aOldFontHeaderSize > (1u << 24)) {
+		printf("Refusing to allocate a new font buffer for %u-byte source.\n",
+				aOldFontHeaderSize);
+		return (NULL);
+	}
 	// just some big value
-	loAllocatedSize = 2 * (aOldFontHeaderSize + 5000);
+	loAllocatedSize = 2 * (int)(aOldFontHeaderSize + 5000);
 	loResult = (unsigned char*) malloc(loAllocatedSize);
 	if (loResult == NULL) {
 		printf("Unable to allocate %d bytes for a new font buffer!\n",
@@ -1273,6 +1286,16 @@ int readOldCharacterDefinition(unsigned char **aResult, int aStartPos,
 	// read the number of columns
 	loColumns = aOldResourceBuffer[loPointer]
 			| (aOldResourceBuffer[loPointer + 1] << 8);
+	// Same plausibility cap convertOldAndStoreNewCharacter uses — keeps the
+	// derived alloc size out of crazy territory.
+	if (loColumns < 0 || loColumns > 1024) {
+		printf("Old character has implausible column count: %d\n", loColumns);
+		return (false);
+	}
+	if (aHeight <= 0 || aHeight > MAX_FONT_HEIGHT) {
+		printf("Implausible font height: %d\n", aHeight);
+		return (false);
+	}
 	loOldCharacterDefinitionSizeInBytes = 2 + (loColumns * aHeight);
 
 #ifdef FONT_CONVERSION_DEBUG

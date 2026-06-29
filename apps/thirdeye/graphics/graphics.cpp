@@ -309,7 +309,7 @@ void GRAPHICS::Graphics::zoomIntoImage(std::vector<uint8_t> &bmp) {
 }
 
 void GRAPHICS::Graphics::playVideo(sequence video) {
-	mVideo = video;
+	mVideo = std::move(video);
 }
 
 bool GRAPHICS::Graphics::isVideoPlaying() {
@@ -331,7 +331,7 @@ void GRAPHICS::Graphics::playAnimation(std::vector<uint8_t> animationData) {
 	Bitmap animation(animationData);
 	mFrames = animation.getNumberOfBitmaps();
 	mCounter = 0;
-	mBuffer = animationData;
+	mBuffer = std::move(animationData);
 	mState = DISP_BMA;
 }
 
@@ -516,27 +516,28 @@ void GRAPHICS::Graphics::update() {
 		case PAN_LEFT: {
 			uint8_t bgPanels = std::get<1>(scene);
 
-			std::vector<uint8_t> bgRight = std::get<2>(scene);
+			std::vector<uint8_t> bgRight = std::move(std::get<2>(scene));
 			mVideo.erase(index++);
 			scene = mVideo.begin()->second;
-			std::vector<uint8_t> bgLeft = std::get<2>(scene);
+			std::vector<uint8_t> bgLeft = std::move(std::get<2>(scene));
 			mVideo.erase(index++);
 			std::vector<uint8_t> bgFarLeft;
 			if (bgPanels == 3) {
 				scene = mVideo.begin()->second;
-				bgFarLeft = std::get<2>(scene);
+				bgFarLeft = std::move(std::get<2>(scene));
 				mVideo.erase(index++);
 			}
 
 			scene = mVideo.begin()->second;
 			//uint8_t fgPanels = std::get<1>(scene);
-			std::vector<uint8_t> fgRight = std::get<2>(scene);
+			std::vector<uint8_t> fgRight = std::move(std::get<2>(scene));
 			mVideo.erase(index++);
 			scene = mVideo.begin()->second;
-			std::vector<uint8_t> fgLeft = std::get<2>(scene);
+			std::vector<uint8_t> fgLeft = std::move(std::get<2>(scene));
 			mVideoWait = std::get<1>(scene);
 
-			panDirection(0, bgRight, bgLeft, bgFarLeft, fgRight, fgLeft);
+			panDirection(0, std::move(bgRight), std::move(bgLeft),
+					std::move(bgFarLeft), std::move(fgRight), std::move(fgLeft));
 		}
 			break;
 		case DISP_BMP:

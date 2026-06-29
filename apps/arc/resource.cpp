@@ -61,9 +61,7 @@ ULONG RES_store_resource(RF_class *RF, ULONG entry, void *source,
 	WORD file;
 	UBYTE *ptr;
 	ULONG len;
-	WORD err;
 
-	err = 0;
 	file = -1;
 
 	len = RHDR->data_size;
@@ -131,10 +129,7 @@ ULONG RES_store_resource(RF_class *RF, ULONG entry, void *source,
 		break;
 	}
 
-	if (!err)
-		return (entry);
-	else
-		return ((ULONG) -1);
+	return (entry);
 }
 
 /***************************************************/
@@ -180,16 +175,23 @@ UWORD RES_read_entry(RF_class *RF, ULONG entry, void *dest, RF_entry_hdr *RHDR,
 		hl = (ULONG) n * (ULONG) sizeof(ULONG);
 		len -= hl;
 
-		lseek(RF->file, hl, SEEK_CUR);
+		(void) lseek(RF->file, hl, SEEK_CUR);
 
 		while (len) {
 			r_read(RF->file, &tl, sizeof(tl));
+			// tl + dl come from the on-disk dict; UWORD already caps them at
+			// 65535 but Coverity wants an explicit guard against corrupted
+			// resources that would underflow `len`.
+			if ((ULONG) sizeof(tl) + (ULONG) tl > len) {
+				report(E_FATAL, NULL, (BYTE*) "RES: corrupt dictionary tag length");
+				abend();
+			}
 			len -= (ULONG) (sizeof(tl) + tl);
 
 			if (!tl)
 				continue;
 
-			tag = (BYTE*) mem_alloc(tl + 1);
+			tag = (BYTE*) mem_alloc((ULONG) tl + 1UL);
 			r_read(RF->file, tag, (UWORD) tl);
 			tag[tl] = '\0';
 
@@ -197,6 +199,10 @@ UWORD RES_read_entry(RF_class *RF, ULONG entry, void *dest, RF_entry_hdr *RHDR,
 			mem_free(tag);
 
 			r_read(RF->file, &dl, sizeof(dl));
+			if ((ULONG) sizeof(dl) + (ULONG) dl > len) {
+				report(E_FATAL, NULL, (BYTE*) "RES: corrupt dictionary def length");
+				abend();
+			}
 			len -= (ULONG) (sizeof(dl) + dl);
 
 			if (dl) {

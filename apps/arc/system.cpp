@@ -175,6 +175,8 @@ void *mem_alloc(ULONG bytes) {
 	if (ptr == NULL) {
 		system_err = OUT_OF_MEMORY;
 		report(E_FATAL, NULL, MSG_OOM);
+		abend();  // report(E_FATAL,...) already aborts; keep this so the
+		          // analyzer sees an unconditional terminator on the NULL path.
 	}
 
 	checksum ^= (ULONG) *ptr;
@@ -490,19 +492,30 @@ WORD verify_file(BYTE *filename) {
 void *IFF_property(BYTE *name, UBYTE *file, LONG flen) {
 	LONG len;
 
+	if (flen < 12) return (NULL);
 	file += 12;
+	flen -= 12;
 
 	do {
-		while (*file == 0) {
+		while (flen > 0 && *file == 0) {
 			file++;
 			flen--;
 		}
+
+		if (flen < 8)
+			return (NULL);
 
 		if (!strncasecmp((BYTE *) file, name, 4))
 			return (file + 8);
 
 		len = ((((ULONG) *(file + 4)) << 24) | (((ULONG) *(file + 5)) << 16)
 				| (((ULONG) *(file + 6)) << 8) | (((ULONG) *(file + 7)))) + 8;
+
+		// Chunk length comes from the IFF file; guard the advance so a
+		// corrupt header can't underflow flen and turn this into an unbounded
+		// loop.
+		if (len <= 0 || len > flen)
+			return (NULL);
 
 		file += len;
 		flen -= len;

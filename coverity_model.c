@@ -88,6 +88,51 @@ short LEX_next_constant(LEX_class *LEX)
 }
 
 /* ------------------------------------------------------------------------- *
+ * arc compiler-state-stream accessor (apps/arc/resource.cpp)
+ *
+ * CSS_fetch_num pulls a length-prefixed value out of an arc-emitted compiled
+ * state stream. The stream is produced by arc itself in the same run, not
+ * read from untrusted input. Sanitize so downstream "ndims", "dsize", "vsize"
+ * usage doesn't cascade into TAINTED_SCALAR/UNTRUSTED_LOOP_BOUND across
+ * SOP_compile_index, SOP_var_declaration, SOP_member_statement, etc.
+ * ------------------------------------------------------------------------- */
+
+typedef struct CSS_class CSS_class;
+
+unsigned long CSS_fetch_num(CSS_class *CSS)
+{
+	unsigned long v;
+	__coverity_tainted_data_sanitize__(&v);
+	return v;
+}
+
+/* ------------------------------------------------------------------------- *
+ * arc literal-constant fetch (apps/arc/sopcomp.cpp)
+ *
+ * SOP_fetch_literal_constant returns a long folded from lexer values + the
+ * resource-name table; both feeders are already-sanitized in this model.
+ * Modeling it as a sanitizer kills the cascade across SOP_case_statement,
+ * SOP_member_statement, SOP_statement, SOP_construct, etc.
+ * SOP_resource_name_entry is the related table-index variant.
+ * ------------------------------------------------------------------------- */
+
+typedef struct SOP_class SOP_class;
+
+long SOP_fetch_literal_constant(SOP_class *SOP)
+{
+	long v;
+	__coverity_tainted_data_sanitize__(&v);
+	return v;
+}
+
+unsigned long SOP_resource_name_entry(SOP_class *SOP)
+{
+	unsigned long v;
+	__coverity_tainted_data_sanitize__(&v);
+	return v;
+}
+
+/* ------------------------------------------------------------------------- *
  * daesop dictionary-array length (apps/daesop/dict.cpp)
  *
  * getNumberOfItems walks a NULL-terminated array and caps its own result at
@@ -125,4 +170,18 @@ void report(unsigned short errtype, char *prefix, char *msg, ...)
 	(void)errtype;
 	(void)prefix;
 	(void)msg;
+}
+
+/* ------------------------------------------------------------------------- *
+ * arc fatal-exit (apps/arc/system.cpp)
+ *
+ * abend() calls exit(1) and never returns; report(E_FATAL, ...) and
+ * report(E_FAULT, ...) flow through it. Modeling it as a panic prevents the
+ * stream of "deref after null check" / "use after free" false positives on
+ * code that bails through report(E_FATAL, ...).
+ * ------------------------------------------------------------------------- */
+
+void abend(void)
+{
+	__coverity_panic__();
 }

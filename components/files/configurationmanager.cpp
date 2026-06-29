@@ -109,7 +109,7 @@ void ConfigurationManager::processPaths(Files::PathContainer& dataDirs)
                         tempPath /= path.substr(pos + 1, path.length() - pos);
                     }
 
-                    *it = tempPath;
+                    *it = std::move(tempPath);
                 }
                 else
                 {
@@ -155,7 +155,7 @@ void ConfigurationManager::loadConfig(const std::filesystem::path& path,
                 std::string value = trim(line.substr(pos + 1));
                 if (!key.empty())
                 {
-                    variables[key] = value;
+                    variables[std::move(key)] = std::move(value);
                 }
             }
             std::cout << "done." << std::endl;
