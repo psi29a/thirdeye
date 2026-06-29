@@ -115,7 +115,9 @@ RESOURCES::GFFI::GFFI(std::filesystem::path gffiPath) {
 					anim[anim.getNumberOfBitmaps() - 1];
 					bool isMore = anim.isMoreBitmap();
 					//printf(" is there more: %x ", isMore);
-					mFiles[tag->first][file->first].data[counter] = subBitmap;
+					// subBitmap is reassigned from `temp` (or the loop breaks)
+					// before any further read, so we can hand it off to the map.
+					mFiles[tag->first][file->first].data[counter] = std::move(subBitmap);
 
 					/* we write out the files
 					 std::string Path = "/tmp/"+std::to_string(file->first)+"_"+std::to_string(counter)+".BMA";
@@ -134,7 +136,7 @@ RESOURCES::GFFI::GFFI(std::filesystem::path gffiPath) {
 								&subBitmap[0] + anim.getNextBitmapPos(),
 								nextSize);
 						//printf("\n");
-						subBitmap = temp;
+						subBitmap = std::move(temp);
 					} else {
 						//printf("\n");
 						break;

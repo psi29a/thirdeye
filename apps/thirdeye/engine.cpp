@@ -976,7 +976,6 @@ void THIRDEYE::Engine::go() {
 	//std::vector<uint8_t> &basePalette = resource.getAsset("Fixed palette");
 	std::vector<uint8_t> &basePalette = resource.getAsset("Title palette");
 	//std::vector<uint8_t> &subPalette = resource.getAsset("Marble palette");
-	std::string text = resource.getTableEntry("Marble palette", 1);
 
 	gfx.loadPalette(basePalette);
 	gfx.loadMouse(icons, 0);

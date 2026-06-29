@@ -154,10 +154,12 @@ TEST (VM_Test, SelfTest) {
 // --- Read + parse a real SOP code resource out of SAMPLE.RES ---
 TEST (VM_Test, ParsesStartCodeResource) {
 	RESOURCES::Resource res{sampleRes()};
+	// getAsset returns a reference into the Resource; copy into the
+	// Interpreter (which takes ownership) without an extra round-trip.
 	std::vector<uint8_t> code = res.getAsset((uint16_t)7); // "start" object
 	ASSERT_EQ(52u, code.size());
 
-	VM::Interpreter vm{code};
+	VM::Interpreter vm{std::move(code)};
 	EXPECT_EQ(0u, vm.header().static_size);
 	EXPECT_EQ(5u, vm.header().import_resource);   // start.IMPT
 	EXPECT_EQ(6u, vm.header().export_resource);   // start.EXPT
@@ -256,7 +258,7 @@ TEST (Object_Test, InheritsParentHandler) {
 	child.name = "child";
 	child.code = std::vector<uint8_t>(14, 0);
 	child.header.parent = 1;
-	os.addClass(child);
+	os.addClass(std::move(child));
 	int obj = os.createInstance(2);
 	EXPECT_EQ(7, os.send(obj, 0, {})); // resolves up to the parent
 }
@@ -323,7 +325,7 @@ TEST (Object_Test, LoadsConstantTableByte) {
 	c.code = std::move(code);
 
 	VM::ObjectSystem os;
-	os.addClass(c);
+	os.addClass(std::move(c));
 	int obj = os.createInstance(1);
 	EXPECT_EQ(30, os.send(obj, 0, {})); // table[2]
 }
@@ -346,7 +348,7 @@ TEST (VM_Test, AutoArrayStoreLoad) {
 	std::vector<uint8_t> body = {PUSH, SHTC, 3, PUSH, SHTC, 7, SABA, 8, 0,
 	                             PUSH, SHTC, 3, LABA, 8, 0, END};
 	code.insert(code.end(), body.begin(), body.end());
-	VM::Interpreter vm{code};
+	VM::Interpreter vm{std::move(code)};
 	EXPECT_EQ(7, vm.execute(14));
 }
 
@@ -366,7 +368,7 @@ TEST (VM_Test, JsrRtsReturnsValueAcrossAutoFrame) {
 	code.push_back(SAW); code.push_back(4); code.push_back(0);      // 25-27 local@fptr-4 = 42
 	code.push_back(PUSH); code.push_back(LAW); code.push_back(4); code.push_back(0); // 28-31 load local
 	code.push_back(RTS);                                 // 32
-	VM::Interpreter vm{code};
+	VM::Interpreter vm{std::move(code)};
 	EXPECT_EQ(42, vm.execute(14));
 }
 
