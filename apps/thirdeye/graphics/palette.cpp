@@ -3,9 +3,16 @@
 GRAPHICS::Palette::Palette(const std::vector<uint8_t> &pal, bool isRes) {
 
 	if (isRes){
-		mNumOfColours = *reinterpret_cast<const uint16_t*>(&pal[0]);
-		mColorArray = *reinterpret_cast<const uint16_t*>(&pal[1]);
-		mFadeIndexArray00 = *reinterpret_cast<const uint16_t*>(&pal[2]);
+		// PAL_HEADER fields are little-endian u16 at offsets 0, 2, 4. The
+		// earlier code read at 0, 1, 2 -- misaligned (UB on strict-alignment
+		// CPUs) and wrong: mColorArray and mFadeIndexArray00 got smeared
+		// bytes from adjacent fields.
+		auto rd16 = [&](size_t off) -> uint16_t {
+			return static_cast<uint16_t>(pal[off] | (pal[off + 1] << 8));
+		};
+		mNumOfColours = rd16(0);
+		mColorArray = rd16(2);
+		mFadeIndexArray00 = rd16(4);
 
 		//std::cout << "Colours: " << mNumOfColours << std::endl;
 
