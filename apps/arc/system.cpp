@@ -265,7 +265,7 @@ LONG file_size(BYTE *filename) {
 
 /*************************************************************/
 ULONG *read_file(BYTE *filename) {
-	WORD i;
+	size_t i;
 	FILE *handle;
 	ULONG len;
 	ULONG *buf, *mem;
@@ -304,8 +304,8 @@ ULONG *read_file(BYTE *filename) {
 		buf = (ULONG*) add_ptr(buf, 4096L);
 	}
 
-	i = fread(buf, 1, (UWORD) len, handle);
-	if (i != (UWORD) len) {
+	i = fread(buf, 1, len, handle);
+	if (i != len) {
 		mem_free(mem);
 		fclose(handle);
 		system_err = CANT_READ_FILE;

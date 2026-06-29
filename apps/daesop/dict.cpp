@@ -514,6 +514,11 @@ DICTENTRYPOINTER *getResourceNameArray(FILE *aResFile,
 
 	// add info about 5 special tables
 	loBehindTheEnd = getNumberOfItems(loResult);
+	if (loBehindTheEnd < 0) {
+		printf("The resource name dictionary item count is out of range!\n");
+		free(loResult);
+		return (NULL);
+	}
 	storeIntoDictionaryArray(loResult, &loBehindTheEnd,
 			makeString("Special table 0: Resource names"), makeString("0"));
 	storeIntoDictionaryArray(loResult, &loBehindTheEnd,
