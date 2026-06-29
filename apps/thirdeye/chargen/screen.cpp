@@ -2070,6 +2070,9 @@ bool THIRDEYE::chargen::runChargenScreen(GRAPHICS::Graphics &gfx,
 			++autoIdx;
 		}
 		while (SDL_PollEvent(&event)) {
+			// SDL3: rescale mouse coords from window pixels into the 320x200
+			// logical space (SDL2's logical-size auto-watch is gone).
+			SDL_ConvertEventToRenderCoordinates(gfx.getRenderer(), &event);
 			if (event.type == SDL_EVENT_QUIT)
 				throw THIRDEYE::runtime::QuitRequested{};
 			Step before = state.step;

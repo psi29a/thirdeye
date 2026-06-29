@@ -170,6 +170,10 @@ std::filesystem::path resolveChildCI(const std::filesystem::path &parent,
 void THIRDEYE::runtime::pumpHost(GRAPHICS::Graphics &gfx, VM::EventSystem &events) {
 	SDL_Event ev;
 	while (SDL_PollEvent(&ev)) {
+		// SDL3 dropped SDL2's automatic event-coordinate rescaling under
+		// logical presentation; convert in place so motion/button events
+		// land in the 320x200 logical space the bytecode regions use.
+		SDL_ConvertEventToRenderCoordinates(gfx.getRenderer(), &ev);
 		switch (ev.type) {
 		case SDL_EVENT_QUIT:
 			throw QuitRequested{};

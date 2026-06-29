@@ -71,7 +71,7 @@ TEST (Palette_Test, Zeros_RES){
 	EXPECT_EQ(0, pal[0].r);
 	EXPECT_EQ(0, pal[0].g);
 	EXPECT_EQ(0, pal[0].b);
-	EXPECT_EQ(0, pal[0].a);
+	EXPECT_EQ(SDL_ALPHA_OPAQUE, pal[0].a);
 	EXPECT_EQ(1, pal.getNumOfColours());
 }
 
@@ -85,7 +85,7 @@ TEST (Palette_Test, ProperlyShifted_RES){
 	EXPECT_EQ(4, pal[0].r);
 	EXPECT_EQ(8, pal[0].g);
 	EXPECT_EQ(252, pal[0].b);
-	EXPECT_EQ(0, pal[0].a);
+	EXPECT_EQ(SDL_ALPHA_OPAQUE, pal[0].a);
 	EXPECT_EQ(1, pal.getNumOfColours());
 }
 
@@ -95,7 +95,7 @@ TEST (Palette_Test, Zeros_GFFI){
 	EXPECT_EQ(0, pal[0].r);
 	EXPECT_EQ(0, pal[0].g);
 	EXPECT_EQ(0, pal[0].b);
-	EXPECT_EQ(0, pal[0].a);
+	EXPECT_EQ(SDL_ALPHA_OPAQUE, pal[0].a);
 	EXPECT_EQ(1, pal.getNumOfColours());
 }
 
@@ -105,7 +105,7 @@ TEST (Palette_Test, ProperlyShifted_GFFI){
 	EXPECT_EQ(4, pal[0].r);
 	EXPECT_EQ(8, pal[0].g);
 	EXPECT_EQ(252, pal[0].b);
-	EXPECT_EQ(0, pal[0].a);
+	EXPECT_EQ(SDL_ALPHA_OPAQUE, pal[0].a);
 	EXPECT_EQ(1, pal.getNumOfColours());
 }
 

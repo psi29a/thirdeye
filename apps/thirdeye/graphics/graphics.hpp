@@ -225,6 +225,9 @@ public:
 	// Expose the SDL window. Needed by SDL3's SDL_StartTextInput / StopTextInput
 	// (which now take the target window, no longer global).
 	SDL_Window *getWindow() const { return mWindow; }
+	// Expose the renderer so callers can call SDL_ConvertEventToRenderCoordinates
+	// (SDL3 no longer auto-rescales event coords for logical presentation).
+	SDL_Renderer *getRenderer() const { return mRenderer; }
 
 	// --- AESOP text output (GRAPHICS.C text_window/style/color/xy + print) ---
 	// AESOP addresses text into numbered "text windows", each with a font,
