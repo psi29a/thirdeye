@@ -115,8 +115,20 @@ RESOURCES::GFFI::GFFI(std::filesystem::path gffiPath) {
 					anim[anim.getNumberOfBitmaps() - 1];
 					bool isMore = anim.isMoreBitmap();
 					//printf(" is there more: %x ", isMore);
-					// subBitmap is reassigned from `temp` (or the loop breaks)
-					// before any further read, so we can hand it off to the map.
+
+					// Carve out the next frame BEFORE moving subBitmap away,
+					// otherwise subBitmap.size()/&subBitmap[0] would read from
+					// a moved-from vector and truncate the tail.
+					std::vector<uint8_t> nextFrame;
+					if (isMore) {
+						uint32_t nextSize = static_cast<uint32_t>(subBitmap.size()
+								- anim.getNextBitmapPos());
+						nextFrame.resize(nextSize);
+						memcpy(&nextFrame[0],
+								&subBitmap[0] + anim.getNextBitmapPos(),
+								nextSize);
+					}
+
 					mFiles[tag->first][file->first].data[counter] = std::move(subBitmap);
 
 					/* we write out the files
@@ -126,21 +138,9 @@ RESOURCES::GFFI::GFFI(std::filesystem::path gffiPath) {
 					 FILE.write(reinterpret_cast<const char*>(&mFiles[tag->first][file->first].data[counter][0]), sz * sizeof(mFiles[tag->first][file->first].data[counter][0]));
 					 */
 
-					if (isMore) {
-						//printf(" new bitmap found @ offset: %x", anim.getNextBitmapPos());
-						uint32_t nextSize = static_cast<uint32_t>(subBitmap.size()
-								- anim.getNextBitmapPos());
-						std::vector<uint8_t> temp(
-								subBitmap.size() - anim.getNextBitmapPos());
-						memcpy(&temp[0],
-								&subBitmap[0] + anim.getNextBitmapPos(),
-								nextSize);
-						//printf("\n");
-						subBitmap = std::move(temp);
-					} else {
-						//printf("\n");
+					if (!isMore)
 						break;
-					}
+					subBitmap = std::move(nextFrame);
 					counter++;
 
 				}
