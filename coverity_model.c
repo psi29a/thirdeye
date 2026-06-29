@@ -99,9 +99,12 @@ short LEX_next_constant(LEX_class *LEX)
 
 typedef struct CSS_class CSS_class;
 
-unsigned long CSS_fetch_num(CSS_class *CSS)
+/* Match arc/defs.hpp typedefs: ULONG = unsigned int, LONG = int. Using
+ * `unsigned long` here would resolve to a different symbol on LP64 and the
+ * model wouldn't bind to the real function. */
+unsigned int CSS_fetch_num(CSS_class *CSS)
 {
-	unsigned long v;
+	unsigned int v;
 	__coverity_tainted_data_sanitize__(&v);
 	return v;
 }
@@ -109,25 +112,26 @@ unsigned long CSS_fetch_num(CSS_class *CSS)
 /* ------------------------------------------------------------------------- *
  * arc literal-constant fetch (apps/arc/sopcomp.cpp)
  *
- * SOP_fetch_literal_constant returns a long folded from lexer values + the
- * resource-name table; both feeders are already-sanitized in this model.
- * Modeling it as a sanitizer kills the cascade across SOP_case_statement,
- * SOP_member_statement, SOP_statement, SOP_construct, etc.
+ * SOP_fetch_literal_constant returns a LONG (= int) folded from lexer values
+ * + the resource-name table; both feeders are already-sanitized in this
+ * model. Modeling it as a sanitizer kills the cascade across
+ * SOP_case_statement, SOP_member_statement, SOP_statement, SOP_construct,
+ * SOP_expr_*, SOP_break_statement, SOP_continue_statement, etc.
  * SOP_resource_name_entry is the related table-index variant.
  * ------------------------------------------------------------------------- */
 
 typedef struct SOP_class SOP_class;
 
-long SOP_fetch_literal_constant(SOP_class *SOP)
+int SOP_fetch_literal_constant(SOP_class *SOP)
 {
-	long v;
+	int v;
 	__coverity_tainted_data_sanitize__(&v);
 	return v;
 }
 
-unsigned long SOP_resource_name_entry(SOP_class *SOP)
+unsigned int SOP_resource_name_entry(SOP_class *SOP)
 {
-	unsigned long v;
+	unsigned int v;
 	__coverity_tainted_data_sanitize__(&v);
 	return v;
 }
