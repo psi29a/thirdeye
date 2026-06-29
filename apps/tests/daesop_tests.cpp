@@ -18,6 +18,7 @@
 
 #include <cstdint>
 #include <cstdlib>
+#include <stdexcept>
 #include <vector>
 
 // daesop's pure (buffer-in, buffer-out) converter. Declared here rather than
@@ -66,26 +67,34 @@ std::vector<uint8_t> makeOldBitmap(int width, int spanX,
 
 // Decode row 0 of a converted "1.10" bitmap into a width-length scanline
 // (0 = transparent). Mirrors the token grammar in graphics/bitmap.cpp.
-std::vector<uint8_t> decode110Row0(const unsigned char *d, int &width) {
-	uint32_t ptr = d[8] | (d[9] << 8) | (d[10] << 16) |
-	               (static_cast<uint32_t>(d[11]) << 24);
-	int bx = d[ptr + 2] | (d[ptr + 3] << 8);
+// Takes the buffer length so every index is bounded -- otherwise this test
+// helper looks like an OOB-read fountain to static analysis.
+std::vector<uint8_t> decode110Row0(const unsigned char *d, size_t dlen,
+                                    int &width) {
+	auto get = [&](size_t off) -> uint8_t {
+		if (off >= dlen)
+			throw std::runtime_error("decode110Row0: read past buffer");
+		return d[off];
+	};
+	uint32_t ptr = get(8) | (get(9) << 8) | (get(10) << 16) |
+	               (static_cast<uint32_t>(get(11)) << 24);
+	int bx = get(ptr + 2) | (get(ptr + 3) << 8);
 	width = bx + 1;
 	std::vector<uint8_t> row(width, 0);
 	uint32_t pos = ptr + 24; // past the 24-byte subpicture header
 	int x = 0;
 	for (;;) {
-		uint8_t m = d[pos++];
+		uint8_t m = get(pos++);
 		if (m == 0) break;                    // end of line
-		if (m == 1) { x += d[pos++]; continue; } // skip transparent
+		if (m == 1) { x += get(pos++); continue; } // skip transparent
 		int amount = m >> 1;
 		if (m & 1) {                          // string: literal pixels
 			for (int i = 0; i < amount; ++i, ++x) {
-				if (x < width) row[x] = d[pos];
+				if (x < width) row[x] = get(pos);
 				++pos;
 			}
 		} else {                              // run: repeated pixel
-			uint8_t v = d[pos++];
+			uint8_t v = get(pos++);
 			for (int i = 0; i < amount; ++i, ++x)
 				if (x < width) row[x] = v;
 		}
@@ -111,7 +120,7 @@ TEST (Daesop_Bitmap, ConvertsSpanStartingPastByte) {
 	EXPECT_EQ(out[2], '1'); EXPECT_EQ(out[3], '0');
 
 	int width = 0;
-	std::vector<uint8_t> row = decode110Row0(out, width);
+	std::vector<uint8_t> row = decode110Row0(out, (size_t) newlen, width);
 	EXPECT_EQ(width, 300);
 	for (size_t i = 0; i < pixels.size(); ++i)
 		EXPECT_EQ(row[283 + i], pixels[i]) << "pixel at x=" << (283 + i);
@@ -131,7 +140,7 @@ TEST (Daesop_Bitmap, ConvertsNormalSpan) {
 	                                              &newlen);
 	ASSERT_NE(out, nullptr);
 	int width = 0;
-	std::vector<uint8_t> row = decode110Row0(out, width);
+	std::vector<uint8_t> row = decode110Row0(out, (size_t) newlen, width);
 	EXPECT_EQ(width, 100);
 	EXPECT_EQ(row[10], 7); EXPECT_EQ(row[11], 7); EXPECT_EQ(row[12], 7);
 	EXPECT_EQ(row[9], 0);

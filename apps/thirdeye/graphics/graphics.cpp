@@ -1042,7 +1042,7 @@ void GRAPHICS::Graphics::printText(int wndnum, const std::string &text) {
 			int wW = runWidth(word);
 			int spW = cur.empty() ? 0 : glyphW(' ');
 			if (!cur.empty() && runWidth(cur) + spW + wW > winW) {
-				lines.push_back(cur);
+				lines.push_back(std::move(cur));
 				cur.clear();
 			}
 			if (!cur.empty()) cur += ' ';
@@ -1052,13 +1052,13 @@ void GRAPHICS::Graphics::printText(int wndnum, const std::string &text) {
 		for (char ch : text) {
 			if (ch == ' ' || ch == '\n') {
 				flushWord();
-				if (ch == '\n') { lines.push_back(cur); cur.clear(); }
+				if (ch == '\n') { lines.push_back(std::move(cur)); cur.clear(); }
 			} else {
 				word.push_back(ch);
 			}
 		}
 		flushWord();
-		if (!cur.empty() || lines.empty()) lines.push_back(cur);
+		if (!cur.empty() || lines.empty()) lines.push_back(std::move(cur));
 	}
 
 	int y = tw.vtab;

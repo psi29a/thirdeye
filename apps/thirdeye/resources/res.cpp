@@ -226,11 +226,13 @@ uint16_t RESOURCES::Resource::getAssets(std::ifstream &resourceFile) {
 		resourceFile.read(reinterpret_cast<char*>(&data[0]),
 				mEntryHeaders[id].data_size);
 
+		// table1/table2 get reassigned at the top of the next iteration.
 		mAssets[id] = Assets(
 				id,
 				dictionary->second.first, mEntryHeaders[id].storage_time,
 				mEntryHeaders[id].data_attributes, mEntryHeaders[id].data_size,
-				start, offset, table1, table2, std::move(data));
+				start, offset, std::move(table1), std::move(table2),
+				std::move(data));
 	}
 	return (static_cast<uint16_t>(mAssets.size()));
 }
@@ -383,9 +385,9 @@ std::map<std::string, std::string> RESOURCES::Resource::parseDictionary(
 				s.pop_back(); // drop trailing NUL counted in len
 			p += len;
 			if (counter % 2 == 0)
-				out[prev] = s;
+				out[prev] = std::move(s);
 			else
-				prev = s;
+				prev = std::move(s);
 		}
 	}
 	return out;
