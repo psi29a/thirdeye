@@ -35,7 +35,7 @@ add_thirdeye_dir (savegame
     )
 
 add_thirdeye_dir (chargen
-    item_dat itemtype_dat chargen_screen
+    item_dat itemtype_dat screen
     )
 
 add_thirdeye_dir (runtime
