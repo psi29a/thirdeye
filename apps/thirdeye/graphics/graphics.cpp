@@ -2,8 +2,6 @@
 #include <algorithm>
 #include <cstdlib>
 
-#include "SDL_syswm.h" // SDL_GetWindowWMInfo (kept out of headers: drags in X11)
-
 #include <iostream>
 #include <stdexcept>
 #include <random>
@@ -11,87 +9,63 @@
 #include <string>
 #include <ctime>
 
-#define SOFTWARE	0
-#define HARDWARE	1
+// SDL3 makes 8 bpp indexed surfaces palette-backed via SDL_CreateSurfacePalette;
+// helper centralises the setup so every "indexed source surface" path looks
+// identical to the SDL2 flow we deleted.
+static SDL_Surface *makeIndexedSurfaceFrom(void *pixels, int w, int h, int pitch,
+                                           SDL_Palette *palette) {
+	SDL_Surface *s = SDL_CreateSurfaceFrom(w, h, SDL_PIXELFORMAT_INDEX8, pixels,
+	                                       pitch);
+	if (s != nullptr)
+		SDL_SetSurfacePalette(s, palette);
+	return s;
+}
 
-GRAPHICS::Graphics::Graphics(uint16_t scale, bool renderer) {
+GRAPHICS::Graphics::Graphics(uint16_t scale, bool /*renderer*/) {
 	std::cout << "Initializing SDL... ";
 	mScale = scale;
 	Uint32 flags = SDL_INIT_VIDEO;
-	if (SDL_WasInit(flags) == 0) {
-		//kindly ask SDL not to trash our OGL context
-		//might this be related to http://bugzilla.libsdl.org/show_bug.cgi?id=748 ?
-		//SDL_SetHint(SDL_HINT_RENDER_DRIVER, "software");
-
-		if (SDL_Init(flags) != 0) {
+	if (!SDL_WasInit(flags)) {
+		if (!SDL_Init(flags)) {
 			throw std::runtime_error(
 					"Could not initialize SDL! " + std::string(SDL_GetError()));
 		}
 	}
 
-	SDL_SysWMinfo info;
-	SDL_VERSION(&info.version); // initialize info structure with SDL version info
+	// SDL3 dropped SDL_SysWMinfo entirely; the version + driver chatter we
+	// used to print here was diagnostic only. Drop it -- the SDL3 video
+	// driver name is still queryable with SDL_GetCurrentVideoDriver() if
+	// anyone misses it. ponytail: removed for simplicity, add back via
+	// SDL_GetCurrentVideoDriver() if a user reports needing that info.
+	int v = SDL_GetVersion();
+	std::cout << "done! SDL " << SDL_VERSIONNUM_MAJOR(v) << "."
+	          << SDL_VERSIONNUM_MINOR(v) << "." << SDL_VERSIONNUM_MICRO(v)
+	          << " (" << (SDL_GetCurrentVideoDriver() ? SDL_GetCurrentVideoDriver() : "?")
+	          << ")" << std::endl;
 
-	// Create a window.
-	mWindow = SDL_CreateWindow("Thirdeye", SDL_WINDOWPOS_CENTERED,
-			SDL_WINDOWPOS_CENTERED, WIDTH * mScale, HEIGHT * mScale, 0 //SDL_WINDOW_SHOWN
-			);
-
-	if (SDL_GetWindowWMInfo(mWindow, &info)) { // the call returns true on success
-		std::cout << "done!" << std::endl << "  Version:	"
-				<< (int) info.version.major << "." << (int) info.version.minor
-				<< "." << (int) info.version.patch << std::endl
-				<< "  Environment:	";
-		switch (info.subsystem) {
-		case SDL_SYSWM_UNKNOWN:
-			std::cout << "an unknown system!";
-			break;
-		case SDL_SYSWM_WINDOWS:
-			std::cout << "Microsoft Windows(TM)";
-			break;
-		case SDL_SYSWM_X11:
-			std::cout << "X Window System";
-			break;
-		case SDL_SYSWM_DIRECTFB:
-			std::cout << "DirectFB";
-			break;
-		case SDL_SYSWM_COCOA:
-			std::cout << "Apple OS X";
-			break;
-		case SDL_SYSWM_UIKIT:
-			std::cout << "UIKit";
-			break;
-		default:
-			std::cout << "an unsupported or unknown system (" << info.subsystem << ")";
-			break;
-		}
-		std::cout << std::endl;
-	} else {
+	mWindow = SDL_CreateWindow("Thirdeye", WIDTH * mScale, HEIGHT * mScale, 0);
+	if (mWindow == nullptr)
 		throw std::runtime_error(
-				"Couldn't get window information: "
-						+ std::string(SDL_GetError()));
-	}
+				"Could not create window: " + std::string(SDL_GetError()));
 
-	// Create the renderer driver to be used in window
-	if (renderer == HARDWARE)
-		mRenderer = SDL_CreateRenderer(mWindow, -1, SDL_RENDERER_ACCELERATED);
-	else
-		mRenderer = SDL_CreateRenderer(mWindow, -1, SDL_RENDERER_SOFTWARE);
+	// SDL3 picks the best renderer when name=nullptr; the SDL2 SOFTWARE
+	// branch we used to honour was dead code (callers always took HARDWARE).
+	mRenderer = SDL_CreateRenderer(mWindow, nullptr);
+	if (mRenderer == nullptr)
+		throw std::runtime_error(
+				"Could not create renderer: " + std::string(SDL_GetError()));
 
-	//SDL_RendererInfo* displayRendererInfo;
-	//SDL_GetRendererInfo(mRenderer, displayRendererInfo);
-	//std::cout << displayRendererInfo->name << std::endl;
+	// Create our game screen that will be blitted to before rendering.
+	mScreen = SDL_CreateSurface(WIDTH, HEIGHT, SDL_PIXELFORMAT_ARGB8888);
+	SDL_SetSurfaceColorKey(mScreen, true, SDL_MapSurfaceRGB(mScreen, 0, 0, 0));
 
-	// Create our game screen that will be blitted to before renderering
-	mScreen = SDL_CreateRGBSurface(0, WIDTH, HEIGHT, 32, 0, 0, 0, 0);
+	// SDL3 replaces SDL_HINT_RENDER_SCALE_QUALITY with per-texture scale mode
+	// (set on mPresentTex once it's created below in update()).
+	SDL_SetRenderLogicalPresentation(mRenderer, WIDTH, HEIGHT,
+	                                 SDL_LOGICAL_PRESENTATION_LETTERBOX);
 
-	SDL_SetColorKey(mScreen, SDL_TRUE, SDL_MapRGB(mScreen->format, 0, 0, 0));
-
-	SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "linear"); // make the scaled rendering look smoother.
-	SDL_RenderSetLogicalSize(mRenderer, WIDTH, HEIGHT);
-
-	mPalette = SDL_AllocPalette(256);
-	mCursor = NULL;
+	mPalette = SDL_CreatePalette(256);
+	mCursor = nullptr;
 	mFrames = 0;
 	mCounter = 0;
 	mState = NOOP;
@@ -100,16 +74,15 @@ GRAPHICS::Graphics::Graphics(uint16_t scale, bool renderer) {
 	mVideoWait = 0;
 	mRunningClock = 0;
 	mSleep = 0;
-
 }
 
 GRAPHICS::Graphics::~Graphics() {
-	SDL_FreeCursor(mCursor);
-	SDL_FreeSurface(mScreen);
-	SDL_FreeSurface(mBackdrop);   // lazily created in drawImage (nullptr-safe free)
-	SDL_FreeSurface(mCompassSnap); // lazily created in snapshotCompass
+	SDL_DestroyCursor(mCursor);
+	SDL_DestroySurface(mScreen);
+	SDL_DestroySurface(mBackdrop);     // lazily created in drawImage (nullptr-safe)
+	SDL_DestroySurface(mCompassSnap);  // lazily created in snapshotCompass
 	if (mPresentTex != nullptr) SDL_DestroyTexture(mPresentTex);
-	SDL_FreePalette(mPalette);
+	SDL_DestroyPalette(mPalette);
 	SDL_DestroyRenderer(mRenderer);
 	SDL_DestroyWindow(mWindow);
 	SDL_Quit();
@@ -171,21 +144,16 @@ void GRAPHICS::Graphics::drawImage(std::vector<uint8_t> &bmp, uint16_t index,
 			                 imageData.begin() + static_cast<ptrdiff_t>(ih - 1 - row) * iw);
 	}
 
-	SDL_Surface *surface = SDL_CreateRGBSurfaceFrom(
-			const_cast<uint8_t*>(src->data()), iw, ih, 8, iw, 0, 0, 0, 0);
+	SDL_Surface *surface = makeIndexedSurfaceFrom(
+			const_cast<uint8_t*>(src->data()), iw, ih, iw, mPalette);
 
 	SDL_Rect dest = { posX, posY, iw, ih };
 
-	//std::cout << "width: " << surface->w << " height: " << surface->h << std::endl;
-
-	SDL_SetPaletteColors(surface->format->palette, mPalette->colors, 0, 256);
-
 	if (transparency) {
-		SDL_SetColorKey(surface, SDL_TRUE,
-				SDL_MapRGB(surface->format, 0, 0, 0));
+		SDL_SetSurfaceColorKey(surface, true, 0);
 	}
 	SDL_BlitSurface(surface, NULL, mScreen, &dest);
-	SDL_FreeSurface(surface);
+	SDL_DestroySurface(surface);
 
 	// Keep the backdrop snapshot in sync with the bitmap art (used to restore a
 	// text box's background so in-game text overlays the panel art). Text never
@@ -197,11 +165,11 @@ void GRAPHICS::Graphics::drawImage(std::vector<uint8_t> &bmp, uint16_t index,
 	// cause of slow keypress->render latency). The blit rect is intersected with
 	// SDL's current clip rect on mScreen so the backdrop matches what's visible.
 	if (mBackdrop == nullptr)
-		mBackdrop = SDL_CreateRGBSurface(0, WIDTH, HEIGHT, 32, 0, 0, 0, 0);
+		mBackdrop = SDL_CreateSurface(WIDTH, HEIGHT, SDL_PIXELFORMAT_ARGB8888);
 	SDL_Rect clip;
-	SDL_GetClipRect(mScreen, &clip);
+	SDL_GetSurfaceClipRect(mScreen, &clip);
 	SDL_Rect mirror_rect = dest;
-	if (SDL_IntersectRect(&mirror_rect, &clip, &mirror_rect)) {
+	if (SDL_GetRectIntersection(&mirror_rect, &clip, &mirror_rect)) {
 		SDL_SetSurfaceBlendMode(mScreen, SDL_BLENDMODE_NONE);
 		SDL_BlitSurface(mScreen, &mirror_rect, mBackdrop, &mirror_rect);
 	}
@@ -209,11 +177,11 @@ void GRAPHICS::Graphics::drawImage(std::vector<uint8_t> &bmp, uint16_t index,
 
 void GRAPHICS::Graphics::setClip(int x, int y, int w, int h) {
 	SDL_Rect r = { x, y, w, h };
-	SDL_SetClipRect(mScreen, &r);
+	SDL_SetSurfaceClipRect(mScreen, &r);
 }
 
 void GRAPHICS::Graphics::clearClip() {
-	SDL_SetClipRect(mScreen, nullptr);
+	SDL_SetSurfaceClipRect(mScreen, nullptr);
 }
 
 // Blit a flat width*height byte buffer (8 bpp indexed) onto the screen
@@ -226,29 +194,27 @@ void GRAPHICS::Graphics::drawIndexed(const std::vector<uint8_t> &pixels,
 	if (pixels.empty() || width <= 0 || height <= 0) return;
 	if (static_cast<size_t>(width) * height > pixels.size()) return;
 
-	SDL_Surface *surface = SDL_CreateRGBSurfaceFrom(
-		const_cast<uint8_t *>(pixels.data()), width, height, 8, width,
-		0, 0, 0, 0);
+	SDL_Surface *surface = makeIndexedSurfaceFrom(
+		const_cast<uint8_t *>(pixels.data()), width, height, width, mPalette);
 	if (!surface) return;
-	SDL_SetPaletteColors(surface->format->palette, mPalette->colors, 0, 256);
 	if (transparent) {
 		// Palette index 0 -> transparent. Sparkles use this so the slot
 		// frame shows through the empty parts of the sprite.
-		SDL_SetColorKey(surface, SDL_TRUE, 0);
+		SDL_SetSurfaceColorKey(surface, true, 0);
 	}
 
 	SDL_Rect dest = { posX, posY, width, height };
 	SDL_BlitSurface(surface, NULL, mScreen, &dest);
-	SDL_FreeSurface(surface);
+	SDL_DestroySurface(surface);
 
 	// Keep mBackdrop in sync with the visible art so later text-window restores
 	// don't ghost over the CPS. Matches drawImage's mirror-rect logic.
 	if (mBackdrop == nullptr)
-		mBackdrop = SDL_CreateRGBSurface(0, WIDTH, HEIGHT, 32, 0, 0, 0, 0);
+		mBackdrop = SDL_CreateSurface(WIDTH, HEIGHT, SDL_PIXELFORMAT_ARGB8888);
 	SDL_Rect clip;
-	SDL_GetClipRect(mScreen, &clip);
+	SDL_GetSurfaceClipRect(mScreen, &clip);
 	SDL_Rect mirror_rect = dest;
-	if (SDL_IntersectRect(&mirror_rect, &clip, &mirror_rect)) {
+	if (SDL_GetRectIntersection(&mirror_rect, &clip, &mirror_rect)) {
 		SDL_SetSurfaceBlendMode(mScreen, SDL_BLENDMODE_NONE);
 		SDL_BlitSurface(mScreen, &mirror_rect, mBackdrop, &mirror_rect);
 	}
@@ -260,8 +226,8 @@ static const SDL_Rect kCompassRect = { 0, 120, 116, 49 };
 
 void GRAPHICS::Graphics::snapshotCompass() {
 	if (mCompassSnap == nullptr)
-		mCompassSnap = SDL_CreateRGBSurface(0, kCompassRect.w, kCompassRect.h, 32,
-		                                    0, 0, 0, 0);
+		mCompassSnap = SDL_CreateSurface(kCompassRect.w, kCompassRect.h,
+		                                 SDL_PIXELFORMAT_ARGB8888);
 	SDL_SetSurfaceBlendMode(mScreen, SDL_BLENDMODE_NONE);
 	SDL_BlitSurface(mScreen, &kCompassRect, mCompassSnap, nullptr);
 }
@@ -281,12 +247,12 @@ void GRAPHICS::Graphics::fillRect(int x0, int y0, int x1, int y1, uint8_t color)
 	if (y1 < y0) std::swap(y0, y1);
 	SDL_Rect r = { x0, y0, x1 - x0 + 1, y1 - y0 + 1 };
 	SDL_Color c = mPalette->colors[color];
-	Uint32 px = SDL_MapRGB(mScreen->format, c.r, c.g, c.b);
-	SDL_FillRect(mScreen, &r, px);
+	Uint32 px = SDL_MapSurfaceRGB(mScreen, c.r, c.g, c.b);
+	SDL_FillSurfaceRect(mScreen, &r, px);
 	// Keep the text-free backdrop snapshot in sync so a later text_window restore of
 	// this box shows the cleared colour, not the art the clear replaced.
 	if (mBackdrop != nullptr)
-		SDL_FillRect(mBackdrop, &r, px);
+		SDL_FillSurfaceRect(mBackdrop, &r, px);
 }
 
 void GRAPHICS::Graphics::zoomIntoImage(std::vector<uint8_t> &bmp) {
@@ -294,18 +260,15 @@ void GRAPHICS::Graphics::zoomIntoImage(std::vector<uint8_t> &bmp) {
 	mCounter = 0;
 	mBuffer = bmp;
 
-	mSurface[0] = SDL_CreateRGBSurface(0, 320, 200, 32, 0, 0, 0, 0);
+	mSurface[0] = SDL_CreateSurface(320, 200, SDL_PIXELFORMAT_ARGB8888);
 	SDL_BlitSurface(mSurface[0], NULL, mScreen, NULL);
 
 	Bitmap image(bmp);
 	std::vector<uint8_t> imageData = image[0];
-	SDL_Surface *surface = SDL_CreateRGBSurfaceFrom((void*) &imageData[0],
-			image.getWidth(0), image.getHeight(0), 8, image.getWidth(0), 0, 0,
-			0, 0);
-	SDL_SetPaletteColors(surface->format->palette, mPalette->colors, 0, 256);
-
+	SDL_Surface *surface = makeIndexedSurfaceFrom(&imageData[0],
+			image.getWidth(0), image.getHeight(0), image.getWidth(0), mPalette);
 	SDL_BlitSurface(surface, NULL, mSurface[0], NULL);
-	SDL_FreeSurface(surface);
+	SDL_DestroySurface(surface);
 }
 
 void GRAPHICS::Graphics::playVideo(sequence video) {
@@ -343,18 +306,15 @@ void GRAPHICS::Graphics::fadeIn() {
 void GRAPHICS::Graphics::drawCurtain(std::vector<uint8_t> bmp) {
 	Bitmap bImage(bmp);
 	std::vector<uint8_t> bImageD = bImage[0];
-	SDL_Surface *sImage = SDL_CreateRGBSurfaceFrom((void*) &bImageD[0],
-			bImage.getWidth(0), bImage.getHeight(0), 8, bImage.getWidth(0), 0,
-			0, 0, 0);
-	mSurface[0] = SDL_CreateRGBSurface(0, 320, 200, 8, 0, 0, 0, 0);
+	SDL_Surface *sImage = makeIndexedSurfaceFrom(&bImageD[0],
+			bImage.getWidth(0), bImage.getHeight(0), bImage.getWidth(0), mPalette);
+	mSurface[0] = SDL_CreateSurface(320, 200, SDL_PIXELFORMAT_INDEX8);
+	SDL_SetSurfacePalette(mSurface[0], mPalette);
 	SDL_BlitSurface(sImage, NULL, mSurface[0], NULL);
-	SDL_SetPaletteColors(mSurface[0]->format->palette, mPalette->colors, 0,
-			256);
-	SDL_SetColorKey(mSurface[0], SDL_TRUE,
-			SDL_MapRGB(mSurface[0]->format, 0, 0, 0));
+	SDL_SetSurfaceColorKey(mSurface[0], true, 0);
 	mState = DRAW_CURTAIN;
 	mCounter = 1;
-	SDL_FreeSurface(sImage);
+	SDL_DestroySurface(sImage);
 }
 
 void GRAPHICS::Graphics::panDirection(uint8_t panDir,
@@ -372,53 +332,41 @@ void GRAPHICS::Graphics::panDirection(uint8_t panDir,
 		bgPanels = 3;
 		Bitmap bBGFarLeft(bgFarLeft);
 		bBGFarLeftD = bBGFarLeft[0];
-		bgFarLeftSurface = SDL_CreateRGBSurfaceFrom((void*) &bBGFarLeftD[0],
-				bBGFarLeft.getWidth(0), bBGFarLeft.getHeight(0), 8,
-				bBGFarLeft.getWidth(0), 0, 0, 0, 0);
-		SDL_SetPaletteColors(bgFarLeftSurface->format->palette,
-				mPalette->colors, 0, 256);
+		bgFarLeftSurface = makeIndexedSurfaceFrom(&bBGFarLeftD[0],
+				bBGFarLeft.getWidth(0), bBGFarLeft.getHeight(0),
+				bBGFarLeft.getWidth(0), mPalette);
 	}
 
 	// create temporary surfaces
 	Bitmap bBGRight(bgRight);
 	std::vector<uint8_t> bBGRightD = bBGRight[0];
-	SDL_Surface *bgRightSurface = SDL_CreateRGBSurfaceFrom(
-			(void*) &bBGRightD[0], bBGRight.getWidth(0), bBGRight.getHeight(0),
-			8, bBGRight.getWidth(0), 0, 0, 0, 0);
-	SDL_SetPaletteColors(bgRightSurface->format->palette, mPalette->colors, 0,
-			256);
+	SDL_Surface *bgRightSurface = makeIndexedSurfaceFrom(&bBGRightD[0],
+			bBGRight.getWidth(0), bBGRight.getHeight(0), bBGRight.getWidth(0),
+			mPalette);
 
 	Bitmap bBGLeft(bgLeft);
 	std::vector<uint8_t> bBGLeftD = bBGLeft[0];
-	SDL_Surface *bgLeftSurface = SDL_CreateRGBSurfaceFrom((void*) &bBGLeftD[0],
-			bBGLeft.getWidth(0), bBGLeft.getHeight(0), 8, bBGLeft.getWidth(0),
-			0, 0, 0, 0);
-	SDL_SetPaletteColors(bgLeftSurface->format->palette, mPalette->colors, 0,
-			256);
+	SDL_Surface *bgLeftSurface = makeIndexedSurfaceFrom(&bBGLeftD[0],
+			bBGLeft.getWidth(0), bBGLeft.getHeight(0), bBGLeft.getWidth(0),
+			mPalette);
 
 	Bitmap bFGRight(fgRight);
 	std::vector<uint8_t> bFGRightD = bFGRight[0];
-	SDL_Surface *fgRightSurface = SDL_CreateRGBSurfaceFrom(
-			(void*) &bFGRightD[0], bFGRight.getWidth(0), bFGRight.getHeight(0),
-			8, bFGRight.getWidth(0), 0, 0, 0, 0);
-	SDL_SetPaletteColors(fgRightSurface->format->palette, mPalette->colors, 0,
-			256);
+	SDL_Surface *fgRightSurface = makeIndexedSurfaceFrom(&bFGRightD[0],
+			bFGRight.getWidth(0), bFGRight.getHeight(0), bFGRight.getWidth(0),
+			mPalette);
 
 	Bitmap bFGLeft(fgLeft);
 	std::vector<uint8_t> bFGLeftD = bFGLeft[0];
-	SDL_Surface *fgLeftSurface = SDL_CreateRGBSurfaceFrom((void*) &bFGLeftD[0],
-			bFGLeft.getWidth(0), bFGLeft.getHeight(0), 8, bFGLeft.getWidth(0),
-			0, 0, 0, 0);
-	SDL_SetPaletteColors(fgLeftSurface->format->palette, mPalette->colors, 0,
-			256);
+	SDL_Surface *fgLeftSurface = makeIndexedSurfaceFrom(&bFGLeftD[0],
+			bFGLeft.getWidth(0), bFGLeft.getHeight(0), bFGLeft.getWidth(0),
+			mPalette);
 
 	// create surfaces that will slide over each other
-	mSurface[0] = SDL_CreateRGBSurface(0, 320 * bgPanels, 200, 8, 0, 0, 0, 0);
-	SDL_SetPaletteColors(mSurface[0]->format->palette, mPalette->colors, 0,
-			256);
-	mSurface[1] = SDL_CreateRGBSurface(0, 320 * fgPanels, 200, 8, 0, 0, 0, 0);
-	SDL_SetPaletteColors(mSurface[1]->format->palette, mPalette->colors, 0,
-			256);
+	mSurface[0] = SDL_CreateSurface(320 * bgPanels, 200, SDL_PIXELFORMAT_INDEX8);
+	SDL_SetSurfacePalette(mSurface[0], mPalette);
+	mSurface[1] = SDL_CreateSurface(320 * fgPanels, 200, SDL_PIXELFORMAT_INDEX8);
+	SDL_SetSurfacePalette(mSurface[1], mPalette);
 
 	SDL_Rect dest = { 0, 0, 0, 0 };
 
@@ -429,23 +377,21 @@ void GRAPHICS::Graphics::panDirection(uint8_t panDir,
 		dest.x -= 3;
 		dest.y = 0;
 		dest.x += 320;
-		SDL_FreeSurface(bgFarLeftSurface);
+		SDL_DestroySurface(bgFarLeftSurface);
 	}
 	SDL_BlitSurface(bgLeftSurface, NULL, mSurface[0], &dest);
-	SDL_FreeSurface(bgLeftSurface);
+	SDL_DestroySurface(bgLeftSurface);
 	dest.x += 320;
 	SDL_BlitSurface(bgRightSurface, NULL, mSurface[0], &dest);
-	SDL_FreeSurface(bgRightSurface);
-	SDL_SetColorKey(mSurface[0], SDL_TRUE,
-			SDL_MapRGB(mSurface[0]->format, 0, 0, 0));
+	SDL_DestroySurface(bgRightSurface);
+	SDL_SetSurfaceColorKey(mSurface[0], true, 0);
 
 	SDL_BlitSurface(fgLeftSurface, NULL, mSurface[1], NULL);
-	SDL_FreeSurface(fgLeftSurface);
+	SDL_DestroySurface(fgLeftSurface);
 	dest.x = 320;
 	SDL_BlitSurface(fgRightSurface, NULL, mSurface[1], &dest);
-	SDL_FreeSurface(fgRightSurface);
-	SDL_SetColorKey(mSurface[1], SDL_TRUE,
-			SDL_MapRGB(mSurface[1]->format, 0, 0, 0));
+	SDL_DestroySurface(fgRightSurface);
+	SDL_SetSurfaceColorKey(mSurface[1], true, 0);
 
 	mState = PAN_LEFT;
 	mCounter = mSurface[0]->w - 320;
@@ -454,15 +400,13 @@ void GRAPHICS::Graphics::panDirection(uint8_t panDir,
 void GRAPHICS::Graphics::scrollLeft(std::vector<uint8_t> bmp) {
 	Bitmap bImage(bmp);
 	std::vector<uint8_t> bImageD = bImage[0];
-	SDL_Surface *sImage = SDL_CreateRGBSurfaceFrom((void*) &bImageD[0],
-			bImage.getWidth(0), bImage.getHeight(0), 8, bImage.getWidth(0), 0,
-			0, 0, 0);
-	mSurface[0] = SDL_CreateRGBSurface(0, 320, 200, 8, 0, 0, 0, 0);
+	SDL_Surface *sImage = makeIndexedSurfaceFrom(&bImageD[0],
+			bImage.getWidth(0), bImage.getHeight(0), bImage.getWidth(0), mPalette);
+	mSurface[0] = SDL_CreateSurface(320, 200, SDL_PIXELFORMAT_INDEX8);
+	SDL_SetSurfacePalette(mSurface[0], mPalette);
 	SDL_BlitSurface(sImage, NULL, mSurface[0], NULL);
-	SDL_SetPaletteColors(mSurface[0]->format->palette, mPalette->colors, 0,
-			256);
-	SDL_SetColorKey(mSurface[0], SDL_TRUE,
-			SDL_MapRGB(mSurface[0]->format, 0, 0, 0));
+	SDL_SetSurfaceColorKey(mSurface[0], true, 0);
+	SDL_DestroySurface(sImage);
 
 	mCounter = mSurface[0]->w;
 	mState = SCROLL_LEFT;
@@ -471,15 +415,13 @@ void GRAPHICS::Graphics::scrollLeft(std::vector<uint8_t> bmp) {
 void GRAPHICS::Graphics::materializeImage(std::vector<uint8_t> bmp) {
 	Bitmap bImage(bmp);
 	std::vector<uint8_t> bImageD = bImage[0];
-	SDL_Surface *sImage = SDL_CreateRGBSurfaceFrom((void*) &bImageD[0],
-			bImage.getWidth(0), bImage.getHeight(0), 8, bImage.getWidth(0), 0,
-			0, 0, 0);
-	mSurface[0] = SDL_CreateRGBSurface(0, 320, 200, 8, 0, 0, 0, 0);
+	SDL_Surface *sImage = makeIndexedSurfaceFrom(&bImageD[0],
+			bImage.getWidth(0), bImage.getHeight(0), bImage.getWidth(0), mPalette);
+	mSurface[0] = SDL_CreateSurface(320, 200, SDL_PIXELFORMAT_INDEX8);
+	SDL_SetSurfacePalette(mSurface[0], mPalette);
 	SDL_BlitSurface(sImage, NULL, mSurface[0], NULL);
-	SDL_SetPaletteColors(mSurface[0]->format->palette, mPalette->colors, 0,
-			256);
-	SDL_SetColorKey(mSurface[0], SDL_TRUE,
-			SDL_MapRGB(mSurface[0]->format, 0, 0, 0));
+	SDL_SetSurfaceColorKey(mSurface[0], true, 0);
+	SDL_DestroySurface(sImage);
 
 	uint16_t size = mSurface[0]->w * mSurface[0]->h;
 	mBuffer.resize(size);
@@ -590,7 +532,7 @@ void GRAPHICS::Graphics::update() {
 
 		if (mCounter == 0) {
 			mState = NOOP;
-			SDL_FreeSurface(mSurface[0]);
+			SDL_DestroySurface(mSurface[0]);
 		} else
 			mCounter--;
 	}
@@ -603,7 +545,7 @@ void GRAPHICS::Graphics::update() {
 
 		if (mCounter == 0) {
 			mState = NOOP;
-			SDL_FreeSurface(mSurface[0]);
+			SDL_DestroySurface(mSurface[0]);
 		} else
 			mCounter -= speed;
 	}
@@ -626,7 +568,7 @@ void GRAPHICS::Graphics::update() {
 		}
 		if (mCounter == mSurface[0]->w / lines / 2) {
 			mState = NOOP;
-			SDL_FreeSurface(mSurface[0]);
+			SDL_DestroySurface(mSurface[0]);
 		} else
 			mCounter++;
 
@@ -643,8 +585,8 @@ void GRAPHICS::Graphics::update() {
 		SDL_BlitSurface(mSurface[1], &sRect, mScreen, &dRect);
 		if (mCounter == 0) {
 			mState = NOOP;
-			SDL_FreeSurface(mSurface[0]);
-			SDL_FreeSurface(mSurface[1]);
+			SDL_DestroySurface(mSurface[0]);
+			SDL_DestroySurface(mSurface[1]);
 		} else
 			mCounter--;
 
@@ -700,14 +642,14 @@ void GRAPHICS::Graphics::update() {
 		uint8_t y = static_cast<float>(mScreen->h) / 2 - percentage * static_cast<float>(mScreen->h) / 2;
 		SDL_Rect rect = { x, y, width, height };
 
-		SDL_Surface *scaledImage = SDL_CreateRGBSurface(0, width, height, 32, 0,
-				0, 0, 0);
+		SDL_Surface *scaledImage = SDL_CreateSurface(width, height,
+				SDL_PIXELFORMAT_ARGB8888);
 		zoomSurfaceRGBA(mSurface[0], scaledImage);
 		SDL_BlitSurface(scaledImage, NULL, mScreen, &rect);
-		SDL_FreeSurface(scaledImage);
+		SDL_DestroySurface(scaledImage);
 		if (mCounter == 100) {
 			mState = NOOP;
-			SDL_FreeSurface(mSurface[0]);
+			SDL_DestroySurface(mSurface[0]);
 		} else
 			mCounter++;
 		mSleep = 10;
@@ -727,10 +669,12 @@ void GRAPHICS::Graphics::update() {
 	if (mPresentTex == nullptr) {
 		mPresentTex = SDL_CreateTexture(mRenderer, SDL_PIXELFORMAT_ARGB8888,
 		                                SDL_TEXTUREACCESS_STREAMING, WIDTH, HEIGHT);
+		// Linear filter on upscale (the SDL2 hint we used to set globally).
+		SDL_SetTextureScaleMode(mPresentTex, SDL_SCALEMODE_LINEAR);
 	}
 	SDL_UpdateTexture(mPresentTex, nullptr, mScreen->pixels, mScreen->pitch);
 	SDL_RenderClear(mRenderer);
-	SDL_RenderCopy(mRenderer, mPresentTex, NULL, NULL);
+	SDL_RenderTexture(mRenderer, mPresentTex, nullptr, nullptr);
 	SDL_RenderPresent(mRenderer);
 }
 
@@ -788,7 +732,7 @@ void GRAPHICS::Graphics::drawTextColored(std::vector<uint8_t> &fnt,
 		SDL_Surface *glyph = font.getCharacter(ascii);
 		if (!glyph) continue;
 		// Modulate (255,255,255) -> (c.r,c.g,c.b) at blit time. Font glyphs
-		// are SDL_FreeSurface'd by ~Font(), so we don't need to restore.
+		// are SDL_DestroySurface'd by ~Font(), so we don't need to restore.
 		SDL_SetSurfaceColorMod(glyph, c.r, c.g, c.b);
 		rect.w = glyph->w; rect.h = glyph->h;
 		SDL_BlitSurface(glyph, NULL, mScreen, &rect);
@@ -817,30 +761,29 @@ void GRAPHICS::Graphics::loadMouse(std::vector<uint8_t> &bitmap,
 	}
 	std::vector<uint8_t> cursorData = image[index];
 
-	SDL_Surface *cursor = SDL_CreateRGBSurface(0,
-			image.getWidth(index) * mScale, image.getHeight(index) * mScale, 32,
-			0, 0, 0, 0);
+	SDL_Surface *cursor = SDL_CreateSurface(
+			image.getWidth(index) * mScale, image.getHeight(index) * mScale,
+			SDL_PIXELFORMAT_ARGB8888);
 
-	SDL_Surface *cImage = SDL_CreateRGBSurfaceFrom((void*) &cursorData[0],
-			image.getWidth(index), image.getHeight(index), 8,
-			image.getWidth(index), 0, 0, 0, 0);
-	SDL_SetPaletteColors(cImage->format->palette, mPalette->colors, 0, 256);
+	SDL_Surface *cImage = makeIndexedSurfaceFrom(&cursorData[0],
+			image.getWidth(index), image.getHeight(index),
+			image.getWidth(index), mPalette);
 
-	SDL_Surface *cImage32 = SDL_CreateRGBSurface(0, image.getWidth(index),
-			image.getHeight(index), 32, 0, 0, 0, 0);
+	SDL_Surface *cImage32 = SDL_CreateSurface(image.getWidth(index),
+			image.getHeight(index), SDL_PIXELFORMAT_ARGB8888);
 	SDL_BlitSurface(cImage, NULL, cImage32, NULL);
 
 	zoomSurfaceRGBA(cImage32, cursor);
 
-	SDL_SetColorKey(cursor, SDL_TRUE, SDL_MapRGB(cursor->format, 0, 0, 0));
+	SDL_SetSurfaceColorKey(cursor, true, SDL_MapSurfaceRGB(cursor, 0, 0, 0));
 
 	mCursor = SDL_CreateColorCursor(cursor, 0, 0);
 
 	SDL_SetCursor(mCursor);
 
-	SDL_FreeSurface(cursor);
-	SDL_FreeSurface(cImage);
-	SDL_FreeSurface(cImage32);
+	SDL_DestroySurface(cursor);
+	SDL_DestroySurface(cImage);
+	SDL_DestroySurface(cImage32);
 }
 
 void GRAPHICS::Graphics::loadPalette(std::vector<uint8_t> &basePal,
@@ -860,14 +803,15 @@ void GRAPHICS::Graphics::loadPalette(std::vector<uint8_t> &basePal,
 	uint16_t start = static_cast<uint16_t>(std::stoi(tokens[0]));
 	uint16_t end = static_cast<uint16_t>(std::stoi(tokens[1]));
 
-	SDL_FreePalette(mPalette);
-	mPalette = SDL_AllocPalette(256);
-
+	// SDL3: keep the same palette handle so any surface holding a ref
+	// (via SDL_SetSurfacePalette) follows along; just overwrite colours
+	// in place. SDL2's free+alloc would have orphaned every transient
+	// indexed surface; under SDL3's refcounted palette, swapping out the
+	// pointer breaks the ref instead of being a no-op, so reuse is safer.
 	Palette basePalette(basePal);
 	Palette subPalette(subPal);
 	uint16_t counter = 0;
 
-	// assign our game palette to a SDL palette
 	for (uint16_t i = 0; i < basePalette.getNumOfColours(); i++) {
 		if (i >= start && i <= end)
 			mPalette->colors[i] = subPalette[counter++];
@@ -878,11 +822,8 @@ void GRAPHICS::Graphics::loadPalette(std::vector<uint8_t> &basePal,
 
 void GRAPHICS::Graphics::loadPalette(std::vector<uint8_t> &basePal,
 		bool isRes) {
-	SDL_FreePalette(mPalette);
-	mPalette = SDL_AllocPalette(256);
 	Palette basePalette(basePal, isRes);
 
-	// assign our game palette to a SDL palette
 	for (uint16_t i = 0; i < basePalette.getNumOfColours(); i++) {
 		mPalette->colors[i] = basePalette[i];
 	}
@@ -973,7 +914,7 @@ void GRAPHICS::Graphics::wipeTextBox(int x0, int y0, int x1, int y1) {
 		int sx = (x0 + 1 < WIDTH) ? x0 + 1 : x0;
 		int sy = (y0 + 1 < HEIGHT) ? y0 + 1 : y0;
 		Uint32 bg = pixels[sy * pitch + sx];
-		SDL_FillRect(mScreen, &r, bg);
+		SDL_FillSurfaceRect(mScreen, &r, bg);
 	}
 }
 
@@ -1100,7 +1041,7 @@ void GRAPHICS::Graphics::printText(int wndnum, const std::string &text) {
 }
 
 void GRAPHICS::Graphics::saveScreenshot(const std::string &path) {
-	if (SDL_SaveBMP(mScreen, path.c_str()) != 0)
+	if (!SDL_SaveBMP(mScreen, path.c_str()))
 		std::cerr << "saveScreenshot failed: " << SDL_GetError() << std::endl;
 }
 

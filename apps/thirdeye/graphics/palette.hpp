@@ -6,7 +6,7 @@
 #include <stdint.h>
 #include <iostream>
 
-#include "SDL.h"
+#include <SDL3/SDL.h>
 
 #define PALHEADEROFFSET 26
 

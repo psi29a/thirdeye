@@ -14,7 +14,7 @@
 #include <iostream>
 
 #include <filesystem>
-#include <SDL.h>
+#include <SDL3/SDL.h>
 
 // Types of games
 #define GAME_UNKN	0

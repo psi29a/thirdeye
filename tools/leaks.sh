@@ -45,8 +45,8 @@ export MallocStackLogging=1
 export MallocStackLoggingNoCompact=1
 export MallocScribble=1
 
-# sdl2-compat dlopens libSDL3 at runtime; Homebrew's lib isn't in dyld's
-# default fallback search path.
+# Ensure Homebrew's libSDL3.dylib is findable by dyld even when the binary
+# wasn't linked with @rpath /opt/homebrew/lib.
 if [ -d /opt/homebrew/lib ]; then
   export DYLD_FALLBACK_LIBRARY_PATH=${DYLD_FALLBACK_LIBRARY_PATH:-/opt/homebrew/lib}
 fi

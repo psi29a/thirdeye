@@ -55,8 +55,6 @@ option(DEBUG "Use debug build options" OFF)
 # Are we running unit tests?
 option(UNIT_TESTS "Run unit tests" ON)
 
-# Are we building statically?
-option(SDL2_STATIC "Link static build of SDL into the binaries" FALSE)
 
 # Apps and tools
 option(BUILD_DAESOP "Build Daesop" ON)
@@ -115,7 +113,6 @@ endif()
 
 include_directories("."
     ${PLATFORM_INCLUDE_DIR}
-    ${SDL2_INCLUDE_DIR}
     ${OPENAL_INCLUDE_DIR}
     ${LIBDIR}
 )
@@ -182,18 +179,10 @@ FetchContent_MakeAvailable(cli11)
 # C4868, etc.) don't surface when we compile main.cpp.
 thirdeye_mark_system_includes(CLI11)
 
-# Find SDL2
-Find_package(SDL2 REQUIRED)
-include_directories(${SDL2_INCLUDE_DIR})
-
-# On some platforms (e.g. macOS Homebrew) FindSDL2 returns SDL2_LIBRARY with
-# libSDL2main.a already baked in; adding ${SDL2MAIN_LIBRARY} on top then
-# duplicates it at link time ("ld: warning: ignoring duplicate libraries").
-# Strip the duplicate so each app target can keep listing both variables for
-# portability (Windows/vcpkg needs SDL2MAIN_LIBRARY listed separately).
-if (SDL2MAIN_LIBRARY AND SDL2_LIBRARY)
-    list(REMOVE_ITEM SDL2_LIBRARY "${SDL2MAIN_LIBRARY}")
-endif()
+# SDL3 ships a first-class CMake package config that exports the SDL3::SDL3
+# imported target (headers + link line + Cocoa/Threads on the relevant
+# platforms). No FindSDL3.cmake needed.
+find_package(SDL3 CONFIG REQUIRED)
 
 # Find OpenAL: use our FindOpenAL.cmake module to prefer Homebrew openal-soft and fall back to system OpenAL.
 find_package(OpenAL REQUIRED)

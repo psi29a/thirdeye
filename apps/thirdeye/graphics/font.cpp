@@ -39,20 +39,19 @@ GRAPHICS::Font::Font(const std::vector<uint8_t> vec) :
 				if (height == 0 || height > 64) continue;
 				// 8 columns per byte, one byte per row, bit 7 = leftmost pixel.
 				constexpr int width = 8;
-				SDL_Surface *surf = SDL_CreateRGBSurface(0, width, height, 32,
-				                                        0, 0, 0, 0);
-				Uint32 white = SDL_MapRGB(surf->format, 255, 255, 255);
+				SDL_Surface *surf = SDL_CreateSurface(width, height, SDL_PIXELFORMAT_ARGB8888);
+				Uint32 white = SDL_MapSurfaceRGB(surf, 255, 255, 255);
 				for (int y = 0; y < height; ++y) {
 					uint8_t b = vec_[go + y];
 					for (int x = 0; x < width; ++x) {
 						if (b & (1 << (7 - x))) {
 							SDL_Rect r = { x, y, 1, 1 };
-							SDL_FillRect(surf, &r, white);
+							SDL_FillSurfaceRect(surf, &r, white);
 						}
 					}
 				}
-				SDL_SetColorKey(surf, SDL_TRUE,
-				                SDL_MapRGB(surf->format, 0, 0, 0));
+				SDL_SetSurfaceColorKey(surf, true,
+				                       SDL_MapSurfaceRGB(surf, 0, 0, 0));
 				character[static_cast<uint8_t>(i)] = surf;
 			}
 			return;
@@ -79,19 +78,18 @@ GRAPHICS::Font::Font(const std::vector<uint8_t> vec) :
 			if (width == 0 || width > 512 || height == 0 || height > 512)
 				continue;
 			size_t data = glyphOff + 4;
-			SDL_Surface *surf = SDL_CreateRGBSurface(0, width, height, 32, 0, 0,
-			                                         0, 0);
-			Uint32 white = SDL_MapRGB(surf->format, 255, 255, 255);
+			SDL_Surface *surf = SDL_CreateSurface(width, height, SDL_PIXELFORMAT_ARGB8888);
+			Uint32 white = SDL_MapSurfaceRGB(surf, 255, 255, 255);
 			for (uint32_t y = 0; y < height; y++)
 				for (uint32_t x = 0; x < width; x++) {
 					size_t p = data + static_cast<size_t>(y) * width + x;
 					if (p < vec_.size() && vec_[p] != 0) {
 						SDL_Rect r = { static_cast<int>(x), static_cast<int>(y),
 						               1, 1 };
-						SDL_FillRect(surf, &r, white);
+						SDL_FillSurfaceRect(surf, &r, white);
 					}
 				}
-			SDL_SetColorKey(surf, SDL_TRUE, SDL_MapRGB(surf->format, 0, 0, 0));
+			SDL_SetSurfaceColorKey(surf, true, SDL_MapSurfaceRGB(surf, 0, 0, 0));
 			character[static_cast<uint8_t>(i)] = surf;
 		}
 		return;
@@ -112,12 +110,9 @@ GRAPHICS::Font::Font(const std::vector<uint8_t> vec) :
 		//prev = index[i];
 
 		// create a surface to draw on
-		character[i] = SDL_CreateRGBSurface(0, charWidth, fontHeight, 32, 0, 0,
-				0, 0); // set to font dimensions
-		Uint32 white = SDL_MapRGB(character[i]->format, 255, 255, 255); // set to white
-		//Uint32 black = SDL_MapRGB(character[i]->format, 0, 0, 0); // set to black
+		character[i] = SDL_CreateSurface(charWidth, fontHeight, SDL_PIXELFORMAT_ARGB8888);
+		Uint32 white = SDL_MapSurfaceRGB(character[i], 255, 255, 255);
 
-		// set values before loop
 		uint8_t counter = 2;
 		uint16_t pixel = 0;
 
@@ -126,30 +121,22 @@ GRAPHICS::Font::Font(const std::vector<uint8_t> vec) :
 			for (uint16_t y = 0; y < charWidth; y++) {
 				SDL_Rect rect = { y, x, 1, 1 };
 				pixel = vec_[index[i] + counter];
-
-				/*
-				if (i == 0x69)
-					std::cout << "Offset: " << index[i] + counter << " Value: "
-							<< pixel << "@" << rect.x << "x" << rect.y
-							<< std::endl;
-				*/
-
 				if (pixel > 0) {
-					SDL_FillRect(character[i], &rect, white);
+					SDL_FillSurfaceRect(character[i], &rect, white);
 				}
 				counter++;
 			}
 		}
 		// set black as our transparency colour
-		SDL_SetColorKey(character[i], SDL_TRUE,
-				SDL_MapRGB(character[i]->format, 0, 0, 0));
+		SDL_SetSurfaceColorKey(character[i], true,
+				SDL_MapSurfaceRGB(character[i], 0, 0, 0));
 	}
 }
 
 GRAPHICS::Font::~Font() {
 	std::map<uint8_t, SDL_Surface*>::iterator it;
 	for (it = character.begin(); it != character.end(); it++) {
-		SDL_FreeSurface(it->second);
+		SDL_DestroySurface(it->second);
 	}
 }
 SDL_Surface* GRAPHICS::Font::getCharacter(uint8_t ascii) {

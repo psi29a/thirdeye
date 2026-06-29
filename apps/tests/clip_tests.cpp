@@ -16,7 +16,7 @@
 #include "../thirdeye/vm/events.hpp"
 #include "../thirdeye/vm/objects.hpp"
 
-#include "SDL.h"
+#include <SDL3/SDL.h>
 
 namespace {
 
@@ -138,13 +138,13 @@ TEST(EventClip, SetEdgeOnUnusedHandleIsNoOp) {
 // --- SDL clip-blit primitive (the second half of the regression) ---------
 //
 // runtime/graphics.cpp's draw_bitmap derives a clip rect from
-// events.windowRect(page) and calls SDL_SetClipRect on the screen surface,
+// events.windowRect(page) and calls SDL_SetSurfaceClipRect on the screen surface,
 // then SDL_BlitSurface to it. These tests pin the SDL behavior we depend on:
 // pixels OUTSIDE the clip rect must not change during a blit, even when the
 // source surface is full screen. If SDL changes that semantic or we
 // accidentally apply the wrong rect, the portrait panel goes black again.
 //
-// SDL_CreateRGBSurface does NOT require SDL_Init(VIDEO) -- it's a pure
+// SDL_CreateSurface does NOT require SDL_Init(VIDEO) -- it's a pure
 // memory allocation. So this test runs on a CI box with no display.
 
 constexpr int kSurfW = 320;
@@ -158,11 +158,9 @@ constexpr uint32_t kColorForeground = 0xFF445566; // ARGB sentinel B
 
 // Allocate a 320x200 32-bit ARGB surface and fill every pixel with `c`.
 SDL_Surface *makeFilled(uint32_t c) {
-	SDL_Surface *s = SDL_CreateRGBSurface(0, kSurfW, kSurfH, 32,
-	                                      0x00FF0000, 0x0000FF00, 0x000000FF,
-	                                      0xFF000000);
+	SDL_Surface *s = SDL_CreateSurface(kSurfW, kSurfH, SDL_PIXELFORMAT_ARGB8888);
 	if (!s) return nullptr;
-	SDL_FillRect(s, nullptr, c);
+	SDL_FillSurfaceRect(s, nullptr, c);
 	return s;
 }
 
@@ -186,9 +184,9 @@ TEST(ClipPrimitive, FullScreenBlitHitsEntireSurface) {
 
 	// Pane rect = full screen (the HUD's PAGE1 case).
 	SDL_Rect clip{0, 0, kSurfW, kSurfH};
-	SDL_SetClipRect(dest, &clip);
-	ASSERT_EQ(SDL_BlitSurface(src, nullptr, dest, nullptr), 0);
-	SDL_SetClipRect(dest, nullptr);
+	SDL_SetSurfaceClipRect(dest, &clip);
+	ASSERT_TRUE(SDL_BlitSurface(src, nullptr, dest, nullptr));
+	SDL_SetSurfaceClipRect(dest, nullptr);
 
 	// Every pixel must now be the foreground sentinel -- the right-hand
 	// portrait column included.
@@ -199,8 +197,8 @@ TEST(ClipPrimitive, FullScreenBlitHitsEntireSurface) {
 		}
 	}
 
-	SDL_FreeSurface(src);
-	SDL_FreeSurface(dest);
+	SDL_DestroySurface(src);
+	SDL_DestroySurface(dest);
 }
 
 // "Regression B" (the view-page wall-leak path): a draw_bitmap to the
@@ -217,9 +215,9 @@ TEST(ClipPrimitive, ViewRectBlitLeavesHudPixelsAlone) {
 	// Pane rect = dungeon view (0,0)-(175,119), supplied here by hand the
 	// way windowRect() would return it after assign_subwindow + set_x*.
 	SDL_Rect clip{0, 0, 176, 120};
-	SDL_SetClipRect(dest, &clip);
-	ASSERT_EQ(SDL_BlitSurface(src, nullptr, dest, nullptr), 0);
-	SDL_SetClipRect(dest, nullptr);
+	SDL_SetSurfaceClipRect(dest, &clip);
+	ASSERT_TRUE(SDL_BlitSurface(src, nullptr, dest, nullptr));
+	SDL_SetSurfaceClipRect(dest, nullptr);
 
 	// Inside the view: painted.
 	for (int y : {0, 11, 60, 119}) {
@@ -242,8 +240,8 @@ TEST(ClipPrimitive, ViewRectBlitLeavesHudPixelsAlone) {
 		}
 	}
 
-	SDL_FreeSurface(src);
-	SDL_FreeSurface(dest);
+	SDL_DestroySurface(src);
+	SDL_DestroySurface(dest);
 }
 
 // "Per-cell narrowing" works the same way: set_x1/set_x2 mid-frame narrow
@@ -258,9 +256,9 @@ TEST(ClipPrimitive, NarrowedClipConfinesBlit) {
 
 	// Narrow to columns 0..127 only.
 	SDL_Rect clip{0, 0, 128, 120};
-	SDL_SetClipRect(dest, &clip);
-	ASSERT_EQ(SDL_BlitSurface(src, nullptr, dest, nullptr), 0);
-	SDL_SetClipRect(dest, nullptr);
+	SDL_SetSurfaceClipRect(dest, &clip);
+	ASSERT_TRUE(SDL_BlitSurface(src, nullptr, dest, nullptr));
+	SDL_SetSurfaceClipRect(dest, nullptr);
 
 	EXPECT_EQ(pixelAt(dest, 0, 0), kColorForeground);
 	EXPECT_EQ(pixelAt(dest, 127, 119), kColorForeground);
@@ -268,8 +266,8 @@ TEST(ClipPrimitive, NarrowedClipConfinesBlit) {
 	EXPECT_EQ(pixelAt(dest, 200, 50), kColorBackground);
 	EXPECT_EQ(pixelAt(dest, 0, 120), kColorBackground);
 
-	SDL_FreeSurface(src);
-	SDL_FreeSurface(dest);
+	SDL_DestroySurface(src);
+	SDL_DestroySurface(dest);
 }
 
 // Aux-window disable contract (mirrors original GIL2VFX): if a window's
@@ -293,9 +291,9 @@ TEST(ClipPrimitive, NegativeEdgesProduceDegenerateClipAndSuppressBlit) {
 	SDL_Rect clip{px0, py0, px1 - px0 + 1, py1 - py0 + 1};
 	ASSERT_EQ(clip.w, 1);
 	ASSERT_EQ(clip.h, 1);
-	SDL_SetClipRect(dest, &clip);
-	ASSERT_EQ(SDL_BlitSurface(src, nullptr, dest, nullptr), 0);
-	SDL_SetClipRect(dest, nullptr);
+	SDL_SetSurfaceClipRect(dest, &clip);
+	ASSERT_TRUE(SDL_BlitSurface(src, nullptr, dest, nullptr));
+	SDL_SetSurfaceClipRect(dest, nullptr);
 
 	// SDL intersects the clip rect with the surface's bounds, so an
 	// at-most-1-pixel clip starting at (-1,-1) lands entirely off-surface;
@@ -313,12 +311,12 @@ TEST(ClipPrimitive, NegativeEdgesProduceDegenerateClipAndSuppressBlit) {
 		   "this to mark aux pages disabled. Re-interpreting -1 as 'use "
 		   "natural edge' breaks that convention.";
 
-	SDL_FreeSurface(src);
-	SDL_FreeSurface(dest);
+	SDL_DestroySurface(src);
+	SDL_DestroySurface(dest);
 }
 
 // Bridge test: the rect runtime/graphics.cpp computes from windowRect MUST
-// match what SDL_SetClipRect actually clips to. This wires the two halves
+// match what SDL_SetSurfaceClipRect actually clips to. This wires the two halves
 // together -- if either side drifts, we catch it without needing the game.
 TEST(ClipPrimitive, WindowRectFeedsSdlClipRectCorrectly) {
 	ObjectSystem objects;
@@ -346,13 +344,13 @@ TEST(ClipPrimitive, WindowRectFeedsSdlClipRectCorrectly) {
 	SDL_Surface *src = makeFilled(kColorForeground);
 	ASSERT_NE(dest, nullptr);
 	ASSERT_NE(src, nullptr);
-	SDL_SetClipRect(dest, &clip);
-	ASSERT_EQ(SDL_BlitSurface(src, nullptr, dest, nullptr), 0);
-	SDL_SetClipRect(dest, nullptr);
+	SDL_SetSurfaceClipRect(dest, &clip);
+	ASSERT_TRUE(SDL_BlitSurface(src, nullptr, dest, nullptr));
+	SDL_SetSurfaceClipRect(dest, nullptr);
 	EXPECT_EQ(pixelAt(dest, 127, 0), kColorForeground);
 	EXPECT_EQ(pixelAt(dest, 128, 0), kColorBackground);
-	SDL_FreeSurface(src);
-	SDL_FreeSurface(dest);
+	SDL_DestroySurface(src);
+	SDL_DestroySurface(dest);
 }
 
 } // namespace

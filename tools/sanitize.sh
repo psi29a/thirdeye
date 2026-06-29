@@ -28,10 +28,8 @@ SAN_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer -fno-sanitize-re
 : "${UBSAN_OPTIONS:=print_stacktrace=1:halt_on_error=1}"
 export ASAN_OPTIONS UBSAN_OPTIONS
 
-# On macOS the sdl2-compat shim dlopens libSDL3.dylib at runtime, and Homebrew's
-# /opt/homebrew/lib isn't in dyld's default fallback search list. Without this
-# the test binary aborts with "Failed loading SDL3 library" -- which looks like
-# a sanitizer find but isn't.
+# On macOS, ensure Homebrew's libSDL3.dylib is findable by dyld in case the
+# binary wasn't linked with an @rpath that points at /opt/homebrew/lib.
 if [ "$(uname -s)" = "Darwin" ] && [ -d /opt/homebrew/lib ]; then
   export DYLD_FALLBACK_LIBRARY_PATH=${DYLD_FALLBACK_LIBRARY_PATH:-/opt/homebrew/lib}
 fi

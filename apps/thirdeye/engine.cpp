@@ -171,16 +171,16 @@ void THIRDEYE::runtime::pumpHost(GRAPHICS::Graphics &gfx, VM::EventSystem &event
 	SDL_Event ev;
 	while (SDL_PollEvent(&ev)) {
 		switch (ev.type) {
-		case SDL_QUIT:
+		case SDL_EVENT_QUIT:
 			throw QuitRequested{};
-		case SDL_KEYDOWN: {
+		case SDL_EVENT_KEY_DOWN: {
 			// The SOP code expects DOS/BIOS key codes: printable keys are ASCII
 			// (SDL keysyms already are, incl. ESC=0x1b/Enter=0x0d), but the arrow
 			// keys are (scancode << 8) with a zero ASCII byte. SDL's own arrow
 			// keysyms (0x4000_00xx) match nothing, so translate them. ESC is *not*
 			// special-cased to quit: the bytecode handles it (in-game it opens the
 			// camp menu via notify msg 272; in the title menu it's "Abandon the
-			// Quest"). Forced quit is the window close button (SDL_QUIT above).
+			// Quest"). Forced quit is the window close button (SDL_EVENT_QUIT above).
 			//
 			// WASD/QE/C use the PHYSICAL key position (SDL_SCANCODE_*), so they work
 			// regardless of layout (QWERTY/AZERTY/QWERTZ): W/S = fwd/back, A/D = strafe,
@@ -188,7 +188,7 @@ void THIRDEYE::runtime::pumpHost(GRAPHICS::Graphics &gfx, VM::EventSystem &event
 			// kernel notifies move forward/back/strafe/turn on those). (No I->inventory:
 			// it defaulted to Bob with no indication of whose pack it opened.)
 			int32_t key = 0;
-			switch (ev.key.keysym.scancode) {
+			switch (ev.key.scancode) {
 			case SDL_SCANCODE_W: key = 0x4800; break; // move forward
 			case SDL_SCANCODE_S: key = 0x5000; break; // move backward
 			case SDL_SCANCODE_A: key = 0x4b00; break; // strafe left
@@ -199,7 +199,7 @@ void THIRDEYE::runtime::pumpHost(GRAPHICS::Graphics &gfx, VM::EventSystem &event
 			default: break;
 			}
 			if (key == 0) { // not a movement scancode -> arrows + ASCII via keysym
-				SDL_Keycode k = ev.key.keysym.sym;
+				SDL_Keycode k = ev.key.key;
 				switch (k) {
 				case SDLK_UP:    key = 0x4800; break;
 				case SDLK_DOWN:  key = 0x5000; break;
@@ -214,21 +214,23 @@ void THIRDEYE::runtime::pumpHost(GRAPHICS::Graphics &gfx, VM::EventSystem &event
 				events.postEvent(0, VM::SYS_KEYDOWN, key);
 			break;
 		}
-		case SDL_MOUSEMOTION: {
+		case SDL_EVENT_MOUSE_MOTION: {
 			int lx, ly;
-			gfx.mouseToLogical(ev.motion.x, ev.motion.y, lx, ly);
+			gfx.mouseToLogical(static_cast<int>(ev.motion.x),
+			                   static_cast<int>(ev.motion.y), lx, ly);
 			events.mouseMove(lx, ly);
 			break;
 		}
-		case SDL_MOUSEBUTTONDOWN:
-		case SDL_MOUSEBUTTONUP: {
+		case SDL_EVENT_MOUSE_BUTTON_DOWN:
+		case SDL_EVENT_MOUSE_BUTTON_UP: {
 			// Keep the mouse position current, then raise the button edge.
 			int lx, ly;
-			gfx.mouseToLogical(ev.button.x, ev.button.y, lx, ly);
+			gfx.mouseToLogical(static_cast<int>(ev.button.x),
+			                   static_cast<int>(ev.button.y), lx, ly);
 			events.mouseMove(lx, ly);
-			uint32_t b = SDL_GetMouseState(nullptr, nullptr);
-			events.mouseButton(b & SDL_BUTTON(SDL_BUTTON_LEFT),
-			                   b & SDL_BUTTON(SDL_BUTTON_RIGHT));
+			SDL_MouseButtonFlags b = SDL_GetMouseState(nullptr, nullptr);
+			events.mouseButton(b & SDL_BUTTON_MASK(SDL_BUTTON_LEFT),
+			                   b & SDL_BUTTON_MASK(SDL_BUTTON_RIGHT));
 			break;
 		}
 		default:
@@ -273,7 +275,7 @@ void THIRDEYE::runtime::pumpHost(GRAPHICS::Graphics &gfx, VM::EventSystem &event
 			events.postEvent(0, VM::SYS_KEYDOWN, codes[idx]);
 		}
 	}
-	// Debug: THIRDEYE_AUTOKEY=<decimal SDL scancode> pushes a synthetic SDL_KEYDOWN
+	// Debug: THIRDEYE_AUTOKEY=<decimal SDL scancode> pushes a synthetic key-down
 	// with that physical scancode every ~40 pumps, so the real key handler (WASD/QE/
 	// I/C scancode mapping) can be exercised headless (e.g. 26=W, 4=A, 22=S, 7=D,
 	// 20=Q, 8=E, 12=I, 6=C).
@@ -285,9 +287,9 @@ void THIRDEYE::runtime::pumpHost(GRAPHICS::Graphics &gfx, VM::EventSystem &event
 		++ktick;
 		if ((once && ktick == 60) || (!once && ktick % 40 == 0)) {
 			SDL_Event ke{};
-			ke.type = SDL_KEYDOWN;
-			ke.key.keysym.scancode = static_cast<SDL_Scancode>(std::atoi(ak));
-			ke.key.keysym.sym = SDLK_UNKNOWN;
+			ke.type = SDL_EVENT_KEY_DOWN;
+			ke.key.scancode = static_cast<SDL_Scancode>(std::atoi(ak));
+			ke.key.key = SDLK_UNKNOWN;
 			SDL_PushEvent(&ke);
 		}
 	}
@@ -850,14 +852,14 @@ void THIRDEYE::Engine::playCinematic(GRAPHICS::Graphics *gfx,
 		SDL_Event event;
 		while (gfx->isVideoPlaying()) {
 			while (SDL_PollEvent(&event)) {
-				if (event.type == SDL_QUIT) {
+				if (event.type == SDL_EVENT_QUIT) {
 					gfx->stopVideo();
 					mixer.stopMusic();
 					throw QuitRequested{};
 				}
-				if (event.type == SDL_KEYDOWN &&
-				    (event.key.keysym.sym == SDLK_ESCAPE ||
-				     event.key.keysym.sym == SDLK_RETURN)) {
+				if (event.type == SDL_EVENT_KEY_DOWN &&
+				    (event.key.key == SDLK_ESCAPE ||
+				     event.key.key == SDLK_RETURN)) {
 					gfx->stopVideo();
 					mixer.stopMusic();
 				}
@@ -888,9 +890,9 @@ void THIRDEYE::Engine::handleBootWall(const VM::VmError &e,
 		SDL_Event event;
 		while (!done) {
 			while (SDL_PollEvent(&event))
-				if (event.type == SDL_QUIT ||
-				    (event.type == SDL_KEYDOWN &&
-				     event.key.keysym.sym == SDLK_ESCAPE))
+				if (event.type == SDL_EVENT_QUIT ||
+				    (event.type == SDL_EVENT_KEY_DOWN &&
+				     event.key.key == SDLK_ESCAPE))
 					done = true;
 			gfx->update();
 			SDL_Delay(16);
@@ -1037,32 +1039,18 @@ void THIRDEYE::Engine::go() {
 		while (SDL_PollEvent(&event)) {
 			switch (event.type) {
 			// this is the window x being clicked.
-			case SDL_QUIT:
+			case SDL_EVENT_QUIT:
 				done = true;
 				break;
 				// process the mouse data by passing it to ngl class
-			case SDL_MOUSEMOTION:
-				//ngl.mouseMoveEvent(event.motion);
-				//std::cout << "Mouse moved @ " <<  event.motion.x << " " << event.motion.y << std::endl;
-				break;
-			case SDL_MOUSEBUTTONDOWN:
-				break;
-			case SDL_MOUSEBUTTONUP:
-				//std::cout << "Mouse clicked @ " << event.button.x << " " << event.button.y << std::endl;
-				break;
-				//case SDL_MOUSEWHEEL : ngl.wheelEvent(event.wheel);
-				// if the window is re-sized pass it to the ngl class to change gl viewport
-				// note this is slow as the context is re-create by SDL each time
-			case SDL_WINDOWEVENT:
-				//int w, h;
-				// get the new window size
-				//SDL_GetWindowSize(window, &w, &h);
-				//ngl.resize(w,h);
+			case SDL_EVENT_MOUSE_MOTION:
+			case SDL_EVENT_MOUSE_BUTTON_DOWN:
+			case SDL_EVENT_MOUSE_BUTTON_UP:
 				break;
 
 				// now we look for a keydown event
-			case SDL_KEYDOWN: {
-				switch (event.key.keysym.sym) {
+			case SDL_EVENT_KEY_DOWN: {
+				switch (event.key.key) {
 				// if it's the escape key quit
 				case SDLK_ESCAPE:
 					if ( state == STATE_INTRO ){
@@ -1071,21 +1059,11 @@ void THIRDEYE::Engine::go() {
 					} else
 						done = true;
 					break;
-				case SDLK_w:
+				case SDLK_W:
 					mixer.playSound(snd);
 					break;
-				case SDLK_a:
-					break;
-				case SDLK_s:
+				case SDLK_S:
 					mixer.playMusic(xmidi);
-					break;
-				case SDLK_d:
-					break;
-				case SDLK_f:
-					//SDL_SetWindowFullscreen(window, SDL_TRUE);
-					break;
-				case SDLK_g:
-					//SDL_SetWindowFullscreen(window, SDL_FALSE);
 					break;
 				default:
 					break;

@@ -1,7 +1,7 @@
 #ifndef FONT_HPP
 #define FONT_HPP
 
-#include "SDL.h"
+#include <SDL3/SDL.h>
 
 #include <map>
 #include <vector>

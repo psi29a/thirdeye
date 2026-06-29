@@ -44,8 +44,7 @@ add_executable(runtests
 )
 
 target_link_libraries(runtests
-    ${SDL2_LIBRARY}
-    ${SDL2MAIN_LIBRARY}
+    SDL3::SDL3
     ${WILDMIDI_LIBRARY}
     ${OPENAL_LIBRARY}
     GTest::gtest_main   # pulls in GTest::gtest transitively
@@ -59,7 +58,7 @@ endif()
 
 # Register with CTest so `ctest --test-dir build` runs the suite. We use
 # add_test (not gtest_discover_tests) so the binary is only executed at test
-# time, not during the build -- this avoids needing the SDL2/OpenAL/WildMIDI
+# time, not during the build -- this avoids needing the SDL3/OpenAL/WildMIDI
 # runtime DLLs on PATH at build time (notably on Windows/vcpkg).
 add_test(NAME runtests COMMAND runtests)
 

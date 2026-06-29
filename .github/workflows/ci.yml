@@ -29,15 +29,15 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y cmake ninja-build build-essential libsdl2-dev libopenal-dev libwildmidi-dev
+          sudo apt-get install -y cmake ninja-build build-essential libsdl3-dev libopenal-dev libwildmidi-dev
 
       # `brew update` is the slow part (~30s on a clean macos-latest runner that
-      # already ships with a recent brew). The formulae we need (cmake/ninja/sdl2/
+      # already ships with a recent brew). The formulae we need (cmake/ninja/sdl3/
       # openal-soft/wildmidi) are stable; the preinstalled brew is fresh enough.
       - name: Install dependencies (macOS)
         if: runner.os == 'macOS'
         run: |
-          brew install cmake ninja sdl2 openal-soft wildmidi
+          brew install cmake ninja sdl3 openal-soft wildmidi
 
       # Expose the GitHub Actions cache endpoint/token to vcpkg's x-gha binary
       # source (set via VCPKG_BINARY_SOURCES above).
@@ -65,9 +65,9 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/vcpkg
-          key: vcpkg-${{ runner.os }}-v1-sdl2-openal-soft-wildmidi
+          key: vcpkg-${{ runner.os }}-v2-sdl3-openal-soft-wildmidi
           restore-keys: |
-            vcpkg-${{ runner.os }}-v1-
+            vcpkg-${{ runner.os }}-v2-
 
       # cmake, ninja and git are preinstalled on the windows-latest image, so we
       # only need vcpkg. (Installing via choco modifies the machine PATH, which
@@ -78,7 +78,7 @@ jobs:
         run: |
           git clone https://github.com/microsoft/vcpkg.git $env:USERPROFILE\vcpkg
           & "$env:USERPROFILE\vcpkg\bootstrap-vcpkg.bat"
-          & "$env:USERPROFILE\vcpkg\vcpkg.exe" install sdl2 openal-soft wildmidi --triplet x64-windows
+          & "$env:USERPROFILE\vcpkg\vcpkg.exe" install sdl3 openal-soft wildmidi --triplet x64-windows
 
       # Ensure Ninja is on PATH for later steps. (gha-setup-ninja registers it
       # via $GITHUB_PATH, which — unlike choco — propagates across steps.)
@@ -135,7 +135,7 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          # runtests.exe needs the vcpkg runtime DLLs (SDL2, OpenAL, WildMidi) on PATH.
+          # runtests.exe needs the vcpkg runtime DLLs (SDL3, OpenAL, WildMidi) on PATH.
           $env:PATH = "$env:USERPROFILE\vcpkg\installed\x64-windows\bin;$env:PATH"
           ctest --test-dir build --output-on-failure -C ${{ matrix.config }}
 
@@ -152,7 +152,7 @@ jobs:
         run: |
           $artifactDir = "artifacts"
           New-Item -ItemType Directory -Force -Path $artifactDir | Out-Null
-          # Copy the vcpkg runtime DLLs (SDL2, OpenAL32, libWildMidi, ...) next to
+          # Copy the vcpkg runtime DLLs (SDL3, OpenAL32, libWildMidi, ...) next to
           # the executables so the zipped artifact runs standalone.
           $vcpkgBin = "$env:USERPROFILE\vcpkg\installed\x64-windows\bin"
           Copy-Item -Path "$vcpkgBin\*.dll" -Destination build -Force

@@ -17,7 +17,7 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y cmake ninja-build build-essential libsdl2-dev libopenal-dev libwildmidi-dev curl
+          sudo apt-get install -y cmake ninja-build build-essential libsdl3-dev libopenal-dev libwildmidi-dev curl
 
       - name: Download Coverity Build Tool
         run: |
