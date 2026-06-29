@@ -521,17 +521,18 @@ DICTENTRYPOINTER *getResourceNameArray(FILE *aResFile,
 		free(loResult);
 		return (NULL);
 	}
+	// storeIntoDictionaryArray makeString()s both args internally; passing
+	// makeString() results here would leak the outer copies.
 	storeIntoDictionaryArray(loResult, &loBehindTheEnd,
-			makeString("Special table 0: Resource names"), makeString("0"));
+			(char*) "Special table 0: Resource names", (char*) "0");
 	storeIntoDictionaryArray(loResult, &loBehindTheEnd,
-			makeString("Special table 1 "), makeString("1"));
+			(char*) "Special table 1 ", (char*) "1");
 	storeIntoDictionaryArray(loResult, &loBehindTheEnd,
-			makeString("Special table 2 "), makeString("2"));
+			(char*) "Special table 2 ", (char*) "2");
 	storeIntoDictionaryArray(loResult, &loBehindTheEnd,
-			makeString("Special table 3: Low level functions"),
-			makeString("3"));
+			(char*) "Special table 3: Low level functions", (char*) "3");
 	storeIntoDictionaryArray(loResult, &loBehindTheEnd,
-			makeString("Special table 4: Message names"), makeString("4"));
+			(char*) "Special table 4: Message names", (char*) "4");
 
 	sortDictionaryAccordingToSecondNumber(loResult);
 	printf("The reading of the resource name array finished.\n");

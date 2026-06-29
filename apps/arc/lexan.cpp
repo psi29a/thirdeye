@@ -534,7 +534,7 @@ void LEX_fetch(LEX_class *LEX) {
 			do                                  // in 80x86 byte order
 			{
 				while ((i = hex_val[j = (UBYTE)LEX->chrnxt] - 1) != -1) {
-					if ((!is_digit[j]) && (base != 16L))
+					if ((!is_digit[(UBYTE)j]) && (base != 16L))
 						break;
 
 					if (i >= base)

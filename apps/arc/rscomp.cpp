@@ -779,9 +779,12 @@ IDR_class *IDR_construct(RS_class *RS) {
 		strcat(IDR->speclist, ":");
 		strcat(IDR->speclist, rspec);
 
-		for (i = 0; i < (WORD) strlen(rspec); i++)
-			if (rspec[i] == ',')
-				rspec[i] = 0;
+		{
+			size_t rspec_len = strlen(rspec);
+			for (size_t k = 0; k < rspec_len; k++)
+				if (rspec[k] == ',')
+					rspec[k] = 0;
+		}
 
 		IDR->fn = str_alloc(rspec);
 

@@ -193,6 +193,13 @@ int processBytecodeDefinitionLine(char *aLine) {
 				loTokens[0]);
 		return (false);
 	}
+	// loBytecodeCode is the bytecodeTable[] index later on; the table is
+	// sized MAX_BYTECODES so anything outside that range is OOB.
+	if (loBytecodeCode < 0 || loBytecodeCode >= MAX_BYTECODES) {
+		printf("Bytecode number %d out of range [0, %d)\n",
+				loBytecodeCode, MAX_BYTECODES);
+		return (false);
+	}
 	//printf("loBytecodeCode: %d\n", loBytecodeCode);
 	loNumberOfParameters = (int) strtol(loTokens[2], &loEndPtr, 10);
 	if (*loEndPtr != '\0') {
