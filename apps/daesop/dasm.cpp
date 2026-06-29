@@ -12,6 +12,7 @@
 #include <mach-o/dyld.h>
 #else
 #include <climits>
+#include <errno.h>
 #include <unistd.h>
 #endif
 
@@ -187,19 +188,22 @@ int processBytecodeDefinitionLine(char *aLine) {
 		return (false);
 	}
 
-	loBytecodeCode = (int) strtol(loTokens[0], &loEndPtr, 16);
+	// Parse the full long, then range-check, then narrow. Casting before the
+	// check would let a hex value like "100000001" wrap into a small in-range
+	// table index on platforms where long is wider than int.
+	errno = 0;
+	long loParsedCode = strtol(loTokens[0], &loEndPtr, 16);
 	if (*loEndPtr != '\0') {
 		printf("The conversion of the hexadecimal number %s failed!\n",
 				loTokens[0]);
 		return (false);
 	}
-	// loBytecodeCode is the bytecodeTable[] index later on; the table is
-	// sized MAX_BYTECODES so anything outside that range is OOB.
-	if (loBytecodeCode < 0 || loBytecodeCode >= MAX_BYTECODES) {
-		printf("Bytecode number %d out of range [0, %d)\n",
-				loBytecodeCode, MAX_BYTECODES);
+	if (errno == ERANGE || loParsedCode < 0 || loParsedCode >= MAX_BYTECODES) {
+		printf("Bytecode number %s out of range [0, %d)\n",
+				loTokens[0], MAX_BYTECODES);
 		return (false);
 	}
+	loBytecodeCode = (int) loParsedCode;
 	//printf("loBytecodeCode: %d\n", loBytecodeCode);
 	loNumberOfParameters = (int) strtol(loTokens[2], &loEndPtr, 10);
 	if (*loEndPtr != '\0') {
