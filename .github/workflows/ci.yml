@@ -19,7 +19,9 @@ jobs:
       VCPKG_BINARY_SOURCES: "clear;x-gha,readwrite"
     strategy:
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        # ubuntu-26.04: libsdl3-dev landed in 25.04 (plucky) and is in the
+        # 26.04 LTS archive; ubuntu-latest (24.04 noble) doesn't ship it.
+        os: [ubuntu-26.04, macos-latest, windows-latest]
         config: [Release]
 
     steps:

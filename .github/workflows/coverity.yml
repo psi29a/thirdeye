@@ -10,7 +10,8 @@ permissions:
 
 jobs:
   coverity:
-    runs-on: ubuntu-latest
+    # ubuntu-26.04 is the first GHA runner with libsdl3-dev in the archive.
+    runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@v4
 
