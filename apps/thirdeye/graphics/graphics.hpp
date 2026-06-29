@@ -123,8 +123,6 @@ private:
 	// menu redraw -- we must not rebuild the font each frame).
 	std::map<int, std::shared_ptr<Font>> mFontCache;
 
-	int zoomSurfaceRGBA(SDL_Surface * src, SDL_Surface * dst);
-
 	void fadeIn();
 	void fadeOut();
 

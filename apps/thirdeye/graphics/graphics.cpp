@@ -644,7 +644,8 @@ void GRAPHICS::Graphics::update() {
 
 		SDL_Surface *scaledImage = SDL_CreateSurface(width, height,
 				SDL_PIXELFORMAT_ARGB8888);
-		zoomSurfaceRGBA(mSurface[0], scaledImage);
+		SDL_BlitSurfaceScaled(mSurface[0], nullptr, scaledImage, nullptr,
+				SDL_SCALEMODE_NEAREST);
 		SDL_BlitSurface(scaledImage, NULL, mScreen, &rect);
 		SDL_DestroySurface(scaledImage);
 		if (mCounter == 100) {
@@ -740,13 +741,10 @@ void GRAPHICS::Graphics::drawTextColored(std::vector<uint8_t> &fnt,
 	}
 }
 
-/*
- * Set the hardware cursor with a specified bitmap.
- * Warning: Possible bug in SDL2, as we cannot use 8-bit RGB image.
- * We create first a 32 ARGB8888 canvas that we paint our cursor onto,
- * then we use that canvas as our hardware cursor. Otherwise we get a
- * blank image.
- */
+// SDL_CreateColorCursor wants an ARGB surface (it uses the alpha channel
+// as the transparency mask), so we paint the indexed source onto a 32 bpp
+// ARGB canvas first, then nearest-neighbour scale it to the desired cursor
+// size for the current --scale.
 void GRAPHICS::Graphics::loadMouse(std::vector<uint8_t> &bitmap,
 		uint16_t index) {
 	Bitmap image(bitmap);
@@ -773,7 +771,7 @@ void GRAPHICS::Graphics::loadMouse(std::vector<uint8_t> &bitmap,
 			image.getHeight(index), SDL_PIXELFORMAT_ARGB8888);
 	SDL_BlitSurface(cImage, NULL, cImage32, NULL);
 
-	zoomSurfaceRGBA(cImage32, cursor);
+	SDL_BlitSurfaceScaled(cImage32, nullptr, cursor, nullptr, SDL_SCALEMODE_NEAREST);
 
 	SDL_SetSurfaceColorKey(cursor, true, SDL_MapSurfaceRGB(cursor, 0, 0, 0));
 
@@ -1064,135 +1062,3 @@ void GRAPHICS::Graphics::mouseToLogical(int wx, int wy, int &lx, int &ly) const 
 		          << "," << ly << ")" << std::endl;
 }
 
-/*!
- \brief Stripped down SDL2_gfx zoom function, if we need more we'll
- just use the library instead.
-
- Zooms 32 bit RGBA/ABGR 'src' surface to 'dst' surface.
- Assumes src and dst surfaces are of 32 bit depth.
- Assumes dst surface was allocated with the correct dimensions.
-
- \param src The surface to zoom (input).
- \param dst The zoomed surface (output).
-
- \return 0 for success or -1 for error.
- */
-int GRAPHICS::Graphics::zoomSurfaceRGBA(SDL_Surface * src, SDL_Surface * dst) {
-	/*!
-	 \brief A 32 bit RGBA pixel.
-	 */
-	typedef struct tColorRGBA {
-		Uint8 r;
-		Uint8 g;
-		Uint8 b;
-		Uint8 a;
-	} tColorRGBA;
-
-	int x, y, sx, sy, ssx, ssy, *sax, *say, *csax, *csay, *salast, csx, csy,
-			sstep, spixelgap, dgap;
-	tColorRGBA *sp, *csp, *dp;
-
-	/*
-	 * Allocate memory for row/column increments
-	 */
-	if ((sax = (int *) malloc((dst->w + 1) * sizeof(Uint32))) == NULL) {
-		return (-1);
-	}
-	if ((say = (int *) malloc((dst->h + 1) * sizeof(Uint32))) == NULL) {
-		free(sax);
-		return (-1);
-	}
-
-	/*
-	 * Precalculate row increments
-	 */
-
-	sx = (int) (65536.0 * (float) (src->w) / (float) (dst->w));
-	sy = (int) (65536.0 * (float) (src->h) / (float) (dst->h));
-
-	/* Maximum scaled source size */
-	ssx = (src->w << 16) - 1;
-	ssy = (src->h << 16) - 1;
-
-	/* Precalculate horizontal row increments */
-	csx = 0;
-	csax = sax;
-	for (x = 0; x <= dst->w; x++) {
-		*csax = csx;
-		csax++;
-		csx += sx;
-
-		/* Guard from overflows */
-		if (csx > ssx) {
-			csx = ssx;
-		}
-	}
-
-	/* Precalculate vertical row increments */
-	csy = 0;
-	csay = say;
-	for (y = 0; y <= dst->h; y++) {
-		*csay = csy;
-		csay++;
-		csy += sy;
-
-		/* Guard from overflows */
-		if (csy > ssy) {
-			csy = ssy;
-		}
-	}
-
-	sp = (tColorRGBA *) src->pixels;
-	dp = (tColorRGBA *) dst->pixels;
-	dgap = dst->pitch - dst->w * 4;
-	spixelgap = src->pitch / 4;
-
-	/*
-	 * Non-Interpolating Zoom
-	 */
-	csay = say;
-	for (y = 0; y < dst->h; y++) {
-		csp = sp;
-		csax = sax;
-		for (x = 0; x < dst->w; x++) {
-			/*
-			 * Draw
-			 */
-			*dp = *sp;
-
-			/*
-			 * Advance source pointer x
-			 */
-			salast = csax;
-			csax++;
-			sstep = (*csax >> 16) - (*salast >> 16);
-			sp += sstep;
-
-			/*
-			 * Advance destination pointer x
-			 */
-			dp++;
-		}
-		/*
-		 * Advance source pointer y
-		 */
-		salast = csay;
-		csay++;
-		sstep = (*csay >> 16) - (*salast >> 16);
-		sstep *= spixelgap;
-		sp = csp + sstep;
-
-		/*
-		 * Advance destination pointer y
-		 */
-		dp = (tColorRGBA *) ((Uint8 *) dp + dgap);
-	}
-
-	/*
-	 * Remove temp arrays
-	 */
-	free(sax);
-	free(say);
-
-	return (0);
-}
