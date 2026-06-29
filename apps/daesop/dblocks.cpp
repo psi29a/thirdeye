@@ -80,7 +80,7 @@ FILE* openAESOPResourceAndSetToFirstDirectoryBlock(char *aResName,
 			aMode);
 
 	// set the pointer to the beginning of the file
-	fseek(loResFile, 0, SEEK_SET);
+	(void) fseek(loResFile, 0, SEEK_SET);
 
 	loHeaderSize = sizeof(struct RESGlobalHeader);
 	loReadSize = static_cast<int>(fread(aHeaderPointer, 1, loHeaderSize, loResFile));
@@ -100,7 +100,11 @@ FILE* openAESOPResourceAndSetToFirstDirectoryBlock(char *aResName,
 		return (NULL);
 	}
 
-	fseek(loResFile, 0, SEEK_END);
+	if (fseek(loResFile, 0, SEEK_END) != 0) {
+		printf("Failed to seek to the end of the resource file!\n");
+		fclose(loResFile);
+		return (NULL);
+	}
 	loLength = ftell(loResFile);
 	if (loLength != aHeaderPointer->file_size) {
 		printf(
@@ -109,8 +113,13 @@ FILE* openAESOPResourceAndSetToFirstDirectoryBlock(char *aResName,
 		fclose(loResFile);
 		return (NULL);
 	}
-	// set the pointer on the first directory block
-	fseek(loResFile, aHeaderPointer->first_directory_block, SEEK_SET);
+	// set the pointer on the first directory block; if this fails callers
+	// would parse from EOF instead.
+	if (fseek(loResFile, aHeaderPointer->first_directory_block, SEEK_SET) != 0) {
+		printf("Failed to seek to the first directory block!\n");
+		fclose(loResFile);
+		return (NULL);
+	}
 	return (loResFile);
 
 }

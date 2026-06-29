@@ -43,7 +43,7 @@ bool tryHandle(Context &ctx, const std::string &fn,
 	// instead of falling through to the following CASE branch.
 	if (fn == "launch") {
 		std::string program;
-		for (VM::Value a : args) {
+		for (const VM::Value &a : args) {
 			std::string s = ctx.vm.readCodeString(static_cast<uint32_t>(a));
 			if (!s.empty()) { program = s; break; }
 		}

@@ -315,9 +315,8 @@ bool tryHandle(Context &ctx, const std::string &fn,
 		constexpr size_t kItemStreamOff = kPcRecordBase + kMaxRecords * kPcStride;
 
 		// PC class statics offsets (mirror items_tmp.cpp).
-		constexpr uint16_t kKernelClass = 1382, kPcClass = 1369;
+		constexpr uint16_t kPcClass = 1369;
 		constexpr uint16_t kItemsBase = 1371; // every item subclasses 1371
-		constexpr uint32_t kPartyPosOff = 243; // x, y, fdir, lvl (4 bytes)
 		constexpr uint32_t kPcNumOff    = 0;   // W:num (party slot)
 		constexpr uint32_t kPcInvOff    = 81;  // W:inventory[26]
 		constexpr uint32_t kPcQuiverOff = 133, kPcArrowsOff = 135;

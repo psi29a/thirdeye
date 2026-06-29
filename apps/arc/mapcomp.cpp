@@ -179,6 +179,14 @@ void MAP_compile(MAP_class *MAP) {
 	width = ((*(UBYTE *) prop) * 256) + (*(UBYTE *) (prop + 1));
 	height = ((*(UBYTE *) (prop + 2)) * 256) + (*(UBYTE *) (prop + 3));
 
+	// width/height come straight from the LBM header. A zero width would
+	// mem_alloc(0) and any x >= width would walk off buffer; reject.
+	if (width == 0 || height == 0) {
+		MAP_error(MAP->IDR->RS, MSG_BFT, NULL);
+		mem_free(file);
+		return;
+	}
+
 	body = (UBYTE*) IFF_property("BODY", file, flen);
 	if (body == NULL) {
 		MAP_error(MAP->IDR->RS, MSG_BFT, NULL);
@@ -193,6 +201,14 @@ void MAP_compile(MAP_class *MAP) {
 
 	sx = MAP->parms[MSP_XSIZE];
 	sy = MAP->parms[MSP_YSIZE];
+
+	// Sample positions ox + i*dx, oy + j*dy must stay inside the LBM extents.
+	if ((sx && ((ULONG) ox + ((ULONG) sx - 1U) * (ULONG) dx >= width)) ||
+	    (sy && ((ULONG) oy + ((ULONG) sy - 1U) * (ULONG) dy >= height))) {
+		MAP_error(MAP->IDR->RS, MSG_BFT, NULL);
+		mem_free(file);
+		return;
+	}
 
 	buffer = (UBYTE*) mem_alloc(width);
 	map = (UBYTE*) mem_alloc(sx * sy);

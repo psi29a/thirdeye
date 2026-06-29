@@ -32,20 +32,20 @@ class DataSource
 public:
 	DataSource() {};
 	virtual ~DataSource() {};
-	
+
 	virtual unsigned int read1() =0;
 	virtual unsigned int read2() =0;
 	virtual unsigned int read2high() =0;
 	virtual unsigned int read4() =0;
 	virtual unsigned int read4high() =0;
 	virtual void read(char *, int) =0;
-	
+
 	virtual void write1(unsigned int) =0;
 	virtual void write2(unsigned int) =0;
 	virtual void write2high(unsigned int) =0;
 	virtual void write4(unsigned int) =0;
 	virtual void write4high(unsigned int) =0;
-	
+
 	virtual void seek(unsigned int) =0;
 	virtual void skip(int) =0;
 	virtual unsigned int getSize() =0;
@@ -57,114 +57,131 @@ class FileDataSource: public DataSource
 {
 private:
 	FILE *f;
+
+	// fgetc returns int; -1 (EOF) becomes 0xff after a byte cast and silently
+	// corrupts the parsed value. Treat EOF as 0 so callers see a clean zero
+	// instead of a sentinel that looks like a real byte.
+	unsigned int getbyte()
+	{
+		int c = fgetc(f);
+		return (c == EOF) ? 0u : (unsigned int)(c & 0xff);
+	}
 public:
 	FileDataSource(FILE *fp)
 	{
 		f = fp;
 	};
-	
+
 	virtual ~FileDataSource() {};
-	
-	virtual unsigned int read1() 
-	{ 
-		unsigned char b0;
-		b0 = fgetc(f);
-		return (b0);
+
+	virtual unsigned int read1()
+	{
+		return getbyte();
 	};
-	
+
 	virtual unsigned int read2()
 	{
-		unsigned char b0, b1;
-		b0 = fgetc(f);
-		b1 = fgetc(f);
+		unsigned int b0 = getbyte();
+		unsigned int b1 = getbyte();
 		return (b0 + (b1 << 8));
 	};
-	
+
 	virtual unsigned int read2high()
 	{
-		unsigned char b0, b1;
-		b1 = fgetc(f);
-		b0 = fgetc(f);
+		unsigned int b1 = getbyte();
+		unsigned int b0 = getbyte();
 		return (b0 + (b1 << 8));
 	};
-	
+
 	virtual unsigned int read4()
 	{
-		unsigned char b0, b1, b2, b3;
-		b0 = fgetc(f);
-		b1 = fgetc(f);
-		b2 = fgetc(f);
-		b3 = fgetc(f);
+		unsigned int b0 = getbyte();
+		unsigned int b1 = getbyte();
+		unsigned int b2 = getbyte();
+		unsigned int b3 = getbyte();
 		return (b0 + (b1<<8) + (b2<<16) + (b3<<24));
 	};
-	
+
 	virtual unsigned int read4high()
 	{
-		unsigned char b0, b1, b2, b3;
-		b3 = fgetc(f);
-		b2 = fgetc(f);
-		b1 = fgetc(f);
-		b0 = fgetc(f);
+		unsigned int b3 = getbyte();
+		unsigned int b2 = getbyte();
+		unsigned int b1 = getbyte();
+		unsigned int b0 = getbyte();
 		return (b0 + (b1<<8) + (b2<<16) + (b3<<24));
 	};
-	
+
 	void read(char *b, int len) {
-		size_t bytesRead = fread(b, 1, len, f);
+		if (len <= 0) return;
+		size_t bytesRead = fread(b, 1, (size_t) len, f);
 		if (bytesRead < (size_t) len) {
 			// zero-fill the remainder on a short read
-			memset(b + bytesRead, 0, len - bytesRead);
+			memset(b + bytesRead, 0, (size_t) len - bytesRead);
 		}
 	};
-	
+
 	virtual void write1(unsigned int val)
 	{
-		fputc((char) (val&0xff),f);
+		fputc((int)(val&0xff),f);
 	};
-	
+
 	virtual void write2(unsigned int val)
 	{
-		fputc((char) (val&0xff),f);
-		fputc((char) ((val>>8)&0xff),f);
+		fputc((int)(val&0xff),f);
+		fputc((int)((val>>8)&0xff),f);
 	};
-	
+
 	virtual void write2high(unsigned int val)
 	{
-		fputc((char) ((val>>8)&0xff),f);
-		fputc((char) (val&0xff),f);
+		fputc((int)((val>>8)&0xff),f);
+		fputc((int)(val&0xff),f);
 	};
-	
+
 	virtual void write4(unsigned int val)
 	{
-		fputc((char) (val&0xff),f);
-		fputc((char) ((val>>8)&0xff),f);
-		fputc((char) ((val>>16)&0xff),f);
-		fputc((char) ((val>>24)&0xff),f);
+		fputc((int)(val&0xff),f);
+		fputc((int)((val>>8)&0xff),f);
+		fputc((int)((val>>16)&0xff),f);
+		fputc((int)((val>>24)&0xff),f);
 	};
 
 	virtual void write4high(unsigned int val)
 	{
-		fputc((char) ((val>>24)&0xff),f);
-		fputc((char) ((val>>16)&0xff),f);
-		fputc((char) ((val>>8)&0xff),f);
-		fputc((char) (val&0xff),f);
+		fputc((int)((val>>24)&0xff),f);
+		fputc((int)((val>>16)&0xff),f);
+		fputc((int)((val>>8)&0xff),f);
+		fputc((int)(val&0xff),f);
 	};
-	
-	virtual void seek(unsigned int pos) { fseek(f, pos, SEEK_SET); };
-	
-	virtual void skip(int pos) { fseek(f, pos, SEEK_CUR); };
-	
+
+	virtual void seek(unsigned int pos) {
+		if (fseek(f, (long)pos, SEEK_SET) != 0) {
+			// best-effort; caller has no recovery
+		}
+	};
+
+	virtual void skip(int pos) {
+		if (fseek(f, pos, SEEK_CUR) != 0) {
+			// best-effort
+		}
+	};
+
 	virtual unsigned int getSize()
 	{
 		long pos = ftell(f);
-		fseek(f, 0, SEEK_END);
+		if (pos < 0) return 0u;
+		if (fseek(f, 0, SEEK_END) != 0) return 0u;
 		long len = ftell(f);
-		fseek(f, pos, SEEK_SET);
-		return (len);
+		if (len < 0) len = 0;
+		if (fseek(f, pos, SEEK_SET) != 0) {
+			// best-effort
+		}
+		return (unsigned int)len;
 	};
-	
+
 	virtual unsigned int getPos()
 	{
-		return (ftell(f));
+		long p = ftell(f);
+		return (p < 0) ? 0u : (unsigned int)p;
 	};
 };
 
@@ -179,16 +196,16 @@ public:
 		buf = buf_ptr = (unsigned char*)data;
 		size = len;
 	};
-	
+
 	virtual ~BufferDataSource() {};
-	
-	virtual unsigned int read1() 
-	{ 
+
+	virtual unsigned int read1()
+	{
 		unsigned char b0;
 		b0 = (unsigned char)*buf_ptr++;
 		return (b0);
 	};
-	
+
 	virtual unsigned int read2()
 	{
 		unsigned char b0, b1;
@@ -196,7 +213,7 @@ public:
 		b1 = (unsigned char)*buf_ptr++;
 		return (b0 + (b1 << 8));
 	};
-	
+
 	virtual unsigned int read2high()
 	{
 		unsigned char b0, b1;
@@ -204,7 +221,7 @@ public:
 		b0 = (unsigned char)*buf_ptr++;
 		return (b0 + (b1 << 8));
 	};
-	
+
 	virtual unsigned int read4()
 	{
 		unsigned char b0, b1, b2, b3;
@@ -214,7 +231,7 @@ public:
 		b3 = (unsigned char)*buf_ptr++;
 		return (b0 + (b1<<8) + (b2<<16) + (b3<<24));
 	};
-	
+
 	virtual unsigned int read4high()
 	{
 		unsigned char b0, b1, b2, b3;
@@ -224,17 +241,17 @@ public:
 		b0 = (unsigned char)*buf_ptr++;
 		return (b0 + (b1<<8) + (b2<<16) + (b3<<24));
 	};
-	
+
 	void read(char *b, int len) {
 		memcpy(b, buf_ptr, len);
 		buf_ptr += len;
 	};
-	
+
 	virtual void write1(unsigned int val)
 	{
 		*buf_ptr++ = val & 0xff;
 	};
-	
+
 	virtual void write2(unsigned int val)
 	{
 		*buf_ptr++ = val & 0xff;
@@ -247,7 +264,7 @@ public:
 		*buf_ptr++ = val & 0xff;
 	};
 
-	
+
 	virtual void write4(unsigned int val)
 	{
 		*buf_ptr++ = val & 0xff;
@@ -255,7 +272,7 @@ public:
 		*buf_ptr++ = (val>>16)&0xff;
 		*buf_ptr++ = (val>>24)&0xff;
 	};
-	
+
 	virtual void write4high(unsigned int val)
 	{
 		*buf_ptr++ = (val>>24)&0xff;
@@ -263,15 +280,15 @@ public:
 		*buf_ptr++ = (val>>8) & 0xff;
 		*buf_ptr++ = val & 0xff;
 	};
-	
+
 	virtual void seek(unsigned int pos) { buf_ptr = buf+pos; };
-	
+
 	virtual void skip(int pos) { buf_ptr += pos; };
-	
+
 	virtual unsigned int getSize() { return (size); };
-	
+
 	virtual unsigned int getPos() { return (buf_ptr-buf); };
-	
+
 	unsigned char *getPtr() { return (buf_ptr); };
 };
 

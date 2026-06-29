@@ -8,7 +8,7 @@
 #include "vm/events.hpp"
 #include "savegame/transfer.hpp"
 #include "savegame/lvl_tmp.hpp"
-#include "chargen/chargen_screen.hpp"
+#include "chargen/screen.hpp"
 #include "runtime/internal.hpp"
 
 #include <components/files/configurationmanager.hpp>

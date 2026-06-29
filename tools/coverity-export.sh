@@ -12,11 +12,12 @@
 #        - the projectId and viewId from the request URL (the SPA hash route
 #          /#/project-view/A/B contains both but the order isn't obvious)
 #   3. Export as env vars:
-#        export COVERITY_HOST=scan7.scan.coverity.com   # optional, default scan4.coverity.com
-#        export COVERITY_SESSION_ID=...
-#        export COVERITY_PROJECT_ID=...
-#        export COVERITY_VIEW_ID=...
-#      Consider stashing these in a gitignored .envrc or your password manager.
+#        export COVERITY_SESSION_ID=...     # required
+#        export COVERITY_XSRF_TOKEN=...     # required
+#        export COVERITY_HOST=...           # optional, default scan7.scan.coverity.com
+#        export COVERITY_PROJECT_ID=...     # optional, default 10380 (thirdeye)
+#        export COVERITY_VIEW_ID=...        # optional, default 13513 (All Open)
+#      Consider stashing the session/XSRF in a gitignored .envrc or password manager.
 #
 # Usage:
 #   tools/coverity-export.sh           # raw JSON to stdout
@@ -30,8 +31,14 @@ set -euo pipefail
 
 : "${COVERITY_SESSION_ID:?set COVERITY_SESSION_ID (browser cookie COVJSESSIONID-build)}"
 : "${COVERITY_XSRF_TOKEN:?set COVERITY_XSRF_TOKEN (browser cookie XSRF-TOKEN)}"
-: "${COVERITY_PROJECT_ID:?set COVERITY_PROJECT_ID (numeric, from /#/project-view/A/B URL)}"
-: "${COVERITY_VIEW_ID:?set COVERITY_VIEW_ID (numeric, from /#/project-view/A/B URL)}"
+# URL pattern is /#/project-view/{viewId}/{projectId} -- the second number is
+# stable across views and is the project id.
+#
+# Note: not every view id from the SPA URL works via this REST endpoint. The
+# default below ("All Outstanding Defects" or equivalent system view) is known
+# to return JSON. Custom/dashboard views may give "Cant find view with id".
+: "${COVERITY_PROJECT_ID:=10380}"
+: "${COVERITY_VIEW_ID:=13513}"
 
 host="${COVERITY_HOST:-scan7.scan.coverity.com}"
 cookie_name="${COVERITY_COOKIE_NAME:-COVJSESSIONID-build}"

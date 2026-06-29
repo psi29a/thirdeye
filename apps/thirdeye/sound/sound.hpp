@@ -70,10 +70,10 @@ Sources() {
 
 class Mixer {
 private:
-	const ALCchar *defaultDeviceName;
-	ALCdevice *device;
-	ALCcontext *context;
-	bool mt32;
+	const ALCchar *defaultDeviceName = nullptr;
+	ALCdevice *device = nullptr;
+	ALCcontext *context = nullptr;
+	bool mt32 = false;
 	std::map<ALuint, Sources> mSources;
 	std::vector<std::string> enumerate();
 public:

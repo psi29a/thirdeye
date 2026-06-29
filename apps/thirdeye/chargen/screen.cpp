@@ -1,4 +1,4 @@
-#include "chargen_screen.hpp"
+#include "screen.hpp"
 
 #include "../graphics/graphics.hpp"
 #include "../graphics/bitmap.hpp"
@@ -871,7 +871,7 @@ void render(GRAPHICS::Graphics &gfx,
 		// the leftmost visible cell holds the cursor portrait.
 		int total = static_cast<int>(GRAPHICS::Bitmap(picBytes).getNumberOfBitmaps());
 		int strip0 = state.portraitCursor;
-		auto picCopy = picBytes;
+		// picCopy is already in scope from the outer slot-portrait block.
 		// Draw 4 visible portraits (wrap if past the end).
 		for (int i = 0; i < kPortraitVisible; ++i) {
 			int idx = (strip0 + i) % total;

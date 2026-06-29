@@ -146,7 +146,8 @@ int processBytecodeDefinitionLine(char *aLine) {
 	BYTECODEPOINTER loBytecodeEntryPointer;
 	int loEntryNumber;
 
-	strncpy(loLine, aLine, 256 - 1);
+	strncpy(loLine, aLine, sizeof(loLine) - 1);
+	loLine[sizeof(loLine) - 1] = '\0';
 	// set all tokens to NULL
 	for (i = 0; i < MAX_TOKENS; i++) {
 		loTokens[i] = NULL;
@@ -1879,6 +1880,7 @@ void writeInfoAboutReferredResourceIfAvailable(long aParameterValue,
 	if (aResourcesInfoTable == NULL) {
 		printf(
 				"writeInfoAboutReferredResourceIfAvailable(...): aResourcesInfoTable is NULL!\n");
+		return;
 	}
 	if (aParameterValue < NUMBER_OF_SPECIAL_TABLES) {
 		// a special AESOP table cannot be ever referred in the bytecode

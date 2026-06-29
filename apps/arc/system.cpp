@@ -175,6 +175,8 @@ void *mem_alloc(ULONG bytes) {
 	if (ptr == NULL) {
 		system_err = OUT_OF_MEMORY;
 		report(E_FATAL, NULL, MSG_OOM);
+		abend();  // report(E_FATAL,...) already aborts; keep this so the
+		          // analyzer sees an unconditional terminator on the NULL path.
 	}
 
 	checksum ^= (ULONG) *ptr;
@@ -265,7 +267,7 @@ LONG file_size(BYTE *filename) {
 
 /*************************************************************/
 ULONG *read_file(BYTE *filename) {
-	WORD i;
+	size_t i;
 	FILE *handle;
 	ULONG len;
 	ULONG *buf, *mem;
@@ -304,8 +306,8 @@ ULONG *read_file(BYTE *filename) {
 		buf = (ULONG*) add_ptr(buf, 4096L);
 	}
 
-	i = fread(buf, 1, (UWORD) len, handle);
-	if (i != (UWORD) len) {
+	i = fread(buf, 1, len, handle);
+	if (i != len) {
 		mem_free(mem);
 		fclose(handle);
 		system_err = CANT_READ_FILE;
@@ -490,19 +492,31 @@ WORD verify_file(BYTE *filename) {
 void *IFF_property(BYTE *name, UBYTE *file, LONG flen) {
 	LONG len;
 
+	if (flen < 12) return (NULL);
 	file += 12;
+	flen -= 12;
 
 	do {
-		while (*file == 0) {
+		while (flen > 0 && *file == 0) {
 			file++;
 			flen--;
 		}
 
-		if (!strncasecmp((BYTE *) file, name, 4))
-			return (file + 8);
+		if (flen < 8)
+			return (NULL);
 
 		len = ((((ULONG) *(file + 4)) << 24) | (((ULONG) *(file + 5)) << 16)
 				| (((ULONG) *(file + 6)) << 8) | (((ULONG) *(file + 7)))) + 8;
+
+		// Chunk length comes from the IFF file; guard the advance so a
+		// corrupt header can't underflow flen and turn this into an unbounded
+		// loop. Validate the chunk fits BEFORE handing its payload back, so a
+		// truncated BMHD/BODY doesn't reach callers.
+		if (len <= 0 || len > flen)
+			return (NULL);
+
+		if (!strncasecmp((BYTE *) file, name, 4))
+			return (file + 8);
 
 		file += len;
 		flen -= len;
