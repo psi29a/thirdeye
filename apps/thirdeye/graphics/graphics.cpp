@@ -642,12 +642,17 @@ void GRAPHICS::Graphics::update() {
 		uint8_t y = static_cast<float>(mScreen->h) / 2 - percentage * static_cast<float>(mScreen->h) / 2;
 		SDL_Rect rect = { x, y, width, height };
 
-		SDL_Surface *scaledImage = SDL_CreateSurface(width, height,
-				SDL_PIXELFORMAT_ARGB8888);
-		SDL_BlitSurfaceScaled(mSurface[0], nullptr, scaledImage, nullptr,
-				SDL_SCALEMODE_NEAREST);
-		SDL_BlitSurface(scaledImage, NULL, mScreen, &rect);
-		SDL_DestroySurface(scaledImage);
+		// mCounter starts at 0, which would produce a 0x0 source -- SDL3
+		// refuses to create it and the blit becomes a null deref. Skip the
+		// first frame so the zoom starts at the first non-degenerate step.
+		if (width > 0 && height > 0) {
+			SDL_Surface *scaledImage = SDL_CreateSurface(width, height,
+					SDL_PIXELFORMAT_ARGB8888);
+			SDL_BlitSurfaceScaled(mSurface[0], nullptr, scaledImage, nullptr,
+					SDL_SCALEMODE_NEAREST);
+			SDL_BlitSurface(scaledImage, NULL, mScreen, &rect);
+			SDL_DestroySurface(scaledImage);
+		}
 		if (mCounter == 100) {
 			mState = NOOP;
 			SDL_DestroySurface(mSurface[0]);
@@ -775,9 +780,12 @@ void GRAPHICS::Graphics::loadMouse(std::vector<uint8_t> &bitmap,
 
 	SDL_SetSurfaceColorKey(cursor, true, SDL_MapSurfaceRGB(cursor, 0, 0, 0));
 
-	mCursor = SDL_CreateColorCursor(cursor, 0, 0);
-
-	SDL_SetCursor(mCursor);
+	// loadMouse is called every time the SOP swaps the cursor sprite; free
+	// the previous one (SDL doesn't take ownership through SDL_SetCursor).
+	SDL_Cursor *next = SDL_CreateColorCursor(cursor, 0, 0);
+	SDL_SetCursor(next);
+	if (mCursor != nullptr) SDL_DestroyCursor(mCursor);
+	mCursor = next;
 
 	SDL_DestroySurface(cursor);
 	SDL_DestroySurface(cImage);

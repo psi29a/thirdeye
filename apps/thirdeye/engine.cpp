@@ -227,14 +227,19 @@ void THIRDEYE::runtime::pumpHost(GRAPHICS::Graphics &gfx, VM::EventSystem &event
 		}
 		case SDL_EVENT_MOUSE_BUTTON_DOWN:
 		case SDL_EVENT_MOUSE_BUTTON_UP: {
-			// Keep the mouse position current, then raise the button edge.
+			// Drive click state from the event edge, not SDL_GetMouseState():
+			// EventSystem::mouseButton() only reacts to transitions, and a
+			// snapshot can miss a queued press/release pair when several
+			// events arrive in the same pump.
+			static bool leftDown = false, rightDown = false;
+			bool down = (ev.type == SDL_EVENT_MOUSE_BUTTON_DOWN);
+			if (ev.button.button == SDL_BUTTON_LEFT)  leftDown = down;
+			else if (ev.button.button == SDL_BUTTON_RIGHT) rightDown = down;
 			int lx, ly;
 			gfx.mouseToLogical(static_cast<int>(ev.button.x),
 			                   static_cast<int>(ev.button.y), lx, ly);
 			events.mouseMove(lx, ly);
-			SDL_MouseButtonFlags b = SDL_GetMouseState(nullptr, nullptr);
-			events.mouseButton(b & SDL_BUTTON_MASK(SDL_BUTTON_LEFT),
-			                   b & SDL_BUTTON_MASK(SDL_BUTTON_RIGHT));
+			events.mouseButton(leftDown, rightDown);
 			break;
 		}
 		default:
