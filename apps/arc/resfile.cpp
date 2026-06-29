@@ -39,6 +39,18 @@
 #include "resource.hpp"
 #include "arcmsg.hpp"
 
+// Seek the resource file with a fatal-bail on failure. Wrong offsets here
+// would silently corrupt the archive, so we treat -1 like r_read/r_write
+// treat a short transfer: report and abend.
+static long rf_seek(WORD fd, long off, int whence) {
+	long r = lseek(fd, off, whence);
+	if (r == (long) -1L) {
+		report(E_FATAL, NULL, (BYTE*) MSG_RCR);
+		abend();
+	}
+	return r;
+}
+
 /***************************************************/
 //
 // Create resource file manager class instance
@@ -103,7 +115,7 @@ RF_class *RF_construct(BYTE *filename, WORD compacting) {
 		link = (OD_link*) mem_alloc(sizeof(OD_link));
 
 		link->touched = 0;
-		link->origin = lseek(RF->file, next, SEEK_SET);
+		link->origin = rf_seek(RF->file, next, SEEK_SET);
 		r_read(RF->file, &link->blk, sizeof(OD_block));
 
 		next = link->blk.next;
@@ -129,14 +141,14 @@ void RF_destroy(RF_class *RF, WORD compact_threshold) {
 	BYTE *RF_filename, *temp_fn;
 
 	if (RF->touched) {
-		(void) lseek(RF->file, 0L, SEEK_SET);
+		(void) rf_seek(RF->file, 0L, SEEK_SET);
 		r_write(RF->file, &RF->hdr, sizeof(RF_file_hdr));
 	}
 
 	link = RF->root;
 	while (link != NULL) {
 		if (link->touched) {
-			(void) lseek(RF->file, link->origin, SEEK_SET);
+			(void) rf_seek(RF->file, link->origin, SEEK_SET);
 			r_write(RF->file, &link->blk, sizeof(OD_block));
 		}
 
@@ -287,7 +299,7 @@ ULONG RF_new_entry(RF_class *RF, void *source, RF_entry_hdr *RHDR, UWORD type) {
 			newlink->blk.index[i] = 0;
 		}
 
-		newlink->origin = lseek(RF->file, 0L, SEEK_END);  // origin captured deliberately
+		newlink->origin = rf_seek(RF->file, 0L, SEEK_END);
 		r_write(RF->file, &newlink->blk, sizeof(OD_block));
 		RF->hdr.file_size += sizeof(OD_block);
 		RF->touched = 1;
@@ -346,7 +358,7 @@ ULONG RF_write_entry(RF_class *RF, ULONG entry, void *source,
 		RHDR->timestamp = RF->hdr.modify_time = current_time();
 	}
 
-	(void) lseek(RF->file, link->blk.index[i], SEEK_SET);
+	(void) rf_seek(RF->file, link->blk.index[i], SEEK_SET);
 
 	if (link->blk.index[i] == RF->hdr.file_size) {
 		RF->hdr.file_size += (sizeof(RF_entry_hdr) + RHDR->data_size);
@@ -359,11 +371,11 @@ ULONG RF_write_entry(RF_class *RF, ULONG entry, void *source,
 		RF->hdr.lost_space += (cur.data_size + sizeof(RF_entry_hdr));
 		link->blk.index[i] = RF->hdr.file_size;
 		link->touched = 1;
-		(void) lseek(RF->file, 0L, SEEK_END);
+		(void) rf_seek(RF->file, 0L, SEEK_END);
 		RF->hdr.file_size += (sizeof(RF_entry_hdr) + RHDR->data_size);
 	} else {
 		RF->hdr.lost_space += (cur.data_size - RHDR->data_size);
-		(void) lseek(RF->file, link->blk.index[i], SEEK_SET);
+		(void) rf_seek(RF->file, link->blk.index[i], SEEK_SET);
 	}
 
 	return (RES_store_resource(RF, entry, source, RHDR, type));
@@ -396,7 +408,7 @@ void RF_delete_entry(RF_class *RF, ULONG entry) {
 	if (link->blk.flags[i] & (SA_UNUSED | SA_DELETED))
 		return;
 
-	(void) lseek(RF->file, link->blk.index[i], SEEK_SET);
+	(void) rf_seek(RF->file, link->blk.index[i], SEEK_SET);
 	r_read(RF->file, &RHDR, sizeof(RF_entry_hdr));
 
 	link->blk.flags[i] |= SA_DELETED;
@@ -407,7 +419,7 @@ void RF_delete_entry(RF_class *RF, ULONG entry) {
 
 	RHDR.data_size = 0L;
 
-	(void) lseek(RF->file, link->blk.index[i], SEEK_SET);
+	(void) rf_seek(RF->file, link->blk.index[i], SEEK_SET);
 	r_write(RF->file, &RHDR, sizeof(RF_entry_hdr));
 }
 
@@ -435,7 +447,7 @@ RF_entry_hdr *RF_header(RF_class *RF, ULONG entry) {
 	if (link->blk.flags[i] & SA_UNUSED)
 		return (NULL);
 
-	(void) lseek(RF->file, link->blk.index[i], SEEK_SET);
+	(void) rf_seek(RF->file, link->blk.index[i], SEEK_SET);
 	r_read(RF->file, &RHDR, sizeof(RF_entry_hdr));
 
 	return (&RHDR);

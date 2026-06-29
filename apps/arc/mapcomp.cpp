@@ -202,6 +202,14 @@ void MAP_compile(MAP_class *MAP) {
 	sx = MAP->parms[MSP_XSIZE];
 	sy = MAP->parms[MSP_YSIZE];
 
+	// Sample positions ox + i*dx, oy + j*dy must stay inside the LBM extents.
+	if ((sx && ((ULONG) ox + ((ULONG) sx - 1U) * (ULONG) dx >= width)) ||
+	    (sy && ((ULONG) oy + ((ULONG) sy - 1U) * (ULONG) dy >= height))) {
+		MAP_error(MAP->IDR->RS, MSG_BFT, NULL);
+		mem_free(file);
+		return;
+	}
+
 	buffer = (UBYTE*) mem_alloc(width);
 	map = (UBYTE*) mem_alloc(sx * sy);
 

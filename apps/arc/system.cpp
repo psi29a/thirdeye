@@ -505,17 +505,18 @@ void *IFF_property(BYTE *name, UBYTE *file, LONG flen) {
 		if (flen < 8)
 			return (NULL);
 
-		if (!strncasecmp((BYTE *) file, name, 4))
-			return (file + 8);
-
 		len = ((((ULONG) *(file + 4)) << 24) | (((ULONG) *(file + 5)) << 16)
 				| (((ULONG) *(file + 6)) << 8) | (((ULONG) *(file + 7)))) + 8;
 
 		// Chunk length comes from the IFF file; guard the advance so a
 		// corrupt header can't underflow flen and turn this into an unbounded
-		// loop.
+		// loop. Validate the chunk fits BEFORE handing its payload back, so a
+		// truncated BMHD/BODY doesn't reach callers.
 		if (len <= 0 || len > flen)
 			return (NULL);
+
+		if (!strncasecmp((BYTE *) file, name, 4))
+			return (file + 8);
 
 		file += len;
 		flen -= len;

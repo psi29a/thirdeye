@@ -113,8 +113,13 @@ FILE* openAESOPResourceAndSetToFirstDirectoryBlock(char *aResName,
 		fclose(loResFile);
 		return (NULL);
 	}
-	// set the pointer on the first directory block
-	(void) fseek(loResFile, aHeaderPointer->first_directory_block, SEEK_SET);
+	// set the pointer on the first directory block; if this fails callers
+	// would parse from EOF instead.
+	if (fseek(loResFile, aHeaderPointer->first_directory_block, SEEK_SET) != 0) {
+		printf("Failed to seek to the first directory block!\n");
+		fclose(loResFile);
+		return (NULL);
+	}
 	return (loResFile);
 
 }

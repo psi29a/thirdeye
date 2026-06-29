@@ -1354,8 +1354,13 @@ void SOP_compile_index(SOP_class *SOP, PVAL *PV) {
 	// (ULONG)-1L is the CSS "no value" sentinel; comparing the unsigned value
 	// against ULONG_MAX is the documented test, but spell it out so Coverity
 	// doesn't read the signed-to-unsigned cast as an overflowed constant.
-	if ((ndims == 0) || (ndims == ~(ULONG)0))
+	// On the sentinel value `while (ndims--)` below would loop ULONG_MAX times,
+	// so bail before we ever reach the dimension dispatch.
+	if ((ndims == 0) || (ndims == ~(ULONG)0)) {
 		SOP_basic_error(SOP, MSG_IUB);
+		CSS_destroy(CSS);
+		return;
+	}
 
 	if (ndims == 1) {
 		dsize = CSS_fetch_num(CSS);

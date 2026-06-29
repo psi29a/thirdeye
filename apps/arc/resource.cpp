@@ -188,8 +188,16 @@ UWORD RES_read_entry(RF_class *RF, ULONG entry, void *dest, RF_entry_hdr *RHDR,
 			}
 			len -= (ULONG) (sizeof(tl) + tl);
 
-			if (!tl)
-				continue;
+			if (!tl) {
+				// A zero-length tag is the dictionary terminator. Any bytes
+				// after it mean the stream is desynced -- treating it as
+				// `continue` would misread the next u16 as another tl.
+				if (len != 0) {
+					report(E_FATAL, NULL, (BYTE*) "RES: corrupt dictionary empty tag");
+					abend();
+				}
+				break;
+			}
 
 			tag = (BYTE*) mem_alloc((ULONG) tl + 1UL);
 			r_read(RF->file, tag, (UWORD) tl);

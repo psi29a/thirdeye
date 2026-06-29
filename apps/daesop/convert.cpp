@@ -425,6 +425,11 @@ unsigned char *getNewBitmapForOldBitmap(unsigned char *aOldResourceBuffer,
 	unsigned int *loOldStartOffsets;
 	unsigned int i;
 
+	// Need at least bytes 0..5 for the size + sub-picture count.
+	if (aOldResourceLength < 6) {
+		printf("Bitmap resource is too short for the old bitmap header!\n");
+		return (NULL);
+	}
 	loOldBitmapHeaderSize = aOldResourceBuffer[0] | (aOldResourceBuffer[1] << 8)
 			| (aOldResourceBuffer[2] << 16) | (aOldResourceBuffer[3] << 24);
 	if (loOldBitmapHeaderSize != aOldResourceLength) {
