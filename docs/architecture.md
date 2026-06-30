@@ -8,7 +8,7 @@ for what's been built (chronological), [progress.md](progress.md); for what's pe
 
 | App | Role | State |
 |-----|------|-------|
-| **thirdeye** | The runtime/game engine (SDL2). | SOP VM structurally complete (all 88 opcodes except `BRK`; objects/`SEND`/statics/externs) + event system (EVENT.C) + windowing/region input + text. EOB3 boots via SOP and renders its title menu (and, with `--skip-menu`, the in-game HUD). |
+| **thirdeye** | The runtime/game engine (SDL3). | SOP VM structurally complete (all 88 opcodes except `BRK`; objects/`SEND`/statics/externs) + event system (EVENT.C) + windowing/region input + text. EOB3 boots via SOP and renders its title menu (and, with `--skip-menu`, the in-game HUD). |
 | **daesop** | RES file tool: disassembler + EOB3→AESOP/32 converter (port of Mirek Luza's DAESOP 0.85). | Complete & working. |
 | **arc** | AESOP resource compiler / SOP assembler (port of John Miles' 1993 DEV tools). | Ported, compiles. |
 | **launcher** | Launcher front-end. | Stub. |
@@ -32,7 +32,7 @@ configure).
   `vm.hpp`/`vm.cpp` (`Interpreter`: stack machine, dispatch, trace), `objects.hpp`/`.cpp`
   (`ObjectSystem`: classes + instances + SEND/PASS), `events.hpp`/`.cpp` (`EventSystem`: notify
   list + FIFO queue + region windowing).
-- **graphics/** — `graphics.cpp` (SDL2: palette, bitmap blit, video playback, zoom, mouse cursor)
+- **graphics/** — `graphics.cpp` (SDL3: palette, bitmap blit, video playback, zoom, mouse cursor)
   + `bitmap`/`font`/`palette`.
 - **sound/** — `sound.cpp` (digital sound mixer) + `xmidi.cpp` (XMIDI→MIDI + WildMIDI).
 - **engine.cpp / engine.hpp** — top-level. `go()` resolves the resource file

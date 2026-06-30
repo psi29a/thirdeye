@@ -21,7 +21,7 @@ Build tools:
 * Git (required: unit tests fetch GoogleTest via CMake FetchContent)
 
 Libraries:
-* SDL2          - windowing, input, audio output
+* SDL3         - windowing, input, audio output
 * OpenAL        - digital sound mixer (openal-soft)
 * WildMIDI      - XMIDI / MIDI playback
 
@@ -33,15 +33,15 @@ Installing dependencies
 -----------------------
 Linux (Debian/Ubuntu):
     sudo apt-get install -y cmake ninja-build build-essential \
-        libsdl2-dev libopenal-dev libwildmidi-dev
+        libsdl3-dev libopenal-dev libwildmidi-dev
 
 macOS (Homebrew):
-    brew install cmake ninja sdl2 openal-soft wildmidi
+    brew install cmake ninja sdl3 openal-soft wildmidi
 
 Windows (vcpkg):
     git clone https://github.com/microsoft/vcpkg.git
     .\vcpkg\bootstrap-vcpkg.bat
-    .\vcpkg\vcpkg.exe install sdl2 openal-soft wildmidi --triplet x64-windows
+    .\vcpkg\vcpkg.exe install sdl3 openal-soft wildmidi --triplet x64-windows
 
 Configure and build
 -------------------
@@ -141,7 +141,7 @@ a populated 3D dungeon -- all driven by the game's own AESOP bytecode.
   bit 15 as the flag. daesop also now finds bytecode.def beside its own binary; added
   daesop unit tests.
 * Build & platform: ported to C++20, dropped the Boost dependency (std::ifstream/
-  filesystem), builds with CMake + Ninja on Linux, macOS and Windows (SDL2, OpenAL,
+  filesystem), builds with CMake + Ninja on Linux, macOS and Windows (SDL3, OpenAL,
   WildMIDI). GoogleTest + CLI11 are auto-fetched via FetchContent. GitHub Actions CI
   (replacing Travis) builds and runs the VM/resource/daesop unit tests on all three
   platforms; MSVC build + warning cleanups. Sound now enumerates devices and works on

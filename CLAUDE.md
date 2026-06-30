@@ -30,7 +30,7 @@ Version 0.87.0 · GPLv3 · SDL2 (Linux/macOS/Windows), C++20.
 
 ## Build + test
 
-Typical: `cmake -S . -B build -G Ninja && cmake --build build`. Deps: SDL2, OpenAL,
+Typical: `cmake -S . -B build -G Ninja && cmake --build build`. Deps: SDL3, OpenAL,
 WildMIDI; GoogleTest + CLI11 are auto-fetched (network on first configure). Default build is
 **`Debug` -O0**; for the interpreter-heavy bring-up loop a Release config is 5–10×
 faster — reconfigure with `cmake -S . -B build -DCMAKE_BUILD_TYPE=Release` (still under
