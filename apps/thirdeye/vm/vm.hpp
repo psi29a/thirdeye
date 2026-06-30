@@ -251,7 +251,7 @@ private:
 	void  setTop(Value v)  { writeStk(mSp, v); }
 
 	// binary op helper: right = pop, left = top; top = f(left,right)
-	template <typename F> void binOp(F f) {
+	template <typename F> void binOp(F&& f) {
 		Value r = popVal();
 		setTop(f(topVal(), r));
 	}

@@ -17,7 +17,7 @@
 
 namespace VM {
 
-void ObjectSystem::addClass(SopClass cls) {
+void ObjectSystem::addClass(SopClass&& cls) {
 	uint16_t n = cls.number;
 	mClasses[n] = std::move(cls);
 }

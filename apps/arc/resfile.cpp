@@ -169,7 +169,12 @@ void RF_destroy(RF_class *RF, WORD compact_threshold) {
 	mem_free(RF);
 
 	if (lost_space && (lost_percent >= compact_threshold)) {
-		rename(RF_filename, temp_fn = temp_filename(NULL));
+		temp_fn = temp_filename(NULL);
+		if (rename((const char*) RF_filename, (const char*) temp_fn) != 0) {
+			// Compaction would clobber the original; bail before we lose data.
+			mem_free(RF_filename);
+			return;
+		}
 		old = RF_construct(temp_fn, 0);
 
 		new_class = RF_construct(RF_filename, 1);

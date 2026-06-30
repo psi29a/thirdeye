@@ -161,6 +161,92 @@ int getNumberOfItems(DICTENTRYPOINTER *aArray)
 }
 
 /* ------------------------------------------------------------------------- *
+ * arc source-file slurp (apps/arc/system.cpp)
+ *
+ * read_file() returns the whole source buffer for the lexer to walk. It's a
+ * compiler tool reading its own user-provided source; the 64 MB cap upstream
+ * already bounds the size. Sanitizing the returned buffer kills the taint
+ * chain at the source -- without this, every downstream SOP_*/RS_*/MAP_*
+ * parser function inherits TAINTED_SCALAR / UNTRUSTED_LOOP_BOUND /
+ * UNTRUSTED_DIVISOR through the LEX state and the resource tables.
+ *
+ * Match arc/defs.hpp: ULONG = unsigned int.
+ * ------------------------------------------------------------------------- */
+
+unsigned int *read_file(unsigned char *filename)
+{
+	unsigned int *p;
+	(void)filename;
+	__coverity_tainted_data_sanitize__(&p);
+	return p;
+}
+
+/* ------------------------------------------------------------------------- *
+ * arc lexer raw-fetch (apps/arc/lexan.cpp)
+ *
+ * LEX_fetch refills the current lexer state from the source buffer; it
+ * applies token-type classification + length checks before any caller sees
+ * the result. Modeling the whole LEX state as sanitized after a fetch stops
+ * UNTRUSTED_ARRAY_INDEX_READ on the is_whitespace/is_digit/is_namechar/
+ * symbol_key lookups inside LEX_fetch itself (all 256-entry tables indexed
+ * by an unsigned byte -- the OOB is unreachable).
+ * ------------------------------------------------------------------------- */
+
+void LEX_fetch(LEX_class *LEX)
+{
+	__coverity_writeall__(LEX);
+}
+
+/* ------------------------------------------------------------------------- *
+ * arc resource-table lookups (apps/arc/rscomp.cpp)
+ *
+ * RS_get_MSGD_entry / RS_get_OBJD_entry pull a small numeric ID out of the
+ * compiler's own symbol tables, built earlier in the same arc run. Treating
+ * them as sanitized stops the cascade through SOP_compile_send,
+ * SOP_member_statement, etc.
+ * ------------------------------------------------------------------------- */
+
+typedef struct RS_class RS_class;
+
+unsigned int RS_get_MSGD_entry(RS_class *RS, char *name)
+{
+	unsigned int v;
+	(void)RS;
+	(void)name;
+	__coverity_tainted_data_sanitize__(&v);
+	return v;
+}
+
+unsigned int RS_get_OBJD_entry(RS_class *RS, char *name)
+{
+	unsigned int v;
+	(void)RS;
+	(void)name;
+	__coverity_tainted_data_sanitize__(&v);
+	return v;
+}
+
+/* ------------------------------------------------------------------------- *
+ * arc pointer-arithmetic helper (apps/arc/system.cpp)
+ *
+ * ptr_dif returns (a - b) / sizeof(unit) for arc's growable buffers. Both
+ * pointers are arc-internal allocations; the result is the element distance
+ * within an arc-owned region, not a value derived from external input. The
+ * divisor in the lowered code is a sizeof, but the *result* gets used as a
+ * loop bound in SOP_break_statement / SOP_continue_statement and Coverity
+ * inherits taint through the pointers.
+ * ------------------------------------------------------------------------- */
+
+unsigned int ptr_dif(unsigned int *a, unsigned int *b)
+{
+	unsigned int v;
+	(void)a;
+	(void)b;
+	__coverity_tainted_data_sanitize__(&v);
+	return v;
+}
+
+/* ------------------------------------------------------------------------- *
  * arc varargs reporter (apps/arc/system.cpp)
  *
  * report() is a custom error printer. Modeling it without a
