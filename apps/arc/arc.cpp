@@ -155,6 +155,11 @@ int main(int argc, BYTE *argv[]) {
 		else if (tolower(argv[i][1]) == 'c')
 			if ((n = ascnum(&argv[i][2], 10)) == -1L)
 				report(E_ERROR, NULL, MSG_IVC);
+			else if (n < 0 || n > 100)
+				// /c is a percent threshold for compaction; reject nonsense
+				// up front so the value can't bleed into downstream divisor
+				// / loop-bound arithmetic.
+				report(E_ERROR, NULL, MSG_IVC);
 			else
 				c_threshold = (WORD) n;
 

@@ -180,8 +180,11 @@ void MAP_compile(MAP_class *MAP) {
 	height = ((*(UBYTE *) (prop + 2)) * 256) + (*(UBYTE *) (prop + 3));
 
 	// width/height come straight from the LBM header. A zero width would
-	// mem_alloc(0) and any x >= width would walk off buffer; reject.
-	if (width == 0 || height == 0) {
+	// mem_alloc(0) and any x >= width would walk off buffer; reject. Cap
+	// the upper end so the y-loop and width-sized allocs can't be driven
+	// to ludicrous sizes by a corrupt header.
+	const UWORD kMaxLbmDim = 8192;
+	if (width == 0 || height == 0 || width > kMaxLbmDim || height > kMaxLbmDim) {
 		MAP_error(MAP->IDR->RS, MSG_BFT, NULL);
 		mem_free(file);
 		return;
