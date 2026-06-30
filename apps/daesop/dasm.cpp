@@ -295,8 +295,18 @@ int processBytecodeDefinitionLine(char *aLine) {
 		}
 	}
 	// explanation
+	// Defensive re-check so Coverity can see the index is bounded right at
+	// the access site, not just at the upstream guard a few lines above.
+	int loExplanationIndex = 3 + loNumberOfParameters;
+	if (loExplanationIndex < 0 || loExplanationIndex >= MAX_TOKENS) {
+		printf("Explanation token index out of range: %d\n", loExplanationIndex);
+		free(loBytecodeEntryPointer->paramString);
+		free(loBytecodeEntryPointer->name);
+		free(loBytecodeEntryPointer);
+		return (false);
+	}
 	loBytecodeEntryPointer->explanation = makeString(
-			loTokens[3 + loNumberOfParameters]);
+			loTokens[loExplanationIndex]);
 	if (loBytecodeEntryPointer->explanation == NULL
 			|| strlen(loBytecodeEntryPointer->explanation) == 0) {
 		printf("The bytecode explanation is missing!\n");

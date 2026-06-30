@@ -449,7 +449,11 @@ unsigned char *getNewBitmapForOldBitmap(unsigned char *aOldResourceBuffer,
 	printf("  %d sub picture(s) found\n", loSubPictures);
 	// loSubPictures is read from disk; we also need 6 + i*4 + 3 to stay inside
 	// aOldResourceBuffer, so cap to whatever the resource length can fit.
-	if (loSubPictures == 0 || (size_t) 6 + (size_t) loSubPictures * 4 > aOldResourceLength) {
+	// Also enforce a hard ceiling so downstream `aSubpictures * (4 + 4)` math
+	// in prepareNewBitmapGlobalHeader can't overflow on a corrupt header.
+	const unsigned int kMaxSubPictures = 65535U;
+	if (loSubPictures == 0 || loSubPictures > kMaxSubPictures ||
+	    (size_t) 6 + (size_t) loSubPictures * 4 > aOldResourceLength) {
 		printf("Implausible sub-picture count: %u\n", loSubPictures);
 		return (NULL);
 	}

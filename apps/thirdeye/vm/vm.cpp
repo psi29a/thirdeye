@@ -713,7 +713,7 @@ void Interpreter::unimplemented(Op op) {
 bool Interpreter::selfTest() {
 	// Build a code buffer: 14-byte PHDR + handler. Handler MHDR auto_size = 4
 	// (2 for THIS + 2 for one auto word at fptr-4). Code begins at offset 16.
-	auto makeProg = [](std::vector<uint8_t> body) {
+	auto makeProg = [](const std::vector<uint8_t>& body) {
 		std::vector<uint8_t> c(14, 0);          // PHDR (zeros ok for this test)
 		c.push_back(0x04); c.push_back(0x00);   // MHDR auto_size = 4
 		c.insert(c.end(), body.begin(), body.end());
@@ -721,7 +721,7 @@ bool Interpreter::selfTest() {
 	};
 	auto S = [](uint8_t op){ return op; };
 	bool ok = true;
-	auto check = [&](const char* name, std::vector<uint8_t> body, Value expect) {
+	auto check = [&](const char* name, const std::vector<uint8_t>& body, Value expect) {
 		Interpreter vm(makeProg(body));
 		try {
 			Value got = vm.execute(14);
