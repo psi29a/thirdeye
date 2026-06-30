@@ -52,7 +52,7 @@ class ObjectSystem {
 public:
 	// Register a class. Classes can be added in any order; parent links are
 	// resolved lazily at dispatch time by resource number.
-	void addClass(SopClass cls);
+	void addClass(SopClass&& cls);
 
 	// Look up a class number by object name; returns false if unknown.
 	bool findClassByName(const std::string& name, uint16_t& classNumber) const;

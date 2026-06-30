@@ -12,6 +12,7 @@
 #include <iomanip>
 #include <sstream>
 #include <cstring>
+#include <utility>
 
 
 RESOURCES::Resource::Resource(std::filesystem::path resourcePath) {
@@ -207,7 +208,7 @@ uint16_t RESOURCES::Resource::getAssets(std::ifstream &resourceFile) {
 			block.entry_header_index[5] - block.entry_header_index[4]
 					- sizeof(EntryHeader), block.entry_header_index[4],
 			block.entry_header_index[4] + sizeof(EntryHeader), table1, table2,
-			blank);
+			std::move(blank));
 
 	std::map<std::string, Dictionary>::iterator dictionary;
 	for (dictionary = mTable0.begin(); dictionary != mTable0.end();

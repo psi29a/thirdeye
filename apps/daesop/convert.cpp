@@ -315,7 +315,10 @@ int replaceResourceInOpenedFile(char *aResourceName, int aResourceNumber,
 	loNewFileLength += aAddedResourceSize;
 	aNewFileHeader->file_size = loNewFileLength;
 	// write the header
-	fseek(aNewFile, 0, SEEK_SET);  // to the beginning of the new file
+	if (fseek(aNewFile, 0, SEEK_SET) != 0) {
+		printf("Unable to seek to the beginning of the new file!\n");
+		return (false);
+	}
 	if (fwrite(aNewFileHeader, 1, loFileHeaderSize, aNewFile)
 			!= loFileHeaderSize) {
 		printf("The new file header could not be written!\n");
@@ -349,7 +352,10 @@ int replaceResourceInOpenedFile(char *aResourceName, int aResourceNumber,
 
 	// write the directory block
 	loDirBlockSize = sizeof(struct RESDirectoryBlock);
-	fseek(aNewFile, loDirBlockStart, SEEK_SET); // set to the directory block
+	if (fseek(aNewFile, loDirBlockStart, SEEK_SET) != 0) {
+		printf("Unable to seek to the directory block!\n");
+		return (false);
+	}
 	if (fwrite(loModifiedDirectoryBlock, 1, loDirBlockSize, aNewFile)
 			!= loDirBlockSize) {
 		printf("Writing of the directory block failed!\n");

@@ -1011,7 +1011,7 @@ void THIRDEYE::Engine::go() {
 	uint32_t fps = 0;	// number of fps (iterations of main loop)
 
 	// get our intro cinematic, set state and play
-	RESOURCES::GFFI introVideo(introPath);
+	RESOURCES::GFFI introVideo(std::move(introPath));
 	mixer.playMusic(introVideo.getMusic());
 	gfx.playVideo(introVideo.getSequence());
 	uint8_t state = STATE_INTRO;
