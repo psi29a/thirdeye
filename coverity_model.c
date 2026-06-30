@@ -166,7 +166,7 @@ int getNumberOfItems(DICTENTRYPOINTER *aArray)
  * read_file() returns the whole source buffer for the lexer to walk. It's a
  * compiler tool reading its own user-provided source; the 64 MB cap upstream
  * already bounds the size. Sanitizing the returned buffer kills the taint
- * chain at the source -- without this, every downstream SOP_*/RS_*/MAP_*
+ * chain at the source -- without this, every downstream SOP_, RS_, and MAP_
  * parser function inherits TAINTED_SCALAR / UNTRUSTED_LOOP_BOUND /
  * UNTRUSTED_DIVISOR through the LEX state and the resource tables.
  *
@@ -194,7 +194,12 @@ unsigned int *read_file(unsigned char *filename)
 
 void LEX_fetch(LEX_class *LEX)
 {
+	/* writeall first so Coverity sees the struct as initialised, then
+	 * sanitize the pointed-to bytes so downstream reads of LEX state are
+	 * not treated as TAINTED_SCALAR. writeall on its own only records the
+	 * store; it does not clear taint. */
 	__coverity_writeall__(LEX);
+	__coverity_tainted_data_sanitize__(LEX);
 }
 
 /* ------------------------------------------------------------------------- *
