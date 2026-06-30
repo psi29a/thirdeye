@@ -21,7 +21,7 @@ Build tools:
 * Git (required: unit tests fetch GoogleTest via CMake FetchContent)
 
 Libraries:
-* SDL3         - windowing, input, audio output
+* SDL3          - windowing, input, audio output
 * OpenAL        - digital sound mixer (openal-soft)
 * WildMIDI      - XMIDI / MIDI playback
 
@@ -32,13 +32,16 @@ internet connection is needed the first time you configure.
 Installing dependencies
 -----------------------
 Linux (Debian/Ubuntu):
+
     sudo apt-get install -y cmake ninja-build build-essential \
         libsdl3-dev libopenal-dev libwildmidi-dev
 
 macOS (Homebrew):
+
     brew install cmake ninja sdl3 openal-soft wildmidi
 
 Windows (vcpkg):
+
     git clone https://github.com/microsoft/vcpkg.git
     .\vcpkg\bootstrap-vcpkg.bat
     .\vcpkg\vcpkg.exe install sdl3 openal-soft wildmidi --triplet x64-windows
@@ -46,15 +49,18 @@ Windows (vcpkg):
 Configure and build
 -------------------
 Linux / macOS:
+
     cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
     cmake --build build
 
 Windows (from a Developer Command Prompt, using the vcpkg toolchain):
+
     cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release ^
         -DCMAKE_TOOLCHAIN_FILE=<path-to-vcpkg>\scripts\buildsystems\vcpkg.cmake
     cmake --build build
 
 Useful CMake options (defaults in parentheses):
+
     -DUNIT_TESTS=ON|OFF      build the unit tests (ON)
     -DBUILD_DAESOP=ON|OFF    build the daesop RES tool / disassembler (ON)
     -DBUILD_ARC=ON|OFF       build the arc resource compiler (OFF)
@@ -79,6 +85,7 @@ Unit tests are built by default into the `runtests` executable (GoogleTest).
     ./build/runtests
 
 To configure without tests (also avoids the GoogleTest download):
+
     cmake -S . -B build -G Ninja -DUNIT_TESTS=OFF
 
 CHANGELOG
