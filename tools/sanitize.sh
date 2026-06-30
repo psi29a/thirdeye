@@ -28,12 +28,15 @@ SAN_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer -fno-sanitize-re
 : "${UBSAN_OPTIONS:=print_stacktrace=1:halt_on_error=1}"
 export ASAN_OPTIONS UBSAN_OPTIONS
 
-# On macOS the sdl2-compat shim dlopens libSDL3.dylib at runtime, and Homebrew's
-# /opt/homebrew/lib isn't in dyld's default fallback search list. Without this
-# the test binary aborts with "Failed loading SDL3 library" -- which looks like
-# a sanitizer find but isn't.
-if [ "$(uname -s)" = "Darwin" ] && [ -d /opt/homebrew/lib ]; then
-  export DYLD_FALLBACK_LIBRARY_PATH=${DYLD_FALLBACK_LIBRARY_PATH:-/opt/homebrew/lib}
+# On macOS, ensure Homebrew's libSDL3.dylib is findable by dyld in case the
+# binary wasn't linked with an @rpath that points at Homebrew's prefix.
+# Covers both Apple Silicon (/opt/homebrew) and Intel (/usr/local) installs.
+if [ "$(uname -s)" = "Darwin" ]; then
+  for brew_lib in /opt/homebrew/lib /usr/local/lib; do
+    if [ -d "$brew_lib" ]; then
+      export DYLD_FALLBACK_LIBRARY_PATH="${DYLD_FALLBACK_LIBRARY_PATH:+$DYLD_FALLBACK_LIBRARY_PATH:}$brew_lib"
+    fi
+  done
 fi
 
 if [ ! -f "$BUILD_DIR/build.ninja" ] && [ ! -f "$BUILD_DIR/Makefile" ]; then

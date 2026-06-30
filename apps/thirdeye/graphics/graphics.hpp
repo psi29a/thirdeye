@@ -8,11 +8,7 @@
 #include "palette.hpp"
 #include "bitmap.hpp"
 
-#include "SDL.h"
-// NB: SDL_syswm.h is intentionally NOT included here. On Linux it pulls in
-// X11's <X.h>, which #defines None/Status/Bool/... into the global namespace and
-// breaks any downstream identifier with those names (e.g. VM::AddrSpace). It's
-// only needed by graphics.cpp, which includes it directly.
+#include <SDL3/SDL.h>
 
 #include <map>
 #include <unordered_map>
@@ -127,8 +123,6 @@ private:
 	// menu redraw -- we must not rebuild the font each frame).
 	std::map<int, std::shared_ptr<Font>> mFontCache;
 
-	int zoomSurfaceRGBA(SDL_Surface * src, SDL_Surface * dst);
-
 	void fadeIn();
 	void fadeOut();
 
@@ -225,6 +219,13 @@ public:
 	// Map a window-pixel coordinate (from an SDL mouse event) to the 320x200
 	// logical space the game's windows use. Accounts for the integer scale.
 	void mouseToLogical(int wx, int wy, int &lx, int &ly) const;
+
+	// Expose the SDL window. Needed by SDL3's SDL_StartTextInput / StopTextInput
+	// (which now take the target window, no longer global).
+	SDL_Window *getWindow() const { return mWindow; }
+	// Expose the renderer so callers can call SDL_ConvertEventToRenderCoordinates
+	// (SDL3 no longer auto-rescales event coords for logical presentation).
+	SDL_Renderer *getRenderer() const { return mRenderer; }
 
 	// --- AESOP text output (GRAPHICS.C text_window/style/color/xy + print) ---
 	// AESOP addresses text into numbered "text windows", each with a font,

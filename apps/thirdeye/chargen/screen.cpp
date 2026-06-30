@@ -5,7 +5,7 @@
 #include "../graphics/cps.hpp"
 #include "../runtime/internal.hpp" // QuitRequested
 
-#include <SDL.h>
+#include <SDL3/SDL.h>
 
 #include <algorithm>
 #include <array>
@@ -473,10 +473,11 @@ int slotAt(int x, int y) {
 }
 
 // Read a logical (320x200) mouse position from an SDL mouse event.
+// SDL3 event coordinates are floats; truncate to int for the integer-pixel API.
 void mousePos(GRAPHICS::Graphics &gfx, const SDL_Event &e, int &lx, int &ly) {
-	int wx = (e.type == SDL_MOUSEMOTION) ? e.motion.x : e.button.x;
-	int wy = (e.type == SDL_MOUSEMOTION) ? e.motion.y : e.button.y;
-	gfx.mouseToLogical(wx, wy, lx, ly);
+	float fx = (e.type == SDL_EVENT_MOUSE_MOTION) ? e.motion.x : e.button.x;
+	float fy = (e.type == SDL_EVENT_MOUSE_MOTION) ? e.motion.y : e.button.y;
+	gfx.mouseToLogical(static_cast<int>(fx), static_cast<int>(fy), lx, ly);
 }
 
 // Draw text with a drop-shadow at (+1, +1) in a dark palette index, then the
@@ -1320,9 +1321,9 @@ bool writeCreateSav(const std::filesystem::path &chargenDir,
 
 void handleEntryEvent(const SDL_Event &e, GRAPHICS::Graphics &gfx,
                       State &state) {
-	if (e.type == SDL_KEYDOWN) {
-		auto k = e.key.keysym.sym;
-		if ((k == SDLK_RETURN || k == SDLK_KP_ENTER || k == SDLK_p)
+	if (e.type == SDL_EVENT_KEY_DOWN) {
+		auto k = e.key.key;
+		if ((k == SDLK_RETURN || k == SDLK_KP_ENTER || k == SDLK_P)
 		    && partyComplete(state)) {
 			state.done = true;          // proceed to game
 		} else if (k == SDLK_ESCAPE) {
@@ -1331,7 +1332,7 @@ void handleEntryEvent(const SDL_Event &e, GRAPHICS::Graphics &gfx,
 			state.done      = true;
 			state.cancelled = true;
 		}
-	} else if (e.type == SDL_MOUSEBUTTONDOWN && e.button.button == SDL_BUTTON_LEFT) {
+	} else if (e.type == SDL_EVENT_MOUSE_BUTTON_DOWN && e.button.button == SDL_BUTTON_LEFT) {
 		int lx, ly;
 		mousePos(gfx, e, lx, ly);
 		if (partyComplete(state) && inPlayButton(lx, ly)) {
@@ -1355,8 +1356,8 @@ struct PickerResult { bool committed = false; bool cancelled = false; };
 PickerResult handleListPicker(const SDL_Event &e, GRAPHICS::Graphics &gfx,
                               int &cursor, int numEntries) {
 	PickerResult res;
-	if (e.type == SDL_KEYDOWN) {
-		auto k = e.key.keysym.sym;
+	if (e.type == SDL_EVENT_KEY_DOWN) {
+		auto k = e.key.key;
 		if (k == SDLK_UP)
 			cursor = (cursor + numEntries - 1) % numEntries;
 		else if (k == SDLK_DOWN)
@@ -1365,7 +1366,7 @@ PickerResult handleListPicker(const SDL_Event &e, GRAPHICS::Graphics &gfx,
 			res.committed = true;
 		else if (k == SDLK_ESCAPE)
 			res.cancelled = true;
-	} else if (e.type == SDL_MOUSEMOTION) {
+	} else if (e.type == SDL_EVENT_MOUSE_MOTION) {
 		int lx, ly;
 		mousePos(gfx, e, lx, ly);
 		// List rendered at y=82 + (i - firstVis)*8 (FONT6, 8-px line height).
@@ -1376,7 +1377,7 @@ PickerResult handleListPicker(const SDL_Event &e, GRAPHICS::Graphics &gfx,
 			if (idx >= 0 && idx < numEntries)
 				cursor = idx;
 		}
-	} else if (e.type == SDL_MOUSEBUTTONDOWN &&
+	} else if (e.type == SDL_EVENT_MOUSE_BUTTON_DOWN &&
 	           e.button.button == SDL_BUTTON_LEFT) {
 		int lx, ly;
 		mousePos(gfx, e, lx, ly);
@@ -1485,30 +1486,30 @@ void handleAlignmentPickEvent(const SDL_Event &e, GRAPHICS::Graphics &gfx,
 	}
 }
 
-void enterNameStep(State &state) {
+void enterNameStep(State &state, SDL_Window *window) {
 	// Pre-seed name input with the previous name (if any) so KEEP -> name
 	// retains what was typed; otherwise blank.
 	state.step = Step::EnterName;
-	// SDL_StartTextInput must be enabled to receive SDL_TEXTINPUT events.
-	SDL_StartTextInput();
+	// SDL3 routes text-input events to the focused window, so we pass ours.
+	SDL_StartTextInput(window);
 }
 
 void handleStatsEvent(const SDL_Event &e, GRAPHICS::Graphics &gfx,
                       State &state, std::mt19937 &rng) {
-	if (e.type == SDL_KEYDOWN) {
-		auto k = e.key.keysym.sym;
-		if (k == SDLK_r)
+	if (e.type == SDL_EVENT_KEY_DOWN) {
+		auto k = e.key.key;
+		if (k == SDLK_R)
 			rollStats(state.party[state.activeSlot], rng);
 		else if (k == SDLK_RETURN || k == SDLK_KP_ENTER ||
-		         k == SDLK_k) {
+		         k == SDLK_K) {
 			// KEEP -> proceed to name entry. The slot only flips to
 			// `filled` once a name is committed and CREATE.SAV is written.
-			enterNameStep(state);
+			enterNameStep(state, gfx.getWindow());
 		} else if (k == SDLK_ESCAPE) {
 			// Back to alignment.
 			state.step = Step::PickAlignment;
 		}
-	} else if (e.type == SDL_MOUSEBUTTONDOWN &&
+	} else if (e.type == SDL_EVENT_MOUSE_BUTTON_DOWN &&
 	           e.button.button == SDL_BUTTON_LEFT) {
 		int lx, ly;
 		mousePos(gfx, e, lx, ly);
@@ -1526,7 +1527,7 @@ void handleStatsEvent(const SDL_Event &e, GRAPHICS::Graphics &gfx,
 			state.step = Step::PickPortrait;
 			break;
 		case BTN_KEEP:
-			enterNameStep(state);
+			enterNameStep(state, gfx.getWindow());
 			break;
 		default: break;
 		}
@@ -1534,13 +1535,14 @@ void handleStatsEvent(const SDL_Event &e, GRAPHICS::Graphics &gfx,
 }
 
 void handleNameEvent(const SDL_Event &e, State &state,
-                     const std::filesystem::path &chargenDir) {
+                     const std::filesystem::path &chargenDir,
+                     SDL_Window *window) {
 	auto &c = state.party[state.activeSlot];
-	if (e.type == SDL_TEXTINPUT) {
+	if (e.type == SDL_EVENT_TEXT_INPUT) {
 		// Accept any byte SDL feeds us -- UTF-8 multi-byte sequences and
 		// emoji included. Cap by name buffer size (10 bytes + NUL); a
 		// multi-byte char may not fit, in which case we skip the whole
-		// SDL_TEXTINPUT to avoid splitting a code point mid-sequence.
+		// SDL_EVENT_TEXT_INPUT to avoid splitting a code point mid-sequence.
 		// ASCII letters are folded to uppercase to match the original game's
 		// name display; multi-byte sequences pass through unchanged (toupper
 		// is a byte op and would corrupt UTF-8 trail bytes).
@@ -1555,8 +1557,8 @@ void handleNameEvent(const SDL_Event &e, State &state,
 			}
 			c.name[curLen + inLen] = '\0';
 		}
-	} else if (e.type == SDL_KEYDOWN) {
-		auto k = e.key.keysym.sym;
+	} else if (e.type == SDL_EVENT_KEY_DOWN) {
+		auto k = e.key.key;
 		if (k == SDLK_BACKSPACE) {
 			// Drop the last UTF-8 code point (trail bytes start with 10xxxxxx).
 			size_t len = std::strlen(c.name);
@@ -1570,7 +1572,7 @@ void handleNameEvent(const SDL_Event &e, State &state,
 			// something. (Esc backs out instead.)
 			if (std::strlen(c.name) == 0)
 				return;
-			SDL_StopTextInput();
+			SDL_StopTextInput(window);
 			std::cout << "  [chargen: slot " << state.activeSlot
 			          << " name=\"" << c.name << "\" -- writing CREATE.SAV]"
 			          << std::endl;
@@ -1591,7 +1593,7 @@ void handleNameEvent(const SDL_Event &e, State &state,
 				          << std::endl;
 			}
 		} else if (k == SDLK_ESCAPE) {
-			SDL_StopTextInput();
+			SDL_StopTextInput(window);
 			state.step = Step::ShowStats; // back to stats
 		}
 	}
@@ -1615,8 +1617,8 @@ void handlePortraitPickEvent(const SDL_Event &e, GRAPHICS::Graphics &gfx,
 	auto scrollNext = [&]() {
 		state.portraitCursor = (state.portraitCursor + 1) % total;
 	};
-	if (e.type == SDL_KEYDOWN) {
-		auto k = e.key.keysym.sym;
+	if (e.type == SDL_EVENT_KEY_DOWN) {
+		auto k = e.key.key;
 		if (k == SDLK_LEFT || k == SDLK_UP) scrollPrev();
 		else if (k == SDLK_RIGHT || k == SDLK_DOWN) scrollNext();
 		else if (k == SDLK_PAGEDOWN)
@@ -1627,7 +1629,7 @@ void handlePortraitPickEvent(const SDL_Event &e, GRAPHICS::Graphics &gfx,
 			                                state.portraitCursor - kPortraitVisible);
 		else if (k == SDLK_RETURN || k == SDLK_KP_ENTER) commit();
 		else if (k == SDLK_ESCAPE) state.step = Step::ShowStats;
-	} else if (e.type == SDL_MOUSEBUTTONDOWN &&
+	} else if (e.type == SDL_EVENT_MOUSE_BUTTON_DOWN &&
 	           e.button.button == SDL_BUTTON_LEFT) {
 		int lx, ly;
 		mousePos(gfx, e, lx, ly);
@@ -1652,8 +1654,8 @@ void handleModifyEvent(const SDL_Event &e, GRAPHICS::Graphics &gfx,
 		int &v = c.abil[state.statCursor];
 		v = std::max(3, std::min(18, v + delta));
 	};
-	if (e.type == SDL_KEYDOWN) {
-		auto k = e.key.keysym.sym;
+	if (e.type == SDL_EVENT_KEY_DOWN) {
+		auto k = e.key.key;
 		if (k == SDLK_UP)
 			state.statCursor = (state.statCursor + NUM_ABIL - 1) % NUM_ABIL;
 		else if (k == SDLK_DOWN)
@@ -1664,7 +1666,7 @@ void handleModifyEvent(const SDL_Event &e, GRAPHICS::Graphics &gfx,
 			bump(-1);
 		else if (k == SDLK_RETURN || k == SDLK_KP_ENTER || k == SDLK_ESCAPE)
 			state.step = Step::ShowStats;
-	} else if (e.type == SDL_MOUSEBUTTONDOWN &&
+	} else if (e.type == SDL_EVENT_MOUSE_BUTTON_DOWN &&
 	           e.button.button == SDL_BUTTON_LEFT) {
 		int lx, ly;
 		mousePos(gfx, e, lx, ly);
@@ -1703,7 +1705,7 @@ void handleModifyEvent(const SDL_Event &e, GRAPHICS::Graphics &gfx,
 //   +<I>       MODIFY: +1 ability I (0..5)
 //   -<I>       MODIFY: -1 ability I
 //   p<N>       portrait carousel select slot N (0..89)
-//   n<NAME>   enter NAME via SDL_TEXTINPUT + Enter (finalises slot)
+//   n<NAME>   enter NAME via SDL_EVENT_TEXT_INPUT + Enter (finalises slot)
 //   P          PLAY (only fires if partyComplete)
 //
 // Full party recipe (4 chars, all single-class Fighter Human Male LG, then
@@ -1785,7 +1787,8 @@ std::vector<AutoAction> parseChargenAuto(const char *src) {
 // in N pumps for N actions, no race conditions.
 bool applyChargenAction(const AutoAction &a, State &state, std::mt19937 &rng,
                         const std::filesystem::path &chargenDir,
-                        const std::vector<uint8_t> &picBytes) {
+                        const std::vector<uint8_t> &picBytes,
+                        SDL_Window *window) {
 	using K = AutoAction;
 	switch (a.kind) {
 	case K::SLOT:
@@ -1875,7 +1878,7 @@ bool applyChargenAction(const AutoAction &a, State &state, std::mt19937 &rng,
 		state.party[state.activeSlot].portrait = state.portraitCursor;
 		// Match handlePortraitPickEvent's Enter path: go to EnterName.
 		state.step = Step::EnterName;
-		SDL_StartTextInput();
+		SDL_StartTextInput(window);
 		return true;
 	}
 	case K::NAME: {
@@ -1883,12 +1886,12 @@ bool applyChargenAction(const AutoAction &a, State &state, std::mt19937 &rng,
 		auto &c = state.party[state.activeSlot];
 		std::strncpy(c.name, a.text.c_str(), sizeof(c.name) - 1);
 		c.name[sizeof(c.name) - 1] = 0;
-		// Uppercase ASCII (matches the SDL_TEXTINPUT handler's behaviour).
+		// Uppercase ASCII (matches the SDL_EVENT_TEXT_INPUT handler's behaviour).
 		for (auto &ch : c.name)
 			if (ch && static_cast<unsigned char>(ch) < 0x80)
 				ch = static_cast<char>(std::toupper(static_cast<unsigned char>(ch)));
 		if (std::strlen(c.name) == 0) return false; // chargen rejects empty
-		SDL_StopTextInput();
+		SDL_StopTextInput(window);
 		c.filled = true;
 		if (writeCreateSav(chargenDir, state)) {
 			state.step       = Step::EntryScreen;
@@ -1997,7 +2000,7 @@ bool THIRDEYE::chargen::runChargenScreen(GRAPHICS::Graphics &gfx,
 			state.party[0].klass = 0;
 			state.party[0].alignment = 0;
 			rollStats(state.party[0], rng);
-			enterNameStep(state);
+			enterNameStep(state, gfx.getWindow());
 		} else if (step == "write") {
 			// Headless: roll char + write CREATE.SAV in one shot. `done` only
 			// flips on a successful save so a failing chargen-test exits with
@@ -2045,7 +2048,7 @@ bool THIRDEYE::chargen::runChargenScreen(GRAPHICS::Graphics &gfx,
 		if (autoIdx < autoActions.size()) {
 			Step beforeAuto = state.step;
 			bool ok = applyChargenAction(autoActions[autoIdx], state, rng,
-			                             chargenDir, picBytes);
+			                             chargenDir, picBytes, gfx.getWindow());
 			if (ok) {
 				++autoIdx;
 				std::cout << "  [chargen autopilot: action " << autoIdx
@@ -2067,7 +2070,10 @@ bool THIRDEYE::chargen::runChargenScreen(GRAPHICS::Graphics &gfx,
 			++autoIdx;
 		}
 		while (SDL_PollEvent(&event)) {
-			if (event.type == SDL_QUIT)
+			// SDL3: rescale mouse coords from window pixels into the 320x200
+			// logical space (SDL2's logical-size auto-watch is gone).
+			SDL_ConvertEventToRenderCoordinates(gfx.getRenderer(), &event);
+			if (event.type == SDL_EVENT_QUIT)
 				throw THIRDEYE::runtime::QuitRequested{};
 			Step before = state.step;
 			int beforeRace = state.raceCursor;
@@ -2095,7 +2101,7 @@ bool THIRDEYE::chargen::runChargenScreen(GRAPHICS::Graphics &gfx,
 			case Step::ShowStats:     handleStatsEvent(event, gfx, state, rng); break;
 			case Step::ModifyStats:   handleModifyEvent(event, gfx, state); break;
 			case Step::PickPortrait:  handlePortraitPickEvent(event, gfx, state, picBytes); break;
-			case Step::EnterName:     handleNameEvent(event, state, chargenDir); break;
+			case Step::EnterName:     handleNameEvent(event, state, chargenDir, gfx.getWindow()); break;
 			}
 			int afterStr = state.party[std::max(0, state.activeSlot)].abil[STR];
 			int afterAbilSum = 0;

@@ -45,11 +45,14 @@ export MallocStackLogging=1
 export MallocStackLoggingNoCompact=1
 export MallocScribble=1
 
-# sdl2-compat dlopens libSDL3 at runtime; Homebrew's lib isn't in dyld's
-# default fallback search path.
-if [ -d /opt/homebrew/lib ]; then
-  export DYLD_FALLBACK_LIBRARY_PATH=${DYLD_FALLBACK_LIBRARY_PATH:-/opt/homebrew/lib}
-fi
+# Ensure Homebrew's libSDL3.dylib is findable by dyld even when the binary
+# wasn't linked with @rpath. Covers both Apple Silicon (/opt/homebrew) and
+# Intel (/usr/local) Homebrew prefixes.
+for brew_lib in /opt/homebrew/lib /usr/local/lib; do
+  if [ -d "$brew_lib" ]; then
+    export DYLD_FALLBACK_LIBRARY_PATH="${DYLD_FALLBACK_LIBRARY_PATH:+$DYLD_FALLBACK_LIBRARY_PATH:}$brew_lib"
+  fi
+done
 
 # Default args for thirdeye if no extras passed: skip the intro so leaks is
 # observable within seconds rather than waiting on a full cinematic.

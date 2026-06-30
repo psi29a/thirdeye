@@ -35,7 +35,11 @@ GRAPHICS::Palette::Palette(const std::vector<uint8_t> &pal, bool isRes) {
 			mPalette[i].r = pal[offset] << 2;
 			mPalette[i].g = pal[offset + 1] << 2;
 			mPalette[i].b = pal[offset + 2] << 2;
-			mPalette[i].a = 0;
+			// Opaque: SDL3 honours palette alpha when blitting INDEX8 -> ARGB8888,
+			// so leaving a=0 produced fully transparent pixels (black screen,
+			// invisible cursor). SDL2's default 32-bit screen format had no
+			// alpha channel and silently ignored it.
+			mPalette[i].a = SDL_ALPHA_OPAQUE;
 			//std::cout << "RGB: " << (int) i << " " << (int) mPalette[i].r << " "
 			//		<< (int) mPalette[i].g << " " << (int) mPalette[i].b << std::endl;
 		}
@@ -47,7 +51,7 @@ GRAPHICS::Palette::Palette(const std::vector<uint8_t> &pal, bool isRes) {
 			mPalette[counter].r = pal[i] << 2;
 			mPalette[counter].g = pal[i+1] << 2;
 			mPalette[counter].b = pal[i+2] << 2;
-			mPalette[counter].a = 0;
+			mPalette[counter].a = SDL_ALPHA_OPAQUE;
 			//std::cout << std::hex << "RGB: " << (int) i << " " << (int) mPalette[counter].r << " "
 			//		<< (int) mPalette[counter].g << " " << (int) mPalette[counter].b << std::endl;
 			counter++;

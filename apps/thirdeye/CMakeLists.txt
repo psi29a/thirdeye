@@ -51,8 +51,7 @@ add_executable(thirdeye
 )
 
 target_link_libraries(thirdeye
-    ${SDL2_LIBRARY}
-    ${SDL2MAIN_LIBRARY}
+    SDL3::SDL3
     ${WILDMIDI_LIBRARY}
     ${OPENAL_LIBRARY}
     CLI11::CLI11
