@@ -329,8 +329,10 @@ Value ObjectSystem::send(int objIndex, int message, std::vector<Value> args) {
 	               message == 71 || message == 43 || message == 82 ||
 	               message == 162 || message == 55 || message == 22 ||
 	               message == 235 || message == 208 || message == 233 ||
-	               message == 103 || message == 17);
-	// 103 = experience grant, 17 = place (item dropped by NPC.die)
+	               message == 103 || message == 17 ||
+	               message == 231 || message == 250 || message == 187);
+	// 231 = restore game (fires update-auto-attack-button); 250 = enter game
+	// 187 = activate adventure screen
 	bool aiMsg = (objIndex >= 1750 && objIndex <= 1900 &&
 	              (message == 91 || message == 85 || message == 107 || message == 99));
 	if (kMonTrace && (atkMsg || aiMsg)) {
