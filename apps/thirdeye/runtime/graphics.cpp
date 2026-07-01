@@ -148,8 +148,13 @@ bool tryHandle(Context &ctx, const std::string &fn,
 		                                     px0, py0, px1, py1);
 		if (clipped)
 			ctx.gfx->setClip(px0, py0, px1 - px0 + 1, py1 - py0 + 1);
-		// arg[6] = flip/mirror (GIL2VFX: 1=X, 2=Y, 3=both); the view draws
-		// right-hand walls as the X-mirror of the left-hand shape.
+		// arg[5] = depth-tier scale (256 = native, 128 = half, 64 = quarter);
+		// arg[6] = flip/mirror (GIL2VFX: 1=X, 2=Y, 3=both).
+		// Matches native EOB3's `draw_bitmap(page, table, number, x, y, scale,
+		// flip, fade_table, fade_level)` -- ignoring the scale flattens all
+		// monster sprites to native size, so mists at 1/2/3 cells forward all
+		// render the same size instead of shrinking with distance.
+		int scale = args.size() > 5 ? static_cast<int>(args[5]) : 0;
 		int mirror = args.size() > 6 ? static_cast<int>(args[6]) : 0;
 		// The compass facing indicator (page 102, resource 187) is only drawn on
 		// a turn; mark it so the next compass refresh re-snapshots (see below).
@@ -161,7 +166,7 @@ bool tryHandle(Context &ctx, const std::string &fn,
 			// table = the AESOP resource number; stable for the lifetime of
 			// the loaded asset, so it's a safe shape-cache identity.
 			ctx.gfx->drawImage(fetch(table), number, x, y, true, mirror,
-			                   static_cast<uint32_t>(table));
+			                   static_cast<uint32_t>(table), scale);
 			if (gPerf) {
 				gDrawNanos += std::chrono::duration_cast<std::chrono::nanoseconds>(
 				                  std::chrono::steady_clock::now() - t0).count();

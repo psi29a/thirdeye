@@ -89,7 +89,8 @@ GRAPHICS::Graphics::~Graphics() {
 }
 
 void GRAPHICS::Graphics::drawImage(std::vector<uint8_t> &bmp, uint16_t index,
-		int posX, int posY, bool transparency, int mirror, uint32_t cacheId) {
+		int posX, int posY, bool transparency, int mirror, uint32_t cacheId,
+		int scale) {
 
 	// Cache the decoded shape (un-mirrored): the RLE VFX decode is the per-frame
 	// hotspot for the in-game 3D view, which re-runs the draw bytecode every
@@ -147,12 +148,27 @@ void GRAPHICS::Graphics::drawImage(std::vector<uint8_t> &bmp, uint16_t index,
 	SDL_Surface *surface = makeIndexedSurfaceFrom(
 			const_cast<uint8_t*>(src->data()), iw, ih, iw, mPalette);
 
-	SDL_Rect dest = { posX, posY, iw, ih };
+	// Apply the AESOP depth-tier scale: shape shrinks to (scale/256) of native
+	// size (0 = native). Anchor stays at the sprite's origin, so the offset
+	// half-fills the width/height loss -- centred shrink, matching
+	// GIL2VFX_draw_bitmap's `xp += bounds*(1-scale)/2` in the reference runtime.
+	int dw = iw, dh = ih, ox = posX, oy = posY;
+	if (scale > 0 && scale != 256) {
+		dw = iw * scale / 256;
+		dh = ih * scale / 256;
+		ox += (iw - dw) / 2;
+		oy += (ih - dh) / 2;
+	}
+	SDL_Rect dest = { ox, oy, dw, dh };
 
 	if (transparency) {
 		SDL_SetSurfaceColorKey(surface, true, 0);
 	}
-	SDL_BlitSurface(surface, NULL, mScreen, &dest);
+	if (dw == iw && dh == ih)
+		SDL_BlitSurface(surface, NULL, mScreen, &dest);
+	else
+		SDL_BlitSurfaceScaled(surface, NULL, mScreen, &dest,
+		                      SDL_SCALEMODE_NEAREST);
 	SDL_DestroySurface(surface);
 
 	// Keep the backdrop snapshot in sync with the bitmap art (used to restore a

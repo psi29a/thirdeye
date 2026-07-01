@@ -81,7 +81,21 @@ void runDebugHooks(VM::ObjectSystem &objects, RESOURCES::Resource &res) {
 			setS(1370, 6, -1, 2);           // W:next  (cell chain terminator)
 			setS(1370, 8, -1, 2);           // W:prev  (else remove walks into obj 0)
 			setS(1622, 3, hp, 2);           // NPC hitpts
-			setS(1622, 5, -1, 2);           // NPC carried (head of carried-item chain)
+			// Carried chain: default -1 (empty), or point at a real item obj to
+			// exercise the drop path in NPC.die. THIRDEYE_MONCARRY=<itemObjId>
+			// gives the synthetic monster a single item to drop on death.
+			int carriedHead = -1;
+			if (const char *e = std::getenv("THIRDEYE_MONCARRY")) {
+				int itemObj = std::atoi(e);
+				if (itemObj > 0) {
+					carriedHead = itemObj;
+					// item.W:next = -1 (only one carried item; chain terminator)
+					if (uint8_t *p = objects.classStaticPtr(itemObj, 1370, 6, 2)) {
+						p[0] = 0xFF; p[1] = 0xFF;
+					}
+				}
+			}
+			setS(1622, 5, carriedHead, 2);  // NPC carried (head of carried-item chain)
 			// ponytail: this exists because NPC.die loops on W:carried != -1; an
 			// uninitialized 0 walks into obj 0 and stalls the death path.
 			int32_t ns = 0;

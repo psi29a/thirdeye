@@ -149,9 +149,12 @@ public:
 	// cacheId: a stable id for the bitmap source (use the AESOP resource number
 	// for asset-backed vectors). 0 disables caching for transient buffers whose
 	// storage address may be recycled (e.g. cinematic frames built by value).
+	// scale is the AESOP draw_bitmap `scale` arg: 0 = native size, else the shape
+	// is drawn at scale/256 (so 256 = 100%, 128 = 50%, 64 = 25%). Depth tiers
+	// in the dungeon view rely on this to shrink monster sprites as they recede.
 	void drawImage(std::vector<uint8_t> &bmp, uint16_t index, int posX,
 			int posY, bool transparency = false, int mirror = 0,
-			uint32_t cacheId = 0);
+			uint32_t cacheId = 0, int scale = 0);
 
 	// Blit a raw indexed (8 bpp) pixel buffer onto the screen at (posX, posY),
 	// using the live palette. Used for full-screen CPS backdrops and any other
