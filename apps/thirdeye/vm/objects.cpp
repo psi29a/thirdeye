@@ -341,9 +341,15 @@ Value ObjectSystem::send(int objIndex, int message, std::vector<Value> args) {
 			std::cerr << "\n";
 		}
 	}
-	if (!found)
+	if (!found) {
+		// Even unhandled sends fire the post-send hook -- dungeon.M:232 "init level"
+		// resolves in the dungeon class, but the hook is generic and cheap.
+		if (mPostSendHook) mPostSendHook(objIndex, message);
 		return -1; // no handler anywhere in the hierarchy (matches RT_execute)
-	return runHandler(defClass, offset, objIndex, message, args);
+	}
+	Value r = runHandler(defClass, offset, objIndex, message, args);
+	if (mPostSendHook) mPostSendHook(objIndex, message);
+	return r;
 }
 
 Value ObjectSystem::pass(int objIndex, int message, uint32_t parentClass,

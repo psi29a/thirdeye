@@ -45,14 +45,19 @@ void runDebugHooks(VM::ObjectSystem &objects, RESOURCES::Resource &res) {
 		// party (so "acquire NPC target" finds it via lvlobj plane 2) with a known
 		// HP, so we can watch combat resolve. Class/HP overridable for testing
 		// against a non-bit-64 target (THIRDEYE_MONCLASS=1943 = warrior shade).
-		if (af == 0 && dn >= 0 && kn >= 0) {
+		// THIRDEYE_ATTACK_NOSPAWN=1: drive the auto-attack rail against whatever
+		// monster the bytecode's acquire_NPC_target finds in front of the party --
+		// useful for verifying combat against real LVL-loaded monsters (with their
+		// real init/AI) instead of the synthetic test monster.
+		bool spawn = std::getenv("THIRDEYE_ATTACK_NOSPAWN") == nullptr;
+		if (spawn && af == 0 && dn >= 0 && kn >= 0) {
 			auto kb = [&](int off) -> int {
 				uint8_t *p = objects.classStaticPtr(kn, 1382, off, 1);
 				return p ? *p : 0;
 			};
 			// Party position lives in the kernel's statics at 243/244/245
 			// (party_lvl@246 is read above) -- NOT the import XR offsets 6/8/10.
-			int px = kb(243), py = kb(244), pf = kb(245);
+			int px = kb(243), py = kb(244), pf = kb(245), pl = kb(246);
 			int fx = px, fy = py;
 			if (pf == 0) fy = py - 1;
 			else if (pf == 1) fx = px + 1;
@@ -71,7 +76,10 @@ void runDebugHooks(VM::ObjectSystem &objects, RESOURCES::Resource &res) {
 			setS(1370, 0, fx + fy * 32, 2); // entities place
 			setS(1370, 2, fx, 1);           // x
 			setS(1370, 3, fy, 1);           // y
-			setS(1370, 4, 1, 1);            // lvl
+			setS(1370, 4, pl, 1);           // lvl (match party_lvl, else entities.remove
+			                                 // bails on death without unlinking from the grid)
+			setS(1370, 6, -1, 2);           // W:next  (cell chain terminator)
+			setS(1370, 8, -1, 2);           // W:prev  (else remove walks into obj 0)
 			setS(1622, 3, hp, 2);           // NPC hitpts
 			setS(1622, 5, -1, 2);           // NPC carried (head of carried-item chain)
 			// ponytail: this exists because NPC.die loops on W:carried != -1; an
@@ -83,10 +91,13 @@ void runDebugHooks(VM::ObjectSystem &objects, RESOURCES::Resource &res) {
 			        dn, 1381, 1024 + 4096 + (fy * 64 + fx * 2), 2)) {
 				p[0] = monIdx & 0xFF; p[1] = (monIdx >> 8) & 0xFF;
 			}
+			// Match the real loader: SEND "restore" to kick off AI (notify
+			// for event 34 + schedule attack).
+			try { objects.send(monIdx, 2, {}); } catch (...) {}
 			std::cerr << "[atk] spawned mon " << monIdx << " class " << mc << " hp "
 			          << hp << " NPCstat 0x" << std::hex << ns << std::dec << " at ("
-			          << fx << "," << fy << ") party (" << px << "," << py
-			          << ") fdir " << pf << "\n";
+			          << fx << "," << fy << ") lvl " << pl
+			          << " party (" << px << "," << py << ") fdir " << pf << "\n";
 		}
 		if (++af % 4 == 0) {
 			// Each PC's own B:auto_attack@75 must be set, or use/attack request

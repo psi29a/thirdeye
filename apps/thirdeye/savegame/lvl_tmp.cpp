@@ -67,8 +67,12 @@ int loadLevelObjects(int level, VM::ObjectSystem &objects,
 			// SEND "draw" recursively) -- an uninitialized 0 makes every feature draw
 			// recursively SEND "draw" to object 0, painting whatever it returns into
 			// the viewcell ("stairs in the wall" / green-line artifacts when strafing).
-			// Monsters re-set this below to prepend to the cell's link chain.
+			// Monsters re-set W:next below to prepend to the cell's link chain.
+			// Also init W:prev@8 = -1: entities.remove walks W:prev/W:next on death;
+			// an uninitialized W:prev=0 writes "prev.W:next = my W:next" into obj 0,
+			// silently corrupting its static block.
 			setS(kEntities, 6, -1, 2);
+			setS(kEntities, 8, -1, 2);
 			setS(kFeatures, 0, df, 2);         // decflags (doors/decorations)
 			// Monster? = the record's class has NPC (1622) in its parent chain. (The
 			// old test -- classStaticPtr(id, kNPC) != nullptr -- mis-fired: that returns
@@ -89,6 +93,9 @@ int loadLevelObjects(int level, VM::ObjectSystem &objects,
 			bool isMonster = isNpcClass(cls);
 			if (isMonster) {
 				setS(kNPC, 3, hp, 2);     // hitpts
+				setS(kNPC, 5, -1, 2);     // carried (head of carried-item chain).
+				// NPC.die loops on W:carried != -1 walking the chain; an
+				// uninitialized 0 walks into obj 0 and stalls death.
 				setS(kNPC, 7, 0, 1);      // fdir (creature facing; default 0)
 				setS(kNPC, 9, 0, 1);      // stage (idle frame)
 				// mission@2 default 0: the monster renders + faces the party (its frame
@@ -127,6 +134,15 @@ int loadLevelObjects(int level, VM::ObjectSystem &objects,
 				}
 				cellp[0] = id & 0xFF;
 				cellp[1] = (id >> 8) & 0xFF;
+			}
+			// SEND "restore" (M:2) to monsters. The native loader does this -- it's
+			// NPC.restore that registers the watch-for-party notify (event 34) and
+			// SENDs "schedule attack" to queue the first AI turn. Without it
+			// monsters never tick: fdir stays 0 (always show their back), they
+			// never advance toward the party, never swing back.
+			if (isMonster) {
+				try { objects.send(id, 2, {}); }
+				catch (const std::exception &) {}
 			}
 			seen[id] = true;
 			++placed;

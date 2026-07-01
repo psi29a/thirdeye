@@ -669,6 +669,13 @@ bool tryHandle(Context &ctx, const std::string &fn,
 						setSlot(static_cast<uint32_t>(slotIdx), static_cast<int16_t>(idx));
 						++placed;
 					}
+					// L:timer[0..15] (16 longs @ offset 1) = -1 "inactive". createProgram
+					// zero-fills; the heartbeat treats timer == 0 as "fire now" and runs the
+					// slot handler (slot 5 = poison damage, 8 = disease, 10 = lvl drain,
+					// etc.), so a fresh PC starts poisoning itself on the first tick. -1
+					// means "no event scheduled" and the handler skips.
+					if (uint8_t *tp = ctx.objects.classStaticPtr(idx, kPcClass, 1, 64))
+						std::memset(tp, 0xFF, 64);
 
 					auto wb = [&](uint32_t off, int sz, int32_t v) {
 						if (uint8_t *p = ctx.objects.classStaticPtr(idx, kPcClass, off, sz))
@@ -756,6 +763,20 @@ bool tryHandle(Context &ctx, const std::string &fn,
 				                      " created from scratch (CINE)"
 				                    : "")
 				     << "]" << std::endl;
+				// SEND each live PC "restore" (M:2). PC.restore registers the
+				// heartbeat notify via PROCEDURE_389 (notify(THIS, 154, SYS_TIMER,
+				// tick+6)) and resets hand flags. Without it L:timer never
+				// decrements, so the swing's `<MISS>`/`<HIT>` overlay -- set when
+				// h_stat |= 4 -- never clears.
+				for (size_t slotIdx = 0; slotIdx < items.characters.size(); ++slotIdx) {
+					const auto &c = items.characters[slotIdx];
+					if (c.classNumber != 1369) continue;
+					int idx = c.objectIndex;
+					if (idx <= 0) continue;
+					if (ctx.objects.objectLookup(idx) != idx) continue;
+					try { ctx.objects.send(idx, 2, {}); }
+					catch (const std::exception &) {}
+				}
 			}
 
 			// (4) Position seeding.
@@ -839,6 +860,23 @@ bool tryHandle(Context &ctx, const std::string &fn,
 		rt() << "  [resume_level: instantiated " << areaCount
 		     << " area-class singletons (SOP \"enter level\" cascade)]"
 		     << std::endl;
+		// Register a one-time hook to re-populate lvlobj after dungeon.M:232
+		// "init level" fires from kernel.enter_game (right after resume_level
+		// returns). init_level clears all 3 lvlobj planes to -1 -- our earlier
+		// loadLevelObjects placement is lost otherwise, so acquire_NPC_target
+		// finds an empty grid and every swing returns "no target". Also fires
+		// on change_level, keeping the semantics consistent across boot + level
+		// transitions.
+		ctx.objects.setPostSendHook(
+		    [&ctx](int objIndex, int message) {
+			    if (objIndex != 2001 || message != 232) return;
+			    uint8_t lvl = 1;
+			    int kn = ctx.objects.firstObjectOfClass(1382);
+			    if (kn >= 0)
+				    if (uint8_t *p = ctx.objects.classStaticPtr(kn, 1382, 246, 1))
+					    lvl = *p ? *p : 1;
+			    THIRDEYE::savegame::loadLevelObjects(lvl, ctx.objects, ctx.res);
+		    });
 		result = 0;
 		return true;
 	}
