@@ -1,8 +1,10 @@
 #include "gtest/gtest.h"
 
 #include "../thirdeye/savegame/items_tmp.hpp"
+#include "../thirdeye/savegame/lvl_tmp.hpp"
 #include "../thirdeye/savegame/savegame_dir.hpp"
 #include "../thirdeye/savegame/transfer.hpp"
+#include "../thirdeye/vm/objects.hpp"
 
 #include <algorithm>
 #include <atomic>
@@ -881,4 +883,45 @@ TEST(AreaInstances_Test, ParsesBundledItems00Bin) {
 	EXPECT_EQ(2409, slotClass[1]);  // mauslvl1
 	EXPECT_EQ(2412, slotClass[2]);  // mauslvl2
 	EXPECT_EQ(2415, slotClass[3]);  // graveyrd
+}
+
+// saveRange (RTOBJECT.C save_range SF_BIN): 0x1A, then per slot a CDESC
+// {u16 slot, u32 class, u16 size} + raw statics; dead slot = 0xFFFFFFFF/0.
+TEST(SaveRange_Test, RoundTripsLiveAndDeadSlots) {
+	VM::ObjectSystem objects;
+	VM::SopClass cls;
+	cls.number = 1400;
+	cls.name = "testobj";
+	cls.code.assign(14, 0);
+	cls.header.static_size = 6;
+	objects.addClass(std::move(cls));
+	objects.createProgram(1000, 1400);
+	objects.createProgram(1005, 1400);
+	uint8_t *p = objects.staticsPtr(1000, 0, 6);
+	ASSERT_NE(nullptr, p);
+	for (int i = 0; i < 6; ++i) p[i] = static_cast<uint8_t>(0xA0 + i);
+
+	auto path = std::filesystem::temp_directory_path() / "thirdeye_saverange.bin";
+	ASSERT_TRUE(THIRDEYE::savegame::saveRange(objects, path, 1000, 1010));
+
+	std::ifstream in(path, std::ios::binary);
+	std::vector<uint8_t> d((std::istreambuf_iterator<char>(in)),
+	                       std::istreambuf_iterator<char>());
+	std::filesystem::remove(path);
+	// 1 header byte + 2 live records (8+6) + 9 dead records (8).
+	ASSERT_EQ(1u + 2 * 14 + 9 * 8, d.size());
+	EXPECT_EQ(0x1A, d[0]);
+	// Live record for slot 1000.
+	EXPECT_EQ(1000, d[1] | (d[2] << 8));
+	EXPECT_EQ(1400u, static_cast<uint32_t>(d[3] | (d[4] << 8) |
+	                                       (d[5] << 16) | (d[6] << 24)));
+	EXPECT_EQ(6, d[7] | (d[8] << 8));
+	for (int i = 0; i < 6; ++i) EXPECT_EQ(0xA0 + i, d[9 + i]);
+	// Next record: slot 1001, dead.
+	size_t o = 1 + 14;
+	EXPECT_EQ(1001, d[o] | (d[o + 1] << 8));
+	EXPECT_EQ(0xFFFFFFFFu, static_cast<uint32_t>(d[o + 2] | (d[o + 3] << 8) |
+	                                             (d[o + 4] << 16) |
+	                                             (uint32_t(d[o + 5]) << 24)));
+	EXPECT_EQ(0, d[o + 6] | (d[o + 7] << 8));
 }

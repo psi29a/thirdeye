@@ -52,9 +52,10 @@ of hex scan codes, one per ~40 pumps; last code repeats) + `THIRDEYE_DUMP` (BMP
 snapshot per present), then diff with Pillow.
 
 ```bash
-# title menu Down → Enter (Continue) → Enter (load save) → turn-right → walk fwd ×4
+# title menu Enter (Continue — already selected when a save exists) → Enter
+# (load slot 1) → turn-right → walk fwd ×4
 THIRDEYE_DUMP=/tmp/f_%d.bmp \
-THIRDEYE_AUTOWALK=5000,0d,0d,4900,4800,4800,4800,4800 \
+THIRDEYE_AUTOWALK=0d,0d,4900,4800,4800,4800,4800 \
   build/thirdeye.app/Contents/MacOS/thirdeye ../data/EYE.RES --skip-intro --vm --scale=2 &
 sleep 15 && kill -INT $!
 python3 -c "from PIL import Image, ImageChops; \
@@ -68,7 +69,10 @@ Codes: `4800`=fwd `5000`=back `4b00`/`4d00`=strafe L/R `4700`/`4900`=turn L/R `0
 how we caught the page-92-vs-99 wall-clip bug (see [progress.md](docs/progress.md)).
 `THIRDEYE_PARTY=x,y,fdir` seeds position/facing. To reach gameplay, drive the title
 menu through `THIRDEYE_AUTOWALK` (no shortcut env var — the shortcut bypassed SOP
-state and reproduced bugs that didn't exist in real play).
+state and reproduced bugs that didn't exist in real play). Menu gotchas: with a
+save present the menu starts on "Continue the Quest" (a `5000` Down moves you to
+"Gather a New Party" → chargen); the Florn Falconhand cutscene now shows a
+dialog selector — an extra `0d` picks the first choice and dismisses it.
 
 ## What runs today
 
@@ -97,6 +101,14 @@ The current top-of-stack work item is save/load + party import — combat now la
   is supposed to behave, how `create_program` initializes state, how events dispatch.
   Reach for `daesop` only as a *debugging* tool, to confirm what the bytecode expects of
   our runtime — never to "fix" the SOP itself.
+- **EOB3-specific runtime C lives in `../eob3_research/arun/src/`, not `runtime/`.**
+  `runtime/EYE.C` is the later AESOP/32 build and is missing the EOB3-only CALLs;
+  `arun/src/EYE.C` is the 16-bit "Eye III engine support" original (28-Oct-92) with
+  `spell_request`/`spell_list`/`magic_field`/`do_dots`/`do_ice`/`step_square_*`/the whole
+  save cluster, plus `GRAPHICS.C`'s `solid_bar_graph` etc. Its box-drawing comment bytes
+  make grep treat it as binary — **use `grep -a`**. Constants (`MTYP_*`, `DIR_*`, `LVL_X`,
+  `NUM_SAVEGAMES`) are in `arun/src/SHARED.H`; `save_range`'s CDESC record format is in
+  `arun/src/RTOBJECT.C`/`RTOBJECT.H`.
 - **VM stack discipline is subtle.** `PUSH` reserves a slot, value loads/constants
   **overwrite the top slot in place** (which is why real bytecode emits a `PUSH` before each
   load), scalar stores don't pop, binary ops are left=second/right=top, branches don't pop.

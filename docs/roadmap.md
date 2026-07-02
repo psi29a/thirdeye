@@ -139,6 +139,51 @@ itself — helpers `THIRDEYE_ATTACK_RESPAWN` (auto-respawn the test monster) and
 `THIRDEYE_XPBLAST=N` (one-shot direct M:103) live in
 [runtime/event.cpp](../apps/thirdeye/runtime/event.cpp) for regression checks.
 
+### ✅ Runtime-import survey + batch fill (2026-07-02)
+
+Diffed **every `C:` import in EYE.RES (118)** against the names our runtime
+handles; 57 were falling through to `[stub -> 0]`. `defaultRuntimeCall` now
+logs the first call to each unhandled function unconditionally (`[stub] name`,
+engine.cpp) so new gaps surface themselves. Ground-truth discovery along the
+way: the EOB3-specific 16-bit `EYE.C` (spells, save cluster, `step_square_*`)
+lives in **`../eob3_research/arun/src/`**, not `runtime/` (see CLAUDE.md
+gotchas — `grep -a` required). Implemented, all ported verbatim from the C:
+
+- **Geometry**: `step_square_X/Y` + `step_region` (half-cell projectile
+  flight), `step_X/Y` extended with the `MTYP_ML/MM/MR` maze-passage moves +
+  the 32-cell coordinate wrap.
+- **Spell queries**: `spell_request` (rest-tick "any spell still to
+  memorize?") and `spell_list` (spell-menu list builder), both reading the
+  PC's `B:spell_stat`/`B:spell_cnt` arrays through a new bounds-checked
+  `staticBytePtr` helper (runtime/internal.cpp).
+- **Strings** (RTCODE.C): `string_len`, `strval`, `envval` (full `ascnum`
+  port incl. `0x`/`0b`/`'c`), `copy_string`, `load_string`;
+  `string_compare` fixed to `stricmp` semantics (case-insensitive).
+- **Text metrics**: `get_text_x/y`, `char_width`, `font_height`, `crout`,
+  `dprint`, `text_refresh_window` (recorded no-op — we present whole-screen).
+- **Graphics**: `draw_line` (+ `Graphics::drawLine`, Bresenham),
+  `draw_rectangle`, `hash_rectangle` (+ `hashRect` checkerboard),
+  `solid_bar_graph` (the HP/food bars, verbatim port), `magic_field`
+  (shield/prayer portrait borders incl. the dashed both-fields pattern),
+  `visible_bitmap_rect` (sprite click hit-testing; writes 4 WORDs into SOP
+  statics), `mouse_in_window`, `pixel_fade` (instant present for now).
+- **No-op'd knowingly**: cursor set (`show/hide/lock/unlock_mouse`,
+  `standby/resume_cursor`, `set_wait_pointer`), cache (`flush/thrash_cache`),
+  `init/shutdown_graphics/interface`, `wait_vertical_retrace`, `beep`,
+  `diagnose`, `create_initial_binary_files` (dev-time TXT→BIN translation).
+
+**Still stubbed** (visible in the `[stub]` log): the sound set (`init_sound`,
+`load_sound_block`, `set_sound_status`, `sound_effect`, `load_music`,
+`unload_music`, `play_sequence`, `shutdown_sound` — deferred on purpose),
+`do_dots`/`do_ice` (fireball/cone-of-cold particle animations — blocking
+GIL2VFX loops with per-pixel occlusion reads; purely visual, damage happens
+in bytecode), and `getkey` (blocking key wait; no SOP path hit yet).
+
+Golden-path regression (title → restore → walk): **only sound stubs remain**.
+NB the harness key script changed — with a save present the title menu
+defaults to "Continue the Quest", so it's `THIRDEYE_AUTOWALK=0d,0d,…` now
+(the old leading `5000` walks you into "Gather a New Party"/chargen).
+
 ### 🚧 Save / load (the savegame format)
 
 *Done:*
@@ -177,6 +222,40 @@ itself — helpers `THIRDEYE_ATTACK_RESPAWN` (auto-respawn the test monster) and
   function handles clearing (matches `GIL2VFX_select_text_window` vs
   `GIL2VFX_wipe_window` separation). Mouse-click routing through `mouse_XY()`
   wired against `EventSystem::pointX/pointY`.
+
+- **In-game save — landed (2026-07-02).** The serializer core is
+  [`savegame::saveRange`](../apps/thirdeye/savegame/lvl_tmp.cpp): RTOBJECT.C
+  `save_range`'s SF_BIN format (0x1A byte, then per slot a CDESC
+  `{u16 slot, u32 class, u16 size}` + raw instance statics; dead slot =
+  `0xFFFFFFFF/0`), verified byte-compatible against the shipped `*_00.BIN`
+  files — a live-game LVL03 dump comes out at **exactly** the shipped 13436 B
+  and ITEMS within 7 B (the live object population differs slightly from a
+  fresh save, as it should). Runtime functions wired in
+  [runtime/eye.cpp](../apps/thirdeye/runtime/eye.cpp): `save_game(slot, lvl)`
+  (live items → `ITEMS_nn.BIN`, live level objs → `LVLxx_nn.BIN`, other
+  levels' `.TMP` copied over), `suspend_game(lvl)` (live →
+  `ITEMS.TMP`/`LVLxx.TMP`),
+  `read_save_directory` (SAVEGAME.DIR → the slot-name buffer; the original's
+  `savegame_dir[]`), `write_save_directory` (buffer → 12 CRLF lines + 0x1A,
+  byte-format-identical to the shipped file). `savegame_title` no longer
+  re-reads disk once its slot buffer is populated, so the save UI's
+  `copy_string`-rename → `write_save_directory` flow can't be clobbered by a
+  picker re-render. `resume_items` is a deliberate no-op (our `resume_level`
+  path rebuilds PCs + items already). Checks: `SaveRange_Test` unit test +
+  `THIRDEYE_SAVETEST=N` one-shot (runtime/event.cpp) that dumps live state
+  through the serializer mid-game.
+
+- **Slot-mapping fix (2026-07-02):** slot numbers map to file suffixes
+  VERBATIM (EYE.C `set_save_slotnum`) — picker slot 1 ("Quick Start Party" =
+  SAVEGAME.DIR line 1) = `ITEMS_01.BIN`/`LVLxx_01.BIN`. **Slot 0 is the
+  new-game *initial* state** ("Read initial (slot 0) items" in EYE.C;
+  `save_game` abends on slot 0), and a real DOS new-game legitimately
+  overwrites it — on this install `ITEMS_00.BIN` holds an old DOS-era rolled
+  party ("THELMA"), which is how the bug surfaced: our previous `slot-1`
+  mapping restored slot 0's THELMA party instead of the QSP.
+  `restore_items`/`restore_level_objects`/`save_game` now use the slot
+  verbatim; verified end-to-end (restore → "Sir Mikeal" HP 97/97 STR 18/94
+  equip 994/993/992; all 105 unit tests green incl. `ParsesQuickStartParty`).
 
 *Remaining:*
 - ~~**Drop the `THIRDEYE_CONTINUE` gate.**~~ ✅ done. `bootObject` auto-detects:

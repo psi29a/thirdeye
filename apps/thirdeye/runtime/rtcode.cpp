@@ -1,9 +1,41 @@
 #include "internal.hpp"
 
+#include "../resources/res.hpp"
+
+#include <cctype>
 #include <chrono>
+#include <cstdlib>
+#include <cstring>
 #include <random>
 
 namespace THIRDEYE::runtime::rtcode {
+
+namespace {
+
+// RTSYSTEM.C ascnum: numeric value of an ASCII string. Supports leading
+// whitespace, +/-, 'c char literals, 0x hex and 0b binary prefixes; returns
+// -1 if the string has no parseable value.
+int32_t ascnum(const std::string &s) {
+	size_t i = 0;
+	while (i < s.size() && std::isspace(static_cast<unsigned char>(s[i]))) ++i;
+	bool neg = false;
+	if (i < s.size() && (s[i] == '-' || s[i] == '+')) {
+		neg = s[i] == '-';
+		++i;
+	}
+	if (i < s.size() && s[i] == '\'')
+		return i + 1 < s.size() ? static_cast<int32_t>(s[i + 1]) : -1;
+	int base = 10;
+	if (s.compare(i, 2, "0x") == 0) { base = 16; i += 2; }
+	else if (s.compare(i, 2, "0b") == 0) { base = 2; i += 2; }
+	const char *begin = s.c_str() + i;
+	char *end = nullptr;
+	long v = std::strtol(begin, &end, base);
+	if (end == begin) return -1;
+	return static_cast<int32_t>(neg ? -v : v);
+}
+
+} // namespace
 
 bool tryHandle(Context &ctx, const std::string &fn,
                const std::vector<VM::Value> &args, VM::Value &result) {
@@ -59,6 +91,54 @@ bool tryHandle(Context &ctx, const std::string &fn,
 		static std::mt19937 rng(0x9e3779b9u);
 		int n = static_cast<int>(args[0]);
 		result = n > 0 ? static_cast<int>(rng() % static_cast<uint32_t>(n)) : 0;
+		return true;
+	}
+	// --- string helpers (RTCODE.C) ---
+	if (fn == "string_len" && args.size() >= 1) {
+		result = static_cast<VM::Value>(ctx.vm.readString(args[0]).size());
+		return true;
+	}
+	// strval(string) / envval(name): numeric value of a string / of a DOS
+	// environment variable, -1 if absent or unparseable.
+	if (fn == "strval" && args.size() >= 1) {
+		result = ascnum(ctx.vm.readString(args[0]));
+		return true;
+	}
+	if (fn == "envval" && args.size() >= 1) {
+		const char *env = std::getenv(ctx.vm.readString(args[0]).c_str());
+		result = env ? ascnum(env) : -1;
+		return true;
+	}
+	// copy_string(src, dest): strcpy into a SOP static array (e.g. the typed
+	// save-slot name into the buffer savegame_title returned).
+	if (fn == "copy_string" && args.size() >= 2) {
+		std::string src = ctx.vm.readString(args[0]);
+		uint8_t *dest = staticBytePtr(ctx, args[1],
+		                              static_cast<uint32_t>(src.size()) + 1);
+		if (dest)
+			std::memcpy(dest, src.c_str(), src.size() + 1);
+		result = 0;
+		return true;
+	}
+	// load_string(array, string_res): copy an "S:"-prefixed string resource's
+	// text (sans prefix) into a SOP static array.
+	if (fn == "load_string" && args.size() >= 2) {
+		result = 0;
+		try {
+			std::vector<uint8_t> &s =
+			    ctx.res.getAsset(static_cast<uint16_t>(args[1]));
+			if (s.size() >= 2 && s[0] == 'S' && s[1] == ':') {
+				uint32_t n = static_cast<uint32_t>(s.size()) - 2;
+				if (uint8_t *dest = staticBytePtr(ctx, args[0], n))
+					std::memcpy(dest, s.data() + 2, n);
+			}
+		} catch (const std::exception &) {}
+		return true;
+	}
+	// beep: PC-speaker chirp -- no-op (sound work deferred).
+	// diagnose(dtype, parm): original debug/heap diagnostics -- no-op.
+	if (fn == "beep" || fn == "diagnose") {
+		result = 0;
 		return true;
 	}
 	return false;

@@ -109,6 +109,41 @@ bool tryHandle(Context &ctx, const std::string &fn,
 		return true;
 	}
 
+	// Cursor / cache / init no-ops: SDL owns the real OS cursor (set_mouse_
+	// pointer swaps its bitmap; show/hide/lock and the standby "hourglass"
+	// have no equivalent), our resource layer keeps assets resident (no LRU
+	// cache to flush/thrash), graphics+interface init happens natively in
+	// bootObject, and presents are vsynced (no retrace wait).
+	if (fn == "show_mouse" || fn == "hide_mouse" || fn == "lock_mouse" ||
+	    fn == "unlock_mouse" || fn == "standby_cursor" ||
+	    fn == "resume_cursor" || fn == "set_wait_pointer" ||
+	    fn == "wait_vertical_retrace" || fn == "init_graphics" ||
+	    fn == "shutdown_graphics" || fn == "init_interface" ||
+	    fn == "shutdown_interface" || fn == "flush_cache" ||
+	    fn == "thrash_cache") {
+		result = 0;
+		return true;
+	}
+	// mouse_in_window(wnd): is the pointer inside the window's rect right now
+	// (INTRFACE.C -- reads point_X/point_Y against the pane edges). Pure event
+	// state, so it works headless too.
+	if (fn == "mouse_in_window" && args.size() >= 1) {
+		int32_t x0, y0, x1, y1;
+		result = 0;
+		if (ctx.events.windowRect(args[0], x0, y0, x1, y1)) {
+			int32_t px = ctx.events.pointX(), py = ctx.events.pointY();
+			result = (px >= x0 && px <= x1 && py >= y0 && py <= y1) ? 1 : 0;
+		}
+		return true;
+	}
+	// text_refresh_window(wndnum, wnd): the original just records which
+	// graphics window to refresh after prints to text window wndnum; our
+	// present path refreshes the whole screen, so recording is unnecessary.
+	if (fn == "text_refresh_window") {
+		result = 0;
+		return true;
+	}
+
 	// The rest of this category needs the graphics target. In headless mode
 	// (no display) we fall through so the engine logs a stub trace.
 	if (!ctx.gfx)
@@ -361,6 +396,128 @@ bool tryHandle(Context &ctx, const std::string &fn,
 		ctx.gfx->setTextXY(static_cast<int>(args[0]), static_cast<int>(args[1]),
 		                   static_cast<int>(args[2]));
 		result = 0;
+		return true;
+	}
+	// get_text_x/get_text_y(wndnum) -- the text cursor (htab/vtab). The SOP
+	// uses these to position follow-on prints (e.g. inline item names).
+	if ((fn == "get_text_x" || fn == "get_text_y") && args.size() >= 1) {
+		int x = 0, y = 0;
+		ctx.gfx->textCursor(static_cast<int>(args[0]), x, y);
+		result = fn == "get_text_x" ? x : y;
+		return true;
+	}
+	// char_width(wndnum, ch) / font_height(wndnum) -- glyph metrics of the
+	// window's bound font. The spell/camp menus measure text with these.
+	if (fn == "char_width" && args.size() >= 2) {
+		result = ctx.gfx->textCharWidth(static_cast<int>(args[0]),
+		                                static_cast<uint8_t>(args[1]));
+		return true;
+	}
+	if (fn == "font_height" && args.size() >= 1) {
+		result = ctx.gfx->textFontHeight(static_cast<int>(args[0]));
+		return true;
+	}
+	// crout(wndnum): newline (GRAPHICS.C sprint(wnd, "\n")).
+	if (fn == "crout" && args.size() >= 1) {
+		ctx.gfx->printText(static_cast<int>(args[0]), "\n");
+		result = 0;
+		return true;
+	}
+	// dprint(format, ...): diagnostic print into the main text window (0).
+	if (fn == "dprint" && args.size() >= 1) {
+		std::string out = formatSop(ctx.vm.readString(args[0]), args, 1, ctx.vm);
+		ctx.gfx->printText(0, out);
+		rt() << "  [dprint \"" << out << "\"]" << std::endl;
+		result = 0;
+		return true;
+	}
+	// draw_line(page, x1, y1, x2, y2, color) / draw_rectangle(wnd, x1, y1,
+	// x2, y2, color) / hash_rectangle(...): GIL2VFX line/outline/checkerboard
+	// primitives. Pages composite onto the one screen surface (as elsewhere).
+	if (fn == "draw_line" && args.size() >= 6) {
+		ctx.gfx->drawLine(static_cast<int>(args[1]), static_cast<int>(args[2]),
+		                  static_cast<int>(args[3]), static_cast<int>(args[4]),
+		                  static_cast<uint8_t>(args[5]));
+		result = 0;
+		return true;
+	}
+	if (fn == "draw_rectangle" && args.size() >= 6) {
+		int x1 = static_cast<int>(args[1]), y1 = static_cast<int>(args[2]);
+		int x2 = static_cast<int>(args[3]), y2 = static_cast<int>(args[4]);
+		uint8_t c = static_cast<uint8_t>(args[5]);
+		ctx.gfx->drawLine(x1, y1, x2, y1, c);
+		ctx.gfx->drawLine(x1, y2, x2, y2, c);
+		ctx.gfx->drawLine(x1, y1, x1, y2, c);
+		ctx.gfx->drawLine(x2, y1, x2, y2, c);
+		result = 0;
+		return true;
+	}
+	if (fn == "hash_rectangle" && args.size() >= 6) {
+		ctx.gfx->hashRect(static_cast<int>(args[1]), static_cast<int>(args[2]),
+		                  static_cast<int>(args[3]), static_cast<int>(args[4]),
+		                  static_cast<uint8_t>(args[5]));
+		result = 0;
+		return true;
+	}
+	// solid_bar_graph(x0, y0, x1, y1, lb_border, tr_border, bkgnd, grn, yel,
+	// red, val, min, crit, max): the HUD HP/food bars (GRAPHICS.C, verbatim).
+	if (fn == "solid_bar_graph" && args.size() >= 14) {
+		int x0 = static_cast<int>(args[0]), y0 = static_cast<int>(args[1]);
+		int x1 = static_cast<int>(args[2]), y1 = static_cast<int>(args[3]);
+		uint8_t lb = static_cast<uint8_t>(args[4]);
+		uint8_t tr = static_cast<uint8_t>(args[5]);
+		uint8_t bkgnd = static_cast<uint8_t>(args[6]);
+		uint8_t grn = static_cast<uint8_t>(args[7]);
+		uint8_t yel = static_cast<uint8_t>(args[8]);
+		uint8_t red = static_cast<uint8_t>(args[9]);
+		int32_t val = args[10], mn = args[11], crit = args[12], mx = args[13];
+		ctx.gfx->drawLine(x0, y0, x0, y1, lb);
+		ctx.gfx->drawLine(x0, y1, x1, y1, lb);
+		ctx.gfx->drawLine(x1, y1 - 1, x1, y0, tr);
+		ctx.gfx->drawLine(x1, y0, x0 + 1, y0, tr);
+		int btop = y0 + 1, bbtm = y1 - 1, blft = x0 + 1, brgt = x1 - 1;
+		int width = brgt - blft;
+		if (val > mx) val = mx;
+		else if (val < mn) val = mn;
+		int range = mx - mn;
+		if (range == 0) range = 1; // degenerate SOP args; original would /0
+		int grayx = blft + (val - mn) * width / range;
+		if (grayx != brgt)
+			ctx.gfx->fillRect(grayx, btop, brgt, bbtm, bkgnd);
+		uint8_t color = (val <= crit) ? red : (val * 3 >= mx ? grn : yel);
+		if (val != mn && grayx == blft)
+			grayx = blft + 1;
+		if (grayx != blft)
+			ctx.gfx->fillRect(blft, btop, grayx, bbtm, color);
+		result = 0;
+		return true;
+	}
+	// pixel_fade(src_wnd, dest_wnd, intervals): a dissolve transition between
+	// pages. We composite on one surface, so just present the current state.
+	// ponytail: instant cut instead of the dissolve; revisit if it jars.
+	if (fn == "pixel_fade") {
+		ctx.gfx->update();
+		result = 0;
+		return true;
+	}
+	// visible_bitmap_rect(x, y, flip, table, number, array): bounding box of
+	// the shape's visible pixels -> 4 WORDs into a SOP static array; returns
+	// 0 if nothing visible. The SOP hit-tests monster clicks with this.
+	if (fn == "visible_bitmap_rect" && args.size() >= 6) {
+		int out[4] = {0, 0, 0, 0};
+		bool vis = false;
+		try {
+			vis = ctx.gfx->visibleBitmapRect(
+			    fetch(args[3]), static_cast<uint16_t>(args[4]),
+			    static_cast<int>(args[0]), static_cast<int>(args[1]),
+			    static_cast<int>(args[2]), out);
+		} catch (const std::exception &) {}
+		if (int16_t *arr = reinterpret_cast<int16_t *>(
+		        staticBytePtr(ctx, args[5], 8))) {
+			for (int i = 0; i < 4; ++i)
+				arr[i] = static_cast<int16_t>(out[i]);
+		}
+		result = vis ? 1 : 0;
 		return true;
 	}
 	// sprint(wndnum, format_addr, args...) -- printf-style print to a text

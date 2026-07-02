@@ -163,6 +163,12 @@ public:
 	// the blit), so sprite art over a backdrop reads cleanly.
 	void drawIndexed(const std::vector<uint8_t> &pixels, int width, int height,
 			int posX, int posY, bool transparent = false);
+	// Bounding box of the non-transparent pixels of shape `index` drawn at
+	// (posX, posY) with `mirror`, clamped to the screen; writes {x0,y0,x1,y1}
+	// into out. Returns false if nothing would be visible
+	// (GIL2VFX_visible_bitmap_rect -- the SOP hit-tests sprite clicks with it).
+	bool visibleBitmapRect(std::vector<uint8_t> &bmp, uint16_t index, int posX,
+			int posY, int mirror, int out[4]);
 
 	// Constrain subsequent blits to a rectangle on the screen surface (used to
 	// clip the dungeon 3D view to its window so wide wall shapes don't bleed into
@@ -180,6 +186,13 @@ public:
 	// the character-stats screen clears the equipment area first); also refreshes the
 	// text-free backdrop snapshot so later text overlays the cleared box, not stale art.
 	void fillRect(int x0, int y0, int x1, int y1, uint8_t color);
+	// Palette-indexed line (GIL2VFX_draw_line). Axis-aligned lines are one
+	// fillRect; diagonals walk Bresenham. Writes the backdrop too (a drawn
+	// line is panel state, same as fillRect).
+	void drawLine(int x0, int y0, int x1, int y1, uint8_t color);
+	// Every-other-pixel checkerboard fill (VFX_rectangle_hash) -- the SOP's
+	// "grayed out" UI treatment.
+	void hashRect(int x0, int y0, int x1, int y1, uint8_t color);
 	void drawText(std::vector<uint8_t> &fnt, std::string text, uint16_t posX,
 			uint16_t posY);
 
@@ -237,6 +250,12 @@ public:
 	void setTextFont(int wndnum, int fontId, std::vector<uint8_t> &fontRes);
 	void setTextColor(int wndnum, uint8_t color);   // text_color's remap target
 	void setTextXY(int wndnum, int x, int y);
+	// Text-cursor + font-metric readbacks (GRAPHICS.C get_text_x/get_text_y,
+	// char_width, font_height). Metric getters return 0 for an unknown
+	// window/font; textCursor returns false and leaves x/y untouched.
+	bool textCursor(int wndnum, int &x, int &y) const;
+	int textCharWidth(int wndnum, uint8_t ch);
+	int textFontHeight(int wndnum);
 	// Bind a text window to a graphics-window rectangle: records the extent (for
 	// centering) and clears the interior to its background, so previously-drawn
 	// (or bitmap-baked) text there doesn't ghost under the fresh text.

@@ -1,5 +1,6 @@
 #include "internal.hpp"
 
+#include "../graphics/graphics.hpp"
 #include "../resources/res.hpp"
 #include "../savegame/items_tmp.hpp"
 #include "../savegame/lvl_tmp.hpp"
@@ -7,6 +8,7 @@
 #include "../savegame/transfer.hpp"
 #include "../vm/objects.hpp"
 
+#include <cctype>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -96,14 +98,20 @@ bool tryHandle(Context &ctx, const std::string &fn,
 		// (we observed "__________________________" in the picker trace).
 		constexpr size_t kEmptyMarkLen = 26;
 		uint8_t *p = gSlotNameBuf + slot * kSlotNameLen;
-		std::memset(p, 0, kSlotNameLen);
-		if (name.empty()) {
-			std::memset(p, '_',
-			            std::min<size_t>(kEmptyMarkLen, kSlotNameLen - 1));
-		} else {
-			size_t n = std::min(name.size(),
-			                    static_cast<size_t>(kSlotNameLen - 1));
-			std::memcpy(p, name.data(), n);
+		// Only (re)fill from disk while the slot buffer is empty. Once
+		// populated -- by us or by the SOP (the save UI copy_string's the
+		// typed slot name into this buffer before write_save_directory) --
+		// the buffer is the live truth and a disk re-read would clobber it.
+		if (p[0] == 0) {
+			std::memset(p, 0, kSlotNameLen);
+			if (name.empty()) {
+				std::memset(p, '_',
+				            std::min<size_t>(kEmptyMarkLen, kSlotNameLen - 1));
+			} else {
+				size_t n = std::min(name.size(),
+				                    static_cast<size_t>(kSlotNameLen - 1));
+				std::memcpy(p, name.data(), n);
+			}
 		}
 		result = VM::makeAddr(VM::AddrSpace::Static,
 		                      static_cast<uint32_t>(slot * kSlotNameLen),
@@ -113,12 +121,17 @@ bool tryHandle(Context &ctx, const std::string &fn,
 		     << "]" << std::endl;
 		return true;
 	}
-	// restore_items(slot) -- copy SAVEGAME/ITEMS_(slot-1):02d.BIN -> ITEMS.TMP.
+	// restore_items(slot) -- copy SAVEGAME/ITEMS_(slot):02d.BIN -> ITEMS.TMP.
 	// The SOP's save picker calls this after the user clicks a used slot;
 	// resume_level later reads ITEMS.TMP and seeds the party from it.
+	// Slot number maps to the file suffix VERBATIM (EYE.C set_save_slotnum):
+	// picker slot 1 ("Quick Start Party" = SAVEGAME.DIR line 1) = ITEMS_01.BIN.
+	// Slot 0 = the new-game INITIAL state ("Read initial (slot 0) items" in
+	// EYE.C; save_game abends on it) -- a real DOS new-game overwrites
+	// ITEMS_00.BIN with the rolled party, so it is NOT a pristine QSP copy.
 	if (fn == "restore_items" && args.size() >= 1) {
 		int slot = static_cast<int>(args[0]);
-		int idx  = slot - 1; // SOP is 1-based; backup files are 00, 01.
+		int idx  = slot;
 		auto dir = ctx.res.resourcePath().parent_path() / "SAVEGAME";
 		bool ok = THIRDEYE::savegame::restoreItems(dir, idx);
 		rt() << "  [restore_items: slot " << idx
@@ -133,7 +146,7 @@ bool tryHandle(Context &ctx, const std::string &fn,
 	// levels in one shot so subsequent change_level reads the right state.)
 	if (fn == "restore_level_objects" && args.size() >= 1) {
 		int slot = static_cast<int>(args[0]);
-		int idx  = slot - 1;
+		int idx  = slot; // verbatim slot -> file suffix (see restore_items)
 		auto dir = ctx.res.resourcePath().parent_path() / "SAVEGAME";
 		// Re-confirm the ITEMS.TMP refresh BEFORE counting level copies.
 		// The SOP pairs restore_items + restore_level_objects, but if the
@@ -164,18 +177,154 @@ bool tryHandle(Context &ctx, const std::string &fn,
 		return true;
 	}
 	if (fn == "string_compare" && args.size() >= 2) {
-		// strcmp semantics: 0 = equal, nonzero = different. Both args are
-		// tagged addresses (Code string OR Static/Extern buffer); readString
-		// handles either and returns "" for an unresolvable address.
+		// stricmp semantics (RTCODE.C): 0 = equal ignoring case, nonzero =
+		// different. Both args are tagged addresses (Code string OR
+		// Static/Extern buffer); readString handles either and returns ""
+		// for an unresolvable address.
 		std::string a = ctx.vm.readString(args[0]);
 		std::string b = ctx.vm.readString(args[1]);
-		int cmp = a.compare(b);
+		auto lower = [](std::string s) {
+			for (char &c : s)
+				c = static_cast<char>(
+				    std::tolower(static_cast<unsigned char>(c)));
+			return s;
+		};
+		int cmp = lower(a).compare(lower(b));
 		result = cmp;
 		rt() << "  [string_compare \"" << a << "\" vs \"" << b
 		     << "\" -> " << cmp << "]" << std::endl;
 		return true;
 	}
 
+	// --- in-game save (EYE.C save cluster) -------------------------------
+	// read_save_directory: load SAVEGAME.DIR into the slot-name buffer (the
+	// original's savegame_dir[] array). savegame_title then serves pointers
+	// into it; the save UI edits it in place (copy_string) and
+	// write_save_directory persists it.
+	if (fn == "read_save_directory") {
+		ensureSlotNameHook(ctx.objects);
+		std::memset(gSlotNameBuf, 0, sizeof(gSlotNameBuf));
+		try {
+			auto entries = THIRDEYE::savegame::loadSaveDir(
+			    ctx.res.resourcePath().parent_path() / "SAVEGAME" /
+			    "SAVEGAME.DIR");
+			for (size_t s = 0; s < entries.size() &&
+			                   s < static_cast<size_t>(kSaveSlots); ++s) {
+				uint8_t *p = gSlotNameBuf + s * kSlotNameLen;
+				if (entries[s].used) {
+					size_t n = std::min(entries[s].name.size(),
+					                    static_cast<size_t>(kSlotNameLen - 1));
+					std::memcpy(p, entries[s].name.data(), n);
+				} else {
+					std::memset(p, '_', 26);
+				}
+			}
+		} catch (const std::exception &) {}
+		result = 0;
+		return true;
+	}
+	// write_save_directory: serialize the slot-name buffer back to
+	// SAVEGAME.DIR (12 CRLF lines + trailing 0x1A, matching the shipped file).
+	if (fn == "write_save_directory") {
+		auto path = ctx.res.resourcePath().parent_path() / "SAVEGAME" /
+		            "SAVEGAME.DIR";
+		std::ofstream out(path, std::ios::binary | std::ios::trunc);
+		constexpr int kDirSlots = 12; // NUM_SAVEGAMES
+		if (out) {
+			for (int s = 0; s < kDirSlots; ++s) {
+				const uint8_t *p = gSlotNameBuf + s * kSlotNameLen;
+				if (p[0] != 0) {
+					out.write(reinterpret_cast<const char *>(p),
+					          static_cast<std::streamsize>(std::strlen(
+					              reinterpret_cast<const char *>(p))));
+				} else {
+					for (int i = 0; i < 26; ++i) out.put('_');
+				}
+				out.write("\r\n", 2);
+			}
+			out.put('\x1a');
+		}
+		rt() << "  [write_save_directory -> " << path.string()
+		     << (out ? " OK" : " FAILED") << "]" << std::endl;
+		result = 0;
+		return true;
+	}
+	// save_game(slotnum, lvlnum): live items -> ITEMS_nn.BIN, live level
+	// objects -> LVL(lvlnum)_nn.BIN, and the other levels' LVLxx.TMP copied
+	// to LVLxx_nn.BIN. nn = slotnum VERBATIM (EYE.C set_save_slotnum); slot 0
+	// is the new-game initial state and is rejected (EYE.C abends on it).
+	// Returns 1 on success, 0 on failure (matches EYE.C).
+	if (fn == "save_game" && args.size() >= 2) {
+		int slot = static_cast<int>(args[0]);
+		int lvl = static_cast<int>(args[1]);
+		int idx = slot;
+		result = 0;
+		if (idx < 1 || lvl < 1 || lvl > 14)
+			return true;
+		char nn[3], ll[3];
+		std::snprintf(nn, sizeof(nn), "%02d", idx);
+		std::snprintf(ll, sizeof(ll), "%02d", lvl);
+		auto dir = ctx.res.resourcePath().parent_path() / "SAVEGAME";
+		bool ok = THIRDEYE::savegame::saveRange(
+		    ctx.objects, dir / ("ITEMS_" + std::string(nn) + ".BIN"), 0, 999);
+		ok = ok && THIRDEYE::savegame::saveRange(
+		               ctx.objects,
+		               dir / ("LVL" + std::string(ll) + "_" + nn + ".BIN"),
+		               1000, 1999);
+		int copied = 0;
+		for (int l = 1; ok && l <= 14; ++l) {
+			if (l == lvl) continue;
+			char cc[3];
+			std::snprintf(cc, sizeof(cc), "%02d", l);
+			auto tmp = dir / ("LVL" + std::string(cc) + ".TMP");
+			auto bin = dir / ("LVL" + std::string(cc) + "_" + nn + ".BIN");
+			std::error_code ec;
+			if (std::filesystem::copy_file(
+			        tmp, bin, std::filesystem::copy_options::overwrite_existing,
+			        ec))
+				++copied;
+			// A missing TMP is tolerated (fresh boot paths may not have
+			// written every level yet); a save with the current level +
+			// items intact is still restorable.
+		}
+		rt() << "  [save_game slot " << idx << " lvl " << lvl
+		     << (ok ? " OK" : " FAILED") << " (+" << copied
+		     << " LVL??.TMP copies)]" << std::endl;
+		result = ok ? 1 : 0;
+		return true;
+	}
+	// suspend_game(cur_lvl): flush live state to the temp files (items ->
+	// ITEMS.TMP, current level's objects -> LVLxx.TMP). The original calls
+	// this before launching a sub-program (camp/chargen) and before saving.
+	if (fn == "suspend_game" && args.size() >= 1) {
+		int lvl = static_cast<int>(args[0]);
+		auto dir = ctx.res.resourcePath().parent_path() / "SAVEGAME";
+		bool ok = THIRDEYE::savegame::saveRange(ctx.objects,
+		                                        dir / "ITEMS.TMP", 0, 999);
+		if (lvl >= 1 && lvl <= 14) {
+			char ll[3];
+			std::snprintf(ll, sizeof(ll), "%02d", lvl);
+			ok = THIRDEYE::savegame::saveRange(
+			         ctx.objects, dir / ("LVL" + std::string(ll) + ".TMP"),
+			         1000, 1999) && ok;
+		}
+		rt() << "  [suspend_game lvl " << lvl << (ok ? " OK" : " FAILED")
+		     << "]" << std::endl;
+		result = 0;
+		return true;
+	}
+	// resume_items(first, last, restoring): the original re-materializes
+	// objects from ITEMS.TMP after a sub-program returns. Our launch()
+	// unwind re-enters bootObject, whose resume_level path already rebuilds
+	// PCs + items from ITEMS.TMP -- doing it again here would double-create.
+	// create_initial_binary_files: dev-time TXT -> BIN translation; shipped
+	// installs already have the .BINs.
+	if (fn == "resume_items" || fn == "create_initial_binary_files") {
+		rt() << "  [" << fn << ": no-op (covered by resume_level flow)]"
+		     << std::endl;
+		result = 0;
+		return true;
+	}
 	// --- char-gen party transfer (EYE.C transfer-file API) ---
 	// open_transfer_file(name): buffer the CHGEN.EXE output (CHARGEN\CREATE.SAV)
 	// so player_attrib/item_attrib can read the created party out of it. The DOS
@@ -287,21 +436,155 @@ bool tryHandle(Context &ctx, const std::string &fn,
 		return true;
 	}
 	if ((fn == "step_X" || fn == "step_Y") && args.size() >= 4) {
+		// Faithful port of EYE.C step_X/step_Y: DX/DY_offset[mtype-1][fdir],
+		// mtype 1..6 = TL/F/TR/L/B/R (turns are all-zero rows), 7/8/9 = the
+		// maze-passage moves ML/MM/MR (diagonal fwd+left / 2-fwd / fwd+right,
+		// used by NPC pathing), coordinates wrap at the 32-cell level edge.
+		static const int8_t DX[6][4] = {{0, 0, 0, 0},  {0, 1, 0, -1},
+		                                {0, 0, 0, 0},  {-1, 0, 1, 0},
+		                                {0, -1, 0, 1}, {1, 0, -1, 0}};
+		static const int8_t DY[6][4] = {{0, 0, 0, 0},  {-1, 0, 1, 0},
+		                                {0, 0, 0, 0},  {0, -1, 0, 1},
+		                                {1, 0, -1, 0}, {0, 1, 0, -1}};
+		const auto &D = (fn == "step_X") ? DX : DY;
 		int coord = static_cast<int>(args[0]);
 		int fdir = static_cast<int>(args[1]) & 3;
-		int dir = static_cast<int>(args[2]);
+		int mtype = static_cast<int>(args[2]);
 		int dist = static_cast<int>(args[3]);
-		int eff; // effective compass direction of the step (-1 = no move, a turn)
-		switch (dir) {
-		case 2: eff = fdir; break;            // forward
-		case 5: eff = (fdir + 2) & 3; break;  // backward
-		case 4: eff = (fdir + 3) & 3; break;  // strafe left
-		case 6: eff = (fdir + 1) & 3; break;  // strafe right
-		default: result = coord; return true; // turns: position unchanged
+		if (!dist) { result = coord; return true; }
+		switch (mtype) {
+		case 7: coord += D[1][fdir] + D[3][fdir]; break; // ML: fwd + left
+		case 8: coord += 2 * D[1][fdir]; break;          // MM: two fwd
+		case 9: coord += D[1][fdir] + D[5][fdir]; break; // MR: fwd + right
+		case 0: break;                                   // MTYP_INIT
+		default:
+			if (mtype >= 1 && mtype <= 6)
+				coord += dist * D[mtype - 1][fdir];
+			break;
 		}
-		static const int dx[4] = {0, 1, 0, -1}; // N,E,S,W
-		static const int dy[4] = {-1, 0, 1, 0};
-		result = coord + (fn == "step_X" ? dx[eff] : dy[eff]) * dist;
+		result = coord & 31; // LVL_X/LVL_Y - 1
+		return true;
+	}
+	// step_square_X/Y(coord, region, dir) + step_region(region, dir): half-cell
+	// projectile flight (EYE.C). A cell is split into 4 quadrant regions
+	// (bit 0 = east half, bit 1 = south half); a missile advances one HALF cell
+	// per tick -- the region bit toggles every tick, and the cell coordinate
+	// only moves when the missile crosses the cell boundary (i.e. when it's
+	// already in the leading half). dir is cardinal 0=N 1=E 2=S 3=W.
+	if (fn == "step_square_X" && args.size() >= 3) {
+		int x = static_cast<int>(args[0]);
+		int r = static_cast<int>(args[1]);
+		int dir = static_cast<int>(args[2]);
+		if (dir == 1 && (r & 1)) x = (x + 1) & 31;       // E, from east half
+		else if (dir == 3 && !(r & 1)) x = (x - 1) & 31; // W, from west half
+		result = x;
+		return true;
+	}
+	if (fn == "step_square_Y" && args.size() >= 3) {
+		int y = static_cast<int>(args[0]);
+		int r = static_cast<int>(args[1]);
+		int dir = static_cast<int>(args[2]);
+		if (dir == 0 && r < 2) y = (y - 1) & 31;       // N, from north half
+		else if (dir == 2 && r >= 2) y = (y + 1) & 31; // S, from south half
+		result = y;
+		return true;
+	}
+	if (fn == "step_region" && args.size() >= 2) {
+		int r = static_cast<int>(args[0]);
+		int dir = static_cast<int>(args[1]);
+		if (dir == 0 || dir == 2) r ^= 2;      // N/S: flip vertical half
+		else if (dir == 1 || dir == 3) r ^= 1; // E/W: flip horizontal half
+		result = r;
+		return true;
+	}
+	// spell_request(stat, cnt, typ, num): does any of the first `num` spell
+	// slots of type `typ` (0=mage, 1=cleric; +10/+110 into the [2][10][10]
+	// arrays) have fewer memorized (cnt) than requested (stat)? Used per
+	// 10-minute rest tick in camp. spell_list(cnt, typ, lvl, list, max):
+	// flatten the per-spell counts of one level into a menu list of spell ids.
+	// Both take pointers to the PC's B:spell_stat/B:spell_cnt static arrays.
+	if (fn == "spell_request" && args.size() >= 4) {
+		uint32_t toff = args[2] ? 110u : 10u;
+		uint32_t num = static_cast<uint32_t>(args[3]);
+		const int8_t *stat = reinterpret_cast<int8_t *>(
+		    staticBytePtr(ctx, args[0], toff + num));
+		const int8_t *cnt = reinterpret_cast<int8_t *>(
+		    staticBytePtr(ctx, args[1], toff + num));
+		result = 0;
+		if (stat && cnt) {
+			for (uint32_t i = 0; i < num; ++i) {
+				int n = stat[toff + i], h = cnt[toff + i];
+				if (n != -1 && h < n) { result = 1; break; }
+			}
+		}
+		return true;
+	}
+	if (fn == "spell_list" && args.size() >= 5) {
+		uint32_t lvl = static_cast<uint32_t>(args[2]);
+		uint32_t l = 10u * (lvl - 1);
+		uint32_t base = (args[1] ? 110u : 10u) + l;
+		uint32_t max = static_cast<uint32_t>(args[4]);
+		const int8_t *cnt = reinterpret_cast<int8_t *>(
+		    staticBytePtr(ctx, args[0], base + 10));
+		uint8_t *list = staticBytePtr(ctx, args[3], max);
+		uint32_t num = 0;
+		if (cnt && list && max > 0) {
+			for (uint32_t i = 0; i < 10 && num < max; ++i) {
+				int n = cnt[base + i];
+				for (int j = 0; j < n && num < max; ++j)
+					list[num++] = static_cast<uint8_t>(i + l);
+			}
+		}
+		result = static_cast<VM::Value>(num);
+		return true;
+	}
+	// magic_field(p, redfield, yelfield, sparkle): draw the shield/prayer
+	// field border around PC portrait p (0..5, 2 cols x 3 rows at x>=176).
+	// Solid rect for one field, alternating dashed red/yellow for both
+	// (EYE.C magic_field, verbatim incl. the sparkle colour offset).
+	if (fn == "magic_field" && args.size() >= 4) {
+		result = 0;
+		if (!ctx.gfx)
+			return true;
+		static const int px[2] = {8, 80};
+		static const int py[3] = {2, 54, 106};
+		int p = static_cast<int>(args[0]);
+		bool red = args[1] != 0, yel = args[2] != 0;
+		int32_t sparkle = args[3];
+		uint8_t redC = 0x23, yelC = 0x37;
+		if (sparkle != -1) {
+			redC = static_cast<uint8_t>(redC + sparkle);
+			yelC = static_cast<uint8_t>(yelC + sparkle);
+		}
+		int x = px[p & 1] + 176;
+		int y = py[(p >> 1) % 3];
+		auto &g = *ctx.gfx;
+		if (red && !yel) {
+			g.drawLine(x, y, x + 63, y, redC);
+			g.drawLine(x, y + 49, x + 63, y + 49, redC);
+			g.drawLine(x, y, x, y + 49, redC);
+			g.drawLine(x + 63, y, x + 63, y + 49, redC);
+		} else if (yel && !red) {
+			g.drawLine(x, y, x + 63, y, yelC);
+			g.drawLine(x, y + 49, x + 63, y + 49, yelC);
+			g.drawLine(x, y, x, y + 49, yelC);
+			g.drawLine(x + 63, y, x + 63, y + 49, yelC);
+		} else if (red && yel) {
+			for (int lp = 0; lp < 64; lp += 16) {
+				int sx = x + lp;
+				g.drawLine(sx, y, sx + 7, y, redC);
+				g.drawLine(sx + 8, y + 49, sx + 15, y + 49, redC);
+				g.drawLine(sx + 8, y, sx + 15, y, yelC);
+				g.drawLine(sx, y + 49, sx + 7, y + 49, yelC);
+			}
+			for (int lp = 1; lp < 48; lp += 12) {
+				int sy = y + lp - 1;
+				g.drawLine(x, sy + 1, x, sy + 6, yelC);
+				g.drawLine(x + 63, sy + 7, x + 63, sy + 12, yelC);
+				g.drawLine(x, sy + 7, x, sy + 12, redC);
+				g.drawLine(x + 63, sy + 1, x + 63, sy + 6, redC);
+			}
+		}
 		return true;
 	}
 	// read_initial_items / arrow_count / write_initial_tempfiles: the rest of the

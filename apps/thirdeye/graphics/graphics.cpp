@@ -191,6 +191,44 @@ void GRAPHICS::Graphics::drawImage(std::vector<uint8_t> &bmp, uint16_t index,
 	}
 }
 
+bool GRAPHICS::Graphics::visibleBitmapRect(std::vector<uint8_t> &bmp,
+		uint16_t index, int posX, int posY, int mirror, int out[4]) {
+	Bitmap image(bmp);
+	int iw = image.getWidth(index), ih = image.getHeight(index);
+	std::vector<uint8_t> pixels = image[index];
+	if (iw <= 0 || ih <= 0 ||
+	    pixels.size() < static_cast<size_t>(iw) * ih)
+		return false;
+	int minX = iw, minY = ih, maxX = -1, maxY = -1;
+	for (int y = 0; y < ih; ++y)
+		for (int x = 0; x < iw; ++x)
+			if (pixels[static_cast<size_t>(y) * iw + x] != 0) {
+				if (x < minX) minX = x;
+				if (x > maxX) maxX = x;
+				if (y < minY) minY = y;
+				if (y > maxY) maxY = y;
+			}
+	if (maxX < 0)
+		return false; // fully transparent shape
+	// Mirroring flips the pixels within the same dest rect (see drawImage),
+	// so the visible box reflects inside [0, iw) / [0, ih).
+	if (mirror & 1) {
+		int nMinX = iw - 1 - maxX;
+		maxX = iw - 1 - minX;
+		minX = nMinX;
+	}
+	if (mirror & 2) {
+		int nMinY = ih - 1 - maxY;
+		maxY = ih - 1 - minY;
+		minY = nMinY;
+	}
+	out[0] = std::max(posX + minX, 0);
+	out[1] = std::max(posY + minY, 0);
+	out[2] = std::min(posX + maxX, WIDTH - 1);
+	out[3] = std::min(posY + maxY, HEIGHT - 1);
+	return out[0] <= out[2] && out[1] <= out[3];
+}
+
 void GRAPHICS::Graphics::setClip(int x, int y, int w, int h) {
 	SDL_Rect r = { x, y, w, h };
 	SDL_SetSurfaceClipRect(mScreen, &r);
@@ -269,6 +307,45 @@ void GRAPHICS::Graphics::fillRect(int x0, int y0, int x1, int y1, uint8_t color)
 	// this box shows the cleared colour, not the art the clear replaced.
 	if (mBackdrop != nullptr)
 		SDL_FillSurfaceRect(mBackdrop, &r, px);
+}
+
+void GRAPHICS::Graphics::drawLine(int x0, int y0, int x1, int y1,
+		uint8_t color) {
+	if (x0 == x1 || y0 == y1) { // axis-aligned: one rect fill
+		fillRect(x0, y0, x1, y1, color);
+		return;
+	}
+	SDL_Color c = mPalette->colors[color];
+	Uint32 px = SDL_MapSurfaceRGB(mScreen, c.r, c.g, c.b);
+	int dx = std::abs(x1 - x0), sx = x0 < x1 ? 1 : -1;
+	int dy = -std::abs(y1 - y0), sy = y0 < y1 ? 1 : -1;
+	int err = dx + dy;
+	for (;;) {
+		SDL_Rect r = { x0, y0, 1, 1 };
+		SDL_FillSurfaceRect(mScreen, &r, px);
+		if (mBackdrop != nullptr)
+			SDL_FillSurfaceRect(mBackdrop, &r, px);
+		if (x0 == x1 && y0 == y1) break;
+		int e2 = 2 * err;
+		if (e2 >= dy) { err += dy; x0 += sx; }
+		if (e2 <= dx) { err += dx; y0 += sy; }
+	}
+}
+
+void GRAPHICS::Graphics::hashRect(int x0, int y0, int x1, int y1,
+		uint8_t color) {
+	if (x1 < x0) std::swap(x0, x1);
+	if (y1 < y0) std::swap(y0, y1);
+	SDL_Color c = mPalette->colors[color];
+	Uint32 px = SDL_MapSurfaceRGB(mScreen, c.r, c.g, c.b);
+	for (int y = y0; y <= y1; ++y) {
+		for (int x = x0 + ((x0 ^ y) & 1); x <= x1; x += 2) {
+			SDL_Rect r = { x, y, 1, 1 };
+			SDL_FillSurfaceRect(mScreen, &r, px);
+			if (mBackdrop != nullptr)
+				SDL_FillSurfaceRect(mBackdrop, &r, px);
+		}
+	}
 }
 
 void GRAPHICS::Graphics::zoomIntoImage(std::vector<uint8_t> &bmp) {
@@ -965,6 +1042,31 @@ void GRAPHICS::Graphics::setTextWindow(int wndnum, int x0, int y0, int x1,
 void GRAPHICS::Graphics::setTextJustify(int wndnum, int justify) {
 	auto [it, _] = mTextWin.try_emplace(wndnum);
 	it->second.justify = justify;
+}
+
+bool GRAPHICS::Graphics::textCursor(int wndnum, int &x, int &y) const {
+	auto it = mTextWin.find(wndnum);
+	if (it == mTextWin.end())
+		return false;
+	x = it->second.htab;
+	y = it->second.vtab;
+	return true;
+}
+
+int GRAPHICS::Graphics::textCharWidth(int wndnum, uint8_t ch) {
+	auto it = mTextWin.find(wndnum);
+	if (it == mTextWin.end() || !it->second.font)
+		return 0;
+	SDL_Surface *g = it->second.font->getCharacter(ch);
+	return g ? g->w : 0;
+}
+
+int GRAPHICS::Graphics::textFontHeight(int wndnum) {
+	auto it = mTextWin.find(wndnum);
+	if (it == mTextWin.end() || !it->second.font)
+		return 0;
+	SDL_Surface *g = it->second.font->getCharacter('A');
+	return g ? g->h : 0;
 }
 
 void GRAPHICS::Graphics::printText(int wndnum, const std::string &text) {

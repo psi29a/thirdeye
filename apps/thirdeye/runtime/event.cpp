@@ -6,9 +6,11 @@
 #include "../vm/objects.hpp"
 
 #include <chrono>
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <exception>
+#include <filesystem>
 #include <iostream>
 #include <map>
 
@@ -71,6 +73,36 @@ void runDebugHooks(VM::ObjectSystem &objects, RESOURCES::Resource &res) {
 					std::cerr << "\n";
 				}
 			}
+		}
+	}
+	// THIRDEYE_SAVETEST=N: one-shot on tick N -- run the save_game/suspend_game
+	// serializer core (saveRange) over the fully-populated live game into the
+	// system temp dir and log the result. Regression check for the in-game
+	// save path without having to drive the camp UI.
+	if (const char *e = std::getenv("THIRDEYE_SAVETEST")) {
+		static int tick = 0;
+		static bool done = false;
+		if (!done && tick++ == std::atoi(e)) {
+			done = true;
+			int kn = objects.firstObjectOfClass(1382);
+			int lvl = 3;
+			if (kn >= 0) {
+				if (uint8_t *p = objects.classStaticPtr(kn, 1382, 246, 1))
+					lvl = *p;
+			}
+			auto dir = std::filesystem::temp_directory_path();
+			auto itemsPath = dir / "thirdeye_savetest_items.bin";
+			char ll[3];
+			std::snprintf(ll, sizeof(ll), "%02d", lvl);
+			auto lvlPath = dir / ("thirdeye_savetest_lvl" + std::string(ll) + ".bin");
+			bool a = THIRDEYE::savegame::saveRange(objects, itemsPath, 0, 999);
+			bool b = THIRDEYE::savegame::saveRange(objects, lvlPath, 1000, 1999);
+			std::cerr << "[savetest] items " << (a ? "OK " : "FAILED ")
+			          << std::filesystem::file_size(itemsPath) << " B -> "
+			          << itemsPath << "\n[savetest] lvl " << lvl << " "
+			          << (b ? "OK " : "FAILED ")
+			          << std::filesystem::file_size(lvlPath) << " B -> "
+			          << lvlPath << "\n";
 		}
 	}
 	// THIRDEYE_DUMPMAP=N: dump the dungeon's B:lvlmap (32x32) on tick N, after

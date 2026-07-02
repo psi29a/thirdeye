@@ -101,6 +101,12 @@ extern bool gFirstPresentLogged;
 // Gated trace stream (no-op unless gRtTrace).
 std::ostream &rt();
 
+// Resolve a tagged Static/Extern address (as produced by LESA/LEXA for "pass
+// this array to the runtime") to a bounds-checked byte pointer into the owning
+// object's statics. Returns nullptr for non-static addresses or OOB ranges.
+// Mirrors the original's flat far pointers into SOP instance memory.
+uint8_t *staticBytePtr(Context &ctx, VM::Value addr, uint32_t size);
+
 // The host seam (see CLAUDE.md). Called by event.cpp's dispatch_event /
 // peek_event. Pumps SDL input into AESOP events, presents the frame, yields
 // the CPU when the queue is idle. Throws QuitRequested on window-close/ESC.

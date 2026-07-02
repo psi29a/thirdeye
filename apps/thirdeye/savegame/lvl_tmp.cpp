@@ -4,6 +4,7 @@
 #include "../vm/objects.hpp"
 
 #include <cstdlib>
+#include <cstring>
 #include <fstream>
 #include <iostream>
 #include <iterator>
@@ -178,6 +179,47 @@ int loadLevelObjects(int level, VM::ObjectSystem &objects,
 	std::cout << "  [loadLevelObjects: placed " << placed << " objects from " << fn
 	          << "]" << std::endl;
 	return placed;
+}
+
+bool saveRange(VM::ObjectSystem &objects, const std::filesystem::path &path,
+               int first, int last) {
+	std::ofstream out(path, std::ios::binary | std::ios::trunc);
+	if (!out)
+		return false;
+	out.put('\x1a'); // save_range's typetest byte
+	std::vector<uint8_t> rec;
+	for (int i = first; i <= last; ++i) {
+		uint16_t cls = objects.classOf(i);
+		uint32_t name = cls == 0xFFFF ? 0xFFFFFFFFu : cls;
+		uint32_t size = 0;
+		const uint8_t *statics = nullptr;
+		if (cls != 0xFFFF) {
+			size = objects.instanceStaticSize(cls);
+			if (size > 0) {
+				try {
+					statics = objects.staticsPtr(i, 0, size);
+				} catch (const std::exception &) {
+					statics = nullptr;
+				}
+			}
+			if (size > 0 && statics == nullptr)
+				size = 0; // unreadable statics: write an empty record
+		}
+		rec.assign(8 + size, 0);
+		rec[0] = i & 0xFF;
+		rec[1] = (i >> 8) & 0xFF;
+		rec[2] = name & 0xFF;
+		rec[3] = (name >> 8) & 0xFF;
+		rec[4] = (name >> 16) & 0xFF;
+		rec[5] = (name >> 24) & 0xFF;
+		rec[6] = size & 0xFF;
+		rec[7] = (size >> 8) & 0xFF;
+		if (size > 0)
+			std::memcpy(rec.data() + 8, statics, size);
+		out.write(reinterpret_cast<const char *>(rec.data()),
+		          static_cast<std::streamsize>(rec.size()));
+	}
+	return !!out;
 }
 
 } // namespace THIRDEYE::savegame
