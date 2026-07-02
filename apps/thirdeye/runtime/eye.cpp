@@ -261,7 +261,7 @@ bool tryHandle(Context &ctx, const std::string &fn,
 		result = 0;
 		if (idx < 1 || lvl < 1 || lvl > 14)
 			return true;
-		char nn[3], ll[3];
+		char nn[16], ll[16];
 		std::snprintf(nn, sizeof(nn), "%02d", idx);
 		std::snprintf(ll, sizeof(ll), "%02d", lvl);
 		auto dir = ctx.res.resourcePath().parent_path() / "SAVEGAME";

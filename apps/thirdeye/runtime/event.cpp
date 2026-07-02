@@ -92,7 +92,7 @@ void runDebugHooks(VM::ObjectSystem &objects, RESOURCES::Resource &res) {
 			}
 			auto dir = std::filesystem::temp_directory_path();
 			auto itemsPath = dir / "thirdeye_savetest_items.bin";
-			char ll[3];
+			char ll[16];
 			std::snprintf(ll, sizeof(ll), "%02d", lvl);
 			auto lvlPath = dir / ("thirdeye_savetest_lvl" + std::string(ll) + ".bin");
 			bool a = THIRDEYE::savegame::saveRange(objects, itemsPath, 0, 999);

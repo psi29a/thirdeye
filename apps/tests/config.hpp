@@ -7,6 +7,6 @@
 #define THIRDEYE_VERSION "0.87.0"
 
 // Absolute path to the repo's files/ dir (holds SAMPLE.RES, bytecode.def, ...).
-#define TESTS_DATA_DIR "/Users/bret.curtis/Workspace/private/eob3/thirdeye/files"
+#define TESTS_DATA_DIR "/src/files"
 
 #endif
