@@ -1070,6 +1070,16 @@ int GRAPHICS::Graphics::textFontHeight(int wndnum) {
 }
 
 void GRAPHICS::Graphics::printText(int wndnum, const std::string &text) {
+	// Faithful port of GIL2VFXA_print_buffer + GIL2VFX_cout (arun/asm/
+	// GIL2VFXA.ASM, arun/src/GIL2VFX.C): word-wrap is computed against the
+	// space REMAINING from the current cursor, boundary spaces are eaten on a
+	// wrap (mid-line spaces render verbatim), justification offsets htab per
+	// line, and a '\n' on the bottom line SCROLLS the window content up one
+	// row (the cursor stays on the last line) instead of clipping. The
+	// scroll is what keeps the message log left-flowing: every log message
+	// starts with '\n', so a full log scrolls and the text restarts at the
+	// left margin -- the old clip-only logic left the cursor stuck mid-line
+	// and new messages continued from there.
 	auto it = mTextWin.find(wndnum);
 	if (it == mTextWin.end() || !it->second.font)
 		return; // no font set for this window yet
@@ -1086,82 +1096,119 @@ void GRAPHICS::Graphics::printText(int wndnum, const std::string &text) {
 		SDL_Surface *g = font->getCharacter(ch);
 		return g ? g->w : 0;
 	};
-	auto runWidth = [&](const std::string &s) -> int {
-		int w = 0;
-		for (unsigned char ch : s) w += glyphW(ch);
-		return w;
-	};
 	int lineH = 8; // these fonts are fixed-height; sample a glyph
 	if (SDL_Surface *g = font->getCharacter('A')) lineH = g->h;
 
-	const int winW = tw.winX1 - tw.winX0 + 1;
-
-	// Greedy word-wrap into lines that fit the window width. The original AESOP
-	// `print` flows text inside the bound window; we wrap on whitespace (and clip
-	// to the box below). Single short strings (menu options) stay one line.
-	std::vector<std::string> lines;
-	{
-		std::string cur, word;
-		auto flushWord = [&]() {
-			if (word.empty()) return;
-			int wW = runWidth(word);
-			int spW = cur.empty() ? 0 : glyphW(' ');
-			if (!cur.empty() && runWidth(cur) + spW + wW > winW) {
-				lines.push_back(std::move(cur));
-				cur.clear();
-			}
-			if (!cur.empty()) cur += ' ';
-			cur += word;
-			word.clear();
-		};
-		for (char ch : text) {
-			if (ch == ' ' || ch == '\n') {
-				flushWord();
-				if (ch == '\n') { lines.push_back(std::move(cur)); cur.clear(); }
-			} else {
-				word.push_back(ch);
-			}
+	// VFX_pane_scroll(0, -lineH): move the window's pixels up one text row,
+	// then repaint the vacated bottom strip from the text-free backdrop
+	// (panel art in-game / sampled flat colour on menus -- wipeTextBox).
+	auto scrollUp = [&]() {
+		int w = tw.winX1 - tw.winX0 + 1;
+		int h = tw.winY1 - tw.winY0 + 1;
+		if (w <= 0 || h <= 0 || tw.winX0 < 0 || tw.winY0 < 0 ||
+		    tw.winX1 >= WIDTH || tw.winY1 >= HEIGHT)
+			return;
+		if (h > lineH) {
+			Uint8 *px = static_cast<Uint8 *>(mScreen->pixels);
+			int pitch = mScreen->pitch;
+			for (int y = tw.winY0; y <= tw.winY1 - lineH; ++y)
+				std::memmove(px + y * pitch + tw.winX0 * 4,
+				             px + (y + lineH) * pitch + tw.winX0 * 4,
+				             static_cast<size_t>(w) * 4);
 		}
-		flushWord();
-		if (!cur.empty() || lines.empty()) lines.push_back(std::move(cur));
-	}
+		wipeTextBox(tw.winX0, std::max(tw.winY0, tw.winY1 - lineH + 1),
+		            tw.winX1, tw.winY1);
+	};
 
-	int y = tw.vtab;
-	int lastX = tw.htab;
-	for (size_t li = 0; li < lines.size(); ++li) {
-		const std::string &line = lines[li];
-		int lineW = runWidth(line);
-		int x;
-		if (tw.justify == 2)      // center each line in the window
-			x = tw.winX0 + (winW - lineW) / 2;
-		else if (tw.justify == 1) // right-align
-			x = tw.winX1 - lineW;
-		else                      // left: first line honours the cursor, wraps to winX0
-			x = (li == 0 ? tw.htab : tw.winX0);
-
-		if (y + lineH - 1 > tw.winY1) break; // clip below the window: stop drawing
-		if (y < tw.winY0) { y += lineH; continue; } // clip above: skip this line
-		for (unsigned char ch : line) {
-			SDL_Surface *glyph = font->getCharacter(ch);
-			if (glyph == nullptr) continue;
-			if (x + glyph->w - 1 > tw.winX1) break; // clip past the right edge
-			// Clip past the left edge: the original draws glyphs at (htab - x0)
-			// relative to the window and VFX clips negatives, so text whose cursor
-			// sits left of the window (e.g. an equipment-screen print with a
-			// page-local htab) is clipped, not bled onto the screen at that x.
-			if (x < tw.winX0) { x += glyph->w; continue; }
-			// Glyphs are white masks (black = transparent via colour key); tint to
-			// the text colour with a colour-mod multiply (white * colour = colour).
-			SDL_SetSurfaceColorMod(glyph, c.r, c.g, c.b);
-			SDL_Rect dst = { x, y, glyph->w, glyph->h };
+	// GIL2VFX_cout: one char at the cursor. '\n' = CR + advance-or-scroll
+	// (scroll when another full line wouldn't fit below); '\r' = CR; else
+	// draw the glyph clipped to the window rect and advance htab.
+	auto coutChar = [&](unsigned char ch) {
+		if (ch == '\n') {
+			tw.htab = tw.winX0;
+			if (tw.vtab - tw.winY0 + 2 * lineH > tw.winY1 - tw.winY0)
+				scrollUp();
+			else
+				tw.vtab += lineH;
+			return;
+		}
+		if (ch == '\r') {
+			tw.htab = tw.winX0;
+			return;
+		}
+		SDL_Surface *glyph = font->getCharacter(ch);
+		if (glyph == nullptr)
+			return;
+		SDL_SetSurfaceColorMod(glyph, c.r, c.g, c.b);
+		// Pixel-precise clip to the window (matches VFX_character_draw):
+		// intersect the surface clip with the window rect for this blit.
+		SDL_Rect prevClip;
+		SDL_GetSurfaceClipRect(mScreen, &prevClip);
+		SDL_Rect winR = { tw.winX0, tw.winY0, tw.winX1 - tw.winX0 + 1,
+		                  tw.winY1 - tw.winY0 + 1 };
+		SDL_Rect clip;
+		if (SDL_GetRectIntersection(&winR, &prevClip, &clip)) {
+			SDL_SetSurfaceClipRect(mScreen, &clip);
+			SDL_Rect dst = { tw.htab, tw.vtab, glyph->w, glyph->h };
 			SDL_BlitSurface(glyph, NULL, mScreen, &dst);
-			x += glyph->w;
+			SDL_SetSurfaceClipRect(mScreen, &prevClip);
 		}
-		lastX = x;
-		y += lineH;
+		tw.htab += glyph->w; // advances even past the edge, like the original
+	};
+
+	const size_t len = text.size();
+	size_t pos = 0;
+	while (pos < len) {
+		// Line-break scan (print_buffer __find_eol/__lscan): the line ends at
+		// the last space that still fits from the current htab, at a '\n'
+		// (included -- coutChar processes it), or at end-of-string. If not
+		// even the first word fits, it prints anyway (clipped at the edge).
+		size_t firstWordEnd = pos;
+		while (firstWordEnd < len && text[firstWordEnd] != ' ' &&
+		       text[firstWordEnd] != '\n')
+			++firstWordEnd;
+		if (firstWordEnd < len && text[firstWordEnd] == '\n')
+			++firstWordEnd; // '\n' belongs to the line
+		size_t lineEnd = firstWordEnd;
+		{
+			int wAcc = tw.htab;
+			for (size_t i = pos; i < len; ++i) {
+				unsigned char ch = text[i];
+				if (ch == '\n') { lineEnd = i + 1; break; }
+				if (ch == ' ')
+					lineEnd = i; // last break candidate so far
+				wAcc += glyphW(ch);
+				if (wAcc > tw.winX1 + 1)
+					break; // past the right edge: keep last candidate
+				if (i + 1 == len) { lineEnd = len; break; }
+			}
+		}
+
+		// Justification mutates htab for this line (out_r / out_c); width of
+		// the line vs the space remaining from the cursor to the right edge.
+		int wLin = 0;
+		for (size_t i = pos; i < lineEnd; ++i)
+			wLin += glyphW(text[i]);
+		int wWin = tw.winX1 - tw.htab + 1;
+		if (tw.justify == 1) { // right
+			tw.htab = (wLin <= wWin) ? tw.winX1 - wLin + 1 : tw.winX0;
+		} else if (tw.justify == 2) { // center (within the REMAINING space)
+			if (wLin < wWin)
+				tw.htab += (wWin - wLin + 1) / 2;
+		} // 0 = left, 3 = fill (unused by EOB3) -> print from htab as-is
+
+		for (size_t i = pos; i < lineEnd; ++i)
+			coutChar(text[i]);
+
+		if (lineEnd >= len)
+			break; // end of buffer: no implicit newline, cursor stays
+		pos = lineEnd;
+		if (text[lineEnd - 1] != '\n') {
+			coutChar('\n'); // wrapped: emit the line break ourselves
+			while (pos < len && text[pos] == ' ')
+				++pos; // ...and eat the boundary spaces the wrap consumed
+		}
 	}
-	tw.htab = lastX;                       // cursor past the last line's text
-	tw.vtab = y > tw.vtab ? y - lineH : y; // cursor on the last drawn line
 }
 
 void GRAPHICS::Graphics::saveScreenshot(const std::string &path) {

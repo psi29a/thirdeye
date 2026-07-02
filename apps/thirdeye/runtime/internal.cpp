@@ -2,6 +2,7 @@
 
 #include "../vm/objects.hpp"
 
+#include <cstdio>
 #include <iostream>
 #include <streambuf>
 #include <string>
@@ -43,10 +44,21 @@ std::string formatSop(const std::string &fmt, const std::vector<VM::Value> &args
 		if (fmt[i] != '%' || i + 1 >= fmt.size()) { out += fmt[i]; continue; }
 		char conv = fmt[++i];
 		if (conv == '%') { out += '%'; continue; }
+		// %0..%9 are INLINE COLOUR CODES (vsprint remaps colour 15 to
+		// text_colors[digit]), not printf conversions -- they consume no
+		// argument. We render single-colour per window (text_color), so
+		// drop the code but keep the surrounding text.
+		if (conv >= '0' && conv <= '9') continue;
 		VM::Value a = ai < args.size() ? args[ai++] : 0;
 		if (conv == 'd' || conv == 'u' || conv == 'i')
 			out += std::to_string(a);
-		else if (conv == 's')
+		else if (conv == 'x' || conv == 'X') {
+			char buf[16];
+			std::snprintf(buf, sizeof(buf), "%x", static_cast<uint32_t>(a));
+			out += buf;
+		} else if (conv == 'c')
+			out += static_cast<char>(a & 0xFF);
+		else if (conv == 's' || conv == 'a')
 			out += vm.readString(a);
 		else { out += '%'; out += conv; }
 	}

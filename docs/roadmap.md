@@ -184,6 +184,69 @@ NB the harness key script changed — with a save present the title menu
 defaults to "Continue the Quest", so it's `THIRDEYE_AUTOWALK=0d,0d,…` now
 (the old leading `5000` walks you into "Gather a New Party"/chargen).
 
+### ✅ Text pipeline + level-object restore made faithful (2026-07-02, PM)
+
+Three user-visible bugs, one root theme — we had approximated subsystems the
+originals define exactly:
+
+- **Message log drifted right + swallowed spaces ("Sir Mikealremarks…").**
+  `Graphics::printText` was a from-intuition word-wrapper: it collapsed
+  runs of spaces (log strings like 1252 *" remarks, …"* begin with a
+  meaningful leading space), centered against the whole window, and CLIPPED
+  at the bottom — leaving the cursor stuck mid-line, so every subsequent log
+  message continued from there (the mid-window green text). Rewritten as a
+  faithful port of `GIL2VFXA_print_buffer` + `GIL2VFX_cout`
+  (arun/asm/GIL2VFXA.ASM): wrap is computed against the space remaining
+  from the *current cursor*, wrap boundaries eat only the boundary spaces,
+  justify offsets htab per line (center = remaining width, right = x2−w+1),
+  and `\n` on the bottom line **scrolls the window content up** (cursor
+  stays) — which is what keeps the log left-flowing, since every log string
+  starts with `\n`. Also: `%0`–`%9` in format strings are vsprint COLOUR
+  CODES, not printf — formatSop now drops them (plus gained `%x`/`%c`/`%a`).
+- **Beige text log after the Florn cutscene.** The "clear to black under
+  Backdrop 190" fix existed *only as a comment* — the code never cleared, so
+  the outtake's `wipe_window(96, 20)` light-brown fill showed through the
+  Backdrop's transparent log interior (and got re-captured into the
+  text-restore backdrop). Now actually clears (runtime/graphics.cpp
+  draw_bitmap).
+- **Axe wouldn't chop the movable trees.** `LVLnn.TMP` is just save_range's
+  CDESC stream (same as ITEMS.TMP), and instance statics are meant to be
+  restored VERBATIM (`restore_range`). Our loader instead scanned for
+  record signatures and hand-invented fields — critically it read the byte
+  at statics+5 (`B:region`, the wall-side/quadrant) as `W:decflags`, whose
+  real home is statics+10. The movable trees store decflags `0x0010` — and
+  bit 0x10 is the *"can be cut"* flag `movable trees.attacked` checks before
+  chopping — so every axe blow hit the "unusually resistant" branch.
+  (The old `0x0F → 0` mapping was itself a patch over reading the wrong
+  field: 0x0F was the region sentinel, never a decflags value.) The loader
+  ([savegame/lvl_tmp.cpp](../apps/thirdeye/savegame/lvl_tmp.cpp)) now walks
+  the CDESC records exactly and memcpy's the statics verbatim, then relinks
+  (place, cell chains) as before. Fallout fixed for free: monster HP is
+  stored as −1 and rolled by `NPC.restore` via `C:dice` (the old loader
+  set HP from the CDESC *size* field — the troll's "HP 30" matched its
+  record being 30 bytes, pure coincidence), NPCstat re-seeds in `restore`
+  via `report`, movable trees keep their real `B:direction`, and LVL03 now
+  places 331 objects (was 231 with the heuristic scan). Verified live:
+  party at (21,22) facing the tree — sword swing prints the "stout axe"
+  remark, axe swings chop (`sound_effect(54)` ×3, state 0→1→2, tree
+  disables on the third), 105/105 tests green.
+  *Watch-item:* wall features (doors/levers) previously rendered with
+  wall-side-as-state; their true decflags now flow through — LVL01
+  mausoleum doors should be eyeballed on the next play session.
+
+  **Follow-up hang fix (same day):** the verbatim copy surfaced that some
+  saved records carry LIVE chain pointers (the QSP monsters at (12,14) ship
+  with `next=1773` / `prev=1772` — save_range dumped them mid-chain). Keeping
+  the file's `W:prev` while our loader rebuilt `W:next` in its own insertion
+  order let the SOP's unlink (`prev.next = my.next`) write `1772.next = 1772`
+  the first time a monster left a shared cell — a self-cycle every chain
+  walker (draw/AI) then spun on forever. With graphics the VM step budget is
+  deliberately unlimited (the SOP main loop legitimately never returns), so
+  this presented as a macOS beachball on strafe near the treeline. Loader now
+  clears `W:next`/`W:prev` before relinking and keeps the cell chains
+  properly doubly linked (old head's `prev` ← new head). Repro (walk to the
+  treeline, strafe) runs clean; axe-chop + 105 tests still green.
+
 ### 🚧 Save / load (the savegame format)
 
 *Done:*

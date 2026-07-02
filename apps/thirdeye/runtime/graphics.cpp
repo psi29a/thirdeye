@@ -220,7 +220,11 @@ bool tryHandle(Context &ctx, const std::string &fn,
 			// after the Florn Falconhand cutscene ends. Clear to color 0 first
 			// so the Backdrop's transparent regions read as their DOS-native
 			// black. Only triggers on Backdrop (a fixed one-of resource) so it
-			// costs nothing on every other draw.
+			// costs nothing on every other draw. (fillRect also writes the
+			// text-free backdrop snapshot, so later text-window restores of
+			// the log area come back black, not the outtake's brown fill.)
+			if (table == 190)
+				ctx.gfx->fillRect(x, y, x + 319, y + 199, 0);
 			ctx.gfx->drawImage(fetch(table), number, x, y, true, mirror,
 			                   static_cast<uint32_t>(table), scale);
 			// The compass snapshot rect (0, 120, 116, 49 in
