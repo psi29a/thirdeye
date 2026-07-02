@@ -156,17 +156,56 @@ bool tryHandle(Context &ctx, const std::string &fn,
 		// render the same size instead of shrinking with distance.
 		int scale = args.size() > 5 ? static_cast<int>(args[5]) : 0;
 		int mirror = args.size() > 6 ? static_cast<int>(args[6]) : 0;
-		// The compass facing indicator (page 102, resource 187) is only drawn on
-		// a turn; mark it so the next compass refresh re-snapshots (see below).
-		if (page == 102 && table == 187)
+		// The compass facing indicator (resource 187) is only drawn on a turn or
+		// when the HUD is being restored after a cutscene; mark it so the next
+		// compass refresh re-snapshots. The initial-boot flow draws it to
+		// page 102 + refreshes window 104; `close outtake dialog` (the Florn
+		// cutscene finalizer) redraws it to page 108 and refreshes window 1,
+		// so we can't gate on either page or refresh alone. Marking dirty on
+		// ANY page-187 draw and re-snapshotting inline is enough — the compass
+		// is a small bitmap and the snapshot is cheap. Without this the
+		// compass snapshot captured mid-outtake pixels (light-brown fill from
+		// `prepare outtake box`'s `wipe_window(96, 20)`) and every subsequent
+		// present's `restoreCompass()` blitted the brown box back onto the
+		// bottom-left HUD region.
+		if (table == 187)
 			gCompassDirty = true;
 		try {
 			auto t0 = gPerf ? std::chrono::steady_clock::now()
 			                : std::chrono::steady_clock::time_point{};
 			// table = the AESOP resource number; stable for the lifetime of
 			// the loaded asset, so it's a safe shape-cache identity.
+			// Backdrop bitmap (res 190) is the whole-screen HUD frame — 320x200,
+			// designed to sit on top of a black clear (VFX_shape_draw treats
+			// palette 0 as transparent, and the DOS init clears to 0 before any
+			// draw). `close outtake dialog` (M:312) draws it to page 1 after the
+			// outtake box painted a light-brown fill into window 96 (y=119..199).
+			// Without a black underlay the transparent pixels of the Backdrop
+			// leave that fill visible, which shows up as a brown text-log region
+			// after the Florn Falconhand cutscene ends. Clear to color 0 first
+			// so the Backdrop's transparent regions read as their DOS-native
+			// black. Only triggers on Backdrop (a fixed one-of resource) so it
+			// costs nothing on every other draw.
 			ctx.gfx->drawImage(fetch(table), number, x, y, true, mirror,
 			                   static_cast<uint32_t>(table), scale);
+			// The compass snapshot rect (0, 120, 116, 49 in
+			// Graphics::kCompassRect) sits in the bottom-left HUD region. If
+			// the compass 187 was drawn just now, the snapshot needs to
+			// capture the *fresh* pixels — not the previous frame's leftover.
+			// The old logic only snapshotted on `refresh_window(104, ...)`,
+			// which fires at boot but NOT on `close outtake dialog`'s HUD
+			// redraw (which uses page 108 + `refresh_window(1, 0)`). Left
+			// stale, the snapshot could latch mid-outtake pixels (the
+			// light-brown `wipe_window(96, 20)` fill) and every present's
+			// `restoreCompass()` would blit that brown box back onto the
+			// screen — exactly the Florn Falconhand aftermath the user saw.
+			// Snapshot inline right after the compass draw so both flows
+			// (boot's page 102, close-outtake's page 108) capture a valid
+			// compass.
+			if (table == 187 && gCompassDirty) {
+				ctx.gfx->snapshotCompass();
+				gCompassDirty = false;
+			}
 			if (gPerf) {
 				gDrawNanos += std::chrono::duration_cast<std::chrono::nanoseconds>(
 				                  std::chrono::steady_clock::now() - t0).count();

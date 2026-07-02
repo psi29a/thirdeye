@@ -346,7 +346,10 @@ Value ObjectSystem::send(int objIndex, int message, std::vector<Value> args) {
 	              message == 89 || message == 90 || message == 87 ||
 	              message == 31 || message == 96 || message == 97 ||
 	              message == 94 || message == 26 || message == 27 ||
-	              message == 95);
+	              message == 95 || message == 58 || message == 59 ||
+	              message == 60 || message == 61 || message == 244 ||
+	              message == 312 || message == 268 || message == 137 ||
+	              message == 220 || message == 227);
 	if (kMonTrace && (atkMsg || aiMsg)) {
 		static int n = 0;
 		static const int kCap = std::getenv("THIRDEYE_MONTRACE_CAP")

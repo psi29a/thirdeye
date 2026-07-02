@@ -460,6 +460,12 @@ VM::Value defaultRuntimeCall(VM::ObjectSystem &objects, VM::EventSystem &events,
 	if (THIRDEYE::runtime::graphics::tryHandle(ctx, fn, args, result)) return result;
 
 	THIRDEYE::runtime::rt() << "  [stub -> 0]" << std::endl;
+	// Always log the first hit on each unimplemented runtime function (max a few
+	// dozen lines per run) -- this is how we find what the SOP needs next.
+	static std::set<std::string> stubbed;
+	if (stubbed.insert(fn).second)
+		std::cout << "[stub] " << fn << " (first call, " << args.size()
+		          << " args)" << std::endl;
 	return 0;
 }
 
