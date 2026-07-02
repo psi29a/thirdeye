@@ -252,6 +252,40 @@ bool tryHandle(Context &ctx, const std::string &fn,
 		result = fdir;
 		return true;
 	}
+	// distance(x1, y1, x2, y2) -- Euclidean distance rounded up to nearest int,
+	// clamped to 0..31 via a 32-entry square-root table (EYE.C distance()).
+	// Used by NPC "my turn"/"watch for party" to decide idle-schedule vs
+	// engage-schedule and whether to enter melee range.
+	if (fn == "distance" && args.size() >= 4) {
+		int32_t dx = std::abs(static_cast<int32_t>(args[0]) -
+		                     static_cast<int32_t>(args[2]));
+		int32_t dy = std::abs(static_cast<int32_t>(args[1]) -
+		                     static_cast<int32_t>(args[3]));
+		int32_t num = dx * dx + dy * dy;
+		static const int32_t sq[32] = {
+		    0, 1, 4, 9, 16, 25, 36, 49, 64, 81, 100, 121, 144, 169, 196, 225,
+		    256, 289, 324, 361, 400, 441, 484, 529, 576, 625, 676, 729, 784,
+		    841, 900, 961};
+		int32_t root = 0;
+		while (root < 31 && sq[root] < num) ++root;
+		result = root;
+		return true;
+	}
+	// seek_direction(cur_x, cur_y, dest_x, dest_y) -- octal direction (N=0,
+	// NE=1, E=2, ..., NW=7) cur should move to approach dest, or -1 if
+	// already there (EYE.C seek_direction()).
+	if (fn == "seek_direction" && args.size() >= 4) {
+		int32_t dx = static_cast<int32_t>(args[2]) - static_cast<int32_t>(args[0]);
+		int32_t dy = static_cast<int32_t>(args[3]) - static_cast<int32_t>(args[1]);
+		int32_t d;
+		if (dx < 0)      d = (dy > 0) ? 5 : (dy < 0) ? 7 : 6;
+		else if (dx > 0) d = (dy > 0) ? 3 : (dy < 0) ? 1 : 2;
+		else if (dy > 0) d = 4;
+		else if (dy < 0) d = 0;
+		else             d = -1;
+		result = d;
+		return true;
+	}
 	if ((fn == "step_X" || fn == "step_Y") && args.size() >= 4) {
 		int coord = static_cast<int>(args[0]);
 		int fdir = static_cast<int>(args[1]) & 3;

@@ -73,7 +73,24 @@ int loadLevelObjects(int level, VM::ObjectSystem &objects,
 			// silently corrupting its static block.
 			setS(kEntities, 6, -1, 2);
 			setS(kEntities, 8, -1, 2);
-			setS(kFeatures, 0, df, 2);         // decflags (doors/decorations)
+			// decflags — the record byte +14 encodes different things per class:
+			//   • wall-side flag 1/2/4/8 for wall-mounted features (doors, levers)
+			//     — goes into decflags bits 0-3, features.get_state returns it
+			//     and the draw code uses it as orientation
+			//   • 0x0F for floor features (stairs, grave, trees, statues, transitions)
+			//     — a "no wall side / on the floor" sentinel. Setting decflags = 0x0F
+			//     makes features.get_state return 15, and class render CASEs only
+			//     handle 0..3, so the object falls through CASE_DEFAULT and never
+			//     draws. That was the QSP LVL03 (22,22) "invisible trees block the
+			//     path" bug: 89 movable trees on level 3, all with +14=0x0F, none
+			//     rendered but all blocked impedance.
+			// For floor features the render state clearly isn't the raw +14; treat
+			// 0x0F as "unset" (decflags = 0) so state = 0 selects the default
+			// render variant. Wall-side values (1..8) still land in decflags as
+			// before.
+			// ponytail: keep this in the loader; if it turns out a specific floor
+			// feature *does* want a non-zero saved state, revisit here.
+			setS(kFeatures, 0, df == 0x0F ? 0 : df, 2);
 			// Monster? = the record's class has NPC (1622) in its parent chain. (The
 			// old test -- classStaticPtr(id, kNPC) != nullptr -- mis-fired: that returns
 			// a pointer regardless of whether NPC is actually an ancestor, so stairs/

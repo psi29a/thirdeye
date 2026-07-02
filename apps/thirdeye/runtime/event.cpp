@@ -7,8 +7,10 @@
 
 #include <chrono>
 #include <cstdlib>
+#include <cstring>
 #include <exception>
 #include <iostream>
+#include <map>
 
 namespace THIRDEYE::runtime::event {
 
@@ -36,6 +38,63 @@ void runDebugHooks(VM::ObjectSystem &objects, RESOURCES::Resource &res) {
 	// 16=right/20=left, flag 7) -> acquire NPC target -> roll to hit -> roll for
 	// damage -> the monster's "take damage" -> "die". Logs the first live monster's
 	// HP so we can watch it drop. (Stand-in for the weapon-click/auto-attack UI.)
+	// THIRDEYE_DUMPCELL=X,Y: on every tick after N=200, list W:lvlobj chains
+	// for all 3 planes at (X,Y). Debug for cell-specific movement bugs.
+	if (const char *e = std::getenv("THIRDEYE_DUMPCELL")) {
+		static int cnt = 0;
+		if (cnt++ == 200) {
+			int cx = -1, cy = -1;
+			if (const char *c = std::strchr(e, ',')) {
+				cx = std::atoi(e); cy = std::atoi(c + 1);
+			}
+			int dn2 = objects.firstObjectOfClass(1381);
+			if (dn2 >= 0 && cx >= 0 && cy >= 0) {
+				for (int plane = 0; plane < 3; ++plane) {
+					uint32_t off = plane * 2048 + cy * 64 + cx * 2;
+					uint8_t *p = objects.classStaticPtr(dn2, 1381, 1024 + off, 2);
+					int head = p ? (int16_t)(p[0] | (p[1] << 8)) : -2;
+					std::cerr << "[cell] plane " << plane << " (" << cx << "," << cy
+					          << ") head=" << head;
+					int cur = head, n = 0;
+					while (cur > 0 && n < 20) {
+						int cls = objects.classOf(cur);
+						std::cerr << " -> " << cur << "(cls " << cls << ")";
+						uint8_t *df = objects.classStaticPtr(cur, 1994, 0, 2);
+						if (df) {
+							int flags = df[0] | (df[1] << 8);
+							std::cerr << " decflags=0x" << std::hex << flags << std::dec;
+						}
+						uint8_t *np = objects.classStaticPtr(cur, 1370, 6, 2);
+						cur = np ? (int16_t)(np[0] | (np[1] << 8)) : -1;
+						++n;
+					}
+					std::cerr << "\n";
+				}
+			}
+		}
+	}
+	// THIRDEYE_DUMPMAP=N: dump the dungeon's B:lvlmap (32x32) on tick N, after
+	// "enter level" has run. Debug for "path blocked" and other maze bugs.
+	if (const char *e = std::getenv("THIRDEYE_DUMPMAP")) {
+		static int tick = 0;
+		int wantTick = std::atoi(e);
+		int dn2 = objects.firstObjectOfClass(1381);
+		if (tick++ == wantTick && dn2 >= 0) {
+			uint8_t *lm = objects.classStaticPtr(dn2, 1381, 0, 1024);
+			if (lm) {
+				std::cerr << "[map] dungeon " << dn2 << " lvlmap (byte @ y*32+x):\n";
+				for (int y = 0; y < 32; ++y) {
+					std::cerr << "[map] y=" << (y<10?" ":"") << y << ":";
+					for (int x = 0; x < 32; ++x) {
+						int b = static_cast<int8_t>(lm[y * 32 + x]);
+						if (b == -1) std::cerr << " . ";
+						else         std::cerr << " " << (b<10?" ":"") << b;
+					}
+					std::cerr << "\n";
+				}
+			}
+		}
+	}
 	if (std::getenv("THIRDEYE_ATTACK")) {
 		static int af = 0;
 		static int monIdx = -1;
@@ -50,6 +109,31 @@ void runDebugHooks(VM::ObjectSystem &objects, RESOURCES::Resource &res) {
 		// useful for verifying combat against real LVL-loaded monsters (with their
 		// real init/AI) instead of the synthetic test monster.
 		bool spawn = std::getenv("THIRDEYE_ATTACK_NOSPAWN") == nullptr;
+		// Auto-respawn: once the monster has been removed (objectLookup < 0),
+		// spawn a fresh one so combat keeps firing -- lets XP accumulate across
+		// many kills for level-up verification. THIRDEYE_ATTACK_RESPAWN=1.
+		bool respawn = std::getenv("THIRDEYE_ATTACK_RESPAWN") != nullptr;
+		// THIRDEYE_XPBLAST=N -- one-shot: send M:103 experience(N) directly to
+		// every PC on the first tick. Fastest way to verify level-up ("attains
+		// level %d") + HP boost chain without waiting for ~200 kills.
+		static bool xpBlasted = false;
+		if (!xpBlasted && std::getenv("THIRDEYE_XPBLAST")) {
+			xpBlasted = true;
+			int32_t blast = std::atoi(std::getenv("THIRDEYE_XPBLAST"));
+			for (int pc : objects.objectsOfClass(1369)) {
+				try { objects.send(pc, 103, {blast}); }
+				catch (const std::exception &) {}
+			}
+			std::cerr << "[xp] blasted " << blast << " XP into every PC\n";
+		}
+		if (respawn && monIdx >= 0) {
+			// NPC.die leaves the slot alive but drops hitpts to 0 and clears
+			// entities.place -- detect by HP<=0.
+			if (uint8_t *hp = objects.classStaticPtr(monIdx, 1622, 3, 2)) {
+				int16_t curHp = static_cast<int16_t>(hp[0] | (hp[1] << 8));
+				if (curHp <= 0) af = 0;
+			}
+		}
 		if (spawn && af == 0 && dn >= 0 && kn >= 0) {
 			auto kb = [&](int off) -> int {
 				uint8_t *p = objects.classStaticPtr(kn, 1382, off, 1);
@@ -126,7 +210,10 @@ void runDebugHooks(VM::ObjectSystem &objects, RESOURCES::Resource &res) {
 					if (uint8_t *hs = objects.classStaticPtr(pc, 1369, 67, 2))
 						hs[0] = hs[1] = 0;
 				} catch (const std::exception &) {}
-			if (kn >= 0) {
+			// THIRDEYE_ATTACK_NOAUTO=1: skip driving M:208 auto-attack so the
+			// party stands still and the monster AI (bounce/my turn) can be
+			// observed in isolation.
+			if (kn >= 0 && std::getenv("THIRDEYE_ATTACK_NOAUTO") == nullptr) {
 				if (uint8_t *ab = objects.classStaticPtr(kn, 1382, 260, 1))
 					*ab = 1; // auto_button on
 				try { objects.send(kn, 208, {}); } // "auto-attack"
@@ -142,6 +229,7 @@ void runDebugHooks(VM::ObjectSystem &objects, RESOURCES::Resource &res) {
 				} catch (const std::exception &) {}
 			}
 			// PC hand contents: W:inventory[16]=right, [20]=left (PC@81, words).
+			// XP: L:experience[0..2] @179. Levels: B:levels[0..2] @163.
 			for (int pc : objects.objectsOfClass(1369))
 				try {
 					uint8_t *r = objects.classStaticPtr(pc, 1369, 81 + 16 * 2, 2);
@@ -150,6 +238,29 @@ void runDebugHooks(VM::ObjectSystem &objects, RESOURCES::Resource &res) {
 						std::cerr << "[hand] pc " << pc << " R="
 						          << static_cast<int16_t>(r[0] | (r[1] << 8)) << " L="
 						          << static_cast<int16_t>(l[0] | (l[1] << 8)) << "\n";
+					// THIRDEYE_XPTRACE: log a line whenever a PC's L:experience[0]
+					// changes. Verifies the XP-award + level-up chain end-to-end.
+					static const bool kXpTrace = std::getenv("THIRDEYE_XPTRACE") != nullptr;
+					if (kXpTrace) {
+						uint8_t *xp = objects.classStaticPtr(pc, 1369, 179, 12);
+						uint8_t *lv = objects.classStaticPtr(pc, 1369, 163, 3);
+						uint8_t *hp = objects.classStaticPtr(pc, 1369, 171, 4);
+						if (xp && lv && hp) {
+							static std::map<int, int32_t> lastXp0;
+							int32_t x0 = (int32_t)(xp[0]|xp[1]<<8|xp[2]<<16|xp[3]<<24);
+							if (lastXp0[pc] != x0) {
+								std::cerr << "[xp] pc " << pc
+								          << " lvl=" << (int)(int8_t)lv[0] << "/"
+								          << (int)(int8_t)lv[1] << "/" << (int)(int8_t)lv[2]
+								          << " xp=" << x0
+								          << "/" << (int32_t)(xp[4]|xp[5]<<8|xp[6]<<16|xp[7]<<24)
+								          << "/" << (int32_t)(xp[8]|xp[9]<<8|xp[10]<<16|xp[11]<<24)
+								          << " hp=" << (int16_t)(hp[0]|hp[1]<<8)
+								          << "/" << (int16_t)(hp[2]|hp[3]<<8) << "\n";
+								lastXp0[pc] = x0;
+							}
+						}
+					}
 				} catch (const std::exception &) {}
 		}
 	}

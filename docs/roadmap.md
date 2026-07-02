@@ -44,6 +44,17 @@ narrative on completed work.
   `--scale`/Retina).
 - ✅ **Level objects** — the whole level (doors/levers/stairs/decorations/monsters, 231 in
   LVL01) loads from `LVLnn.TMP` and renders.
+  - **Fix (2026-07-01):** the record byte `+14` is *not* raw `W:decflags` for floor
+    features. QSP LVL03 stores `0x0F` for all 89 movable trees / 169 graves / map
+    transitions (per doc "0x0f for floor objects"), which used to land in
+    `W:decflags` verbatim → `features.get_state` returned 15 → the tree's
+    `render` CASE only handles states 0..3 → tree fell through `CASE_DEFAULT`
+    and never drew. Result: `impedance` correctly blocked movement at (22,22)
+    on the Graveyard–Forest boundary but the party saw an "open" path and got
+    "You can't go that way." with nothing visible in front. Loader now maps
+    `+14 == 0x0F → decflags = 0` while wall-side values (1/2/4/8 for doors) go
+    through unchanged, so LVL01 mausoleum doors/levers keep their orientation.
+    ([savegame/lvl_tmp.cpp](../apps/thirdeye/savegame/lvl_tmp.cpp) 76.)
 - ✅ **Items & inventory (display)** — equipment screen renders the paper-doll + char-gen gear;
   slot regions register so interaction routes through the proven click path.
 
@@ -86,10 +97,47 @@ so `acquire NPC target` no longer finds the corpse.
   at that linear-memory offset, so we now return a sinkhole instead of throwing
   (vm/objects.cpp `staticsPtr` + vm/vm.cpp `externPtr`).
 
-**Open follow-ups** (real gameplay, not bring-up): magic-weapon vs bit-6 (today *any*
-hit kills incorporeals; should require `weapon flags & magic`), monster-AI attack-back
-(M:208 only schedules party→monster — monster→party comes through `bounce`/`my turn`),
-experience award + level up integration on the player side.
+**Monster-AI attack-back — landed (2026-07-01):** the `bounce`/`my turn` chain
+was already firing (SYS_TIMER events + M:87 `schedule attack` re-arm), but the
+monster never crossed into aggro because `C:distance` and `C:seek_direction`
+were unimplemented runtime stubs returning 0. `NPC.my turn` used those to pick
+a wander direction and gate the `advance_and_attack`/`valid_range_attack`
+sends, so every NPC just wandered north forever. Implemented both in
+[runtime/eye.cpp](../apps/thirdeye/runtime/eye.cpp) verbatim from EYE.C — the
+32-entry sqrt table for `distance` and the octal N/NE/E/… direction map for
+`seek_direction`. Verified with `THIRDEYE_ATTACK=1
+THIRDEYE_ATTACK_NOAUTO=1`: synthetic troll adjacent to the party now walks
+through `my turn` → `advance and attack` (M:99) → `contact` (M:89) → PC.take
+damage (M:82) → front-row PC (Stonebeard, idx 33) takes 5/15/18/10 hp per
+swing. Real level-3 NPCs also start firing `my turn` correctly.
+
+**Magic-weapon vs bit-6 — not a runtime bug (2026-07-01):** RE'd end-to-end and
+confirmed the SOP itself instant-kills bit-6 targets on *any* successful hit, with
+no weapon-flag gate. `PC.roll to hit` (r1369 @3318) short-circuits to `return 1`
+when `target.NPCstat & 0x40` is set (auto-hit), and `weapons.hand-to-hand attack`
+(r1688 @866) then does `SEND target.die(1)` unconditionally on the same bit — no
+LNGC of a weapon-magic constant appears anywhere in the handler, no subclass
+overrides `hand-to-hand attack` (checked bare hands / magic dagger / magic staff /
+two-handed sword). Bit 0x40 is set consistently across ethereals (sword wraith,
+shadow, watch ghost, shadow hound, lich, shadow of death). So "one bare-hand
+punch drops a wraith" *is* the shipped EOB3 behavior — our runtime is faithful.
+Any change would be a deliberate deviation from `EYE.RES`, which violates the
+project rule "our job is to run EYE.RES, not to RE it."
+
+**XP + level-up — verified end-to-end (2026-07-01):** the whole chain runs on the
+bytecode already. Troll kill → `NPC.die(killer)` (msg 55) → `NPC.report(1012)` returns
+class XP value (1400 for troll) → kernel `M:103 experience(1400)` divides by
+qualifying-PC count (via `M:35 qualify`) → each qualifying PC gets `M:103 experience`
+→ PC bytecode loops the 3 multi-class slots, checks `M:174 racial level limits` on
+`tables` singleton (obj 2003, class 2380), adds XP to `L:experience[0..2]` @179,
+and on threshold cross (`M:175 experience level`) bumps `B:levels[i]` @163, sends
+`M:176 new hit points` and adds the roll to `W:hpts` @171 + `W:hmax` @173. Verified
+with `THIRDEYE_ATTACK=1 THIRDEYE_XPBLAST=500000 THIRDEYE_XPTRACE=1`: Stonebeard
+6/6/0 → 8/8/0 with HP 60→102, Fast Eddie 8 → 10, and PCs at racial cap correctly
+stay put (Sir Mikeal 7 fighter, PC 35 at 13). No C++ change needed for the chain
+itself — helpers `THIRDEYE_ATTACK_RESPAWN` (auto-respawn the test monster) and
+`THIRDEYE_XPBLAST=N` (one-shot direct M:103) live in
+[runtime/event.cpp](../apps/thirdeye/runtime/event.cpp) for regression checks.
 
 ### 🚧 Save / load (the savegame format)
 
