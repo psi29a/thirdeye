@@ -20,7 +20,7 @@ EOF
 # so the container writes container paths (/src) into them -- snapshot the
 # host-generated ones and restore on exit, or a later host build (or commit!)
 # picks up /src paths.
-cfgs=$(ls apps/*/config.hpp 2>/dev/null)
+cfgs=$(ls apps/*/config.hpp 2>/dev/null || true) # fresh checkout has none
 tmp=$(mktemp -d)
 for f in $cfgs; do mkdir -p "$tmp/$(dirname "$f")" && cp "$f" "$tmp/$f"; done
 trap 'for f in $cfgs; do cp "$tmp/$f" "$f"; done; rm -rf "$tmp"' EXIT

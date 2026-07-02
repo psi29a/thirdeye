@@ -57,6 +57,11 @@ int loadLevelObjects(int level, VM::ObjectSystem &objects,
 		pos += 8 + size;
 		if (pos > d.size())
 			break; // truncated record
+		// saveRange only emits slots 1000..1999; an id outside that range in
+		// a corrupt/hand-edited file would destroyObject() a live party or
+		// global object below. Don't trust the on-disk id.
+		if (id < 1000 || id > 1999)
+			continue;
 		// restore_range: whatever lives in the slot is torn down first (its
 		// MSG_DESTROY handler cancels its notify requests) -- both for dead
 		// file slots (destroy_object + continue in the original) and before
@@ -101,19 +106,7 @@ int loadLevelObjects(int level, VM::ObjectSystem &objects,
 			setS(kEntities, 6, -1, 2); // W:next
 			setS(kEntities, 8, -1, 2); // W:prev
 			// Monster? = the record's class has NPC (1622) in its parent chain.
-			auto isNpcClass = [&](int c) {
-				for (int cur = c, guard = 0; cur > 0 && guard < 16; ++guard) {
-					if (cur == static_cast<int>(kNPC))
-						return true;
-					const VM::SopClass *sc = objects.classByNumber(
-					    static_cast<uint16_t>(cur));
-					if (sc == nullptr)
-						break;
-					cur = sc->header.parent;
-				}
-				return false;
-			};
-			bool isMonster = isNpcClass(cls);
+			bool isMonster = objects.isSubclassOf(cls, kNPC);
 			// Link into the cell grid so "draw objects" renders it. lvlobj has 3
 			// planes (plane*2048 + y*64 + x*2): features/decorations (doors) go in
 			// PLANE 0, MONSTERS go in PLANE 2 -- NPC.draw walks the cell's object
