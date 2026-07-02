@@ -49,6 +49,9 @@ void runDebugHooks(VM::ObjectSystem &objects, RESOURCES::Resource &res) {
 			if (const char *c = std::strchr(e, ',')) {
 				cx = std::atoi(e); cy = std::atoi(c + 1);
 			}
+			// env-supplied cell: clamp to the 32x32 grid or the lvlobj offset
+			// math walks out of the dungeon statics (classStaticPtr throws).
+			if (cx > 31 || cy > 31) cx = -1;
 			int dn2 = objects.firstObjectOfClass(1381);
 			if (dn2 >= 0 && cx >= 0 && cy >= 0) {
 				for (int plane = 0; plane < 3; ++plane) {
@@ -207,9 +210,11 @@ void runDebugHooks(VM::ObjectSystem &objects, RESOURCES::Resource &res) {
 				if (itemObj > 0) {
 					carriedHead = itemObj;
 					// item.W:next = -1 (only one carried item; chain terminator)
-					if (uint8_t *p = objects.classStaticPtr(itemObj, 1370, 6, 2)) {
-						p[0] = 0xFF; p[1] = 0xFF;
-					}
+					try { // env-supplied obj index: classStaticPtr throws on junk
+						if (uint8_t *p = objects.classStaticPtr(itemObj, 1370, 6, 2)) {
+							p[0] = 0xFF; p[1] = 0xFF;
+						}
+					} catch (const std::exception &) { carriedHead = -1; }
 				}
 			}
 			setS(1622, 5, carriedHead, 2);  // NPC carried (head of carried-item chain)

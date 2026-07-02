@@ -91,6 +91,10 @@ public:
 	//   destroy_object(index): send MSG_DESTROY, then free the slot.
 	int createProgram(int index, uint16_t classNumber);
 	int createObject(uint16_t classNumber) { return createProgram(-1, classNumber); }
+	//   create_SOP_instance(name, index): bare alloc + MSG_CREATE, no restore
+	//     fallback -- restore_range's create path (the caller sends MSG_RESTORE
+	//     itself after copying the saved statics in).
+	int createInstance(int index, uint16_t classNumber);
 	Value destroyObject(int index);
 
 	// Runtime-function dispatch hook shared by every handler we run.

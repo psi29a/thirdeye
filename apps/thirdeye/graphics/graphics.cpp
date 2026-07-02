@@ -285,12 +285,13 @@ void GRAPHICS::Graphics::snapshotCompass() {
 		                                 SDL_PIXELFORMAT_ARGB8888);
 	SDL_SetSurfaceBlendMode(mScreen, SDL_BLENDMODE_NONE);
 	SDL_BlitSurface(mScreen, &kCompassRect, mCompassSnap, nullptr);
+	mCompassCovered = false; // freshly drawn: resume the per-present re-stamp
 }
 
 void GRAPHICS::Graphics::restoreCompass() {
 	// Only in-game (mTextRestoreBg marks the HUD; the title menu uses flat-fill and
 	// has no compass), and only once a snapshot exists.
-	if (mCompassSnap == nullptr || !mTextRestoreBg)
+	if (mCompassSnap == nullptr || !mTextRestoreBg || mCompassCovered)
 		return;
 	SDL_Rect dst = kCompassRect;
 	SDL_SetSurfaceBlendMode(mCompassSnap, SDL_BLENDMODE_NONE);
@@ -301,6 +302,13 @@ void GRAPHICS::Graphics::fillRect(int x0, int y0, int x1, int y1, uint8_t color)
 	if (x1 < x0) std::swap(x0, x1);
 	if (y1 < y0) std::swap(y0, y1);
 	SDL_Rect r = { x0, y0, x1 - x0 + 1, y1 - y0 + 1 };
+	// A fill covering the whole compass rect (an outtake/cutscene box) means
+	// the SOP intends to paint over the compass -- stop re-stamping the
+	// snapshot on present until the compass is redrawn (see restoreCompass).
+	if (r.x <= kCompassRect.x && r.y <= kCompassRect.y &&
+	    r.x + r.w >= kCompassRect.x + kCompassRect.w &&
+	    r.y + r.h >= kCompassRect.y + kCompassRect.h)
+		mCompassCovered = true;
 	SDL_Color c = mPalette->colors[color];
 	Uint32 px = SDL_MapSurfaceRGB(mScreen, c.r, c.g, c.b);
 	SDL_FillSurfaceRect(mScreen, &r, px);

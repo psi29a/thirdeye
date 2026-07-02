@@ -206,8 +206,11 @@ void MAP_compile(MAP_class *MAP) {
 	sy = MAP->parms[MSP_YSIZE];
 
 	// Sample positions ox + i*dx, oy + j*dy must stay inside the LBM extents.
-	if ((sx && ((ULONG) ox + ((ULONG) sx - 1U) * (ULONG) dx >= width)) ||
-	    (sy && ((ULONG) oy + ((ULONG) sy - 1U) * (ULONG) dy >= height))) {
+	// A zero sx/sy is rejected too: sy==0 would skip this check, underflow at
+	// `!--sy` below, and overflow the sx*sy(=0)-byte `map` on the first row.
+	if (sx == 0 || sy == 0 ||
+	    ((ULONG) ox + ((ULONG) sx - 1U) * (ULONG) dx >= width) ||
+	    ((ULONG) oy + ((ULONG) sy - 1U) * (ULONG) dy >= height)) {
 		MAP_error(MAP->IDR->RS, MSG_BFT, NULL);
 		mem_free(file);
 		return;
@@ -219,6 +222,15 @@ void MAP_compile(MAP_class *MAP) {
 	m = 0;
 
 	for (y = 0; y < height; y++) {
+		// A truncated BODY chunk must not let the header-supplied height
+		// drive reads past the file buffer. (A row that STRADDLES the end
+		// can still overread within LBM_fetch_line; bounding that needs a
+		// limit param through the RLE decoder -- not worth it for a dev
+		// tool reading the developer's own art.)
+		if (body >= file + flen) {
+			MAP_error(MAP->IDR->RS, MSG_BFT, NULL);
+			break;
+		}
 		LBM_fetch_line(&body, buffer, width);
 
 		if (y == oy) {

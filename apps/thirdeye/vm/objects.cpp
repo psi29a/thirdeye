@@ -252,6 +252,15 @@ int ObjectSystem::createProgram(int index, uint16_t classNumber) {
 	return i;
 }
 
+int ObjectSystem::createInstance(int index, uint16_t classNumber) {
+	int i = allocAt(index, classNumber);
+	uint16_t defClass;
+	uint32_t offset;
+	if (resolve(classNumber, kMsgCreate, defClass, offset))
+		send(i, kMsgCreate, {});
+	return i;
+}
+
 Value ObjectSystem::destroyObject(int index) {
 	if (index < 0 || static_cast<size_t>(index) >= mObjList.size() ||
 	    mObjList[index] == kFreeSlot)

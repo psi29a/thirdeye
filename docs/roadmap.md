@@ -261,8 +261,39 @@ originals define exactly:
   transition). `change_level` now `save_range`s the old level to `LVLoo.TMP`
   and defers the reload to the "init level" hook; `loadLevelObjects` destroys
   before recreating (MSG_DESTROY cancels the SOP's notify requests).
-  **Watch item:** take stairs up/down and back next play session — level
-  round-trip persistence is new code.
+
+  **Level transitions verified end-to-end (2026-07-02, evening):** graveyard →
+  mausoleum → graveyard round-trips headlessly and live. Three more loader
+  fixes fell out of the verification (matched against `RTOBJECT.C`
+  `restore_range` + the `teleporters` class disassembly):
+  - **MSG_RESTORE goes to EVERY restored object, not just monsters** —
+    `restore_range` does `RT_execute(index, MSG_RESTORE)` unconditionally
+    (restoring=1 at all level-load call sites in EYE.C). `teleporters.restore`
+    is where the step-on trigger arms (`C:notify(THIS, trigger, event 32,
+    y<<16|x)`); with monsters-only, level exits never fired. The loader now
+    uses a faithful `ObjectSystem::createInstance` (bare `create_SOP_instance`:
+    alloc + MSG_CREATE, no restore fallback) and sends M:2 to every placed
+    object.
+  - **The restore happens INSIDE `change_level`** (as in EYE.C), not deferred
+    to the "init level" hook — the teleporter path SENDs area "enter level"
+    with no "init level" in between, so the deferral left the new level empty.
+  - **`loadLevelObjects` clears all 3 `lvlobj` planes first** (init_level's
+    wipe) — nothing else does it on a mid-game transition, and a stale cell
+    would alias a same-numbered slot that belongs to a different object on the
+    new level.
+
+  Also fixed: the compass snapshot re-stamp painted over the transition
+  outtake's story text — `restoreCompass()` now suspends when a fill covers
+  the whole compass rect and re-arms on the next `snapshotCompass()`
+  (graphics/graphics.cpp). Verified in frames: outtake text flows full-width,
+  compass back in place after arrival. Persistence proven along the way: the
+  mists chasing the party round-trip through `LVLoo.TMP` (on the next boot of
+  the re-saved file they were parked mid-chase, blocking the path). Headless
+  harness gotchas discovered: repeated `kill -INT` builds macOS crash history
+  and AppKit then blocks the next launch on a "reopen windows?" modal
+  (`defaults write com.eob3.thirdeye ApplePersistenceIgnoreState YES` fixes
+  it); `THIRDEYE_DUMP` substitutes only a plain `%d` (a `%03d` writes one
+  literal file, overwritten every present).
 
 ### 🚧 Save / load (the savegame format)
 

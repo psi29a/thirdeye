@@ -814,17 +814,19 @@ bool tryHandle(Context &ctx, const std::string &fn,
 		result = 0;
 		return true;
 	}
-	// change_level(old_level, new_level): the native EYE.C function does two
-	// things -- save_range the DEPARTING level's objects to LVLoo.TMP (or
-	// opened doors / dead monsters resurrect on return), then restore_range
-	// the new level. We do the save here; the restore happens in the "init
-	// level" post-send hook (see resume_level), which fires right after this
-	// returns and after init_level has cleared the lvlobj grid. Restoring
-	// here too replayed every monster's M:2 restore twice per transition
-	// (double watch-for-party + "schedule attack") for a placement that
-	// init_level wiped anyway.
+	// change_level(old_level, new_level): the native EYE.C function does BOTH
+	// halves inside the call -- save_range the DEPARTING level's objects to
+	// LVLoo.TMP (or opened doors / dead monsters resurrect on return), then
+	// restore_range the new level. The restore must happen here: the
+	// teleporter trigger path SENDs area "enter level" right after this
+	// returns with NO "init level" in between (that only fires on the boot /
+	// restore-game flow), so deferring the load to the init-level hook left
+	// the new level empty and the old level's chains live. loadLevelObjects
+	// clears the lvlobj planes itself, so the boot-flow hook reload stays
+	// harmless (destroy-before-restore cancels the first load's notifies).
 	if (fn == "change_level" && args.size() >= 2) {
 		int oldLvl = static_cast<int>(args[0]);
+		int newLvl = static_cast<int>(args[1]);
 		if (oldLvl >= 1 && oldLvl <= 14) {
 			char ll[16];
 			std::snprintf(ll, sizeof(ll), "%02d", oldLvl);
@@ -834,6 +836,8 @@ bool tryHandle(Context &ctx, const std::string &fn,
 				std::cerr << "[change_level: failed saving " << path << "]"
 				          << std::endl;
 		}
+		if (newLvl >= 1 && newLvl <= 14)
+			THIRDEYE::savegame::loadLevelObjects(newLvl, ctx.objects, ctx.res);
 		result = 0;
 		return true;
 	}

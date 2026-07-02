@@ -58,6 +58,10 @@ private:
 	// re-apply it each present -- otherwise the cardinal/facing indicator (only
 	// redrawn by the bytecode on a turn) gets erased by an inventory-close redraw.
 	SDL_Surface *mCompassSnap = nullptr;
+	// True while the SOP has deliberately painted over the compass area (an
+	// outtake/cutscene box fill covering the whole compass rect): suspend the
+	// per-present re-stamp until the compass is redrawn (snapshotCompass).
+	bool mCompassCovered = false;
 	// Persistent streaming GPU texture for present (see update()): created
 	// once, refreshed each frame via SDL_UpdateTexture. Avoids the
 	// CreateTextureFromSurface + DestroyTexture per call that the original
