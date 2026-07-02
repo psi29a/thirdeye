@@ -186,7 +186,16 @@ itself — helpers `THIRDEYE_ATTACK_RESPAWN` (auto-respawn the test monster) and
   the env var, and it can now `createProgram` PCs from scratch on the CINE
   path (defensive today since the SOP's CINE branch still runs chargen-
   transfer; live the moment we bypass that).
-- `write_initial_tempfiles` (the new-game write).
+- ~~`write_initial_tempfiles` (the new-game write).~~ ✅ done. Full
+  serializer in [runtime/eye.cpp](../apps/thirdeye/runtime/eye.cpp) `if (fn ==
+  "write_initial_tempfiles")`: seeds `ITEMS.TMP` bytes 0..676 from
+  `ITEMS_00.BIN` scaffold, writes all 10 PC records @677 field-by-field from
+  live PC statics (name/race/classes/portrait/PCstat/alignment/levels[3]/
+  lost_levels[3]/lost_hp/hpts/hmax/hbon/food/xp[3]/stats/spell_cnt/spell_stat),
+  appends a fresh item stream by walking every live subclass-of-`items`
+  entity, and copies `LVLnn_00.BIN → LVLnn.TMP` for all 14 levels via
+  `restoreLevels(dir, 0)`. Chargen-transfer's new-game save now round-trips
+  through `resume_level`.
 - ~~The 4-byte trailer in each §2.3 record is currently skipped~~ ✅ RE'd:
   - **byte 3 = magical bonus (signed int8)** -- verified end-to-end
     against named items (Father Jon's ring of protection +3, Sir Mikeal's
@@ -236,9 +245,18 @@ SOP M:14 handler; **no DOS RE needed**. Full CHARCOPY artifact dump:
 [`../eob3_research/CHARCOPY/`](../eob3_research/CHARCOPY/README.md).
 
 ### ⏳ Other stand-ins
-- Level objects load the *saved* `LVLnn.TMP` (not the new-game source).
-- Object link-chains/decflags are simplified.
-- Party position carry-over on `change_level` is a stand-in.
+- ~~Level objects load the *saved* `LVLnn.TMP` (not the new-game source).~~ ✅
+  covered by `write_initial_tempfiles` above — new-game boot writes fresh
+  `LVL??.TMP` from `LVL??_00.BIN` before `loadLevelObjects` reads them.
+- ~~Object link-chains/decflags are simplified.~~ ✅ real: features/decorations
+  chain properly in plane 0 (single per cell), monsters prepend to a real
+  linked list in plane 2 (`W:next@6` with `-1` terminator, up to 4 per cell,
+  entities.remove walks `W:prev/W:next` on death). `W:decflags` for floor
+  features maps `+14 == 0x0F → 0` so render CASEs land on state 0 (see the
+  Level objects fix note above); wall-side flags (1/2/4/8) pass through.
+- Party position carry-over on `change_level` — the SOP handles it (kernel
+  updates `B:party_x/y/lvl`); our `change_level` just refreshes
+  `loadLevelObjects`, no separate C++ carry-over needed.
 
 ## Phase 4 — Dungeon Hack
 
