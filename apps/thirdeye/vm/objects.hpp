@@ -22,6 +22,7 @@
 
 #include <cstdint>
 #include <deque>
+#include <functional>
 #include <map>
 #include <string>
 #include <vector>
@@ -154,6 +155,13 @@ public:
 	// True if `classNumber` is, or derives from, `baseClass` (walks N:PARENT).
 	bool isSubclassOf(uint16_t classNumber, uint16_t baseClass) const;
 
+	// Post-send hook: called after every SEND returns, with (objIndex, message).
+	// Used by the level-object loader to re-populate lvlobj after dungeon.M:232
+	// "init level" wipes the grid mid-boot (native EYE.C's restore_level_objects
+	// runs after init_level; we hook here to match that order).
+	using PostSendHook = std::function<void(int objIndex, int message)>;
+	void setPostSendHook(PostSendHook hook) { mPostSendHook = std::move(hook); }
+
 private:
 	// Find the lowest class at/above `startClass` that handles `message`.
 	bool resolve(uint16_t startClass, int message, uint16_t& defClass,
@@ -180,6 +188,7 @@ private:
 	std::deque<std::vector<uint8_t>> mStatics;
 	Interpreter::RuntimeCall mRuntimeCall;
 	DynamicStaticsHook mDynamicStatics;
+	PostSendHook mPostSendHook;
 	bool mTrace = false;
 	uint64_t mMaxSteps = 0;
 	int mDepth = 0; // current SEND/PASS recursion depth

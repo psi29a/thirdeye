@@ -16,6 +16,9 @@ Icon?
 ehthumbs.db
 Thumbs.db
 
+# cmake configure_file output (absolute machine paths; regenerated at configure)
+apps/*/config.hpp
+
 # Eclipse
 .cproject
 .preferences.xml

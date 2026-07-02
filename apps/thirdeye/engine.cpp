@@ -251,37 +251,75 @@ void THIRDEYE::runtime::pumpHost(GRAPHICS::Graphics &gfx, VM::EventSystem &event
 	// SYS_TIMER event (see EventSystem::postTimer / INTRFACE.C timer_callback).
 	events.postTimer(static_cast<int32_t>(SDL_GetTicks() >> 5));
 
-	// Debug: THIRDEYE_AUTOWALK posts scripted SYS_KEYDOWNs (the same the arrow
-	// keys/WASD/QE post) every ~40 pumps, so a headless run can drive the engine
-	// for repro/regression testing. Value is one OR MORE comma-separated hex
-	// scan codes: "4800" = repeat forward; "4900,4800,4800" = turn-right once
-	// then walk forward x2 then hold (last code repeats). Useful sequences:
-	//   4800=forward 5000=back 4b00=strafe-L 4d00=strafe-R 4700=turn-L 4900=turn-R
-	//   5000,0d,0d = menu Down + Enter + Enter (advances title menu + save picker)
-	//   0d = Enter   1b = Esc
+	// Debug: THIRDEYE_AUTOWALK is the scripted-input test harness. Comma-separated
+	// tokens, one per ~40 pumps (last token repeats):
+	//   <hex>      hex scancode SYS_KEYDOWN (4800=fwd 5000=back 4b00/4d00=strafe-L/R
+	//              4700/4900=turn-L/R 0d=Enter 1b=Esc)
+	//   L<x>:<y>   left-click at logical (x,y) -- press, then release ~5 ticks later
+	//   R<x>:<y>   right-click  (so a real attack click on a weapon icon is one token)
+	//   _          no-op (wait one window)
+	// Examples:
+	//   4800                     hold forward
+	//   5000,0d,0d               menu Down + Enter + Enter (title -> save picker)
+	//   4900,4800,4800,R126:133  turn-right, walk x2, right-click PC0's right hand
 	if (const char *aw = std::getenv("THIRDEYE_AUTOWALK")) {
 		// Cache the parsed sequence in statics: AUTOWALK is a process-launch
 		// env var (set once before exec), so re-parsing every event pump
-		// (~30 Hz) is wasted work. Callers wanting a different script
-		// restart the process; we deliberately don't honor setenv at runtime.
-		static std::vector<int32_t> codes;
-		static int tick = 0;
-		if (codes.empty()) {
+		// (~30 Hz) is wasted work.
+		enum class TokKind : uint8_t { Key, Lclick, Rclick, Wait };
+		struct Tok { TokKind kind; int32_t scancode; int x; int y; };
+		static std::vector<Tok> toks;
+		static int tick = -1;
+		if (toks.empty()) {
 			std::string s = aw;
 			for (size_t p = 0; p < s.size(); ) {
 				size_t e = s.find(',', p);
-				int32_t c = static_cast<int32_t>(std::strtol(
-					s.substr(p, e == std::string::npos ? e : e - p).c_str(), nullptr, 16));
-				if (c != 0) codes.push_back(c);
-				if (e == std::string::npos) break;
-				p = e + 1;
+				std::string one = s.substr(p, e == std::string::npos ? e : e - p);
+				if (e == std::string::npos) p = s.size(); else p = e + 1;
+				if (one.empty()) continue;
+				Tok t{TokKind::Wait, 0, 0, 0};
+				if (one == "_") {
+					t.kind = TokKind::Wait;
+				} else if ((one[0] == 'L' || one[0] == 'R') &&
+				           one.find(':') != std::string::npos) {
+					int x = 0, y = 0;
+					if (std::sscanf(one.c_str() + 1, "%d:%d", &x, &y) == 2) {
+						t.kind = (one[0] == 'L') ? TokKind::Lclick : TokKind::Rclick;
+						t.x = x; t.y = y;
+					} else continue;
+				} else {
+					int32_t c = static_cast<int32_t>(
+						std::strtol(one.c_str(), nullptr, 16));
+					if (c == 0) continue;
+					t.kind = TokKind::Key;
+					t.scancode = c;
+				}
+				toks.push_back(t);
 			}
-			if (codes.empty()) codes.push_back(0x4800);
+			if (toks.empty()) toks.push_back({TokKind::Key, 0x4800, 0, 0});
 		}
-		if (++tick % 40 == 0) {
-			size_t idx = static_cast<size_t>(tick / 40 - 1);
-			if (idx >= codes.size()) idx = codes.size() - 1;
-			events.postEvent(0, VM::SYS_KEYDOWN, codes[idx]);
+		++tick;
+		size_t idx = static_cast<size_t>(tick / 40);
+		if (idx >= toks.size()) idx = toks.size() - 1;
+		const auto &tok = toks[idx];
+		int phase = tick % 40;
+		if (phase == 0) {
+			switch (tok.kind) {
+			case TokKind::Key:
+				events.postEvent(0, VM::SYS_KEYDOWN, tok.scancode); break;
+			case TokKind::Lclick: case TokKind::Rclick: {
+				int lx, ly;
+				gfx.mouseToLogical(tok.x, tok.y, lx, ly);
+				events.mouseMove(lx, ly);
+				events.mouseButton(tok.kind == TokKind::Lclick,
+				                   tok.kind == TokKind::Rclick);
+				break;
+			}
+			case TokKind::Wait: break;
+			}
+		} else if (phase == 5 &&
+		           (tok.kind == TokKind::Lclick || tok.kind == TokKind::Rclick)) {
+			events.mouseButton(false, false);
 		}
 	}
 	// Debug: THIRDEYE_AUTOKEY=<decimal SDL scancode> pushes a synthetic key-down
@@ -422,6 +460,12 @@ VM::Value defaultRuntimeCall(VM::ObjectSystem &objects, VM::EventSystem &events,
 	if (THIRDEYE::runtime::graphics::tryHandle(ctx, fn, args, result)) return result;
 
 	THIRDEYE::runtime::rt() << "  [stub -> 0]" << std::endl;
+	// Always log the first hit on each unimplemented runtime function (max a few
+	// dozen lines per run) -- this is how we find what the SOP needs next.
+	static std::set<std::string> stubbed;
+	if (stubbed.insert(fn).second)
+		std::cout << "[stub] " << fn << " (first call, " << args.size()
+		          << " args)" << std::endl;
 	return 0;
 }
 

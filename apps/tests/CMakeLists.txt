@@ -29,7 +29,7 @@ add_runtests_dir (vm
     )
 
 add_runtests_dir (savegame
-    transfer items_tmp savegame_dir
+    transfer items_tmp savegame_dir lvl_tmp
     )
 
 add_runtests_dir (chargen

@@ -44,6 +44,14 @@ narrative on completed work.
   `--scale`/Retina).
 - ✅ **Level objects** — the whole level (doors/levers/stairs/decorations/monsters, 231 in
   LVL01) loads from `LVLnn.TMP` and renders.
+  - **Fix (2026-07-01, superseded same day):** trees didn't render because
+    `features.get_state` returned 15 — the loader was reading the wrong statics
+    offset and a `+14 == 0x0F → decflags = 0` remap was patched in to compensate.
+    The remap is **gone**: `loadLevelObjects` was rewritten to copy each record's
+    statics verbatim (the original's `restore_range`), which puts the true
+    `W:decflags` at `+10` and fixed rendering, tree-chopping, and monster HP in
+    one stroke — see the "level-object restore made faithful" section below.
+    ([savegame/lvl_tmp.cpp](../apps/thirdeye/savegame/lvl_tmp.cpp).)
 - ✅ **Items & inventory (display)** — equipment screen renders the paper-doll + char-gen gear;
   slot regions register so interaction routes through the proven click path.
 
@@ -86,10 +94,175 @@ so `acquire NPC target` no longer finds the corpse.
   at that linear-memory offset, so we now return a sinkhole instead of throwing
   (vm/objects.cpp `staticsPtr` + vm/vm.cpp `externPtr`).
 
-**Open follow-ups** (real gameplay, not bring-up): magic-weapon vs bit-6 (today *any*
-hit kills incorporeals; should require `weapon flags & magic`), monster-AI attack-back
-(M:208 only schedules party→monster — monster→party comes through `bounce`/`my turn`),
-experience award + level up integration on the player side.
+**Monster-AI attack-back — landed (2026-07-01):** the `bounce`/`my turn` chain
+was already firing (SYS_TIMER events + M:87 `schedule attack` re-arm), but the
+monster never crossed into aggro because `C:distance` and `C:seek_direction`
+were unimplemented runtime stubs returning 0. `NPC.my turn` used those to pick
+a wander direction and gate the `advance_and_attack`/`valid_range_attack`
+sends, so every NPC just wandered north forever. Implemented both in
+[runtime/eye.cpp](../apps/thirdeye/runtime/eye.cpp) verbatim from EYE.C — the
+32-entry sqrt table for `distance` and the octal N/NE/E/… direction map for
+`seek_direction`. Verified with `THIRDEYE_ATTACK=1
+THIRDEYE_ATTACK_NOAUTO=1`: synthetic troll adjacent to the party now walks
+through `my turn` → `advance and attack` (M:99) → `contact` (M:89) → PC.take
+damage (M:82) → front-row PC (Stonebeard, idx 33) takes 5/15/18/10 hp per
+swing. Real level-3 NPCs also start firing `my turn` correctly.
+
+**Magic-weapon vs bit-6 — not a runtime bug (2026-07-01):** RE'd end-to-end and
+confirmed the SOP itself instant-kills bit-6 targets on *any* successful hit, with
+no weapon-flag gate. `PC.roll to hit` (r1369 @3318) short-circuits to `return 1`
+when `target.NPCstat & 0x40` is set (auto-hit), and `weapons.hand-to-hand attack`
+(r1688 @866) then does `SEND target.die(1)` unconditionally on the same bit — no
+LNGC of a weapon-magic constant appears anywhere in the handler, no subclass
+overrides `hand-to-hand attack` (checked bare hands / magic dagger / magic staff /
+two-handed sword). Bit 0x40 is set consistently across ethereals (sword wraith,
+shadow, watch ghost, shadow hound, lich, shadow of death). So "one bare-hand
+punch drops a wraith" *is* the shipped EOB3 behavior — our runtime is faithful.
+Any change would be a deliberate deviation from `EYE.RES`, which violates the
+project rule "our job is to run EYE.RES, not to RE it."
+
+**XP + level-up — verified end-to-end (2026-07-01):** the whole chain runs on the
+bytecode already. Troll kill → `NPC.die(killer)` (msg 55) → `NPC.report(1012)` returns
+class XP value (1400 for troll) → kernel `M:103 experience(1400)` divides by
+qualifying-PC count (via `M:35 qualify`) → each qualifying PC gets `M:103 experience`
+→ PC bytecode loops the 3 multi-class slots, checks `M:174 racial level limits` on
+`tables` singleton (obj 2003, class 2380), adds XP to `L:experience[0..2]` @179,
+and on threshold cross (`M:175 experience level`) bumps `B:levels[i]` @163, sends
+`M:176 new hit points` and adds the roll to `W:hpts` @171 + `W:hmax` @173. Verified
+with `THIRDEYE_ATTACK=1 THIRDEYE_XPBLAST=500000 THIRDEYE_XPTRACE=1`: Stonebeard
+6/6/0 → 8/8/0 with HP 60→102, Fast Eddie 8 → 10, and PCs at racial cap correctly
+stay put (Sir Mikeal 7 fighter, PC 35 at 13). No C++ change needed for the chain
+itself — helpers `THIRDEYE_ATTACK_RESPAWN` (auto-respawn the test monster) and
+`THIRDEYE_XPBLAST=N` (one-shot direct M:103) live in
+[runtime/event.cpp](../apps/thirdeye/runtime/event.cpp) for regression checks.
+
+### ✅ Runtime-import survey + batch fill (2026-07-02)
+
+Diffed **every `C:` import in EYE.RES (118)** against the names our runtime
+handles; 57 were falling through to `[stub -> 0]`. `defaultRuntimeCall` now
+logs the first call to each unhandled function unconditionally (`[stub] name`,
+engine.cpp) so new gaps surface themselves. Ground-truth discovery along the
+way: the EOB3-specific 16-bit `EYE.C` (spells, save cluster, `step_square_*`)
+lives in **`../eob3_research/arun/src/`**, not `runtime/` (see CLAUDE.md
+gotchas — `grep -a` required). Implemented, all ported verbatim from the C:
+
+- **Geometry**: `step_square_X/Y` + `step_region` (half-cell projectile
+  flight), `step_X/Y` extended with the `MTYP_ML/MM/MR` maze-passage moves +
+  the 32-cell coordinate wrap.
+- **Spell queries**: `spell_request` (rest-tick "any spell still to
+  memorize?") and `spell_list` (spell-menu list builder), both reading the
+  PC's `B:spell_stat`/`B:spell_cnt` arrays through a new bounds-checked
+  `staticBytePtr` helper (runtime/internal.cpp).
+- **Strings** (RTCODE.C): `string_len`, `strval`, `envval` (full `ascnum`
+  port incl. `0x`/`0b`/`'c`), `copy_string`, `load_string`;
+  `string_compare` fixed to `stricmp` semantics (case-insensitive).
+- **Text metrics**: `get_text_x/y`, `char_width`, `font_height`, `crout`,
+  `dprint`, `text_refresh_window` (recorded no-op — we present whole-screen).
+- **Graphics**: `draw_line` (+ `Graphics::drawLine`, Bresenham),
+  `draw_rectangle`, `hash_rectangle` (+ `hashRect` checkerboard),
+  `solid_bar_graph` (the HP/food bars, verbatim port), `magic_field`
+  (shield/prayer portrait borders incl. the dashed both-fields pattern),
+  `visible_bitmap_rect` (sprite click hit-testing; writes 4 WORDs into SOP
+  statics), `mouse_in_window`, `pixel_fade` (instant present for now).
+- **No-op'd knowingly**: cursor set (`show/hide/lock/unlock_mouse`,
+  `standby/resume_cursor`, `set_wait_pointer`), cache (`flush/thrash_cache`),
+  `init/shutdown_graphics/interface`, `wait_vertical_retrace`, `beep`,
+  `diagnose`, `create_initial_binary_files` (dev-time TXT→BIN translation).
+
+**Still stubbed** (visible in the `[stub]` log): the sound set (`init_sound`,
+`load_sound_block`, `set_sound_status`, `sound_effect`, `load_music`,
+`unload_music`, `play_sequence`, `shutdown_sound` — deferred on purpose),
+`do_dots`/`do_ice` (fireball/cone-of-cold particle animations — blocking
+GIL2VFX loops with per-pixel occlusion reads; purely visual, damage happens
+in bytecode), and `getkey` (blocking key wait; no SOP path hit yet).
+
+Golden-path regression (title → restore → walk): **only sound stubs remain**.
+NB the harness key script changed — with a save present the title menu
+defaults to "Continue the Quest", so it's `THIRDEYE_AUTOWALK=0d,0d,…` now
+(the old leading `5000` walks you into "Gather a New Party"/chargen).
+
+### ✅ Text pipeline + level-object restore made faithful (2026-07-02, PM)
+
+Three user-visible bugs, one root theme — we had approximated subsystems the
+originals define exactly:
+
+- **Message log drifted right + swallowed spaces ("Sir Mikealremarks…").**
+  `Graphics::printText` was a from-intuition word-wrapper: it collapsed
+  runs of spaces (log strings like 1252 *" remarks, …"* begin with a
+  meaningful leading space), centered against the whole window, and CLIPPED
+  at the bottom — leaving the cursor stuck mid-line, so every subsequent log
+  message continued from there (the mid-window green text). Rewritten as a
+  faithful port of `GIL2VFXA_print_buffer` + `GIL2VFX_cout`
+  (arun/asm/GIL2VFXA.ASM): wrap is computed against the space remaining
+  from the *current cursor*, wrap boundaries eat only the boundary spaces,
+  justify offsets htab per line (center = remaining width, right = x2−w+1),
+  and `\n` on the bottom line **scrolls the window content up** (cursor
+  stays) — which is what keeps the log left-flowing, since every log string
+  starts with `\n`. Also: `%0`–`%9` in format strings are vsprint COLOUR
+  CODES, not printf — formatSop now drops them (plus gained `%x`/`%c`/`%a`).
+- **Beige text log after the Florn cutscene.** The "clear to black under
+  Backdrop 190" fix existed *only as a comment* — the code never cleared, so
+  the outtake's `wipe_window(96, 20)` light-brown fill showed through the
+  Backdrop's transparent log interior (and got re-captured into the
+  text-restore backdrop). Now actually clears (runtime/graphics.cpp
+  draw_bitmap).
+- **Axe wouldn't chop the movable trees.** `LVLnn.TMP` is just save_range's
+  CDESC stream (same as ITEMS.TMP), and instance statics are meant to be
+  restored VERBATIM (`restore_range`). Our loader instead scanned for
+  record signatures and hand-invented fields — critically it read the byte
+  at statics+5 (`B:region`, the wall-side/quadrant) as `W:decflags`, whose
+  real home is statics+10. The movable trees store decflags `0x0010` — and
+  bit 0x10 is the *"can be cut"* flag `movable trees.attacked` checks before
+  chopping — so every axe blow hit the "unusually resistant" branch.
+  (The old `0x0F → 0` mapping was itself a patch over reading the wrong
+  field: 0x0F was the region sentinel, never a decflags value.) The loader
+  ([savegame/lvl_tmp.cpp](../apps/thirdeye/savegame/lvl_tmp.cpp)) now walks
+  the CDESC records exactly and memcpy's the statics verbatim, then relinks
+  (place, cell chains) as before. Fallout fixed for free: monster HP is
+  stored as −1 and rolled by `NPC.restore` via `C:dice` (the old loader
+  set HP from the CDESC *size* field — the troll's "HP 30" matched its
+  record being 30 bytes, pure coincidence), NPCstat re-seeds in `restore`
+  via `report`, movable trees keep their real `B:direction`, and LVL03 now
+  places 331 objects (was 231 with the heuristic scan). Verified live:
+  party at (21,22) facing the tree — sword swing prints the "stout axe"
+  remark, axe swings chop (`sound_effect(54)` ×3, state 0→1→2, tree
+  disables on the third), 105/105 tests green.
+  *Watch-item:* wall features (doors/levers) previously rendered with
+  wall-side-as-state; their true decflags now flow through — LVL01
+  mausoleum doors should be eyeballed on the next play session.
+
+  **Follow-up hang fix (same day):** the verbatim copy surfaced that some
+  saved records carry LIVE chain pointers (the QSP monsters at (12,14) ship
+  with `next=1773` / `prev=1772` — save_range dumped them mid-chain). Keeping
+  the file's `W:prev` while our loader rebuilt `W:next` in its own insertion
+  order let the SOP's unlink (`prev.next = my.next`) write `1772.next = 1772`
+  the first time a monster left a shared cell — a self-cycle every chain
+  walker (draw/AI) then spun on forever. With graphics the VM step budget is
+  deliberately unlimited (the SOP main loop legitimately never returns), so
+  this presented as a macOS beachball on strafe near the treeline. Loader now
+  clears `W:next`/`W:prev` before relinking and keeps the cell chains
+  properly doubly linked (old head's `prev` ← new head). Repro (walk to the
+  treeline, strafe) runs clean; axe-chop + 105 tests still green.
+
+  **CodeRabbit round (2026-07-02):** PR #53 review triage — 9 real, 3 pushed
+  back with the original sources as evidence (`ascnum` char-literal sign,
+  `solid_bar_graph`'s raw `val*3 >= max` threshold, `load_string`'s
+  byte-identical copy are all faithful to `arun/src`). Real fixes landed:
+  text scroll condition corrected to GIL2VFXA.ASM's exact-fit semantics
+  (`vtab + 2*charH - 1 > y1`), a wrap-scan progress guard (a boundary space
+  at an edge-parked cursor could read `text[-1]` / stall), `%X` uppercase,
+  endian-safe `visible_bitmap_rect` writes, `strnlen` on save-slot names,
+  wider try/catch in `saveRange`. Bigger catch while verifying the "double
+  reload" comment against `EYE.C`/`RTOBJECT.C`: our `change_level` neither
+  saved the departing level (doors/kills resurrected on return) nor did the
+  loader destroy stale objects (`restore_range` tears down live slots — dead
+  file slots included — before restoring; ours left the old level's entities
+  alive and event-registered as ghosts, and double-restored monsters per
+  transition). `change_level` now `save_range`s the old level to `LVLoo.TMP`
+  and defers the reload to the "init level" hook; `loadLevelObjects` destroys
+  before recreating (MSG_DESTROY cancels the SOP's notify requests).
+  **Watch item:** take stairs up/down and back next play session — level
+  round-trip persistence is new code.
 
 ### 🚧 Save / load (the savegame format)
 
@@ -130,6 +303,40 @@ experience award + level up integration on the player side.
   `GIL2VFX_wipe_window` separation). Mouse-click routing through `mouse_XY()`
   wired against `EventSystem::pointX/pointY`.
 
+- **In-game save — landed (2026-07-02).** The serializer core is
+  [`savegame::saveRange`](../apps/thirdeye/savegame/lvl_tmp.cpp): RTOBJECT.C
+  `save_range`'s SF_BIN format (0x1A byte, then per slot a CDESC
+  `{u16 slot, u32 class, u16 size}` + raw instance statics; dead slot =
+  `0xFFFFFFFF/0`), verified byte-compatible against the shipped `*_00.BIN`
+  files — a live-game LVL03 dump comes out at **exactly** the shipped 13436 B
+  and ITEMS within 7 B (the live object population differs slightly from a
+  fresh save, as it should). Runtime functions wired in
+  [runtime/eye.cpp](../apps/thirdeye/runtime/eye.cpp): `save_game(slot, lvl)`
+  (live items → `ITEMS_nn.BIN`, live level objs → `LVLxx_nn.BIN`, other
+  levels' `.TMP` copied over), `suspend_game(lvl)` (live →
+  `ITEMS.TMP`/`LVLxx.TMP`),
+  `read_save_directory` (SAVEGAME.DIR → the slot-name buffer; the original's
+  `savegame_dir[]`), `write_save_directory` (buffer → 12 CRLF lines + 0x1A,
+  byte-format-identical to the shipped file). `savegame_title` no longer
+  re-reads disk once its slot buffer is populated, so the save UI's
+  `copy_string`-rename → `write_save_directory` flow can't be clobbered by a
+  picker re-render. `resume_items` is a deliberate no-op (our `resume_level`
+  path rebuilds PCs + items already). Checks: `SaveRange_Test` unit test +
+  `THIRDEYE_SAVETEST=N` one-shot (runtime/event.cpp) that dumps live state
+  through the serializer mid-game.
+
+- **Slot-mapping fix (2026-07-02):** slot numbers map to file suffixes
+  VERBATIM (EYE.C `set_save_slotnum`) — picker slot 1 ("Quick Start Party" =
+  SAVEGAME.DIR line 1) = `ITEMS_01.BIN`/`LVLxx_01.BIN`. **Slot 0 is the
+  new-game *initial* state** ("Read initial (slot 0) items" in EYE.C;
+  `save_game` abends on slot 0), and a real DOS new-game legitimately
+  overwrites it — on this install `ITEMS_00.BIN` holds an old DOS-era rolled
+  party ("THELMA"), which is how the bug surfaced: our previous `slot-1`
+  mapping restored slot 0's THELMA party instead of the QSP.
+  `restore_items`/`restore_level_objects`/`save_game` now use the slot
+  verbatim; verified end-to-end (restore → "Sir Mikeal" HP 97/97 STR 18/94
+  equip 994/993/992; all 105 unit tests green incl. `ParsesQuickStartParty`).
+
 *Remaining:*
 - ~~**Drop the `THIRDEYE_CONTINUE` gate.**~~ ✅ done. `bootObject` auto-detects:
   `--skip-menu` + `SAVEGAME/ITEMS.TMP` present → boot mode `CINE`; missing →
@@ -138,7 +345,16 @@ experience award + level up integration on the player side.
   the env var, and it can now `createProgram` PCs from scratch on the CINE
   path (defensive today since the SOP's CINE branch still runs chargen-
   transfer; live the moment we bypass that).
-- `write_initial_tempfiles` (the new-game write).
+- ~~`write_initial_tempfiles` (the new-game write).~~ ✅ done. Full
+  serializer in [runtime/eye.cpp](../apps/thirdeye/runtime/eye.cpp) `if (fn ==
+  "write_initial_tempfiles")`: seeds `ITEMS.TMP` bytes 0..676 from
+  `ITEMS_00.BIN` scaffold, writes all 10 PC records @677 field-by-field from
+  live PC statics (name/race/classes/portrait/PCstat/alignment/levels[3]/
+  lost_levels[3]/lost_hp/hpts/hmax/hbon/food/xp[3]/stats/spell_cnt/spell_stat),
+  appends a fresh item stream by walking every live subclass-of-`items`
+  entity, and copies `LVLnn_00.BIN → LVLnn.TMP` for all 14 levels via
+  `restoreLevels(dir, 0)`. Chargen-transfer's new-game save now round-trips
+  through `resume_level`.
 - ~~The 4-byte trailer in each §2.3 record is currently skipped~~ ✅ RE'd:
   - **byte 3 = magical bonus (signed int8)** -- verified end-to-end
     against named items (Father Jon's ring of protection +3, Sir Mikeal's
@@ -188,9 +404,18 @@ SOP M:14 handler; **no DOS RE needed**. Full CHARCOPY artifact dump:
 [`../eob3_research/CHARCOPY/`](../eob3_research/CHARCOPY/README.md).
 
 ### ⏳ Other stand-ins
-- Level objects load the *saved* `LVLnn.TMP` (not the new-game source).
-- Object link-chains/decflags are simplified.
-- Party position carry-over on `change_level` is a stand-in.
+- ~~Level objects load the *saved* `LVLnn.TMP` (not the new-game source).~~ ✅
+  covered by `write_initial_tempfiles` above — new-game boot writes fresh
+  `LVL??.TMP` from `LVL??_00.BIN` before `loadLevelObjects` reads them.
+- ~~Object link-chains/decflags are simplified.~~ ✅ real: features/decorations
+  chain properly in plane 0 (single per cell), monsters prepend to a real
+  linked list in plane 2 (`W:next@6` with `-1` terminator, up to 4 per cell,
+  entities.remove walks `W:prev/W:next` on death). `W:decflags` for floor
+  features maps `+14 == 0x0F → 0` so render CASEs land on state 0 (see the
+  Level objects fix note above); wall-side flags (1/2/4/8) pass through.
+- Party position carry-over on `change_level` — the SOP handles it (kernel
+  updates `B:party_x/y/lvl`); our `change_level` just refreshes
+  `loadLevelObjects`, no separate C++ carry-over needed.
 
 ## Phase 4 — Dungeon Hack
 

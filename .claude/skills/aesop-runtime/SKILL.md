@@ -30,6 +30,18 @@ John Miles released the AESOP/32 runtime under `../eob3_research/runtime/*.C`:
 | `SOUND32.C` | sound + XMIDI |
 | `DEFS.H` | message tokens (`MSG_CREATE=0`, `MSG_DESTROY`), type defs, key constants |
 
+**EOB3-specific CALLs: check `../eob3_research/arun/src/` FIRST.** `runtime/EYE.C` is
+the later AESOP/32 build and lacks the EOB3-only functions; `arun/src/EYE.C` is the
+16-bit "Eye III engine support" original (28-Oct-92) with `spell_request`/`spell_list`/
+`magic_field`/`do_dots`/`do_ice`/`step_square_*` and the whole save cluster
+(`save_game`/`suspend_game`/`read_save_directory`/…), and `arun/src/GRAPHICS.C` has
+`solid_bar_graph`/`dprint`/`char_width` etc. The `arun/arun.map` symbol list is a quick
+"which module owns this function" index. Beware: the box-drawing comment bytes make grep
+treat these files as binary — **use `grep -a`**. Constants (`MTYP_*`, `DIR_*`, `LVL_X`,
+`NUM_SAVEGAMES`, `SAVE_LEN`) live in `arun/src/SHARED.H`; `save_range`'s on-disk CDESC
+record format ({u16 slot, u32 class, u16 size} + statics, 0x1A prefix) is in
+`arun/src/RTOBJECT.C`/`.H` — our writer is `savegame::saveRange` (lvl_tmp.cpp).
+
 Open the C — even when it's `data`-typed by `file(1)` (Watcom DOS line endings), it reads
 fine. The signature `LONG cdecl foo(LONG argcnt, ARG1, ARG2, …)` tells you everything:
 return type, arg count, arg sizes, argument order.

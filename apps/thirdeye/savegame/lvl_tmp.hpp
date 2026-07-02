@@ -2,6 +2,7 @@
 #define THIRDEYE_SAVEGAME_LVL_TMP_HPP
 
 #include <cstdint>
+#include <filesystem>
 
 namespace RESOURCES { class Resource; }
 namespace VM { class ObjectSystem; }
@@ -27,6 +28,16 @@ namespace THIRDEYE::savegame {
 // Returns the number of objects placed.
 int loadLevelObjects(int level, VM::ObjectSystem &objects,
                      RESOURCES::Resource &res);
+
+// Serialize object slots [first..last] in RTOBJECT.C save_range's SF_BIN
+// format: a 0x1A byte, then for EVERY slot in the range a CDESC
+// {u16 slot, u32 class, u16 size} followed by `size` bytes of raw instance
+// statics (dead slot = class 0xFFFFFFFF, size 0). Byte-compatible with the
+// shipped SAVEGAME/*_00.BIN files (verified against LVL01_00.BIN /
+// ITEMS_00.BIN). ITEMS.TMP = [0..999], LVLnn.TMP = [1000..1999].
+// Returns false on I/O failure.
+bool saveRange(VM::ObjectSystem &objects, const std::filesystem::path &path,
+               int first, int last);
 
 } // namespace THIRDEYE::savegame
 

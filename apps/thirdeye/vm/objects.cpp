@@ -328,12 +328,34 @@ Value ObjectSystem::send(int objIndex, int message, std::vector<Value> args) {
 	bool atkMsg = (message == 163 || message == 77 || message == 78 ||
 	               message == 71 || message == 43 || message == 82 ||
 	               message == 162 || message == 55 || message == 22 ||
-	               message == 235); // 235 = All Attack button toggle
-	bool aiMsg = (objIndex >= 1750 && objIndex <= 1900 &&
-	              (message == 91 || message == 85 || message == 107 || message == 99));
+	               message == 235 || message == 208 || message == 233 ||
+	               message == 103 || message == 17 ||
+	               message == 231 || message == 250 || message == 187 ||
+	               message == 171 || message == 173 || message == 174 ||
+	               message == 175 || message == 176);
+	// 231 = restore game (fires update-auto-attack-button); 250 = enter game
+	// 187 = activate adventure screen
+	// NPC AI hooks: watch(91), my-turn(85), LoS(107), advance-and-attack(99),
+	// bounce(86), follow-through(88), contact(89), command(90), schedule
+	// attack(87), attempt move(31), seek square(96), valid range attack(97),
+	// valid feature attack (missile collision 94). Cover the whole monster
+	// attack-back chain. Also: party movement -- step(26), move(27),
+	// impedance(95) -- for tracking "can't go that way" bugs.
+	bool aiMsg = (message == 91 || message == 85 || message == 107 ||
+	              message == 99 || message == 86 || message == 88 ||
+	              message == 89 || message == 90 || message == 87 ||
+	              message == 31 || message == 96 || message == 97 ||
+	              message == 94 || message == 26 || message == 27 ||
+	              message == 95 || message == 58 || message == 59 ||
+	              message == 60 || message == 61 || message == 244 ||
+	              message == 312 || message == 268 || message == 137 ||
+	              message == 220 || message == 227);
 	if (kMonTrace && (atkMsg || aiMsg)) {
 		static int n = 0;
-		if (n++ < 600) {
+		static const int kCap = std::getenv("THIRDEYE_MONTRACE_CAP")
+		                           ? std::atoi(std::getenv("THIRDEYE_MONTRACE_CAP"))
+		                           : 600;
+		if (n++ < kCap) {
 			std::cerr << "[mon-msg] idx " << objIndex << " msg " << message
 			          << " handler " << (found ? defClass : -1);
 			for (size_t a = 0; a < args.size(); ++a)
@@ -341,9 +363,15 @@ Value ObjectSystem::send(int objIndex, int message, std::vector<Value> args) {
 			std::cerr << "\n";
 		}
 	}
-	if (!found)
+	if (!found) {
+		// Even unhandled sends fire the post-send hook -- dungeon.M:232 "init level"
+		// resolves in the dungeon class, but the hook is generic and cheap.
+		if (mPostSendHook) mPostSendHook(objIndex, message);
 		return -1; // no handler anywhere in the hierarchy (matches RT_execute)
-	return runHandler(defClass, offset, objIndex, message, args);
+	}
+	Value r = runHandler(defClass, offset, objIndex, message, args);
+	if (mPostSendHook) mPostSendHook(objIndex, message);
+	return r;
 }
 
 Value ObjectSystem::pass(int objIndex, int message, uint32_t parentClass,

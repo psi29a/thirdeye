@@ -1,6 +1,7 @@
 #include "graphics.hpp"
 #include <algorithm>
 #include <cstdlib>
+#include <cstring>
 
 #include <iostream>
 #include <stdexcept>
@@ -89,7 +90,8 @@ GRAPHICS::Graphics::~Graphics() {
 }
 
 void GRAPHICS::Graphics::drawImage(std::vector<uint8_t> &bmp, uint16_t index,
-		int posX, int posY, bool transparency, int mirror, uint32_t cacheId) {
+		int posX, int posY, bool transparency, int mirror, uint32_t cacheId,
+		int scale) {
 
 	// Cache the decoded shape (un-mirrored): the RLE VFX decode is the per-frame
 	// hotspot for the in-game 3D view, which re-runs the draw bytecode every
@@ -147,12 +149,27 @@ void GRAPHICS::Graphics::drawImage(std::vector<uint8_t> &bmp, uint16_t index,
 	SDL_Surface *surface = makeIndexedSurfaceFrom(
 			const_cast<uint8_t*>(src->data()), iw, ih, iw, mPalette);
 
-	SDL_Rect dest = { posX, posY, iw, ih };
+	// Apply the AESOP depth-tier scale: shape shrinks to (scale/256) of native
+	// size (0 = native). Anchor stays at the sprite's origin, so the offset
+	// half-fills the width/height loss -- centred shrink, matching
+	// GIL2VFX_draw_bitmap's `xp += bounds*(1-scale)/2` in the reference runtime.
+	int dw = iw, dh = ih, ox = posX, oy = posY;
+	if (scale > 0 && scale != 256) {
+		dw = iw * scale / 256;
+		dh = ih * scale / 256;
+		ox += (iw - dw) / 2;
+		oy += (ih - dh) / 2;
+	}
+	SDL_Rect dest = { ox, oy, dw, dh };
 
 	if (transparency) {
 		SDL_SetSurfaceColorKey(surface, true, 0);
 	}
-	SDL_BlitSurface(surface, NULL, mScreen, &dest);
+	if (dw == iw && dh == ih)
+		SDL_BlitSurface(surface, NULL, mScreen, &dest);
+	else
+		SDL_BlitSurfaceScaled(surface, NULL, mScreen, &dest,
+		                      SDL_SCALEMODE_NEAREST);
 	SDL_DestroySurface(surface);
 
 	// Keep the backdrop snapshot in sync with the bitmap art (used to restore a
@@ -173,6 +190,44 @@ void GRAPHICS::Graphics::drawImage(std::vector<uint8_t> &bmp, uint16_t index,
 		SDL_SetSurfaceBlendMode(mScreen, SDL_BLENDMODE_NONE);
 		SDL_BlitSurface(mScreen, &mirror_rect, mBackdrop, &mirror_rect);
 	}
+}
+
+bool GRAPHICS::Graphics::visibleBitmapRect(std::vector<uint8_t> &bmp,
+		uint16_t index, int posX, int posY, int mirror, int out[4]) {
+	Bitmap image(bmp);
+	int iw = image.getWidth(index), ih = image.getHeight(index);
+	std::vector<uint8_t> pixels = image[index];
+	if (iw <= 0 || ih <= 0 ||
+	    pixels.size() < static_cast<size_t>(iw) * ih)
+		return false;
+	int minX = iw, minY = ih, maxX = -1, maxY = -1;
+	for (int y = 0; y < ih; ++y)
+		for (int x = 0; x < iw; ++x)
+			if (pixels[static_cast<size_t>(y) * iw + x] != 0) {
+				if (x < minX) minX = x;
+				if (x > maxX) maxX = x;
+				if (y < minY) minY = y;
+				if (y > maxY) maxY = y;
+			}
+	if (maxX < 0)
+		return false; // fully transparent shape
+	// Mirroring flips the pixels within the same dest rect (see drawImage),
+	// so the visible box reflects inside [0, iw) / [0, ih).
+	if (mirror & 1) {
+		int nMinX = iw - 1 - maxX;
+		maxX = iw - 1 - minX;
+		minX = nMinX;
+	}
+	if (mirror & 2) {
+		int nMinY = ih - 1 - maxY;
+		maxY = ih - 1 - minY;
+		minY = nMinY;
+	}
+	out[0] = std::max(posX + minX, 0);
+	out[1] = std::max(posY + minY, 0);
+	out[2] = std::min(posX + maxX, WIDTH - 1);
+	out[3] = std::min(posY + maxY, HEIGHT - 1);
+	return out[0] <= out[2] && out[1] <= out[3];
 }
 
 void GRAPHICS::Graphics::setClip(int x, int y, int w, int h) {
@@ -253,6 +308,45 @@ void GRAPHICS::Graphics::fillRect(int x0, int y0, int x1, int y1, uint8_t color)
 	// this box shows the cleared colour, not the art the clear replaced.
 	if (mBackdrop != nullptr)
 		SDL_FillSurfaceRect(mBackdrop, &r, px);
+}
+
+void GRAPHICS::Graphics::drawLine(int x0, int y0, int x1, int y1,
+		uint8_t color) {
+	if (x0 == x1 || y0 == y1) { // axis-aligned: one rect fill
+		fillRect(x0, y0, x1, y1, color);
+		return;
+	}
+	SDL_Color c = mPalette->colors[color];
+	Uint32 px = SDL_MapSurfaceRGB(mScreen, c.r, c.g, c.b);
+	int dx = std::abs(x1 - x0), sx = x0 < x1 ? 1 : -1;
+	int dy = -std::abs(y1 - y0), sy = y0 < y1 ? 1 : -1;
+	int err = dx + dy;
+	for (;;) {
+		SDL_Rect r = { x0, y0, 1, 1 };
+		SDL_FillSurfaceRect(mScreen, &r, px);
+		if (mBackdrop != nullptr)
+			SDL_FillSurfaceRect(mBackdrop, &r, px);
+		if (x0 == x1 && y0 == y1) break;
+		int e2 = 2 * err;
+		if (e2 >= dy) { err += dy; x0 += sx; }
+		if (e2 <= dx) { err += dx; y0 += sy; }
+	}
+}
+
+void GRAPHICS::Graphics::hashRect(int x0, int y0, int x1, int y1,
+		uint8_t color) {
+	if (x1 < x0) std::swap(x0, x1);
+	if (y1 < y0) std::swap(y0, y1);
+	SDL_Color c = mPalette->colors[color];
+	Uint32 px = SDL_MapSurfaceRGB(mScreen, c.r, c.g, c.b);
+	for (int y = y0; y <= y1; ++y) {
+		for (int x = x0 + ((x0 ^ y) & 1); x <= x1; x += 2) {
+			SDL_Rect r = { x, y, 1, 1 };
+			SDL_FillSurfaceRect(mScreen, &r, px);
+			if (mBackdrop != nullptr)
+				SDL_FillSurfaceRect(mBackdrop, &r, px);
+		}
+	}
 }
 
 void GRAPHICS::Graphics::zoomIntoImage(std::vector<uint8_t> &bmp) {
@@ -951,7 +1045,42 @@ void GRAPHICS::Graphics::setTextJustify(int wndnum, int justify) {
 	it->second.justify = justify;
 }
 
+bool GRAPHICS::Graphics::textCursor(int wndnum, int &x, int &y) const {
+	auto it = mTextWin.find(wndnum);
+	if (it == mTextWin.end())
+		return false;
+	x = it->second.htab;
+	y = it->second.vtab;
+	return true;
+}
+
+int GRAPHICS::Graphics::textCharWidth(int wndnum, uint8_t ch) {
+	auto it = mTextWin.find(wndnum);
+	if (it == mTextWin.end() || !it->second.font)
+		return 0;
+	SDL_Surface *g = it->second.font->getCharacter(ch);
+	return g ? g->w : 0;
+}
+
+int GRAPHICS::Graphics::textFontHeight(int wndnum) {
+	auto it = mTextWin.find(wndnum);
+	if (it == mTextWin.end() || !it->second.font)
+		return 0;
+	SDL_Surface *g = it->second.font->getCharacter('A');
+	return g ? g->h : 0;
+}
+
 void GRAPHICS::Graphics::printText(int wndnum, const std::string &text) {
+	// Faithful port of GIL2VFXA_print_buffer + GIL2VFX_cout (arun/asm/
+	// GIL2VFXA.ASM, arun/src/GIL2VFX.C): word-wrap is computed against the
+	// space REMAINING from the current cursor, boundary spaces are eaten on a
+	// wrap (mid-line spaces render verbatim), justification offsets htab per
+	// line, and a '\n' on the bottom line SCROLLS the window content up one
+	// row (the cursor stays on the last line) instead of clipping. The
+	// scroll is what keeps the message log left-flowing: every log message
+	// starts with '\n', so a full log scrolls and the text restarts at the
+	// left margin -- the old clip-only logic left the cursor stuck mid-line
+	// and new messages continued from there.
 	auto it = mTextWin.find(wndnum);
 	if (it == mTextWin.end() || !it->second.font)
 		return; // no font set for this window yet
@@ -968,82 +1097,127 @@ void GRAPHICS::Graphics::printText(int wndnum, const std::string &text) {
 		SDL_Surface *g = font->getCharacter(ch);
 		return g ? g->w : 0;
 	};
-	auto runWidth = [&](const std::string &s) -> int {
-		int w = 0;
-		for (unsigned char ch : s) w += glyphW(ch);
-		return w;
-	};
 	int lineH = 8; // these fonts are fixed-height; sample a glyph
 	if (SDL_Surface *g = font->getCharacter('A')) lineH = g->h;
 
-	const int winW = tw.winX1 - tw.winX0 + 1;
-
-	// Greedy word-wrap into lines that fit the window width. The original AESOP
-	// `print` flows text inside the bound window; we wrap on whitespace (and clip
-	// to the box below). Single short strings (menu options) stay one line.
-	std::vector<std::string> lines;
-	{
-		std::string cur, word;
-		auto flushWord = [&]() {
-			if (word.empty()) return;
-			int wW = runWidth(word);
-			int spW = cur.empty() ? 0 : glyphW(' ');
-			if (!cur.empty() && runWidth(cur) + spW + wW > winW) {
-				lines.push_back(std::move(cur));
-				cur.clear();
-			}
-			if (!cur.empty()) cur += ' ';
-			cur += word;
-			word.clear();
-		};
-		for (char ch : text) {
-			if (ch == ' ' || ch == '\n') {
-				flushWord();
-				if (ch == '\n') { lines.push_back(std::move(cur)); cur.clear(); }
-			} else {
-				word.push_back(ch);
-			}
+	// VFX_pane_scroll(0, -lineH): move the window's pixels up one text row,
+	// then repaint the vacated bottom strip from the text-free backdrop
+	// (panel art in-game / sampled flat colour on menus -- wipeTextBox).
+	auto scrollUp = [&]() {
+		int w = tw.winX1 - tw.winX0 + 1;
+		int h = tw.winY1 - tw.winY0 + 1;
+		if (w <= 0 || h <= 0 || tw.winX0 < 0 || tw.winY0 < 0 ||
+		    tw.winX1 >= WIDTH || tw.winY1 >= HEIGHT)
+			return;
+		if (h > lineH) {
+			Uint8 *px = static_cast<Uint8 *>(mScreen->pixels);
+			int pitch = mScreen->pitch;
+			for (int y = tw.winY0; y <= tw.winY1 - lineH; ++y)
+				std::memmove(px + y * pitch + tw.winX0 * 4,
+				             px + (y + lineH) * pitch + tw.winX0 * 4,
+				             static_cast<size_t>(w) * 4);
 		}
-		flushWord();
-		if (!cur.empty() || lines.empty()) lines.push_back(std::move(cur));
-	}
+		wipeTextBox(tw.winX0, std::max(tw.winY0, tw.winY1 - lineH + 1),
+		            tw.winX1, tw.winY1);
+	};
 
-	int y = tw.vtab;
-	int lastX = tw.htab;
-	for (size_t li = 0; li < lines.size(); ++li) {
-		const std::string &line = lines[li];
-		int lineW = runWidth(line);
-		int x;
-		if (tw.justify == 2)      // center each line in the window
-			x = tw.winX0 + (winW - lineW) / 2;
-		else if (tw.justify == 1) // right-align
-			x = tw.winX1 - lineW;
-		else                      // left: first line honours the cursor, wraps to winX0
-			x = (li == 0 ? tw.htab : tw.winX0);
-
-		if (y + lineH - 1 > tw.winY1) break; // clip below the window: stop drawing
-		if (y < tw.winY0) { y += lineH; continue; } // clip above: skip this line
-		for (unsigned char ch : line) {
-			SDL_Surface *glyph = font->getCharacter(ch);
-			if (glyph == nullptr) continue;
-			if (x + glyph->w - 1 > tw.winX1) break; // clip past the right edge
-			// Clip past the left edge: the original draws glyphs at (htab - x0)
-			// relative to the window and VFX clips negatives, so text whose cursor
-			// sits left of the window (e.g. an equipment-screen print with a
-			// page-local htab) is clipped, not bled onto the screen at that x.
-			if (x < tw.winX0) { x += glyph->w; continue; }
-			// Glyphs are white masks (black = transparent via colour key); tint to
-			// the text colour with a colour-mod multiply (white * colour = colour).
-			SDL_SetSurfaceColorMod(glyph, c.r, c.g, c.b);
-			SDL_Rect dst = { x, y, glyph->w, glyph->h };
+	// GIL2VFX_cout: one char at the cursor. '\n' = CR + advance-or-scroll
+	// (scroll when another full line wouldn't fit below); '\r' = CR; else
+	// draw the glyph clipped to the window rect and advance htab.
+	auto coutChar = [&](unsigned char ch) {
+		if (ch == '\n') {
+			tw.htab = tw.winX0;
+			// GIL2VFXA.ASM lfout: eax = vtab + 2*charH - 1 (bottom row of
+			// the would-be new line), `jle __set_vtab` vs y2 -- advance on
+			// exact fit, scroll only when the new line's bottom row passes y1.
+			if (tw.vtab + 2 * lineH - 1 > tw.winY1)
+				scrollUp();
+			else
+				tw.vtab += lineH;
+			return;
+		}
+		if (ch == '\r') {
+			tw.htab = tw.winX0;
+			return;
+		}
+		SDL_Surface *glyph = font->getCharacter(ch);
+		if (glyph == nullptr)
+			return;
+		SDL_SetSurfaceColorMod(glyph, c.r, c.g, c.b);
+		// Pixel-precise clip to the window (matches VFX_character_draw):
+		// intersect the surface clip with the window rect for this blit.
+		SDL_Rect prevClip;
+		SDL_GetSurfaceClipRect(mScreen, &prevClip);
+		SDL_Rect winR = { tw.winX0, tw.winY0, tw.winX1 - tw.winX0 + 1,
+		                  tw.winY1 - tw.winY0 + 1 };
+		SDL_Rect clip;
+		if (SDL_GetRectIntersection(&winR, &prevClip, &clip)) {
+			SDL_SetSurfaceClipRect(mScreen, &clip);
+			SDL_Rect dst = { tw.htab, tw.vtab, glyph->w, glyph->h };
 			SDL_BlitSurface(glyph, NULL, mScreen, &dst);
-			x += glyph->w;
+			SDL_SetSurfaceClipRect(mScreen, &prevClip);
 		}
-		lastX = x;
-		y += lineH;
+		tw.htab += glyph->w; // advances even past the edge, like the original
+	};
+
+	const size_t len = text.size();
+	size_t pos = 0;
+	while (pos < len) {
+		// Line-break scan (print_buffer __find_eol/__lscan): the line ends at
+		// the last space that still fits from the current htab, at a '\n'
+		// (included -- coutChar processes it), or at end-of-string. If not
+		// even the first word fits, it prints anyway (clipped at the edge).
+		size_t firstWordEnd = pos;
+		while (firstWordEnd < len && text[firstWordEnd] != ' ' &&
+		       text[firstWordEnd] != '\n')
+			++firstWordEnd;
+		if (firstWordEnd < len && text[firstWordEnd] == '\n')
+			++firstWordEnd; // '\n' belongs to the line
+		size_t lineEnd = firstWordEnd;
+		{
+			int wAcc = tw.htab;
+			for (size_t i = pos; i < len; ++i) {
+				unsigned char ch = text[i];
+				if (ch == '\n') { lineEnd = i + 1; break; }
+				if (ch == ' ')
+					lineEnd = i; // last break candidate so far
+				wAcc += glyphW(ch);
+				if (wAcc > tw.winX1 + 1)
+					break; // past the right edge: keep last candidate
+				if (i + 1 == len) { lineEnd = len; break; }
+			}
+		}
+		// A boundary space at a cursor already past the right edge leaves
+		// lineEnd == pos: force one char of progress or text[lineEnd - 1]
+		// below reads before the buffer and the loop never advances.
+		if (lineEnd == pos)
+			lineEnd = std::min(pos + 1, len);
+
+		// Justification mutates htab for this line (out_r / out_c); width of
+		// the line vs the space remaining from the cursor to the right edge.
+		int wLin = 0;
+		for (size_t i = pos; i < lineEnd; ++i)
+			wLin += glyphW(text[i]);
+		int wWin = tw.winX1 - tw.htab + 1;
+		if (tw.justify == 1) { // right
+			tw.htab = (wLin <= wWin) ? tw.winX1 - wLin + 1 : tw.winX0;
+		} else if (tw.justify == 2) { // center (within the REMAINING space)
+			if (wLin < wWin)
+				tw.htab += (wWin - wLin + 1) / 2;
+		} // 0 = left, 3 = fill (unused by EOB3) -> print from htab as-is
+
+		for (size_t i = pos; i < lineEnd; ++i)
+			coutChar(text[i]);
+
+		if (lineEnd >= len)
+			break; // end of buffer: no implicit newline, cursor stays
+		pos = lineEnd;
+		if (text[lineEnd - 1] != '\n') {
+			coutChar('\n'); // wrapped: emit the line break ourselves
+			while (pos < len && text[pos] == ' ')
+				++pos; // ...and eat the boundary spaces the wrap consumed
+		}
 	}
-	tw.htab = lastX;                       // cursor past the last line's text
-	tw.vtab = y > tw.vtab ? y - lineH : y; // cursor on the last drawn line
 }
 
 void GRAPHICS::Graphics::saveScreenshot(const std::string &path) {
