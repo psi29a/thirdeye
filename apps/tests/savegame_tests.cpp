@@ -907,6 +907,7 @@ TEST(SaveRange_Test, RoundTripsLiveAndDeadSlots) {
 	std::ifstream in(path, std::ios::binary);
 	std::vector<uint8_t> d((std::istreambuf_iterator<char>(in)),
 	                       std::istreambuf_iterator<char>());
+	in.close(); // Windows: remove() fails while the stream holds the file open
 	std::filesystem::remove(path);
 	// 1 header byte + 2 live records (8+6) + 9 dead records (8).
 	ASSERT_EQ(1u + 2 * 14 + 9 * 8, d.size());
