@@ -97,11 +97,12 @@ void runDebugHooks(VM::ObjectSystem &objects, RESOURCES::Resource &res) {
 			auto lvlPath = dir / ("thirdeye_savetest_lvl" + std::string(ll) + ".bin");
 			bool a = THIRDEYE::savegame::saveRange(objects, itemsPath, 0, 999);
 			bool b = THIRDEYE::savegame::saveRange(objects, lvlPath, 1000, 1999);
+			std::error_code ec; // file_size throws if saveRange failed
 			std::cerr << "[savetest] items " << (a ? "OK " : "FAILED ")
-			          << std::filesystem::file_size(itemsPath) << " B -> "
+			          << std::filesystem::file_size(itemsPath, ec) << " B -> "
 			          << itemsPath << "\n[savetest] lvl " << lvl << " "
 			          << (b ? "OK " : "FAILED ")
-			          << std::filesystem::file_size(lvlPath) << " B -> "
+			          << std::filesystem::file_size(lvlPath, ec) << " B -> "
 			          << lvlPath << "\n";
 		}
 	}
@@ -280,7 +281,8 @@ void runDebugHooks(VM::ObjectSystem &objects, RESOURCES::Resource &res) {
 						if (xp && lv && hp) {
 							static std::map<int, int32_t> lastXp0;
 							int32_t x0 = (int32_t)(xp[0]|xp[1]<<8|xp[2]<<16|xp[3]<<24);
-							if (lastXp0[pc] != x0) {
+							auto it = lastXp0.find(pc);
+							if (it == lastXp0.end() || it->second != x0) {
 								std::cerr << "[xp] pc " << pc
 								          << " lvl=" << (int)(int8_t)lv[0] << "/"
 								          << (int)(int8_t)lv[1] << "/" << (int)(int8_t)lv[2]

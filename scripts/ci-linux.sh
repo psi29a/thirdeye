@@ -16,7 +16,15 @@ EOF
 
 # ponytail: native arch (arm64 on Apple Silicon), not CI's amd64 -- GCC header/
 # warning breakage is arch-independent; add --platform linux/amd64 if it isn't.
-# Source is mounted rw: cmake configure_file()s config.hpp into the SOURCE tree.
+# Source is mounted rw: cmake configure_file()s config.hpp into the SOURCE tree,
+# so the container writes container paths (/src) into them -- snapshot the
+# host-generated ones and restore on exit, or a later host build (or commit!)
+# picks up /src paths.
+cfgs=$(ls apps/*/config.hpp 2>/dev/null)
+tmp=$(mktemp -d)
+for f in $cfgs; do mkdir -p "$tmp/$(dirname "$f")" && cp "$f" "$tmp/$f"; done
+trap 'for f in $cfgs; do cp "$tmp/$f" "$f"; done; rm -rf "$tmp"' EXIT
+
 docker run --rm -v "$PWD":/src -v thirdeye-ci-build:/build thirdeye-ci sh -c '
   cmake -S /src -B /build -G Ninja -DCMAKE_BUILD_TYPE=Release &&
   cmake --build /build -- -j"$(nproc)" &&

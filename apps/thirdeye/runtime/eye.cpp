@@ -234,9 +234,12 @@ bool tryHandle(Context &ctx, const std::string &fn,
 			for (int s = 0; s < kDirSlots; ++s) {
 				const uint8_t *p = gSlotNameBuf + s * kSlotNameLen;
 				if (p[0] != 0) {
+					// strnlen: the SOP's copy_string writes these slots in
+					// place and can fill all kSlotNameLen bytes w/o a NUL.
 					out.write(reinterpret_cast<const char *>(p),
-					          static_cast<std::streamsize>(std::strlen(
-					              reinterpret_cast<const char *>(p))));
+					          static_cast<std::streamsize>(strnlen(
+					              reinterpret_cast<const char *>(p),
+					              kSlotNameLen)));
 				} else {
 					for (int i = 0; i < 26; ++i) out.put('_');
 				}
@@ -811,14 +814,26 @@ bool tryHandle(Context &ctx, const std::string &fn,
 		result = 0;
 		return true;
 	}
-	// change_level(old_level, new_level): the native EYE.C function that swaps
-	// the dungeon to a new level. We just refresh the level's objects from
-	// LVLnn.TMP; everything else (maze data, wall-set bitmap number, walls +
-	// creature palettes) is loaded by the SOP "enter level" cascade that the
-	// kernel's SEND "init level" triggers right after this call returns.
+	// change_level(old_level, new_level): the native EYE.C function does two
+	// things -- save_range the DEPARTING level's objects to LVLoo.TMP (or
+	// opened doors / dead monsters resurrect on return), then restore_range
+	// the new level. We do the save here; the restore happens in the "init
+	// level" post-send hook (see resume_level), which fires right after this
+	// returns and after init_level has cleared the lvlobj grid. Restoring
+	// here too replayed every monster's M:2 restore twice per transition
+	// (double watch-for-party + "schedule attack") for a placement that
+	// init_level wiped anyway.
 	if (fn == "change_level" && args.size() >= 2) {
-		int newLvl = static_cast<int>(args[1]);
-		THIRDEYE::savegame::loadLevelObjects(newLvl, ctx.objects, ctx.res);
+		int oldLvl = static_cast<int>(args[0]);
+		if (oldLvl >= 1 && oldLvl <= 14) {
+			char ll[16];
+			std::snprintf(ll, sizeof(ll), "%02d", oldLvl);
+			auto path = ctx.res.resourcePath().parent_path() / "SAVEGAME" /
+			            ("LVL" + std::string(ll) + ".TMP");
+			if (!THIRDEYE::savegame::saveRange(ctx.objects, path, 1000, 1999))
+				std::cerr << "[change_level: failed saving " << path << "]"
+				          << std::endl;
+		}
 		result = 0;
 		return true;
 	}

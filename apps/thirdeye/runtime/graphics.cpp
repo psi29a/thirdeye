@@ -516,10 +516,12 @@ bool tryHandle(Context &ctx, const std::string &fn,
 			    static_cast<int>(args[0]), static_cast<int>(args[1]),
 			    static_cast<int>(args[2]), out);
 		} catch (const std::exception &) {}
-		if (int16_t *arr = reinterpret_cast<int16_t *>(
-		        staticBytePtr(ctx, args[5], 8))) {
-			for (int i = 0; i < 4; ++i)
-				arr[i] = static_cast<int16_t>(out[i]);
+		if (uint8_t *arr = staticBytePtr(ctx, args[5], 8)) {
+			for (int i = 0; i < 4; ++i) { // little-endian, unaligned-safe
+				uint16_t v = static_cast<uint16_t>(out[i]);
+				arr[i * 2] = static_cast<uint8_t>(v & 0xff);
+				arr[i * 2 + 1] = static_cast<uint8_t>(v >> 8);
+			}
 		}
 		result = vis ? 1 : 0;
 		return true;

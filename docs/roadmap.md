@@ -44,17 +44,14 @@ narrative on completed work.
   `--scale`/Retina).
 - ✅ **Level objects** — the whole level (doors/levers/stairs/decorations/monsters, 231 in
   LVL01) loads from `LVLnn.TMP` and renders.
-  - **Fix (2026-07-01):** the record byte `+14` is *not* raw `W:decflags` for floor
-    features. QSP LVL03 stores `0x0F` for all 89 movable trees / 169 graves / map
-    transitions (per doc "0x0f for floor objects"), which used to land in
-    `W:decflags` verbatim → `features.get_state` returned 15 → the tree's
-    `render` CASE only handles states 0..3 → tree fell through `CASE_DEFAULT`
-    and never drew. Result: `impedance` correctly blocked movement at (22,22)
-    on the Graveyard–Forest boundary but the party saw an "open" path and got
-    "You can't go that way." with nothing visible in front. Loader now maps
-    `+14 == 0x0F → decflags = 0` while wall-side values (1/2/4/8 for doors) go
-    through unchanged, so LVL01 mausoleum doors/levers keep their orientation.
-    ([savegame/lvl_tmp.cpp](../apps/thirdeye/savegame/lvl_tmp.cpp) 76.)
+  - **Fix (2026-07-01, superseded same day):** trees didn't render because
+    `features.get_state` returned 15 — the loader was reading the wrong statics
+    offset and a `+14 == 0x0F → decflags = 0` remap was patched in to compensate.
+    The remap is **gone**: `loadLevelObjects` was rewritten to copy each record's
+    statics verbatim (the original's `restore_range`), which puts the true
+    `W:decflags` at `+10` and fixed rendering, tree-chopping, and monster HP in
+    one stroke — see the "level-object restore made faithful" section below.
+    ([savegame/lvl_tmp.cpp](../apps/thirdeye/savegame/lvl_tmp.cpp).)
 - ✅ **Items & inventory (display)** — equipment screen renders the paper-doll + char-gen gear;
   slot regions register so interaction routes through the proven click path.
 
@@ -246,6 +243,26 @@ originals define exactly:
   clears `W:next`/`W:prev` before relinking and keeps the cell chains
   properly doubly linked (old head's `prev` ← new head). Repro (walk to the
   treeline, strafe) runs clean; axe-chop + 105 tests still green.
+
+  **CodeRabbit round (2026-07-02):** PR #53 review triage — 9 real, 3 pushed
+  back with the original sources as evidence (`ascnum` char-literal sign,
+  `solid_bar_graph`'s raw `val*3 >= max` threshold, `load_string`'s
+  byte-identical copy are all faithful to `arun/src`). Real fixes landed:
+  text scroll condition corrected to GIL2VFXA.ASM's exact-fit semantics
+  (`vtab + 2*charH - 1 > y1`), a wrap-scan progress guard (a boundary space
+  at an edge-parked cursor could read `text[-1]` / stall), `%X` uppercase,
+  endian-safe `visible_bitmap_rect` writes, `strnlen` on save-slot names,
+  wider try/catch in `saveRange`. Bigger catch while verifying the "double
+  reload" comment against `EYE.C`/`RTOBJECT.C`: our `change_level` neither
+  saved the departing level (doors/kills resurrected on return) nor did the
+  loader destroy stale objects (`restore_range` tears down live slots — dead
+  file slots included — before restoring; ours left the old level's entities
+  alive and event-registered as ghosts, and double-restored monsters per
+  transition). `change_level` now `save_range`s the old level to `LVLoo.TMP`
+  and defers the reload to the "init level" hook; `loadLevelObjects` destroys
+  before recreating (MSG_DESTROY cancels the SOP's notify requests).
+  **Watch item:** take stairs up/down and back next play session — level
+  round-trip persistence is new code.
 
 ### 🚧 Save / load (the savegame format)
 

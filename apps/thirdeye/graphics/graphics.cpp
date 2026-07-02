@@ -1127,7 +1127,10 @@ void GRAPHICS::Graphics::printText(int wndnum, const std::string &text) {
 	auto coutChar = [&](unsigned char ch) {
 		if (ch == '\n') {
 			tw.htab = tw.winX0;
-			if (tw.vtab - tw.winY0 + 2 * lineH > tw.winY1 - tw.winY0)
+			// GIL2VFXA.ASM lfout: eax = vtab + 2*charH - 1 (bottom row of
+			// the would-be new line), `jle __set_vtab` vs y2 -- advance on
+			// exact fit, scroll only when the new line's bottom row passes y1.
+			if (tw.vtab + 2 * lineH - 1 > tw.winY1)
 				scrollUp();
 			else
 				tw.vtab += lineH;
@@ -1184,6 +1187,11 @@ void GRAPHICS::Graphics::printText(int wndnum, const std::string &text) {
 				if (i + 1 == len) { lineEnd = len; break; }
 			}
 		}
+		// A boundary space at a cursor already past the right edge leaves
+		// lineEnd == pos: force one char of progress or text[lineEnd - 1]
+		// below reads before the buffer and the loop never advances.
+		if (lineEnd == pos)
+			lineEnd = std::min(pos + 1, len);
 
 		// Justification mutates htab for this line (out_r / out_c); width of
 		// the line vs the space remaining from the cursor to the right edge.

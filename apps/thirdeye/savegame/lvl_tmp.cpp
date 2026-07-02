@@ -57,6 +57,13 @@ int loadLevelObjects(int level, VM::ObjectSystem &objects,
 		pos += 8 + size;
 		if (pos > d.size())
 			break; // truncated record
+		// restore_range: whatever lives in the slot is torn down first (its
+		// MSG_DESTROY handler cancels its notify requests) -- both for dead
+		// file slots (destroy_object + continue in the original) and before
+		// re-creating a live one. Without this, a level transition leaves the
+		// old level's entities alive and event-registered as ghosts.
+		try { objects.destroyObject(id); }
+		catch (const std::exception &) {}
 		if (clsName == 0xFFFFFFFFu || size < 6)
 			continue; // dead slot
 		uint16_t cls = static_cast<uint16_t>(clsName);
@@ -177,13 +184,13 @@ bool saveRange(VM::ObjectSystem &objects, const std::filesystem::path &path,
 		uint32_t size = 0;
 		const uint8_t *statics = nullptr;
 		if (cls != 0xFFFF) {
-			size = objects.instanceStaticSize(cls);
-			if (size > 0) {
-				try {
+			try {
+				size = objects.instanceStaticSize(cls);
+				if (size > 0)
 					statics = objects.staticsPtr(i, 0, size);
-				} catch (const std::exception &) {
-					statics = nullptr;
-				}
+			} catch (const std::exception &) {
+				size = 0; // corrupt class chain / unreadable statics:
+				statics = nullptr; // degrade to an empty record
 			}
 			if (size > 0 && statics == nullptr)
 				size = 0; // unreadable statics: write an empty record

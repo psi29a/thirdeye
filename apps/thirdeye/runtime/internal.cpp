@@ -54,7 +54,8 @@ std::string formatSop(const std::string &fmt, const std::vector<VM::Value> &args
 			out += std::to_string(a);
 		else if (conv == 'x' || conv == 'X') {
 			char buf[16];
-			std::snprintf(buf, sizeof(buf), "%x", static_cast<uint32_t>(a));
+			std::snprintf(buf, sizeof(buf), conv == 'X' ? "%X" : "%x",
+			              static_cast<uint32_t>(a));
 			out += buf;
 		} else if (conv == 'c')
 			out += static_cast<char>(a & 0xFF);
