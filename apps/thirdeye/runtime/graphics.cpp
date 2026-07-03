@@ -225,8 +225,21 @@ bool tryHandle(Context &ctx, const std::string &fn,
 			// costs nothing on every other draw. (fillRect also writes the
 			// text-free backdrop snapshot, so later text-window restores of
 			// the log area come back black, not the outtake's brown fill.)
-			if (table == 190)
+			if (table == 190) {
 				ctx.gfx->fillRect(x, y, x + 319, y + 199, 0);
+				// Entering the game from the title menu ("Continue the
+				// Quest" / "Summon the Heroes") happens INSIDE the same
+				// `start` instance, so the engine's per-launch
+				// setTextRestoreBackground(mode != MODE_INTR) never
+				// re-fires and text boxes stay in the menu's flat-fill
+				// mode. Flat-fill samples a pixel just inside the box --
+				// after a coloured party comment scrolls, that sample can
+				// hit a green glyph and the whole message bar fills green
+				// (and stays green, since the next sample hits the fill).
+				// The HUD Backdrop draw is the definitive "now in-game"
+				// signal: switch to backdrop-restore mode here.
+				ctx.gfx->setTextRestoreBackground(true);
+			}
 			ctx.gfx->drawImage(fetch(table), number, x, y, true, mirror,
 			                   static_cast<uint32_t>(table), scale);
 			// The compass snapshot rect (0, 120, 116, 49 in
