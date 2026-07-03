@@ -7,9 +7,10 @@ narrative on completed work.
 
 ## Phase 1 — VM core ✅ (essentially done)
 
-- ✅ Stack VM for all 88 opcodes except `BRK` (branches/arith/logic/constants/auto/`JSR`/`RTS`/
+- ✅ Stack VM for all 88 opcodes (branches/arith/logic/constants/auto/`JSR`/`RTS`/
   `CASE`/`RCRS`/`CALL`/`SEND`/`PASS`/statics/extern/table loads/effective-addr/`AIM`/`AIS`/
-  `SXAS`/`SOLE`). GTest-covered; CI on Linux/macOS/Windows.
+  `SXAS`/`SOLE`; `BRK` = the int-3 debugger hook, continues with a log like a
+  debugger-less original). GTest-covered; CI on Linux/macOS/Windows.
 - ✅ Objects + `SEND`/`PASS` dispatch + class-hierarchy inheritance + parameter passing
   (`ObjectSystem`).
 - ✅ Static variables (scalar + array, per-instance), constant tables, `AIM`/`AIS`.
@@ -34,7 +35,8 @@ narrative on completed work.
   OpenAL `Mixer` (raw 8-bit mono @ 8 kHz, the same `playSound` path the intro keypress SFX
   uses). `load_sound_block` walks its Code-space table of 32-bit resource numbers (new
   `Interpreter::codeWord`) into an index→PCM bank — verified loading the shipped COMMON (45
-  clips, base 0) + LEVEL (8 clips, base 50) banks per `SOUND.H`. **Music still stubbed**
+  clips, base 0) + LEVEL (8 clips, base 50) banks per `SOUND.H`. `init_sound`/
+  `shutdown_sound` arm/disarm the play gate. **Music is the last stubbed CALL surface**
   (`load_music`/`play_sequence`/`unload_music` — the XMIDI+WildMIDI pipe exists for the intro,
   not yet wired to the SOP calls). Save/load + the Restore-Game picker flow end-to-end (see
   Phase 3). Much of `EYE.C` (combat-edge cases, level transition flow) still incremental.
@@ -87,8 +89,11 @@ narrative on completed work.
   Debug rig: `THIRDEYE_TESTITEM`/`ITEMHERE`/`ITEMREGION` (drop an item at/ahead of the
   party with a chosen quadrant), `THIRDEYE_TESTPICKUP` (drive M:248 directly),
   `THIRDEYE_ITEMDUMP=<obj>` (hex-dump live item statics), `THIRDEYE_STARVE=N`, and
-  `in_hand` change logging under `THIRDEYE_CLICK`. Not covered: hand-weapon display in
-  the compact adventure panels (visual polish, low priority).
+  `in_hand` change logging under `THIRDEYE_CLICK`. The adventure panels' hand-weapon
+  display (issue item 4) turned out to already work — the SOP always drew the two
+  hand-slot icons next to each portrait; they render correctly (sword/shield/axe/
+  spellbook/holy symbol per the QSP loadout) now that `equip[]` restoration fills
+  `W:inventory[16/20]`, and they redraw on the kernel's own "refresh players" tick.
   **Fallout fix:** the "init level" post-send hook captured `[&ctx]` — a dangling
   reference to `defaultRuntimeCall`'s stack-local Context that only "worked" while the
   dead stack bytes held the old layout; adding the Context `mixer` member shifted the
@@ -226,12 +231,21 @@ gotchas — `grep -a` required). Implemented, all ported verbatim from the C:
   `init/shutdown_graphics/interface`, `wait_vertical_retrace`, `beep`,
   `diagnose`, `create_initial_binary_files` (dev-time TXT→BIN translation).
 
-**Still stubbed** (visible in the `[stub]` log): the sound set (`init_sound`,
-`load_sound_block`, `set_sound_status`, `sound_effect`, `load_music`,
-`unload_music`, `play_sequence`, `shutdown_sound` — deferred on purpose),
-`do_dots`/`do_ice` (fireball/cone-of-cold particle animations — blocking
-GIL2VFX loops with per-pixel occlusion reads; purely visual, damage happens
-in bytecode), and `getkey` (blocking key wait; no SOP path hit yet).
+**Still stubbed**: ONLY the music trio (`load_music`, `play_sequence`,
+`unload_music` — the XMIDI/WildMIDI pipe exists; wiring is the next chunk).
+Everything else got wired 2026-07-03: `do_dots`/`do_ice` (verbatim ports of
+EYE.C's fixed-point particle physics in runtime/graphics.cpp; the per-pixel
+sprite-occlusion mask reads are skipped since we composite pages onto one
+surface — particles clip to the view window and save/restore the exact pixels
+they cover; frame-paced like the originals' vblank waits, runaway-guarded;
+*watch item: first in-game fireball/cone cast*), `getkey` (blocks on
+SYS_KEYDOWN with the host pump running, per INTRFACE.C),
+`init_sound`/`shutdown_sound` (arm/disarm the play gate), and **`pixel_fade`
+is now a real dissolve**: Graphics keeps a copy of the last PRESENTED frame
+and dissolves from it to the current surface content over N presented frames
+— verified with a frame-dump curve showing the exact 30-step ramp to black on
+a level transition plus the outtake's fade-in. (`THIRDEYE_DUMP` moved into
+`Graphics::update()` so mid-CALL presents — fades, particles — are captured.)
 
 Golden-path regression (title → restore → walk): **only sound stubs remain**.
 NB the harness key script changed — with a save present the title menu

@@ -8,6 +8,7 @@
 #include <random>
 #include <sstream>
 #include <string>
+#include <vector>
 #include <ctime>
 
 // SDL3 makes 8 bpp indexed surfaces palette-backed via SDL_CreateSurfacePalette;
@@ -82,6 +83,7 @@ GRAPHICS::Graphics::~Graphics() {
 	SDL_DestroySurface(mScreen);
 	SDL_DestroySurface(mBackdrop);     // lazily created in drawImage (nullptr-safe)
 	SDL_DestroySurface(mCompassSnap);  // lazily created in snapshotCompass
+	SDL_DestroySurface(mLastShown);    // lazily created in update
 	if (mPresentTex != nullptr) SDL_DestroyTexture(mPresentTex);
 	SDL_DestroyPalette(mPalette);
 	SDL_DestroyRenderer(mRenderer);
@@ -316,6 +318,69 @@ void GRAPHICS::Graphics::fillRect(int x0, int y0, int x1, int y1, uint8_t color)
 	// this box shows the cleared colour, not the art the clear replaced.
 	if (mBackdrop != nullptr)
 		SDL_FillSurfaceRect(mBackdrop, &r, px);
+}
+
+uint32_t GRAPHICS::Graphics::peekPixel(int x, int y) const {
+	if (x < 0 || x >= WIDTH || y < 0 || y >= HEIGHT)
+		return 0;
+	const uint8_t *row = static_cast<const uint8_t *>(mScreen->pixels) +
+	                     static_cast<size_t>(y) * mScreen->pitch;
+	return reinterpret_cast<const uint32_t *>(row)[x];
+}
+
+void GRAPHICS::Graphics::pokePixel(int x, int y, uint32_t raw) {
+	if (x < 0 || x >= WIDTH || y < 0 || y >= HEIGHT)
+		return;
+	uint8_t *row = static_cast<uint8_t *>(mScreen->pixels) +
+	               static_cast<size_t>(y) * mScreen->pitch;
+	reinterpret_cast<uint32_t *>(row)[x] = raw;
+}
+
+uint32_t GRAPHICS::Graphics::mapColor(uint8_t color) const {
+	SDL_Color c = mPalette->colors[color];
+	return SDL_MapSurfaceRGB(mScreen, c.r, c.g, c.b);
+}
+
+void GRAPHICS::Graphics::pixelFade(int x0, int y0, int x1, int y1,
+                                   int intervals) {
+	if (x1 < x0) std::swap(x0, x1);
+	if (y1 < y0) std::swap(y0, y1);
+	x0 = std::max(0, x0); y0 = std::max(0, y0);
+	x1 = std::min(WIDTH - 1, x1); y1 = std::min(HEIGHT - 1, y1);
+	if (mLastShown == nullptr || intervals <= 0) { // nothing presented yet
+		update();
+		return;
+	}
+	int w = x1 - x0 + 1, h = y1 - y0 + 1;
+	// Snapshot the NEW content (what the SOP just drew), show the OLD frame,
+	// then reveal new pixels in shuffled order across `intervals` presents.
+	SDL_Rect rect = { x0, y0, w, h };
+	SDL_Surface *newSnap = SDL_CreateSurface(w, h, SDL_PIXELFORMAT_ARGB8888);
+	if (newSnap == nullptr) { update(); return; }
+	SDL_SetSurfaceBlendMode(mScreen, SDL_BLENDMODE_NONE);
+	SDL_SetSurfaceBlendMode(mLastShown, SDL_BLENDMODE_NONE);
+	SDL_BlitSurface(mScreen, &rect, newSnap, nullptr);
+	SDL_BlitSurface(mLastShown, &rect, mScreen, &rect);
+	std::vector<uint32_t> order(static_cast<size_t>(w) * h);
+	for (size_t i = 0; i < order.size(); ++i)
+		order[i] = static_cast<uint32_t>(i);
+	static std::minstd_rand rng{0x1D5EED};
+	std::shuffle(order.begin(), order.end(), rng);
+	size_t done = 0;
+	for (int step = 0; step < intervals; ++step) {
+		size_t upto = order.size() * (step + 1) / intervals;
+		for (; done < upto; ++done) {
+			int px = static_cast<int>(order[done] % w);
+			int py = static_cast<int>(order[done] / w);
+			const uint8_t *srow = static_cast<const uint8_t *>(newSnap->pixels) +
+			                      static_cast<size_t>(py) * newSnap->pitch;
+			pokePixel(x0 + px, y0 + py,
+			          reinterpret_cast<const uint32_t *>(srow)[px]);
+		}
+		update();
+		SDL_Delay(16); // ~1 vblank per interval, matching VFX_pixel_fade pacing
+	}
+	SDL_DestroySurface(newSnap);
 }
 
 void GRAPHICS::Graphics::drawLine(int x0, int y0, int x1, int y1,
@@ -784,6 +849,26 @@ void GRAPHICS::Graphics::update() {
 	SDL_RenderClear(mRenderer);
 	SDL_RenderTexture(mRenderer, mPresentTex, nullptr, nullptr);
 	SDL_RenderPresent(mRenderer);
+
+	// Keep a copy of what the player now sees -- pixelFade()'s dissolve source.
+	if (mLastShown == nullptr)
+		mLastShown = SDL_CreateSurface(WIDTH, HEIGHT, SDL_PIXELFORMAT_ARGB8888);
+	SDL_SetSurfaceBlendMode(mScreen, SDL_BLENDMODE_NONE);
+	SDL_BlitSurface(mScreen, nullptr, mLastShown, nullptr);
+
+	// Debug aid: with THIRDEYE_DUMP set, snapshot every presented frame so a
+	// headless run can be inspected as BMPs. Lives here (not in the runtime
+	// present handler) so fades/particle effects presented mid-CALL are
+	// captured too. "%d" in the path -> numbered frames; substituted by hand,
+	// never passed as a printf format (env input is data, not a format spec).
+	if (const char *d = std::getenv("THIRDEYE_DUMP")) {
+		static int frameNo = 0;
+		std::string path = d;
+		auto pos = path.find("%d");
+		if (pos != std::string::npos)
+			path.replace(pos, 2, std::to_string(frameNo++));
+		saveScreenshot(path.c_str());
+	}
 }
 
 uint32_t GRAPHICS::Graphics::getSleep() {

@@ -5,10 +5,12 @@
 #include "../vm/events.hpp"
 
 #include <algorithm>
+#include <array>
 #include <chrono>
 #include <cstdint>
 #include <cstdlib>
 #include <iostream>
+#include <random>
 #include <string>
 #include <vector>
 
@@ -316,21 +318,9 @@ bool tryHandle(Context &ctx, const std::string &fn,
 			if (std::getenv("THIRDEYE_QUIT_AFTER_FIRST"))
 				throw QuitRequested{};
 		}
-		// Debug aid: with THIRDEYE_DUMP set, snapshot every presented frame so a
-		// headless run (no window) can still be inspected as a BMP. If the path
-		// contains "%d", write numbered frames (otherwise overwrite the same file).
-		// We substitute "%d" by hand rather than passing the env var to snprintf
-		// as a format string: env input is data, not a format spec, and stray
-		// conversions like "%s"/"%n" in the path would otherwise crash or worse.
-		if (const char *d = std::getenv("THIRDEYE_DUMP")) {
-			static int frameNo = 0;
-			std::string path = d;
-			auto pos = path.find("%d");
-			if (pos != std::string::npos) {
-				path.replace(pos, 2, std::to_string(frameNo++));
-			}
-			ctx.gfx->saveScreenshot(path.c_str());
-		}
+		// (THIRDEYE_DUMP frame snapshots moved into Graphics::update() so
+		// EVERY present is captured -- including pixel_fade / particle-effect
+		// frames presented outside this handler.)
 		rt() << "  [present]" << std::endl;
 		result = 0;
 		return true;
@@ -496,11 +486,18 @@ bool tryHandle(Context &ctx, const std::string &fn,
 		result = 0;
 		return true;
 	}
-	// pixel_fade(src_wnd, dest_wnd, intervals): a dissolve transition between
-	// pages. We composite on one surface, so just present the current state.
-	// ponytail: instant cut instead of the dissolve; revisit if it jars.
-	if (fn == "pixel_fade") {
-		ctx.gfx->update();
+	// pixel_fade(src_wnd, dest_wnd, intervals): VFX_pixel_fade -- a random-
+	// pixel dissolve from the src pane's content into the dest pane. We
+	// composite on one surface, so Graphics::pixelFade dissolves from the
+	// last PRESENTED frame (what the player sees) to the current surface
+	// content over `intervals` frames -- covers both the wipe-then-fade-out
+	// and draw-then-fade-in idioms without per-page surfaces.
+	if (fn == "pixel_fade" && args.size() >= 3) {
+		int x0 = 0, y0 = 0, x1 = 319, y1 = 199;
+		// The dest window's rect bounds the effect; src as fallback.
+		if (!ctx.events.windowRect(args[1], x0, y0, x1, y1))
+			ctx.events.windowRect(args[0], x0, y0, x1, y1);
+		ctx.gfx->pixelFade(x0, y0, x1, y1, static_cast<int>(args[2]));
 		result = 0;
 		return true;
 	}
@@ -568,6 +565,188 @@ bool tryHandle(Context &ctx, const std::string &fn,
 		} catch (const std::exception &) {}
 		result = 0;
 		return true;
+	}
+	// --- do_dots / do_ice: EYE.C's blocking particle effects (fireball burst /
+	// cone of cold). Verbatim ports of the fixed-point WORD physics; the
+	// sprite-occlusion mask reads (GIL2VFX_read_dot on the view page) are
+	// skipped -- we composite pages onto one surface, so the particles draw
+	// over whatever is there, clipped to the view window. Both effects save
+	// the exact pixels they cover and restore them each frame, so they leave
+	// no residue. Frame-paced like the originals' vblank waits.
+	if ((fn == "do_dots" || fn == "do_ice") && ctx.gfx != nullptr) {
+		constexpr int kMaxDots = 150, kAccur = 6, kFriction = 1, kGravity = 5;
+		static std::minstd_rand rng{0xD075};
+		auto rnd = [&](int lo, int hi) -> int { // EYE.C rnd(): inclusive range
+			if (hi <= lo) return lo;
+			return lo + static_cast<int>(rng() % (hi - lo + 1));
+		};
+		// colors is a BYTE* -- a Code-space ramp table (or a static buffer).
+		auto colAt = [&](VM::Value addr, uint32_t idx) -> int {
+			int b = ctx.vm.codeByte(addr, idx);
+			if (b >= 0)
+				return b;
+			VM::Addr a = VM::decodeAddr(addr);
+			if (a.space == VM::AddrSpace::Static ||
+			    a.space == VM::AddrSpace::Extern) {
+				try {
+					if (uint8_t *p = ctx.objects.staticsPtr(a.obj, a.offset + idx, 1))
+						return *p;
+				} catch (const std::exception &) {}
+			}
+			return 0; // XCOLOR: ends the particle
+		};
+		std::array<int16_t, kMaxDots> xpos{}, ypos{}, xvel{}, yvel{}, colcnt{},
+		    colidx{}, delay{};
+		// Saved background per dot: position + raw pixel, restored each frame.
+		std::array<int, kMaxDots> sx{}, sy{};
+		std::array<uint32_t, kMaxDots> sbg{};
+		std::array<bool, kMaxDots> saved{};
+		int guard = 0;
+		if (fn == "do_dots" && args.size() >= 10) {
+			// do_dots(view, scrn, exp_x, exp_y, scale, power, dots, life, upval,
+			//         colors)
+			static const int kFloorTbl[4] = {119, 103, 79, 63};
+			int scale = static_cast<int>(args[4]) & 3;
+			int power = static_cast<int>(args[5]);
+			int dots = std::min<int>(static_cast<int>(args[6]), kMaxDots);
+			int life = std::max<int>(1, static_cast<int>(args[7]));
+			int upval = std::clamp<int>(static_cast<int>(args[8]), 0, 7);
+			int floor = kFloorTbl[scale];
+			if (scale) scale--;
+			int roof = 0, lwall = -100, rwall = 276;
+			int top = 0, bottom = 119, lside = 0, rside = 175;
+			ctx.events.windowRect(args[0], lside, top, rside, bottom);
+			int cx = static_cast<int>(args[2]), cy = static_cast<int>(args[3]);
+			for (int i = 0; i < dots; i++) {
+				xpos[i] = ypos[i] = 0;
+				xvel[i] = static_cast<int16_t>(rnd(0, power) - (power >> 1));
+				yvel[i] = static_cast<int16_t>(rnd(0, power) - (power >> 1) -
+				                               (power >> (8 - upval)));
+				colcnt[i] = static_cast<int16_t>(
+				    rnd((4 << 8) / life, (8 << 8) / life));
+				colidx[i] = static_cast<int16_t>(scale << 8);
+			}
+			int active = 2;
+			while (active && ++guard < 1500) {
+				if (active != 2)
+					for (int i = dots - 1; i >= 0; i--)
+						if (saved[i])
+							ctx.gfx->pokePixel(sx[i], sy[i], sbg[i]);
+				active = 0;
+				for (int i = 0; i < dots; i++) {
+					if (xvel[i] > 0) xvel[i] -= kFriction;
+					else             xvel[i] += kFriction;
+					xpos[i] += xvel[i];
+					yvel[i] += kGravity;
+					ypos[i] += yvel[i];
+					colidx[i] += colcnt[i];
+					int px = ((xpos[i] >> kAccur) >> scale) + cx;
+					int py = ((ypos[i] >> kAccur) >> scale) + cy;
+					if (py >= floor || py < roof) yvel[i] = static_cast<int16_t>(-(yvel[i] >> 1));
+					if (px >= rwall || px < lwall) xvel[i] = static_cast<int16_t>(-(xvel[i] >> 1));
+					if (py > floor) py = floor;
+					int pixcol = colAt(args[9],
+					                   static_cast<uint16_t>(colidx[i]) >> 8);
+					saved[i] = false;
+					if (pixcol != 0) {
+						active = 1;
+						if (px >= lside && px <= rside && py >= top && py <= bottom) {
+							sbg[i] = ctx.gfx->peekPixel(px, py);
+							sx[i] = px; sy[i] = py; saved[i] = true;
+							ctx.gfx->pokePixel(px, py,
+							                   ctx.gfx->mapColor(
+							                       static_cast<uint8_t>(pixcol)));
+						}
+					} else colcnt[i] = 0;
+				}
+				ctx.gfx->update();
+				SDL_Delay(32); // two vblank waits in the original (~30 fps)
+			}
+			result = 0;
+			return true;
+		}
+		if (fn == "do_ice" && args.size() >= 7) {
+			// do_ice(view, scrn, dots, mag, grav, life, colors)
+			int dots = std::min<int>(static_cast<int>(args[2]), kMaxDots);
+			int mag = static_cast<int>(args[3]) << kAccur;
+			int grav = std::max<int>(1, static_cast<int>(args[4]));
+			int life = std::max<int>(1, static_cast<int>(args[5]));
+			int top = 0, bottom = 119, lside = 0, rside = 175;
+			ctx.events.windowRect(args[0], lside, top, rside, bottom);
+			const int cx = 88, cy = 48;
+			for (int i = 0; i < dots; i++) {
+				int m = rnd(mag >> 2, mag);
+				int16_t v = 0, t = 0;
+				while (t < m) { v = static_cast<int16_t>(v + grav);
+				                t = static_cast<int16_t>(t + v); }
+				switch (rng() & 3) {
+				case 0: xpos[i] = 1 << (kAccur - 1); ypos[i] = t;
+				        xvel[i] = v; yvel[i] = 0; break;
+				case 1: xpos[i] = t; ypos[i] = 1 << (kAccur - 1);
+				        xvel[i] = 0; yvel[i] = v; break;
+				case 2: xpos[i] = 1 << (kAccur - 1); ypos[i] = static_cast<int16_t>(-t);
+				        xvel[i] = v; yvel[i] = 0; break;
+				default: xpos[i] = static_cast<int16_t>(-t); ypos[i] = 1 << (kAccur - 1);
+				        xvel[i] = 0; yvel[i] = v; break;
+				}
+				if (rng() & 1) { xvel[i] = static_cast<int16_t>(-xvel[i]);
+				                 yvel[i] = static_cast<int16_t>(-yvel[i]); }
+				colcnt[i] = static_cast<int16_t>(
+				    rnd((4 << 8) / life, (8 << 8) / life));
+				colidx[i] = 0;
+				delay[i] = static_cast<int16_t>(rnd(0, life >> 2));
+			}
+			int active = 2;
+			while (active && ++guard < 1500) {
+				if (active != 2)
+					for (int i = dots - 1; i >= 0; i--)
+						if (saved[i])
+							ctx.gfx->pokePixel(sx[i], sy[i], sbg[i]);
+				active = 0;
+				int grav78 = (grav >> 1) + (grav >> 2) + (grav >> 3);
+				for (int i = 0; i < dots; i++) {
+					if (delay[i])
+						delay[i]--;
+					else {
+						if (xpos[i] > 0)
+							xvel[i] = static_cast<int16_t>(
+							    xvel[i] - (xvel[i] > 0 ? grav : grav78));
+						else
+							xvel[i] = static_cast<int16_t>(
+							    xvel[i] + (xvel[i] < 0 ? grav : grav78));
+						if (ypos[i] > 0)
+							yvel[i] = static_cast<int16_t>(
+							    yvel[i] - (yvel[i] > 0 ? grav : grav78));
+						else
+							yvel[i] = static_cast<int16_t>(
+							    yvel[i] + (yvel[i] < 0 ? grav : grav78));
+						xpos[i] += xvel[i];
+						ypos[i] += yvel[i];
+						colidx[i] += colcnt[i];
+					}
+					int px = (xpos[i] >> kAccur) + cx;
+					int py = (ypos[i] >> kAccur) + cy;
+					int pixcol = colAt(args[6],
+					                   static_cast<uint16_t>(colidx[i]) >> 8);
+					saved[i] = false;
+					if (pixcol != 0) {
+						active = 1;
+						if (!delay[i] && px >= lside && px <= rside &&
+						    py >= top && py <= bottom) {
+							sbg[i] = ctx.gfx->peekPixel(px, py);
+							sx[i] = px; sy[i] = py; saved[i] = true;
+							ctx.gfx->pokePixel(px, py,
+							                   ctx.gfx->mapColor(
+							                       static_cast<uint8_t>(pixcol)));
+						}
+					} else colcnt[i] = 0;
+				}
+				ctx.gfx->update();
+				SDL_Delay(16); // one vblank wait in the original (~60 fps)
+			}
+			result = 0;
+			return true;
+		}
 	}
 	return false;
 }

@@ -615,6 +615,19 @@ bool tryHandle(Context &ctx, const std::string &fn,
 		result = 0;
 		return true;
 	}
+	// getkey: INTRFACE.C blocks on `while (!find_event(SYS_KEYDOWN,-1));` then
+	// removes the event. The original's queue is interrupt-fed; ours needs the
+	// host pump run inside the wait or no key can ever arrive. Headless (no
+	// gfx) returns immediately rather than deadlocking.
+	if (fn == "getkey") {
+		if (ctx.gfx != nullptr) {
+			while (ctx.events.findEvent(VM::SYS_KEYDOWN, -1) < 0)
+				pumpHost(*ctx.gfx, ctx.events);
+		}
+		ctx.events.removeEvent(VM::SYS_KEYDOWN, -1, -1);
+		result = 0;
+		return true;
+	}
 	if (fn == "peek_event") {
 		if (ctx.gfx) pumpHost(*ctx.gfx, ctx.events);
 		result = ctx.events.peekEvent() ? 1 : 0;

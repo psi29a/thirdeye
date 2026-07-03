@@ -27,6 +27,20 @@ bool gSoundOn = true;
 
 bool tryHandle(Context &ctx, const std::string &fn,
                const std::vector<VM::Value> &args, VM::Value &result) {
+	// init_sound(errprompt): the original probes/loads the DOS PCM+XMIDI
+	// drivers; our OpenAL/WildMIDI mixer is constructed with the engine, so
+	// this just arms the play gate. shutdown_sound releases the DOS drivers;
+	// we only need to disarm.
+	if (fn == "init_sound") {
+		gSoundOn = true;
+		result = 0;
+		return true;
+	}
+	if (fn == "shutdown_sound") {
+		gSoundOn = false;
+		result = 0;
+		return true;
+	}
 	// set_sound_status(on): master enable/disable (the SOP toggles it around
 	// cutscenes and the options screen). We honour it as a play gate.
 	if (fn == "set_sound_status") {

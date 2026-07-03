@@ -197,6 +197,9 @@ public:
 	// Code address or the element is out of range. Used by load_sound_block to
 	// walk its NUL-terminated resource-number array.
 	int32_t codeWord(Value addr, uint32_t index) const;
+	// Byte variant (BYTE* tables, e.g. do_dots/do_ice colour ramps). -1 on
+	// non-Code address or out of range.
+	int32_t codeByte(Value addr, uint32_t index) const;
 
 	// Map of runtime-function number (as referenced by RCRS) -> function name,
 	// built from the code object's .IMPT dictionary.

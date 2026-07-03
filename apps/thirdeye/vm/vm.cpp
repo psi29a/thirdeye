@@ -521,8 +521,19 @@ Value Interpreter::run() {
 			setTop(mObjectLookup(static_cast<uint16_t>(topVal())));
 			break;
 
-		case Op::BRK: // the original's int-3 debugger hook
-			unimplemented(op);
+		case Op::BRK:
+			// The original's int-3 debugger hook: with no debugger attached
+			// (every shipped runtime), the interrupt returns and execution
+			// continues. Nothing in EYE.RES executes it; log once if hit.
+			{
+				static bool warned = false;
+				if (!warned) {
+					warned = true;
+					std::cerr << "[vm] BRK executed at PC " << mPC
+					          << " (debugger hook; continuing)\n";
+				}
+			}
+			break;
 		}
 		if (kSlowOp) {
 			auto opMs = std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -652,6 +663,16 @@ uint8_t* Interpreter::externPtr(uint16_t obj, uint32_t xrOffset, uint32_t extra,
 		return sinkhole; // caller may read up to 4 bytes; we cap pessimistically
 	}
 	return p;
+}
+
+int32_t Interpreter::codeByte(Value addr, uint32_t index) const {
+	Addr a = decodeAddr(addr);
+	if (a.space != AddrSpace::Code)
+		return -1;
+	uint64_t off = static_cast<uint64_t>(a.offset) + index;
+	if (off >= mCode.size())
+		return -1;
+	return mCode[off];
 }
 
 int32_t Interpreter::codeWord(Value addr, uint32_t index) const {
