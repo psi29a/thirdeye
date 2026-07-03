@@ -60,17 +60,40 @@ narrative on completed work.
     ([savegame/lvl_tmp.cpp](../apps/thirdeye/savegame/lvl_tmp.cpp).)
 - ✅ **Items & inventory (display)** — equipment screen renders the paper-doll + char-gen gear;
   slot regions register so interaction routes through the proven click path.
-- 🚧 **Floor item pickup (#29)** — the pickup LOGIC now works end-to-end. Root-cause fix
-  (2026-07-03): the kernel's `W:in_hand@241` "empty hand" sentinel must be **-1**, but
-  `create_program` zero-fills it to 0, so `take/drop topmost object` (M:248) read it as
-  "holding object 0" and every floor click took the DROP path — nothing could ever be
-  picked up. `resume_level` now seeds `W:in_hand = -1` (runtime/eye.cpp). Verified: driving
-  M:248 at a dropped item's cell moves it floor→hand (`in_hand -1 → item`, plane-1 cell
-  cleared). Debug rig: `THIRDEYE_TESTITEM` (drops an item ahead / `THIRDEYE_ITEMHERE` on the
-  party cell), `THIRDEYE_TESTPICKUP` (drives M:248 directly). **Remaining:** the dungeon-view
-  floor-click region→forward-cell mapping needs calibration (clicks currently resolve to the
-  party's own tile); and equip/move-between-slots + consumable use (M:163 non-weapon branch)
-  are still unverified.
+- ✅ **Item interaction (#29) — verified end-to-end (2026-07-03).** All three interaction
+  types work through real clicks, after four uninit/sentinel fixes:
+  - **Floor pickup** — kernel `W:in_hand@241` empty-hand sentinel must be **-1**
+    (zero-fill read as "holding object 0" → every click took the DROP path); seeded in
+    `resume_level`. Verified via real clicks for BOTH the party's own cell (region 85,
+    near floor strip) and the cell ahead (region 86, mid strip → `step dist 1`): floor
+    clicked → cell+quadrant → `get index of topmost item` (plane 1, `W:place == -1`,
+    `B:region` = quadrant) → take → `in_hand = item`. Nothing was miscalibrated — items
+    are clickable at the quadrant where the SOP draws them.
+  - **Equip/move** — portrait click opens the equipment screen (M:240); clicking the
+    right-hand slot takes the sword to hand (`in_hand -1 → 993`), clicking again places
+    it back (`993 → -1`). Two more stored-as-sentinel fixes made this possible: the §2.3
+    item stream stores `items.W:itmflags` as **0xFFFF** — and bit 0x400 is the CURSED
+    gate (`utils` r1386 @3646), so every restored item refused to unequip ("cannot
+    release the item!  It is cursed!"); itmflags is now re-seeded from the class's
+    `report(1)` low word. Likewise `arms.B:bonus` is stored as -1 with the REAL magical
+    bonus in trailer byte 3 — now applied on restore (a -1 bonus also reads as cursed).
+    Backpack slots `W:inventory[0..13]` are now parsed from ITEMS.TMP @+96 and restored
+    (they were left zero-filled = "item object 0", so clicking an empty backpack slot
+    picked up the kernel).
+  - **Consumables** — rations picked from the floor → equipment screen → food-plate
+    click: a full PC correctly refuses (" isn't hungry at the moment."); with food
+    lowered (`THIRDEYE_STARVE=10`) the same click consumes the rations
+    (`in_hand 999 → -1`) and refreshes the FOOD bar.
+  Debug rig: `THIRDEYE_TESTITEM`/`ITEMHERE`/`ITEMREGION` (drop an item at/ahead of the
+  party with a chosen quadrant), `THIRDEYE_TESTPICKUP` (drive M:248 directly),
+  `THIRDEYE_ITEMDUMP=<obj>` (hex-dump live item statics), `THIRDEYE_STARVE=N`, and
+  `in_hand` change logging under `THIRDEYE_CLICK`. Not covered: hand-weapon display in
+  the compact adventure panels (visual polish, low priority).
+  **Fallout fix:** the "init level" post-send hook captured `[&ctx]` — a dangling
+  reference to `defaultRuntimeCall`'s stack-local Context that only "worked" while the
+  dead stack bytes held the old layout; adding the Context `mixer` member shifted the
+  frame and it became a boot-time SEGFAULT. The hook now captures the long-lived
+  `objects`/`res` directly (runtime/eye.cpp).
 
 ### ✅ Combat — basic attack/damage/die chain lands
 

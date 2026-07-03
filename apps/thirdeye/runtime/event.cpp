@@ -154,6 +154,22 @@ void runDebugHooks(VM::ObjectSystem &objects, RESOURCES::Resource &res) {
 			}
 		}
 	}
+	// THIRDEYE_STARVE=N: set every PC's W:food@177 to N% at tick 230 --
+	// exercises the food-icon consume path (a full PC refuses to eat).
+	if (const char *e = std::getenv("THIRDEYE_STARVE")) {
+		static int st = 0;
+		if (++st == 230) {
+			int val = std::atoi(e);
+			for (int pc : objects.objectsOfClass(1369))
+				try {
+					if (uint8_t *p = objects.classStaticPtr(pc, 1369, 177, 2)) {
+						p[0] = val & 0xFF;
+						p[1] = (val >> 8) & 0xFF;
+					}
+				} catch (const std::exception &) {}
+			std::cerr << "[starve] set all PC food to " << val << "\n";
+		}
+	}
 	if (std::getenv("THIRDEYE_ATTACK")) {
 		static int af = 0;
 		static int monIdx = -1;
@@ -429,7 +445,10 @@ void runDebugHooks(VM::ObjectSystem &objects, RESOURCES::Resource &res) {
 			setS(1370, 2, ix, 1);           // x
 			setS(1370, 3, iy, 1);           // y
 			setS(1370, 4, pl, 1);           // lvl (party's level)
-			setS(1370, 5, 2, 1);            // B:region = SW quadrant
+			int reg = 2; // SW quadrant default; THIRDEYE_ITEMREGION overrides
+			if (const char *e = std::getenv("THIRDEYE_ITEMREGION"))
+				reg = std::atoi(e) & 3;
+			setS(1370, 5, reg, 1);          // B:region = floor quadrant
 			setS(1370, 6, -1, 2);           // W:next (chain terminator)
 			setS(1370, 8, -1, 2);           // W:prev
 			try {
@@ -469,6 +488,55 @@ void runDebugHooks(VM::ObjectSystem &objects, RESOURCES::Resource &res) {
 				std::cout << "  [pickup: in_hand after=" << ksw(241)
 				          << " plane1[" << ix << "," << iy << "]=" << lvlobjHead
 				          << " (item was " << itemIdx << ")]\n";
+			}
+		}
+	}
+	// Debug: log W:in_hand@241 when it changes (verifies pickup/drop/equip --
+	// the bytecode's internal SEND 248/195 don't show in the event log).
+	if (std::getenv("THIRDEYE_CLICK") || std::getenv("THIRDEYE_TESTPICKUP")) {
+		int kn = objects.firstObjectOfClass(1382);
+		if (kn >= 0) {
+			static int lastInHand = -12345;
+			if (uint8_t *p = objects.classStaticPtr(kn, 1382, 241, 2)) {
+				int ih = static_cast<int16_t>(p[0] | (p[1] << 8));
+				if (ih != lastInHand) {
+					std::cout << "  [in_hand " << lastInHand << " -> " << ih
+					          << "]" << std::endl;
+					lastInHand = ih;
+				}
+			}
+			// One-shot: dump the kernel's floor-click plumbing -- the 3 region
+			// handles in W:staticArray192 that "floor clicked" matches the click
+			// region against (i<2 = own cell, i=2 = one cell forward).
+			static bool dumped = false;
+			static int dtick = 0;
+			if (!dumped && ++dtick == 240) {
+				dumped = true;
+				if (uint8_t *p = objects.classStaticPtr(kn, 1382, 192, 6))
+					std::cout << "  [floor regions: near-A=" << (p[0] | (p[1] << 8))
+					          << " near-B=" << (p[2] | (p[3] << 8))
+					          << " fwd=" << (p[4] | (p[5] << 8)) << "]" << std::endl;
+				// THIRDEYE_ITEMDUMP=<obj>: hex-dump that item object's full
+				// statics (all classes) -- for comparing a restored item's
+				// live fields (itmflags, B:bonus, ...) against the save record.
+				if (const char *e = std::getenv("THIRDEYE_ITEMDUMP")) {
+					int io = std::atoi(e);
+					int cls = objects.classOf(io);
+					try {
+						uint32_t sz = objects.instanceStaticSize(
+						    static_cast<uint16_t>(cls));
+						if (uint8_t *p = objects.staticsPtr(io, 0, sz)) {
+							std::cout << "  [itemdump obj " << io << " cls " << cls
+							          << " size " << sz << ":";
+							for (uint32_t i = 0; i < sz; ++i) {
+								char b[4];
+								std::snprintf(b, sizeof(b), " %02x", p[i]);
+								std::cout << b;
+							}
+							std::cout << "]" << std::endl;
+						}
+					} catch (const std::exception &) {}
+				}
 			}
 		}
 	}

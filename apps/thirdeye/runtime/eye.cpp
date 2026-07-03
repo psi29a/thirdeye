@@ -941,6 +941,7 @@ bool tryHandle(Context &ctx, const std::string &fn,
 				auto stream = THIRDEYE::savegame::parseItemStream(
 				    raw, items.itemStreamOff, staticSize);
 				int created = 0, failed = 0;
+				constexpr uint16_t kArmsClass = 1373;
 				for (const auto &rec : stream) {
 					try {
 						ctx.objects.createProgram(rec.id, rec.cls);
@@ -949,6 +950,28 @@ bool tryHandle(Context &ctx, const std::string &fn,
 						        static_cast<uint32_t>(rec.staticBlock.size())))
 							std::memcpy(p, rec.staticBlock.data(),
 							            rec.staticBlock.size());
+						// Stored-as-sentinel fields (same convention as monster
+						// hitpts = -1): the block stores arms.B:bonus as -1 (real
+						// bonus = trailer byte 3) and items.W:itmflags as 0xFFFF.
+						// itmflags bit 0x400 is the CURSED gate (utils r1386
+						// @3646) -- verbatim 0xFFFF made every item unremovable
+						// ("cannot release the item!  It is cursed!"). Re-seed
+						// itmflags from the class's report(1) low word, as the
+						// original loader does when the item is built.
+						constexpr uint16_t kItemsClass = 1371;
+						try {
+							int32_t rep1 = ctx.objects.send(rec.id, 18, {1});
+							if (uint8_t *fp = ctx.objects.classStaticPtr(
+							        rec.id, kItemsClass, 0, 2)) {
+								fp[0] = rep1 & 0xFF;
+								fp[1] = (rep1 >> 8) & 0xFF;
+							}
+						} catch (const std::exception &) {}
+						if (ctx.objects.isSubclassOf(rec.cls, kArmsClass)) {
+							if (uint8_t *b = ctx.objects.classStaticPtr(
+							        rec.id, kArmsClass, 0, 1))
+								*b = static_cast<uint8_t>(rec.magicalBonus());
+						}
 						++created;
 					} catch (const std::exception &) { ++failed; }
 				}
@@ -1084,6 +1107,17 @@ bool tryHandle(Context &ctx, const std::string &fn,
 							p[1] = static_cast<uint8_t>((v >> 8) & 0xFF);
 						}
 					}
+					// W:inventory[0..13] <- backpack @+96. Empty = -1: a
+					// zero-filled slot reads as "item object 0" and the
+					// inventory click handler picks the kernel up as an item.
+					for (int s = 0; s < THIRDEYE::savegame::ItemsTmp::Character::kBackpackSlots; ++s) {
+						uint32_t off = kInventoryOff + s * 2;
+						int16_t v = c.backpack[s];
+						if (uint8_t *p = ctx.objects.classStaticPtr(idx, kPcClass, off, 2)) {
+							p[0] = static_cast<uint8_t>(v & 0xFF);
+							p[1] = static_cast<uint8_t>((v >> 8) & 0xFF);
+						}
+					}
 					++patched;
 					rt() << "  [resume_level: patched PC " << idx << " <- \""
 					     << c.name << "\" HP " << c.hpCurrent << "/" << c.hpMax
@@ -1212,15 +1246,20 @@ bool tryHandle(Context &ctx, const std::string &fn,
 		// finds an empty grid and every swing returns "no target". Also fires
 		// on change_level, keeping the semantics consistent across boot + level
 		// transitions.
+		// NB: capture the long-lived engine objects, NOT `&ctx` -- Context is a
+		// stack local of defaultRuntimeCall and is gone by the time this hook
+		// fires. The old `[&ctx]` capture was a dangling reference that only
+		// "worked" while the dead stack bytes still held the references; adding
+		// a Context member shifted the frame layout and it became a segfault.
 		ctx.objects.setPostSendHook(
-		    [&ctx](int objIndex, int message) {
+		    [&objects = ctx.objects, &res = ctx.res](int objIndex, int message) {
 			    if (objIndex != 2001 || message != 232) return;
 			    uint8_t lvl = 1;
-			    int kn = ctx.objects.firstObjectOfClass(1382);
+			    int kn = objects.firstObjectOfClass(1382);
 			    if (kn >= 0)
-				    if (uint8_t *p = ctx.objects.classStaticPtr(kn, 1382, 246, 1))
+				    if (uint8_t *p = objects.classStaticPtr(kn, 1382, 246, 1))
 					    lvl = *p ? *p : 1;
-			    THIRDEYE::savegame::loadLevelObjects(lvl, ctx.objects, ctx.res);
+			    THIRDEYE::savegame::loadLevelObjects(lvl, objects, res);
 		    });
 		result = 0;
 		return true;

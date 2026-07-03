@@ -23,6 +23,7 @@ constexpr size_t kMaxRecords   = 10;
 // Within a PC record:
 constexpr size_t kObjIndexOff  = 0;
 constexpr size_t kClassOff     = 2;
+constexpr size_t kBackpackOff  = 96;  // 14 words -> W:inventory[0..13]
 constexpr size_t kEquipOff     = 127; // 12 words: body, bracers, rhand, lring,
                                       //           rring, boots, lhand, pouchA,
                                       //           pouchB, pouchC, necklace, helmet
@@ -138,6 +139,8 @@ ItemsTmp parseItemsTmp(const std::vector<uint8_t> &data) {
 		c.con         = data[base + kConOff];
 		c.cha         = data[base + kChaOff];
 
+		for (int s = 0; s < ItemsTmp::Character::kBackpackSlots; ++s)
+			c.backpack[s] = readEquipSlot(data, base + kBackpackOff + s * 2);
 		for (int s = 0; s < ItemsTmp::Character::kEquipSlots; ++s)
 			c.equip[s] = readEquipSlot(data, base + kEquipOff + s * 2);
 		c.arrowsType = readI16(data, base + kArrowsTypeOff);

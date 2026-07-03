@@ -42,7 +42,12 @@ struct ItemsTmp {
 		int16_t  classNumber = -1; // +2   1369 = "PC"
 
 		// Backpack ids @+96..+125 (14 slots × 2 bytes) -- see equip[] for the
-		// worn block. (Backpack ids correspond to PC.W:inventory[0..13].)
+		// worn block. (Backpack ids correspond to PC.W:inventory[0..13];
+		// -1 = empty. Must be restored: a zero-filled slot reads as "item
+		// object 0" and the inventory click handler happily picks it up.)
+		static constexpr int kBackpackSlots = 14;
+		int16_t  backpack[kBackpackSlots] = {-1,-1,-1,-1,-1,-1,-1,
+		                                     -1,-1,-1,-1,-1,-1,-1};
 
 		// Equipment slots (item-object IDs; -1 = empty / 0xFFFF).
 		// File offset +127. Indices: 0 body, 1 bracers, 2 rhand, 3 lring,
