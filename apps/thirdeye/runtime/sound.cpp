@@ -24,6 +24,24 @@ namespace {
 // passes to sound_effect, so the two agree without modelling EMS blocks.
 std::map<int, std::vector<uint8_t>> gBank;
 bool gSoundOn = true;
+bool gMusicResident = false; // tracks load_music/unload_music toggling
+
+// play_sequence(LA, AD, PC) resource picker. The original picks by
+// XMI_device_type; we default to the MT32 track (LA) because Mixer is
+// configured with mt32=true (XMIDI_CONVERT_MT32_TO_GS). Env var
+// THIRDEYE_MIDI_DEVICE=AD|PC|LA overrides.
+int pickMusicRes(const std::vector<VM::Value> &args) {
+	if (args.size() < 3) return 0;
+	int la = static_cast<int>(args[0]);
+	int ad = static_cast<int>(args[1]);
+	int pc = static_cast<int>(args[2]);
+	const char *dev = std::getenv("THIRDEYE_MIDI_DEVICE");
+	if (dev) {
+		if (std::string(dev) == "AD") return ad;
+		if (std::string(dev) == "PC") return pc;
+	}
+	return la;
+}
 } // namespace
 
 bool tryHandle(Context &ctx, const std::string &fn,
@@ -89,6 +107,44 @@ bool tryHandle(Context &ctx, const std::string &fn,
 			std::cerr << "[snd] load_sound_block(" << firstBlock << ".."
 			          << args[1] << ") loaded " << loaded << " clips (base "
 			          << (firstBlock == kBlkCommon ? 0 : kFirstLevel) << ")\n";
+		result = 0;
+		return true;
+	}
+	// load_music/unload_music: the original allocates/releases the AIL XMI
+	// driver + timbre cache. WildMIDI reinits per playMusic call, so both are
+	// just a resident flag here -- unload_music also silences any current song.
+	if (fn == "load_music") {
+		gMusicResident = true;
+		result = 0;
+		return true;
+	}
+	if (fn == "unload_music") {
+		if (gMusicResident && ctx.mixer != nullptr)
+			ctx.mixer->stopMusic();
+		gMusicResident = false;
+		result = 0;
+		return true;
+	}
+	// play_sequence(LA, AD, PC): resource numbers of the same track encoded
+	// for MT32/AdLib/PC-speaker. Load the picked one and hand its XMI bytes
+	// to the mixer (see intro.cpp `S` key path for the same call shape).
+	if (fn == "play_sequence" && args.size() >= 3) {
+		int resNum = pickMusicRes(args);
+		if (!gSoundOn || !gMusicResident || ctx.mixer == nullptr || resNum <= 0) {
+			result = 0;
+			return true;
+		}
+		try {
+			auto xmi = ctx.res.getAsset(static_cast<uint16_t>(resNum));
+			if (std::getenv("THIRDEYE_SNDTRACE"))
+				std::cerr << "[snd] play_sequence res=" << resNum
+				          << " (" << xmi.size() << "B XMI)\n";
+			if (!xmi.empty()) ctx.mixer->playMusic(std::move(xmi));
+		} catch (const std::exception &e) {
+			if (std::getenv("THIRDEYE_SNDTRACE"))
+				std::cerr << "[snd] play_sequence res=" << resNum
+				          << " missing: " << e.what() << "\n";
+		}
 		result = 0;
 		return true;
 	}

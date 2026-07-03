@@ -493,6 +493,95 @@ void runDebugHooks(VM::ObjectSystem &objects, RESOURCES::Resource &res) {
 			}
 		}
 	}
+	// THIRDEYE_SPELL[=<spell_class>]: end-to-end spell-cast verification.
+	// Spawns a target monster in front of the party, waits for the level to
+	// settle, then SENDs magic.cast_spell (M:54) with (spell_class, sp=0,
+	// caster=first PC). Watches monster HP each tick. Default spell class is
+	// 1646 (magic missile); override with THIRDEYE_SPELL=<n> (e.g. 1652
+	// fireball). Target class overridable with THIRDEYE_SPELL_TARGET=<n>
+	// (default 1934 troll) and HP with THIRDEYE_SPELL_TARGETHP.
+	if (std::getenv("THIRDEYE_SPELL")) {
+		static int stick = 0;
+		static int monIdx = -1;
+		static bool cast = false;
+		int dn = objects.firstObjectOfClass(1381);
+		int kn = objects.firstObjectOfClass(1382);
+		int magic = objects.firstObjectOfClass(2377);
+		if (++stick == 260 && dn >= 0 && kn >= 0) {
+			auto kb = [&](int off) -> int {
+				uint8_t *p = objects.classStaticPtr(kn, 1382, off, 1);
+				return p ? *p : 0;
+			};
+			int px = kb(243), py = kb(244), pf = kb(245), pl = kb(246);
+			int fx = px, fy = py;
+			if (pf == 0) fy = py - 1;
+			else if (pf == 1) fx = px + 1;
+			else if (pf == 2) fy = py + 1;
+			else fx = px - 1;
+			int mc = 1934;
+			if (const char *e = std::getenv("THIRDEYE_SPELL_TARGET")) mc = std::atoi(e);
+			int hp = 50;
+			if (const char *e = std::getenv("THIRDEYE_SPELL_TARGETHP")) hp = std::atoi(e);
+			monIdx = 2610;
+			objects.createProgram(monIdx, static_cast<uint16_t>(mc));
+			auto setS = [&](uint16_t k, uint32_t o, int v, int n) {
+				if (uint8_t *p = objects.classStaticPtr(monIdx, k, o, n))
+					for (int i = 0; i < n; ++i) p[i] = (v >> (8 * i)) & 0xFF;
+			};
+			setS(1370, 0, fx + fy * 32, 2);
+			setS(1370, 2, fx, 1);
+			setS(1370, 3, fy, 1);
+			setS(1370, 4, pl, 1);
+			setS(1370, 5, 4, 1);  // B:region = 4 (fill-cell monster; find_hitable_monsters gate)
+			setS(1370, 6, -1, 2);
+			setS(1370, 8, -1, 2);
+			setS(1622, 3, hp, 2);
+			setS(1622, 5, -1, 2); // W:carried terminator
+			int32_t ns = 0;
+			try { ns = objects.send(monIdx, 18, {1}); } catch (...) {}
+			setS(1622, 0, ns, 2);
+			if (uint8_t *p = objects.classStaticPtr(
+			        dn, 1381, 1024 + 4096 + (fy * 64 + fx * 2), 2)) {
+				p[0] = monIdx & 0xFF; p[1] = (monIdx >> 8) & 0xFF;
+			}
+			try { objects.send(monIdx, 2, {}); } catch (...) {}
+			std::cerr << "[spell] spawned mon " << monIdx << " class " << mc
+			          << " hp " << hp << " at (" << fx << "," << fy
+			          << ") facing party (" << px << "," << py
+			          << ") fdir " << pf << "\n";
+		}
+		if (!cast && stick == 300 && monIdx >= 0) {
+			cast = true;
+			int spellClass = 1646;
+			if (const char *e = std::getenv("THIRDEYE_SPELL")) {
+				int v = std::atoi(e);
+				if (v > 1) spellClass = v;
+			}
+			auto pcs = objects.objectsOfClass(1369);
+			if (pcs.empty() || magic < 0) {
+				std::cerr << "[spell] no PC(" << pcs.size() << ") or magic singleton("
+				          << magic << ") -- cannot cast\n";
+			} else {
+				int pc = pcs[0];
+				std::cerr << "[spell] casting class " << spellClass
+				          << " via magic(" << magic << ").cast_spell caster=" << pc
+				          << " target=" << monIdx << "\n";
+				try {
+					objects.send(magic, 54, {spellClass, 0, pc});
+				} catch (const std::exception &e) {
+					std::cerr << "[spell] M:54 threw: " << e.what() << "\n";
+				}
+			}
+		}
+		if (cast && monIdx >= 0 && stick % 4 == 0) {
+			try {
+				if (uint8_t *p = objects.classStaticPtr(monIdx, 1622, 3, 2))
+					std::cerr << "[spell] mon " << monIdx << " hp "
+					          << static_cast<int16_t>(p[0] | (p[1] << 8))
+					          << " (live=" << objects.objectLookup(monIdx) << ")\n";
+			} catch (const std::exception &) {}
+		}
+	}
 	// Debug: log W:in_hand@241 when it changes (verifies pickup/drop/equip --
 	// the bytecode's internal SEND 248/195 don't show in the event log).
 	if (std::getenv("THIRDEYE_CLICK") || std::getenv("THIRDEYE_TESTPICKUP")) {

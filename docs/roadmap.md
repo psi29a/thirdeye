@@ -29,17 +29,22 @@ narrative on completed work.
 - ✅ AESOP/16 `"1.10"` bitmap decoder.
 - ✅ Text rendering pipeline (`text_window`/`text_style`/`text_color`/`text_xy`/`print`/
   `sprint`).
-- 🚧 EOB3 runtime-function set (`EYE.C`/`RTCODE.C`/`INTRFACE.C`) wired. **Digital SFX now
-  wired** (2026-07-03): `load_sound_block`/`sound_effect`/`set_sound_status`
+- ✅ EOB3 runtime-function set (`EYE.C`/`RTCODE.C`/`INTRFACE.C`) wired. **Digital SFX**
+  (2026-07-03): `load_sound_block`/`sound_effect`/`set_sound_status`
   ([runtime/sound.cpp](../apps/thirdeye/runtime/sound.cpp), port of `SOUND32.C`) back onto the
   OpenAL `Mixer` (raw 8-bit mono @ 8 kHz, the same `playSound` path the intro keypress SFX
   uses). `load_sound_block` walks its Code-space table of 32-bit resource numbers (new
   `Interpreter::codeWord`) into an index→PCM bank — verified loading the shipped COMMON (45
   clips, base 0) + LEVEL (8 clips, base 50) banks per `SOUND.H`. `init_sound`/
-  `shutdown_sound` arm/disarm the play gate. **Music is the last stubbed CALL surface**
-  (`load_music`/`play_sequence`/`unload_music` — the XMIDI+WildMIDI pipe exists for the intro,
-  not yet wired to the SOP calls). Save/load + the Restore-Game picker flow end-to-end (see
-  Phase 3). Much of `EYE.C` (combat-edge cases, level transition flow) still incremental.
+  `shutdown_sound` arm/disarm the play gate. **Music trio wired** (2026-07-03):
+  `load_music`/`unload_music` toggle a resident flag (WildMIDI reinits per playback, so no
+  driver-level setup needed) and `play_sequence(LA, AD, PC)` picks the MT32 track by default
+  (matches `Mixer` `mt32=true`; override with `THIRDEYE_MIDI_DEVICE=AD|PC|LA`), loads the
+  XMI resource via `res.getAsset`, and hands it to `Mixer::playMusic` (existing WildMIDI +
+  XMIDI-to-GS path already used by the intro cinematic). **Every `C:` import in EYE.RES is
+  now handled — zero `[stub]` traces on the golden path.** Save/load + the Restore-Game
+  picker flow end-to-end (see Phase 3). Much of `EYE.C` (combat-edge cases, level transition
+  flow) still incremental.
 - ✅ **Goal reached**: title menu + in-game HUD both render and are interactive (SOP-driven).
 
 ## Phase 3 — Playable EOB3 🚧 (dungeon is explorable + populated)
@@ -231,9 +236,9 @@ gotchas — `grep -a` required). Implemented, all ported verbatim from the C:
   `init/shutdown_graphics/interface`, `wait_vertical_retrace`, `beep`,
   `diagnose`, `create_initial_binary_files` (dev-time TXT→BIN translation).
 
-**Still stubbed**: ONLY the music trio (`load_music`, `play_sequence`,
-`unload_music` — the XMIDI/WildMIDI pipe exists; wiring is the next chunk).
-Everything else got wired 2026-07-03: `do_dots`/`do_ice` (verbatim ports of
+**Still stubbed**: none. Music trio (`load_music`/`play_sequence`/
+`unload_music`) landed 2026-07-03, closing the last `[stub]` hole on the
+golden path (see Phase 2 note). Everything else got wired 2026-07-03: `do_dots`/`do_ice` (verbatim ports of
 EYE.C's fixed-point particle physics in runtime/graphics.cpp; the per-pixel
 sprite-occlusion mask reads are skipped since we composite pages onto one
 surface — particles clip to the view window and save/restore the exact pixels
@@ -247,7 +252,22 @@ and dissolves from it to the current surface content over N presented frames
 a level transition plus the outtake's fade-in. (`THIRDEYE_DUMP` moved into
 `Graphics::update()` so mid-CALL presents — fades, particles — are captured.)
 
-Golden-path regression (title → restore → walk): **only sound stubs remain**.
+Golden-path regression (title → restore → walk): **zero stubs remain** —
+verified with `THIRDEYE_TIMING=1` first-call trace over a 15s autowalk run.
+
+**Spell cast** (2026-07-03) — the runtime infrastructure a spell walks
+through is all present (M:54 → M:319 → M:340; every `C:` call it makes,
+`dice`/`rnd`/`spell_request`/`spell_list`/`do_dots`/`do_ice`/`magic_field`,
+implemented). The `THIRDEYE_SPELL` synthetic harness in [runtime/event.cpp](../apps/thirdeye/runtime/event.cpp)
+reaches `cast_mage_spell` and fires the correct missile count (castlvl 9
+÷ 2 = 5 for magic missile) but doesn't land damage because it passes
+`sp=0` — that field is the memorized-slot dispatch key. The proper
+end-to-end path is now unblocked: since the Camp UI is native SOP (see
+Phase 6c correction below), Memorize Spells actually works in-engine — a
+manual C-Enter-Enter-pick-spell in a safe cell followed by the game's own
+cast UI is the golden verification and needs no code, just a play
+session. Melee-damage-and-die is already green (`THIRDEYE_ATTACK`).
+
 NB the harness key script changed — with a save present the title menu
 defaults to "Continue the Quest", so it's `THIRDEYE_AUTOWALK=0d,0d,…` now
 (the old leading `5000` walks you into "Gather a New Party"/chargen).
@@ -565,9 +585,25 @@ never change game behaviour.
 ## Phase 6 — Replace CHGEN.EXE with a C++20 chargen 🚧
 
 Goal: drop the dependency on the original `CHARGEN/CHGEN.EXE`, run all
-character generation natively. CHGEN.EXE also hosts the in-game Camp UI
-(Rest / Memorize / Pray / Scribe / Load / Save), so a full replacement
-covers both subsystems.
+character generation natively.
+
+**Correction (2026-07-03):** the earlier assumption that CHGEN.EXE hosts
+the in-game Camp UI was **wrong**. The Camp UI lives entirely inside
+EYE.RES bytecode — class 1385 `camp` exports the full menu (M:272
+toggle_camp_menu, M:294 rest, M:302 init_spell_menu, M:306 build_spell_array,
+M:295 spell_menu_selected, M:281 spell_menu_entry_selected, M:296
+scribe_scroll, M:298 save_option_selected, M:299 load_option_selected,
+M:308 sleep, M:309 show_time, M:297 drop_character, M:307 can_heal, M:285
+interrupt_resting). Pressing `C` in-game already opens the full camp screen
+(Rest / Pray for Spells / Memorize Spells / Scribe Scroll / Drop Companion /
+Break Camp / Save Game / Restore Game / Turn Sounds On / Show Bar Graphs /
+Exit Game) with the party portraits + HP intact; Rest correctly refuses
+in a monster-adjacent cell with the shipped *"This doesn't seem like such a
+great place to rest,"* line; Memorize prompts *"Select the mage who will
+memorize spells"* with the mage's portrait circled. No C++ Camp UI work
+needed — every runtime `C:` call it uses is already implemented (we saw
+zero `[stub]` traces on the camp path). That leaves this phase focused
+purely on chargen.
 
 Full RE artifact dump + 3-phase plan: [`../eob3_research/CHGEN/`](../eob3_research/CHGEN/README.md).
 Quick map:
@@ -575,8 +611,8 @@ Quick map:
 | | Goal | Status |
 |---|---|---|
 | **Phase 6a — File-format readers** | ITEM.DAT, ITEMTYPE.DAT, CHARPICS.BMP, EOSPREFS.DAT. Reuse thirdeye's existing CPS/palette/font decoders for the rest. | ✅ ITEM.DAT, ITEMTYPE.DAT, CHARPICS.BMP readers landed in [`apps/thirdeye/chargen/`](../apps/thirdeye/chargen/) with unit + bundled-data tests; CHARPICS also wired as a third variant in the `Bitmap` decoder (auto-detected by file-size header) so all 89 portraits load. EOSPREFS.DAT stubbed pending need. |
-| **Phase 6b — Chargen UI** | Race / class / alignment / stat-roll / portrait / starting-equipment flow. Writes `CREATE.SAV` in our already-RE'd format (so the existing `xfer` transfer keeps working). | ⏳ pending |
-| **Phase 6c — Camp UI in thirdeye** | Self-host Rest / Memorize / Pray / Scribe / Save / Load. Drops CHGEN.EXE entirely. | ⏳ pending |
+| **Phase 6b — Chargen UI** | Race / class / alignment / stat-roll / portrait / starting-equipment flow. Writes `CREATE.SAV` in our already-RE'd format (so the existing `xfer` transfer keeps working). | ✅ Landed in [`apps/thirdeye/chargen/screen.cpp`](../apps/thirdeye/chargen/screen.cpp) (~2100 LOC): `Step` state machine covers EntryScreen → PickRace → PickClass → PickAlignment → PickPortrait → EnterName → ShowStats / ModifyStats; `writeCreateSav` overlays live-rolled fields (race/class/alignment/portrait/name/stats) onto the bundled CREATE.SAV template and writes a class-appropriate equipment kit. The existing `xfer` transfer path then ingests it verbatim. Race×class kit is validated by `validateClassKits` at boot. |
+| **Phase 6c — Camp UI in thirdeye** | ~~Self-host Rest / Memorize / Pray / Scribe / Save / Load.~~ Not applicable — the Camp UI is native SOP (class 1385 in EYE.RES), not hosted by CHGEN.EXE. See the correction note above. | ✅ verified 2026-07-03 (headless `C`-key path renders the full menu; Rest gates correctly; Memorize prompts the mage select) |
 
 What's already done that this phase doesn't need to redo:
 - `CREATE.SAV` writer format ✅ (we read it; see [docs/create_sav_and_item_format.md](create_sav_and_item_format.md))

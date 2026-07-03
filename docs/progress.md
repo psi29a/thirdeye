@@ -291,6 +291,48 @@ the `"2."` magic (older format kept for the intro's GFF fonts); fonts are cached
 (`text_style` fires every redraw). Not yet done: per-index colour remap (we mask), window
 clipping.
 
+## Sound + music (2026-07-03)
+
+✅ **Digital SFX pipeline** covered under the earlier *Char-gen* section — `load_sound_block` /
+`sound_effect` / `set_sound_status` back onto the OpenAL `Mixer`.
+
+✅ **XMIDI music trio wired** (`runtime/sound.cpp`). `load_music` / `unload_music` toggle a
+resident flag (WildMIDI reinits per playback, so no driver-level state to hold), and
+`play_sequence(LA, AD, PC)` picks the MT32 (LA) resource by default — matches
+`Mixer(mt32=true)` which converts MT32→GS via `XMIDI_CONVERT_MT32_TO_GS`. Override via
+`THIRDEYE_MIDI_DEVICE=AD|PC|LA`. Bytes come from `res.getAsset(resnum)` and go straight into
+the existing `Mixer::playMusic` path already used by the intro cinematic. **Every `C:` import
+in EYE.RES is now handled** — a `THIRDEYE_TIMING=1` first-call trace over a 15s autowalk shows
+zero `[stub]` lines. `THIRDEYE_SNDTRACE=1` logs `[snd] play_sequence res=… (NB XMI)` on each
+trigger.
+
+⚠️ **Spell cast — partial verification** (2026-07-03). Added `THIRDEYE_SPELL[=<class>]`
+end-to-end test rail in [runtime/event.cpp](../apps/thirdeye/runtime/event.cpp): spawns a
+target monster in front of the party (default troll, HP 50, `B:region=4` so
+`find_hitable_monsters` counts it), then SENDs `magic.cast_spell` (M:54) to the magic
+singleton (obj 2005 = `firstObjectOfClass(2377)`) with `(spell_class, sp=0, caster=first
+PC)`. **Cast chain runs**: M:54 → SEND M:319 `cast` on the spell instance → SEND M:83
+`mage level` (returns 9) → SEND M:340 `cast mage spell` → the CASE dispatch on `B:sp`
+executes. **5 `sound_effect(0)` fires** — matching castlvl 9 ÷ 2 = 5 missiles for magic
+missile. **But no damage lands on the target** because `B:sp=0` we pass isn't a real
+spellbook slot value; the CASE branch doesn't reach the `missile spell` (M:335) →
+`spell missiles.throw` (M:38) → `find hitable monsters` (M:70) → `roll for damage` (M:43) →
+NPC `take damage` (M:82) chain that would actually deplete HP. `daesop`'d proof: the M:70
+handler in `utils` (which does the damage-target selection) never appears in the `--debug`
+trace after the cast fires.
+**What this means**: the runtime infrastructure the spell path needs is *present* — every
+`C:` runtime function it calls (`dice`, `rnd`, `post_event`, `spell_request`, `spell_list`,
+`do_dots`, `do_ice`, `magic_field`, particle-mask save/restore, etc.) is implemented and
+the SEND chain propagates through 4 levels of the class hierarchy. What's *missing* is a
+real memorized spellbook: the correct `sp` value that maps to magic missile in
+`cast_mage_spell`'s CASE dispatch table only lives in a PC that's been through the memorize
+UI. That UI is hosted by `CHGEN.EXE` (Phase 6c, Camp UI). Full end-to-end verification
+(cast → damage → die) will fall out naturally once Phase 6c lands and a real memorized
+spell can be selected the way a player would. As a partial cross-check today,
+melee-damage-and-die is already green (`THIRDEYE_ATTACK` — troll dies in 8s, sword wraith
+dies on contact); the same M:82 `take damage` → M:55 `die` → `entities.remove` (M:22) chain
+is what a working spell hit would drive.
+
 ✅ **AESOP/16 `"1.10"` bitmap decoder done** (`graphics/bitmap.cpp`). Every EYE.RES bitmap
 is the native VFX shape-table format: a 4-byte `"1.10"` version, a u32 shape count, a
 directory of `count`×8-byte `{u32 offset, u32 color}` entries (at byte 8), then per shape a
