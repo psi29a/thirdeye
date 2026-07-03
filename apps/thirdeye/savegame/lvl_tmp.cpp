@@ -148,6 +148,24 @@ int loadLevelObjects(int level, VM::ObjectSystem &objects,
 				cellp[0] = id & 0xFF;
 				cellp[1] = (id >> 8) & 0xFF;
 			}
+			// Seed W:NPCstat@1622:0 from report(1) for monsters. NPC.restore
+			// caches report(1) into a scratch local but NEVER writes W:NPCstat
+			// wholesale (it only conditionally ORs bit 0x20) -- the class stat
+			// flags (incl. 0x40 = incorporeal) are placed into W:NPCstat when a
+			// monster is first built, which the original save then persists. The
+			// shipped QSP LVLnn.TMP carries a stale W:NPCstat (0x0001) at that
+			// offset, so without this seed PC.roll-to-hit reads bit 0x40 = 0 and
+			// never auto-hits ethereal monsters (grave mist / sword wraith): every
+			// swing "misses". Seed BEFORE restore so its 0x20 tweak lands on top.
+			if (isMonster) {
+				try {
+					int32_t rep1 = objects.send(id, 18, {1}); // report(1) = class NPCstat
+					if (uint8_t *p = objects.classStaticPtr(id, kNPC, 0, 2)) {
+						p[0] = rep1 & 0xFF;
+						p[1] = (rep1 >> 8) & 0xFF;
+					}
+				} catch (const std::exception &) {}
+			}
 			// SEND "restore" (M:2) to EVERY restored object -- restore_range does
 			// `RT_execute(index, MSG_RESTORE)` unconditionally (restoring=1 at all
 			// level-load call sites in EYE.C). NPC.restore registers the

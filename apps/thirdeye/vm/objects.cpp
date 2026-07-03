@@ -378,7 +378,20 @@ Value ObjectSystem::send(int objIndex, int message, std::vector<Value> args) {
 		if (mPostSendHook) mPostSendHook(objIndex, message);
 		return -1; // no handler anywhere in the hierarchy (matches RT_execute)
 	}
+	// THIRDEYE_ATKTRACE: log the PC-attack resolution chain with return values
+	// (roll to hit=71, die=55, take damage=82, weapon damage=40, hand-to-hand=76,
+	// acquire NPC target=77) to pinpoint where an incorporeal-target swing fails.
+	static const bool kAtkTrace = std::getenv("THIRDEYE_ATKTRACE") != nullptr;
+	bool atkTraceMsg = kAtkTrace && (message == 71 || message == 55 ||
+	                                 message == 82 || message == 40 ||
+	                                 message == 76 || message == 77);
 	Value r = runHandler(defClass, offset, objIndex, message, args);
+	if (atkTraceMsg) {
+		std::cerr << "[atktrace] obj " << objIndex << " msg " << message;
+		for (size_t a = 0; a < args.size(); ++a)
+			std::cerr << " arg" << a << "=" << args[a];
+		std::cerr << " -> " << r << "\n";
+	}
 	if (mPostSendHook) mPostSendHook(objIndex, message);
 	return r;
 }

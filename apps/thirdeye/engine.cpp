@@ -414,8 +414,9 @@ VM::Value defaultRuntimeCall(VM::ObjectSystem &objects, VM::EventSystem &events,
                              GRAPHICS::Graphics *gfx, RESOURCES::Resource &res,
                              std::map<int32_t, int32_t> &mem, TransferState &xfer,
                              VM::Interpreter &vm, const std::string &fn,
-                             const std::vector<VM::Value> &args) {
-	THIRDEYE::runtime::Context ctx{objects, events, gfx, res, mem, xfer, vm};
+                             const std::vector<VM::Value> &args,
+                             MIXER::Mixer *mixer = nullptr) {
+	THIRDEYE::runtime::Context ctx{objects, events, gfx, res, mem, xfer, vm, mixer};
 	VM::Value result = 0;
 
 	// Hot paths: math, peekmem/pokemem, the event queue + dispatch_event host
@@ -458,6 +459,7 @@ VM::Value defaultRuntimeCall(VM::ObjectSystem &objects, VM::EventSystem &events,
 	if (THIRDEYE::runtime::rtobject::tryHandle(ctx, fn, args, result)) return result;
 	if (THIRDEYE::runtime::eye::tryHandle(ctx, fn, args, result))      return result;
 	if (THIRDEYE::runtime::graphics::tryHandle(ctx, fn, args, result)) return result;
+	if (THIRDEYE::runtime::sound::tryHandle(ctx, fn, args, result))    return result;
 
 	THIRDEYE::runtime::rt() << "  [stub -> 0]" << std::endl;
 	// Always log the first hit on each unimplemented runtime function (max a few
@@ -535,7 +537,8 @@ void THIRDEYE::Engine::runResourceVM(RESOURCES::Resource &resource) {
 	VM::EventSystem events(objects);
 	std::map<int32_t, int32_t> mem; // peekmem/pokemem cells
 	TransferState xfer;             // char-gen party transfer file (unused here)
-	events.setVerbose(mDebug || std::getenv("THIRDEYE_AUTOWALK"));
+	events.setVerbose(mDebug || std::getenv("THIRDEYE_AUTOWALK") ||
+	                  std::getenv("THIRDEYE_CLICK"));
 	objects.setTrace(mDebug);
 	// Gate the runtime-call trace: on with --debug, or when a debug env var wants it.
 	gRtTrace = mDebug || std::getenv("THIRDEYE_AUTOWALK") ||
@@ -596,9 +599,15 @@ void THIRDEYE::Engine::bootObject(RESOURCES::Resource &resource,
 		          << "); booting headless." << std::endl;
 	}
 
+	// In-game sound mixer (OpenAL). Only useful with graphics; when headless we
+	// still construct it so the sound runtime calls have a target, but they no-op
+	// if the device failed to open. Lives for the whole game session.
+	MIXER::Mixer mixer;
+
 	VM::ObjectSystem objects;
 	VM::EventSystem events(objects);
-	events.setVerbose(mDebug || std::getenv("THIRDEYE_AUTOWALK"));
+	events.setVerbose(mDebug || std::getenv("THIRDEYE_AUTOWALK") ||
+	                  std::getenv("THIRDEYE_CLICK"));
 	objects.setTrace(mDebug);
 	// Gate the runtime-call trace ([drew]/[text]/CALL lines): on with --debug, or
 	// when a debug env var wants it (AUTOWALK/TESTOBJ/CLICK/AUTOKEY). Without this
@@ -656,7 +665,7 @@ void THIRDEYE::Engine::bootObject(RESOURCES::Resource &resource,
 		[&](VM::Interpreter &vm, const std::string &fn,
 		           const std::vector<VM::Value> &args) {
 			return defaultRuntimeCall(objects, events, gfx.get(), resource, mem, xfer,
-			                          vm, fn, args);
+			                          vm, fn, args, &mixer);
 		});
 	// With graphics, the host pump (in dispatch_event) presents + yields + handles
 	// quit, so the SOP main loop is frame-paced and the whole game session runs

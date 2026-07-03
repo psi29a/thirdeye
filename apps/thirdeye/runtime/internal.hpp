@@ -26,6 +26,7 @@
 
 namespace RESOURCES { class Resource; }
 namespace GRAPHICS { class Graphics; }
+namespace MIXER { class Mixer; }
 namespace VM { class ObjectSystem; class EventSystem; }
 namespace THIRDEYE::savegame { struct TransferState; }
 
@@ -57,13 +58,14 @@ struct Context {
 	std::map<int32_t, int32_t> &mem;
 	savegame::TransferState &xfer;
 	VM::Interpreter &vm;
+	MIXER::Mixer *mixer;         // null in headless mode / non-game paths
 
 	Context(VM::ObjectSystem &objects_, VM::EventSystem &events_,
 	        GRAPHICS::Graphics *gfx_, RESOURCES::Resource &res_,
 	        std::map<int32_t, int32_t> &mem_, savegame::TransferState &xfer_,
-	        VM::Interpreter &vm_)
+	        VM::Interpreter &vm_, MIXER::Mixer *mixer_ = nullptr)
 	    : objects(objects_), events(events_), gfx(gfx_), res(res_),
-	      mem(mem_), xfer(xfer_), vm(vm_) {}
+	      mem(mem_), xfer(xfer_), vm(vm_), mixer(mixer_) {}
 
 	Context(const Context &) = default;
 	Context(Context &&) = default;
@@ -135,6 +137,9 @@ namespace eye      { bool tryHandle(Context&, const std::string &fn,
                                     const std::vector<VM::Value>&,
                                     VM::Value &result); }
 namespace graphics { bool tryHandle(Context&, const std::string &fn,
+                                    const std::vector<VM::Value>&,
+                                    VM::Value &result); }
+namespace sound    { bool tryHandle(Context&, const std::string &fn,
                                     const std::vector<VM::Value>&,
                                     VM::Value &result); }
 

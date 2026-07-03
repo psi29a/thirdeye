@@ -654,6 +654,16 @@ uint8_t* Interpreter::externPtr(uint16_t obj, uint32_t xrOffset, uint32_t extra,
 	return p;
 }
 
+int32_t Interpreter::codeWord(Value addr, uint32_t index) const {
+	Addr a = decodeAddr(addr);
+	if (a.space != AddrSpace::Code)
+		return -1;
+	uint64_t off = static_cast<uint64_t>(a.offset) + static_cast<uint64_t>(index) * 2;
+	if (off + 2 > mCode.size())
+		return -1;
+	return static_cast<int32_t>(mCode[off] | (mCode[off + 1] << 8));
+}
+
 const uint8_t* Interpreter::codePtr(uint32_t off, uint32_t size) {
 	if (static_cast<uint64_t>(off) + size > mCode.size())
 		throw VmError("table/code access out of range (offset " +

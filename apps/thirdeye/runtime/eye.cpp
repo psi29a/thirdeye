@@ -1164,6 +1164,15 @@ bool tryHandle(Context &ctx, const std::string &fn,
 			rt() << "  [resume_level: registered " << placed
 			     << " party members in player[] (stand-in for savegame load)]"
 			     << std::endl;
+			// W:in_hand@241 sentinel: -1 = empty hand. create_program zero-fills
+			// it to 0, which "take/drop topmost object" (M:248) reads as "holding
+			// object 0" -- so every floor click took the DROP path and no item
+			// could ever be picked up. The original save/new-game kernel record
+			// carries -1 here; seed it since our resume path builds the kernel.
+			if (uint8_t *ih = ctx.objects.classStaticPtr(kernel, kKernelClass, 241, 2)) {
+				ih[0] = 0xFF;
+				ih[1] = 0xFF;
+			}
 		}
 		// Load the level's objects (doors/levers/monsters/items from LVLnn.TMP)
 		// into the dungeon. The maze data, wall-set bitmap number, and all

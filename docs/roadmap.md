@@ -28,10 +28,16 @@ narrative on completed work.
 - ✅ AESOP/16 `"1.10"` bitmap decoder.
 - ✅ Text rendering pipeline (`text_window`/`text_style`/`text_color`/`text_xy`/`print`/
   `sprint`).
-- 🚧 EOB3 runtime-function set (`EYE.C`/`RTCODE.C`/`INTRFACE.C`) wired. Still stubbed: sound
-  (the SDL_mixer+WildMIDI pipe exists; the SOP-driven sound calls are stubs). Save/load + the
-  Restore-Game picker now flow end-to-end (see Phase 3). Much of `EYE.C` (combat-edge cases,
-  level transition flow) still incremental.
+- 🚧 EOB3 runtime-function set (`EYE.C`/`RTCODE.C`/`INTRFACE.C`) wired. **Digital SFX now
+  wired** (2026-07-03): `load_sound_block`/`sound_effect`/`set_sound_status`
+  ([runtime/sound.cpp](../apps/thirdeye/runtime/sound.cpp), port of `SOUND32.C`) back onto the
+  OpenAL `Mixer` (raw 8-bit mono @ 8 kHz, the same `playSound` path the intro keypress SFX
+  uses). `load_sound_block` walks its Code-space table of 32-bit resource numbers (new
+  `Interpreter::codeWord`) into an index→PCM bank — verified loading the shipped COMMON (45
+  clips, base 0) + LEVEL (8 clips, base 50) banks per `SOUND.H`. **Music still stubbed**
+  (`load_music`/`play_sequence`/`unload_music` — the XMIDI+WildMIDI pipe exists for the intro,
+  not yet wired to the SOP calls). Save/load + the Restore-Game picker flow end-to-end (see
+  Phase 3). Much of `EYE.C` (combat-edge cases, level transition flow) still incremental.
 - ✅ **Goal reached**: title menu + in-game HUD both render and are interactive (SOP-driven).
 
 ## Phase 3 — Playable EOB3 🚧 (dungeon is explorable + populated)
@@ -54,6 +60,17 @@ narrative on completed work.
     ([savegame/lvl_tmp.cpp](../apps/thirdeye/savegame/lvl_tmp.cpp).)
 - ✅ **Items & inventory (display)** — equipment screen renders the paper-doll + char-gen gear;
   slot regions register so interaction routes through the proven click path.
+- 🚧 **Floor item pickup (#29)** — the pickup LOGIC now works end-to-end. Root-cause fix
+  (2026-07-03): the kernel's `W:in_hand@241` "empty hand" sentinel must be **-1**, but
+  `create_program` zero-fills it to 0, so `take/drop topmost object` (M:248) read it as
+  "holding object 0" and every floor click took the DROP path — nothing could ever be
+  picked up. `resume_level` now seeds `W:in_hand = -1` (runtime/eye.cpp). Verified: driving
+  M:248 at a dropped item's cell moves it floor→hand (`in_hand -1 → item`, plane-1 cell
+  cleared). Debug rig: `THIRDEYE_TESTITEM` (drops an item ahead / `THIRDEYE_ITEMHERE` on the
+  party cell), `THIRDEYE_TESTPICKUP` (drives M:248 directly). **Remaining:** the dungeon-view
+  floor-click region→forward-cell mapping needs calibration (clicks currently resolve to the
+  party's own tile); and equip/move-between-slots + consumable use (M:163 non-weapon branch)
+  are still unverified.
 
 ### ✅ Combat — basic attack/damage/die chain lands
 
@@ -120,6 +137,23 @@ shadow, watch ghost, shadow hound, lich, shadow of death). So "one bare-hand
 punch drops a wraith" *is* the shipped EOB3 behavior — our runtime is faithful.
 Any change would be a deliberate deviation from `EYE.RES`, which violates the
 project rule "our job is to run EYE.RES, not to RE it."
+
+**Ethereal monsters "always missed" — FIXED (2026-07-03):** the incorporeal
+auto-hit above only worked for freshly-spawned test monsters; every *real*
+level-loaded grave mist / sword wraith was unhittable in play. Root cause: the
+PC's `roll to hit` (r1369 M:71) reads the target's `W:NPCstat@1622:0 & 0x40`,
+but `NPC.restore` caches `report(1)` into a scratch local and **never writes
+`W:NPCstat` wholesale** (only conditionally ORs bit 0x20). The class stat flags
+(incl. 0x40) are seeded into `W:NPCstat` when a monster is first *built*; the
+shipped QSP `LVLnn.TMP` persists a stale `0x0001` there, so bit 0x40 read as 0
+→ no auto-hit → normal d20 vs the mist's tough AC → every swing "missed."
+`loadLevelObjects` now seeds `W:NPCstat = report(1)` for monsters before the
+M:2 restore (savegame/lvl_tmp.cpp) — the "uninitialized static the original
+loader would have set." Verified: real LVL03 mist (obj 1750) went
+`NPCstat 0x0001 → 0x61C3`, and a live swing now `roll to hit → 1` (auto-hit) →
+`die` → removed from the grid, no re-acquire. Debug: `THIRDEYE_MISTCHECK=1`
+(dumps a real mist's stored vs class NPCstat), `THIRDEYE_ATKTRACE=1` (logs the
+roll-to-hit/die/take-damage chain with return values).
 
 **XP + level-up — verified end-to-end (2026-07-01):** the whole chain runs on the
 bytecode already. Troll kill → `NPC.die(killer)` (msg 55) → `NPC.report(1012)` returns
