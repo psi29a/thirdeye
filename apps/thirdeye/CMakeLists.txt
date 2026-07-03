@@ -39,7 +39,7 @@ add_thirdeye_dir (chargen
     )
 
 add_thirdeye_dir (runtime
-    internal rtcode event rtobject eye graphics
+    internal rtcode event rtobject eye graphics sound
     )
 
 # Main executable

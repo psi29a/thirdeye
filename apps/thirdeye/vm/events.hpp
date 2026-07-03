@@ -152,6 +152,11 @@ public:
 	// When set, dispatch logs each message it delivers (bring-up visibility).
 	void setVerbose(bool v) { mVerbose = v; }
 
+	// Queue probes for the blocking `getkey` runtime call (INTRFACE.C busy-
+	// waits on find_event(SYS_KEYDOWN) then removes it).
+	int32_t findEvent(int32_t type, int32_t parameter) const; // index or -1
+	void removeEvent(int32_t type, int32_t parameter, int32_t owner);
+
 private:
 	// A notification-request list entry (EVENT.H NREQ). next/prev index into
 	// mNR (-1 = none); SYS_FREE-typed entries form the free chain.
@@ -197,8 +202,6 @@ private:
 	void addEvent(int32_t type, int32_t parameter, int32_t owner);
 	int32_t fetchEvent();                                   // index or -1
 	int32_t nextEvent() const;                              // index or -1
-	int32_t findEvent(int32_t type, int32_t parameter) const; // index or -1
-	void removeEvent(int32_t type, int32_t parameter, int32_t owner);
 	int32_t scanEventRange(int32_t firstType, int32_t lastType) const;
 
 	// Region helpers (INTRFACE.C): is the mouse inside window `wnd`? and post a

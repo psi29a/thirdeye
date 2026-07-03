@@ -521,8 +521,19 @@ Value Interpreter::run() {
 			setTop(mObjectLookup(static_cast<uint16_t>(topVal())));
 			break;
 
-		case Op::BRK: // the original's int-3 debugger hook
-			unimplemented(op);
+		case Op::BRK:
+			// The original's int-3 debugger hook: with no debugger attached
+			// (every shipped runtime), the interrupt returns and execution
+			// continues. Nothing in EYE.RES executes it; log once if hit.
+			{
+				static bool warned = false;
+				if (!warned) {
+					warned = true;
+					std::cerr << "[vm] BRK executed at PC " << mPC
+					          << " (debugger hook; continuing)\n";
+				}
+			}
+			break;
 		}
 		if (kSlowOp) {
 			auto opMs = std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -654,6 +665,26 @@ uint8_t* Interpreter::externPtr(uint16_t obj, uint32_t xrOffset, uint32_t extra,
 	return p;
 }
 
+int32_t Interpreter::codeByte(Value addr, uint32_t index) const {
+	Addr a = decodeAddr(addr);
+	if (a.space != AddrSpace::Code)
+		return -1;
+	uint64_t off = static_cast<uint64_t>(a.offset) + index;
+	if (off >= mCode.size())
+		return -1;
+	return mCode[off];
+}
+
+int32_t Interpreter::codeWord(Value addr, uint32_t index) const {
+	Addr a = decodeAddr(addr);
+	if (a.space != AddrSpace::Code)
+		return -1;
+	uint64_t off = static_cast<uint64_t>(a.offset) + static_cast<uint64_t>(index) * 2;
+	if (off + 2 > mCode.size())
+		return -1;
+	return static_cast<int32_t>(mCode[off] | (mCode[off + 1] << 8));
+}
+
 const uint8_t* Interpreter::codePtr(uint32_t off, uint32_t size) {
 	if (static_cast<uint64_t>(off) + size > mCode.size())
 		throw VmError("table/code access out of range (offset " +
@@ -759,6 +790,36 @@ bool Interpreter::selfTest() {
 	                S((uint8_t)O::PUSH), S((uint8_t)O::LAW), 4,0, // reload into fresh slot
 	                S((uint8_t)O::END) }, 42);
 
+	// codeByte / codeWord probes: park a known 4-byte pattern in the PHDR
+	// prefix (bytes 4..7 of the code buffer, unused during execute()) and
+	// read it back through the tagged-address helpers.
+	{
+		std::vector<uint8_t> body = { S((uint8_t)O::SHTC), 0, S((uint8_t)O::END) };
+		std::vector<uint8_t> c(14, 0);
+		c[4] = 0x11; c[5] = 0x22; c[6] = 0x33; c[7] = 0x44;
+		c.push_back(0x04); c.push_back(0x00);
+		c.insert(c.end(), body.begin(), body.end());
+		Interpreter vm(c);
+		Value codeAddr = makeAddr(AddrSpace::Code, 4);
+		Value stackAddr = makeAddr(AddrSpace::Stack, 0);
+		auto expect = [&](const char *name, int32_t got, int32_t want) {
+			if (got != want) {
+				std::cerr << "VM selfTest FAIL: " << name << " expected " << want
+				          << " got " << got << "\n";
+				ok = false;
+			}
+		};
+		expect("codeByte[0]", vm.codeByte(codeAddr, 0), 0x11);
+		expect("codeByte[3]", vm.codeByte(codeAddr, 3), 0x44);
+		expect("codeWord[0]", vm.codeWord(codeAddr, 0), 0x2211);
+		expect("codeWord[1]", vm.codeWord(codeAddr, 1), 0x4433);
+		expect("codeByte-non-code", vm.codeByte(stackAddr, 0), -1);
+		expect("codeWord-non-code", vm.codeWord(stackAddr, 0), -1);
+		expect("codeByte-oob",
+		       vm.codeByte(codeAddr, static_cast<uint32_t>(c.size())), -1);
+		expect("codeWord-oob",
+		       vm.codeWord(codeAddr, static_cast<uint32_t>(c.size())), -1);
+	}
 	if (ok) std::cerr << "VM selfTest: all passed\n";
 	return ok;
 }

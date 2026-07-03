@@ -192,6 +192,15 @@ public:
 	// latter two via the extern-statics hook). Used by sprint() for PC name etc.
 	std::string readString(Value addr) const;
 
+	// Read the little-endian u16 at element `index` of a Code-space table
+	// (as produced by LETA for a constant array). Returns -1 if `addr` isn't a
+	// Code address or the element is out of range. Used by load_sound_block to
+	// walk its NUL-terminated resource-number array.
+	int32_t codeWord(Value addr, uint32_t index) const;
+	// Byte variant (BYTE* tables, e.g. do_dots/do_ice colour ramps). -1 on
+	// non-Code address or out of range.
+	int32_t codeByte(Value addr, uint32_t index) const;
+
 	// Map of runtime-function number (as referenced by RCRS) -> function name,
 	// built from the code object's .IMPT dictionary.
 	void setImports(std::map<int32_t, std::string> imports) {

@@ -58,6 +58,14 @@ private:
 	// re-apply it each present -- otherwise the cardinal/facing indicator (only
 	// redrawn by the bytecode on a turn) gets erased by an inventory-close redraw.
 	SDL_Surface *mCompassSnap = nullptr;
+	// True while the SOP has deliberately painted over the compass area (an
+	// outtake/cutscene box fill covering the whole compass rect): suspend the
+	// per-present re-stamp until the compass is redrawn (snapshotCompass).
+	bool mCompassCovered = false;
+	// Copy of the last PRESENTED frame (refreshed at the end of update()).
+	// pixelFade() dissolves from this (what the player currently sees) to the
+	// current mScreen content -- the flattened-page stand-in for VFX_pixel_fade.
+	SDL_Surface *mLastShown = nullptr;
 	// Persistent streaming GPU texture for present (see update()): created
 	// once, refreshed each frame via SDL_UpdateTexture. Avoids the
 	// CreateTextureFromSurface + DestroyTexture per call that the original
@@ -193,6 +201,21 @@ public:
 	// Every-other-pixel checkerboard fill (VFX_rectangle_hash) -- the SOP's
 	// "grayed out" UI treatment.
 	void hashRect(int x0, int y0, int x1, int y1, uint8_t color);
+	// Raw single-pixel access for the particle effects (do_dots/do_ice port):
+	// peek returns the mapped ARGB value (0 on OOB) so a particle can save and
+	// restore the exact background it covers; poke writes one back. mapColor
+	// maps a palette index to the same raw value. None of these touch the
+	// backdrop -- particles are transient overlays erased by their own loop.
+	uint32_t peekPixel(int x, int y) const;
+	void pokePixel(int x, int y, uint32_t raw);
+	uint32_t mapColor(uint8_t color) const;
+	// VFX_pixel_fade for the flattened single-surface model: dissolve the
+	// inclusive rect from the frame the player currently SEES (the copy kept
+	// at each present) to the CURRENT mScreen content, revealing random
+	// pixels over `intervals` presented frames. Covers both directions --
+	// fade-to-black (SOP wipes then fades) and fade-in (SOP draws the new
+	// scene then fades) -- without needing per-page surfaces.
+	void pixelFade(int x0, int y0, int x1, int y1, int intervals);
 	void drawText(std::vector<uint8_t> &fnt, std::string text, uint16_t posX,
 			uint16_t posY);
 

@@ -7,9 +7,10 @@ narrative on completed work.
 
 ## Phase 1 — VM core ✅ (essentially done)
 
-- ✅ Stack VM for all 88 opcodes except `BRK` (branches/arith/logic/constants/auto/`JSR`/`RTS`/
+- ✅ Stack VM for all 88 opcodes (branches/arith/logic/constants/auto/`JSR`/`RTS`/
   `CASE`/`RCRS`/`CALL`/`SEND`/`PASS`/statics/extern/table loads/effective-addr/`AIM`/`AIS`/
-  `SXAS`/`SOLE`). GTest-covered; CI on Linux/macOS/Windows.
+  `SXAS`/`SOLE`; `BRK` = the int-3 debugger hook, continues with a log like a
+  debugger-less original). GTest-covered; CI on Linux/macOS/Windows.
 - ✅ Objects + `SEND`/`PASS` dispatch + class-hierarchy inheritance + parameter passing
   (`ObjectSystem`).
 - ✅ Static variables (scalar + array, per-instance), constant tables, `AIM`/`AIS`.
@@ -28,10 +29,17 @@ narrative on completed work.
 - ✅ AESOP/16 `"1.10"` bitmap decoder.
 - ✅ Text rendering pipeline (`text_window`/`text_style`/`text_color`/`text_xy`/`print`/
   `sprint`).
-- 🚧 EOB3 runtime-function set (`EYE.C`/`RTCODE.C`/`INTRFACE.C`) wired. Still stubbed: sound
-  (the SDL_mixer+WildMIDI pipe exists; the SOP-driven sound calls are stubs). Save/load + the
-  Restore-Game picker now flow end-to-end (see Phase 3). Much of `EYE.C` (combat-edge cases,
-  level transition flow) still incremental.
+- 🚧 EOB3 runtime-function set (`EYE.C`/`RTCODE.C`/`INTRFACE.C`) wired. **Digital SFX now
+  wired** (2026-07-03): `load_sound_block`/`sound_effect`/`set_sound_status`
+  ([runtime/sound.cpp](../apps/thirdeye/runtime/sound.cpp), port of `SOUND32.C`) back onto the
+  OpenAL `Mixer` (raw 8-bit mono @ 8 kHz, the same `playSound` path the intro keypress SFX
+  uses). `load_sound_block` walks its Code-space table of 32-bit resource numbers (new
+  `Interpreter::codeWord`) into an index→PCM bank — verified loading the shipped COMMON (45
+  clips, base 0) + LEVEL (8 clips, base 50) banks per `SOUND.H`. `init_sound`/
+  `shutdown_sound` arm/disarm the play gate. **Music is the last stubbed CALL surface**
+  (`load_music`/`play_sequence`/`unload_music` — the XMIDI+WildMIDI pipe exists for the intro,
+  not yet wired to the SOP calls). Save/load + the Restore-Game picker flow end-to-end (see
+  Phase 3). Much of `EYE.C` (combat-edge cases, level transition flow) still incremental.
 - ✅ **Goal reached**: title menu + in-game HUD both render and are interactive (SOP-driven).
 
 ## Phase 3 — Playable EOB3 🚧 (dungeon is explorable + populated)
@@ -54,6 +62,43 @@ narrative on completed work.
     ([savegame/lvl_tmp.cpp](../apps/thirdeye/savegame/lvl_tmp.cpp).)
 - ✅ **Items & inventory (display)** — equipment screen renders the paper-doll + char-gen gear;
   slot regions register so interaction routes through the proven click path.
+- ✅ **Item interaction (#29) — verified end-to-end (2026-07-03).** All three interaction
+  types work through real clicks, after four uninit/sentinel fixes:
+  - **Floor pickup** — kernel `W:in_hand@241` empty-hand sentinel must be **-1**
+    (zero-fill read as "holding object 0" → every click took the DROP path); seeded in
+    `resume_level`. Verified via real clicks for BOTH the party's own cell (region 85,
+    near floor strip) and the cell ahead (region 86, mid strip → `step dist 1`): floor
+    clicked → cell+quadrant → `get index of topmost item` (plane 1, `W:place == -1`,
+    `B:region` = quadrant) → take → `in_hand = item`. Nothing was miscalibrated — items
+    are clickable at the quadrant where the SOP draws them.
+  - **Equip/move** — portrait click opens the equipment screen (M:240); clicking the
+    right-hand slot takes the sword to hand (`in_hand -1 → 993`), clicking again places
+    it back (`993 → -1`). Two more stored-as-sentinel fixes made this possible: the §2.3
+    item stream stores `items.W:itmflags` as **0xFFFF** — and bit 0x400 is the CURSED
+    gate (`utils` r1386 @3646), so every restored item refused to unequip ("cannot
+    release the item!  It is cursed!"); itmflags is now re-seeded from the class's
+    `report(1)` low word. Likewise `arms.B:bonus` is stored as -1 with the REAL magical
+    bonus in trailer byte 3 — now applied on restore (a -1 bonus also reads as cursed).
+    Backpack slots `W:inventory[0..13]` are now parsed from ITEMS.TMP @+96 and restored
+    (they were left zero-filled = "item object 0", so clicking an empty backpack slot
+    picked up the kernel).
+  - **Consumables** — rations picked from the floor → equipment screen → food-plate
+    click: a full PC correctly refuses (" isn't hungry at the moment."); with food
+    lowered (`THIRDEYE_STARVE=10`) the same click consumes the rations
+    (`in_hand 999 → -1`) and refreshes the FOOD bar.
+  Debug rig: `THIRDEYE_TESTITEM`/`ITEMHERE`/`ITEMREGION` (drop an item at/ahead of the
+  party with a chosen quadrant), `THIRDEYE_TESTPICKUP` (drive M:248 directly),
+  `THIRDEYE_ITEMDUMP=<obj>` (hex-dump live item statics), `THIRDEYE_STARVE=N`, and
+  `in_hand` change logging under `THIRDEYE_CLICK`. The adventure panels' hand-weapon
+  display (issue item 4) turned out to already work — the SOP always drew the two
+  hand-slot icons next to each portrait; they render correctly (sword/shield/axe/
+  spellbook/holy symbol per the QSP loadout) now that `equip[]` restoration fills
+  `W:inventory[16/20]`, and they redraw on the kernel's own "refresh players" tick.
+  **Fallout fix:** the "init level" post-send hook captured `[&ctx]` — a dangling
+  reference to `defaultRuntimeCall`'s stack-local Context that only "worked" while the
+  dead stack bytes held the old layout; adding the Context `mixer` member shifted the
+  frame and it became a boot-time SEGFAULT. The hook now captures the long-lived
+  `objects`/`res` directly (runtime/eye.cpp).
 
 ### ✅ Combat — basic attack/damage/die chain lands
 
@@ -121,6 +166,23 @@ punch drops a wraith" *is* the shipped EOB3 behavior — our runtime is faithful
 Any change would be a deliberate deviation from `EYE.RES`, which violates the
 project rule "our job is to run EYE.RES, not to RE it."
 
+**Ethereal monsters "always missed" — FIXED (2026-07-03):** the incorporeal
+auto-hit above only worked for freshly-spawned test monsters; every *real*
+level-loaded grave mist / sword wraith was unhittable in play. Root cause: the
+PC's `roll to hit` (r1369 M:71) reads the target's `W:NPCstat@1622:0 & 0x40`,
+but `NPC.restore` caches `report(1)` into a scratch local and **never writes
+`W:NPCstat` wholesale** (only conditionally ORs bit 0x20). The class stat flags
+(incl. 0x40) are seeded into `W:NPCstat` when a monster is first *built*; the
+shipped QSP `LVLnn.TMP` persists a stale `0x0001` there, so bit 0x40 read as 0
+→ no auto-hit → normal d20 vs the mist's tough AC → every swing "missed."
+`loadLevelObjects` now seeds `W:NPCstat = report(1)` for monsters before the
+M:2 restore (savegame/lvl_tmp.cpp) — the "uninitialized static the original
+loader would have set." Verified: real LVL03 mist (obj 1750) went
+`NPCstat 0x0001 → 0x61C3`, and a live swing now `roll to hit → 1` (auto-hit) →
+`die` → removed from the grid, no re-acquire. Debug: `THIRDEYE_MISTCHECK=1`
+(dumps a real mist's stored vs class NPCstat), `THIRDEYE_ATKTRACE=1` (logs the
+roll-to-hit/die/take-damage chain with return values).
+
 **XP + level-up — verified end-to-end (2026-07-01):** the whole chain runs on the
 bytecode already. Troll kill → `NPC.die(killer)` (msg 55) → `NPC.report(1012)` returns
 class XP value (1400 for troll) → kernel `M:103 experience(1400)` divides by
@@ -169,12 +231,21 @@ gotchas — `grep -a` required). Implemented, all ported verbatim from the C:
   `init/shutdown_graphics/interface`, `wait_vertical_retrace`, `beep`,
   `diagnose`, `create_initial_binary_files` (dev-time TXT→BIN translation).
 
-**Still stubbed** (visible in the `[stub]` log): the sound set (`init_sound`,
-`load_sound_block`, `set_sound_status`, `sound_effect`, `load_music`,
-`unload_music`, `play_sequence`, `shutdown_sound` — deferred on purpose),
-`do_dots`/`do_ice` (fireball/cone-of-cold particle animations — blocking
-GIL2VFX loops with per-pixel occlusion reads; purely visual, damage happens
-in bytecode), and `getkey` (blocking key wait; no SOP path hit yet).
+**Still stubbed**: ONLY the music trio (`load_music`, `play_sequence`,
+`unload_music` — the XMIDI/WildMIDI pipe exists; wiring is the next chunk).
+Everything else got wired 2026-07-03: `do_dots`/`do_ice` (verbatim ports of
+EYE.C's fixed-point particle physics in runtime/graphics.cpp; the per-pixel
+sprite-occlusion mask reads are skipped since we composite pages onto one
+surface — particles clip to the view window and save/restore the exact pixels
+they cover; frame-paced like the originals' vblank waits, runaway-guarded;
+*watch item: first in-game fireball/cone cast*), `getkey` (blocks on
+SYS_KEYDOWN with the host pump running, per INTRFACE.C),
+`init_sound`/`shutdown_sound` (arm/disarm the play gate), and **`pixel_fade`
+is now a real dissolve**: Graphics keeps a copy of the last PRESENTED frame
+and dissolves from it to the current surface content over N presented frames
+— verified with a frame-dump curve showing the exact 30-step ramp to black on
+a level transition plus the outtake's fade-in. (`THIRDEYE_DUMP` moved into
+`Graphics::update()` so mid-CALL presents — fades, particles — are captured.)
 
 Golden-path regression (title → restore → walk): **only sound stubs remain**.
 NB the harness key script changed — with a save present the title menu
@@ -261,8 +332,39 @@ originals define exactly:
   transition). `change_level` now `save_range`s the old level to `LVLoo.TMP`
   and defers the reload to the "init level" hook; `loadLevelObjects` destroys
   before recreating (MSG_DESTROY cancels the SOP's notify requests).
-  **Watch item:** take stairs up/down and back next play session — level
-  round-trip persistence is new code.
+
+  **Level transitions verified end-to-end (2026-07-02, evening):** graveyard →
+  mausoleum → graveyard round-trips headlessly and live. Three more loader
+  fixes fell out of the verification (matched against `RTOBJECT.C`
+  `restore_range` + the `teleporters` class disassembly):
+  - **MSG_RESTORE goes to EVERY restored object, not just monsters** —
+    `restore_range` does `RT_execute(index, MSG_RESTORE)` unconditionally
+    (restoring=1 at all level-load call sites in EYE.C). `teleporters.restore`
+    is where the step-on trigger arms (`C:notify(THIS, trigger, event 32,
+    y<<16|x)`); with monsters-only, level exits never fired. The loader now
+    uses a faithful `ObjectSystem::createInstance` (bare `create_SOP_instance`:
+    alloc + MSG_CREATE, no restore fallback) and sends M:2 to every placed
+    object.
+  - **The restore happens INSIDE `change_level`** (as in EYE.C), not deferred
+    to the "init level" hook — the teleporter path SENDs area "enter level"
+    with no "init level" in between, so the deferral left the new level empty.
+  - **`loadLevelObjects` clears all 3 `lvlobj` planes first** (init_level's
+    wipe) — nothing else does it on a mid-game transition, and a stale cell
+    would alias a same-numbered slot that belongs to a different object on the
+    new level.
+
+  Also fixed: the compass snapshot re-stamp painted over the transition
+  outtake's story text — `restoreCompass()` now suspends when a fill covers
+  the whole compass rect and re-arms on the next `snapshotCompass()`
+  (graphics/graphics.cpp). Verified in frames: outtake text flows full-width,
+  compass back in place after arrival. Persistence proven along the way: the
+  mists chasing the party round-trip through `LVLoo.TMP` (on the next boot of
+  the re-saved file they were parked mid-chase, blocking the path). Headless
+  harness gotchas discovered: repeated `kill -INT` builds macOS crash history
+  and AppKit then blocks the next launch on a "reopen windows?" modal
+  (`defaults write com.eob3.thirdeye ApplePersistenceIgnoreState YES` fixes
+  it); `THIRDEYE_DUMP` substitutes only a plain `%d` (a `%03d` writes one
+  literal file, overwritten every present).
 
 ### 🚧 Save / load (the savegame format)
 

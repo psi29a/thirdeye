@@ -49,6 +49,9 @@ void runDebugHooks(VM::ObjectSystem &objects, RESOURCES::Resource &res) {
 			if (const char *c = std::strchr(e, ',')) {
 				cx = std::atoi(e); cy = std::atoi(c + 1);
 			}
+			// env-supplied cell: clamp to the 32x32 grid or the lvlobj offset
+			// math walks out of the dungeon statics (classStaticPtr throws).
+			if (cx > 31 || cy > 31) cx = -1;
 			int dn2 = objects.firstObjectOfClass(1381);
 			if (dn2 >= 0 && cx >= 0 && cy >= 0) {
 				for (int plane = 0; plane < 3; ++plane) {
@@ -126,6 +129,45 @@ void runDebugHooks(VM::ObjectSystem &objects, RESOURCES::Resource &res) {
 					std::cerr << "\n";
 				}
 			}
+		}
+	}
+	// THIRDEYE_MISTCHECK: after level load, find the first live grave mist
+	// (class 1991) and compare its NPCstat as roll-to-hit reads it
+	// (classStaticPtr(1622,0)) against report(1). If they differ, the
+	// verbatim-loaded / restored statics don't land bit 0x40 where the PC
+	// attack path reads it -> incorporeal monsters can't be auto-hit.
+	if (std::getenv("THIRDEYE_MISTCHECK")) {
+		static int mt = 0;
+		if (++mt == 260) {
+			for (int i = 1000; i <= 1999; ++i) {
+				if (objects.classOf(i) != 1991) continue;
+				int32_t rep = -1;
+				try { rep = objects.send(i, 18, {1}); } catch (...) {}
+				int stat0 = -1;
+				if (uint8_t *p = objects.classStaticPtr(i, 1622, 0, 2))
+					stat0 = static_cast<uint16_t>(p[0] | (p[1] << 8));
+				std::cerr << "[mistcheck] mist obj " << i << " report(1)=0x"
+				          << std::hex << rep << " NPCstat@1622:0=0x" << stat0
+				          << " (bit0x40 stored=" << std::dec
+				          << ((stat0 & 0x40) ? 1 : 0) << ")\n";
+				break;
+			}
+		}
+	}
+	// THIRDEYE_STARVE=N: set every PC's W:food@177 to N% at tick 230 --
+	// exercises the food-icon consume path (a full PC refuses to eat).
+	if (const char *e = std::getenv("THIRDEYE_STARVE")) {
+		static int st = 0;
+		if (++st == 230) {
+			int val = std::atoi(e);
+			for (int pc : objects.objectsOfClass(1369))
+				try {
+					if (uint8_t *p = objects.classStaticPtr(pc, 1369, 177, 2)) {
+						p[0] = val & 0xFF;
+						p[1] = (val >> 8) & 0xFF;
+					}
+				} catch (const std::exception &) {}
+			std::cerr << "[starve] set all PC food to " << val << "\n";
 		}
 	}
 	if (std::getenv("THIRDEYE_ATTACK")) {
@@ -207,9 +249,11 @@ void runDebugHooks(VM::ObjectSystem &objects, RESOURCES::Resource &res) {
 				if (itemObj > 0) {
 					carriedHead = itemObj;
 					// item.W:next = -1 (only one carried item; chain terminator)
-					if (uint8_t *p = objects.classStaticPtr(itemObj, 1370, 6, 2)) {
-						p[0] = 0xFF; p[1] = 0xFF;
-					}
+					try { // env-supplied obj index: classStaticPtr throws on junk
+						if (uint8_t *p = objects.classStaticPtr(itemObj, 1370, 6, 2)) {
+							p[0] = 0xFF; p[1] = 0xFF;
+						}
+					} catch (const std::exception &) { carriedHead = -1; }
 				}
 			}
 			setS(1622, 5, carriedHead, 2);  // NPC carried (head of carried-item chain)
@@ -225,6 +269,14 @@ void runDebugHooks(VM::ObjectSystem &objects, RESOURCES::Resource &res) {
 			// Match the real loader: SEND "restore" to kick off AI (notify
 			// for event 34 + schedule attack).
 			try { objects.send(monIdx, 2, {}); } catch (...) {}
+			// Diagnostic: read NPCstat back at the roll-to-hit offset AFTER
+			// restore, to confirm bit 0x40 (incorporeal) survives.
+			int nsBack = -1;
+			if (uint8_t *p = objects.classStaticPtr(monIdx, 1622, 0, 2))
+				nsBack = static_cast<uint16_t>(p[0] | (p[1] << 8));
+			std::cerr << "[atk] NPCstat@1622:0 after restore = 0x" << std::hex
+			          << nsBack << " (bit0x40=" << ((nsBack & 0x40) ? 1 : 0)
+			          << ")" << std::dec << "\n";
 			std::cerr << "[atk] spawned mon " << monIdx << " class " << mc << " hp "
 			          << hp << " NPCstat 0x" << std::hex << ns << std::dec << " at ("
 			          << fx << "," << fy << ") lvl " << pl
@@ -354,31 +406,140 @@ void runDebugHooks(VM::ObjectSystem &objects, RESOURCES::Resource &res) {
 	// link into lvlobj like any level object so "draw objects" -> items.draw shows
 	// it on the ground. Placed once, after init level clears lvlobj.
 	if (std::getenv("THIRDEYE_TESTITEM")) {
+		static int tick = 0;
 		static bool done = false;
 		int dn = objects.firstObjectOfClass(1381);
-		if (!done && dn >= 0) {
+		int kn = objects.firstObjectOfClass(1382);
+		// Wait until well after "init level" (which wipes lvlobj) and the party
+		// position is final, then drop the item one cell IN FRONT of the party
+		// on the party's own level -- works from any start (QSP, --chargen, ...).
+		if (!done && ++tick == 250 && dn >= 0 && kn >= 0) {
 			done = true;
-			// Use an existing char-gen item (its full state is set -- it renders in
+			// Use an existing item object (its full state is set -- it renders in
 			// the inventory) and move it onto the floor in front of the party.
-			int itemIdx = 999, ix = 15, iy = 14; // 1 N of (15,15) start
+			int itemIdx = 999;
 			if (const char *e = std::getenv("THIRDEYE_ITEMOBJ"))
 				itemIdx = std::atoi(e);
+			auto kb = [&](int off) -> int {
+				uint8_t *p = objects.classStaticPtr(kn, 1382, off, 1);
+				return p ? *p : 0;
+			};
+			int px = kb(243), py = kb(244), pf = kb(245), pl = kb(246);
+			int ix = px, iy = py;
+			if (std::getenv("THIRDEYE_ITEMHERE") == nullptr) {
+				if (pf == 0) iy = py - 1;
+				else if (pf == 1) ix = px + 1;
+				else if (pf == 2) iy = py + 1;
+				else ix = px - 1;
+			}
 			auto setS = [&](uint16_t k, uint32_t o, int v, int n) {
 				try {
 					if (uint8_t *p = objects.classStaticPtr(itemIdx, k, o, n))
 						for (int i = 0; i < n; ++i) p[i] = (v >> (8 * i)) & 0xFF;
 				} catch (const std::exception &) {}
 			};
-			setS(1370, 0, ix + iy * 32, 2); // entities place = floor cell
+			// Floor items: kernel "get index of topmost item" (M:247) walks lvlobj
+			// PLANE 1 and expects W:place == -1 with B:region = the floor quadrant
+			// (bit0 = east half, bit1 = south half).
+			setS(1370, 0, -1, 2);           // W:place = -1 (on the floor)
 			setS(1370, 2, ix, 1);           // x
 			setS(1370, 3, iy, 1);           // y
-			setS(1370, 4, 1, 1);            // lvl
-			if (uint8_t *p =
-			        objects.classStaticPtr(dn, 1381, 1024 + (iy * 64 + ix * 2), 2)) {
-				p[0] = itemIdx & 0xFF; p[1] = (itemIdx >> 8) & 0xFF;
+			setS(1370, 4, pl, 1);           // lvl (party's level)
+			int reg = 2; // SW quadrant default; THIRDEYE_ITEMREGION overrides
+			if (const char *e = std::getenv("THIRDEYE_ITEMREGION"))
+				reg = std::atoi(e) & 3;
+			setS(1370, 5, reg, 1);          // B:region = floor quadrant
+			setS(1370, 6, -1, 2);           // W:next (chain terminator)
+			setS(1370, 8, -1, 2);           // W:prev
+			try {
+				if (uint8_t *p = objects.classStaticPtr(
+				        dn, 1381, 1024 + 2048 + (iy * 64 + ix * 2), 2)) {
+					p[0] = itemIdx & 0xFF; p[1] = (itemIdx >> 8) & 0xFF;
+				}
+			} catch (const std::exception &) {}
+			// Force a view redraw ("draw view" is gated on kernel B:update@249).
+			if (uint8_t *up = objects.classStaticPtr(kn, 1382, 249, 1))
+				*up = 1;
+			std::cout << "  [testitem: item obj " << itemIdx << " (cls "
+			          << objects.classOf(itemIdx) << ") -> floor @(" << ix << ","
+			          << iy << ") lvl " << pl << "]" << std::endl;
+			// THIRDEYE_TESTPICKUP: drive the kernel "take/drop topmost object"
+			// (M:248) directly with the dropped item's cell -- isolates the
+			// pickup LOGIC (M:247 find -> remove -> W:in_hand) from the floor-
+			// region click hit-testing. Args match floor-clicked's push order:
+			// (targetX, targetY, quadrant).
+			if (std::getenv("THIRDEYE_TESTPICKUP")) {
+				auto ksw = [&](int off) -> int {
+					if (uint8_t *p = objects.classStaticPtr(kn, 1382, off, 2))
+						return static_cast<int16_t>(p[0] | (p[1] << 8));
+					return -99;
+				};
+				std::cout << "  [pickup: in_hand before=" << ksw(241) << "]\n";
+				// Probe with the SAME quadrant the item was placed in (reg), or
+				// a THIRDEYE_ITEMREGION override would make the probe miss.
+				try { objects.send(kn, 248, {ix, iy, reg}); }
+				catch (const std::exception &e) {
+					std::cout << "  [pickup: M:248 threw: " << e.what() << "]\n";
+				}
+				int lvlobjHead = -99;
+				try {
+					if (uint8_t *p = objects.classStaticPtr(
+					        dn, 1381, 1024 + 2048 + (iy * 64 + ix * 2), 2))
+						lvlobjHead = static_cast<int16_t>(p[0] | (p[1] << 8));
+				} catch (const std::exception &) {}
+				std::cout << "  [pickup: in_hand after=" << ksw(241)
+				          << " plane1[" << ix << "," << iy << "]=" << lvlobjHead
+				          << " (item was " << itemIdx << ")]\n";
 			}
-			std::cout << "  [testitem: item obj " << itemIdx << " -> floor @(" << ix
-			          << "," << iy << ")]" << std::endl;
+		}
+	}
+	// Debug: log W:in_hand@241 when it changes (verifies pickup/drop/equip --
+	// the bytecode's internal SEND 248/195 don't show in the event log).
+	if (std::getenv("THIRDEYE_CLICK") || std::getenv("THIRDEYE_TESTPICKUP")) {
+		int kn = objects.firstObjectOfClass(1382);
+		if (kn >= 0) {
+			static int lastInHand = -12345;
+			if (uint8_t *p = objects.classStaticPtr(kn, 1382, 241, 2)) {
+				int ih = static_cast<int16_t>(p[0] | (p[1] << 8));
+				if (ih != lastInHand) {
+					std::cout << "  [in_hand " << lastInHand << " -> " << ih
+					          << "]" << std::endl;
+					lastInHand = ih;
+				}
+			}
+			// One-shot: dump the kernel's floor-click plumbing -- the 3 region
+			// handles in W:staticArray192 that "floor clicked" matches the click
+			// region against (i<2 = own cell, i=2 = one cell forward).
+			static bool dumped = false;
+			static int dtick = 0;
+			if (!dumped && ++dtick == 240) {
+				dumped = true;
+				if (uint8_t *p = objects.classStaticPtr(kn, 1382, 192, 6))
+					std::cout << "  [floor regions: near-A=" << (p[0] | (p[1] << 8))
+					          << " near-B=" << (p[2] | (p[3] << 8))
+					          << " fwd=" << (p[4] | (p[5] << 8)) << "]" << std::endl;
+				// THIRDEYE_ITEMDUMP=<obj>: hex-dump that item object's full
+				// statics (all classes) -- for comparing a restored item's
+				// live fields (itmflags, B:bonus, ...) against the save record.
+				if (const char *e = std::getenv("THIRDEYE_ITEMDUMP")) {
+					int io = std::atoi(e);
+					int cls = objects.classOf(io);
+					try {
+						uint32_t sz = objects.instanceStaticSize(
+						    static_cast<uint16_t>(cls));
+						if (uint8_t *p = objects.staticsPtr(io, 0, sz)) {
+							std::cout << "  [itemdump obj " << io << " cls " << cls
+							          << " size " << sz << ":";
+							for (uint32_t i = 0; i < sz; ++i) {
+								char b[4];
+								std::snprintf(b, sizeof(b), " %02x", p[i]);
+								std::cout << b;
+							}
+							std::cout << "]" << std::endl;
+						}
+					} catch (const std::exception &) {}
+				}
+			}
 		}
 	}
 	// Debug: log the party position when it changes (verifies movement).
@@ -408,7 +569,7 @@ bool tryHandle(Context &ctx, const std::string &fn,
 	// trace. dispatchEvent itself logs the messages it delivers when verbose.
 	if (fn == "notify" && args.size() >= 4) {
 		ctx.events.notify(args[0], static_cast<uint32_t>(args[1]), args[2], args[3]);
-		if (std::getenv("THIRDEYE_AUTOWALK"))
+		if (std::getenv("THIRDEYE_AUTOWALK") || std::getenv("THIRDEYE_CLICK"))
 			std::cout << "  [notify obj " << args[0] << " msg " << args[1]
 			          << " event " << args[2] << " param 0x" << std::hex << args[3]
 			          << std::dec << "]" << std::endl;
@@ -453,6 +614,19 @@ bool tryHandle(Context &ctx, const std::string &fn,
 	}
 	if (fn == "drain_event_queue") {
 		ctx.events.drainEventQueue();
+		result = 0;
+		return true;
+	}
+	// getkey: INTRFACE.C blocks on `while (!find_event(SYS_KEYDOWN,-1));` then
+	// removes the event. The original's queue is interrupt-fed; ours needs the
+	// host pump run inside the wait or no key can ever arrive. Headless (no
+	// gfx) returns immediately rather than deadlocking.
+	if (fn == "getkey") {
+		if (ctx.gfx != nullptr) {
+			while (ctx.events.findEvent(VM::SYS_KEYDOWN, -1) < 0)
+				pumpHost(*ctx.gfx, ctx.events);
+		}
+		ctx.events.removeEvent(VM::SYS_KEYDOWN, -1, -1);
 		result = 0;
 		return true;
 	}

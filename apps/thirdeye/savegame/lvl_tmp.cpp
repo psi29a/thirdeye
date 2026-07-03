@@ -45,6 +45,15 @@ int loadLevelObjects(int level, VM::ObjectSystem &objects,
 		          << std::endl;
 		return 0;
 	}
+	// init_level's grid wipe: clear all 3 lvlobj planes (dungeon statics
+	// @1024, 3 x 2048 B) to -1 before relinking. On the boot flow init_level
+	// already did this; on a change_level mid-game nothing else does, and a
+	// stale cell entry from the previous level would alias a same-numbered
+	// slot that now belongs to a different object on the new level.
+	try {
+		if (uint8_t *grid = objects.classStaticPtr(dn, kDungeonClass, 1024, 3 * 2048))
+			std::memset(grid, 0xFF, 3 * 2048);
+	} catch (const std::exception &) {}
 	int placed = 0;
 	size_t pos = 1;
 	while (pos + 8 <= d.size()) {
@@ -77,9 +86,9 @@ int loadLevelObjects(int level, VM::ObjectSystem &objects,
 			continue;
 		bool created = false;
 		try {
-			objects.createProgram(id, cls);
+			objects.createInstance(id, cls);
 			created = true;
-			// restore_range: raw statics into the instance (createProgram
+			// restore_range: raw statics into the instance (createInstance
 			// zero-fills whatever the record doesn't cover).
 			uint32_t want = std::min<uint32_t>(size, objects.instanceStaticSize(cls));
 			if (want > 0) {
@@ -139,15 +148,32 @@ int loadLevelObjects(int level, VM::ObjectSystem &objects,
 				cellp[0] = id & 0xFF;
 				cellp[1] = (id >> 8) & 0xFF;
 			}
-			// SEND "restore" (M:2) to monsters. The native loader does this -- it's
-			// NPC.restore that registers the watch-for-party notify (event 34) and
-			// SENDs "schedule attack" to queue the first AI turn. Without it
-			// monsters never tick: fdir stays 0 (always show their back), they
-			// never advance toward the party, never swing back.
+			// Seed W:NPCstat@1622:0 from report(1) for monsters. NPC.restore
+			// caches report(1) into a scratch local but NEVER writes W:NPCstat
+			// wholesale (it only conditionally ORs bit 0x20) -- the class stat
+			// flags (incl. 0x40 = incorporeal) are placed into W:NPCstat when a
+			// monster is first built, which the original save then persists. The
+			// shipped QSP LVLnn.TMP carries a stale W:NPCstat (0x0001) at that
+			// offset, so without this seed PC.roll-to-hit reads bit 0x40 = 0 and
+			// never auto-hits ethereal monsters (grave mist / sword wraith): every
+			// swing "misses". Seed BEFORE restore so its 0x20 tweak lands on top.
 			if (isMonster) {
-				try { objects.send(id, 2, {}); }
-				catch (const std::exception &) {}
+				try {
+					int32_t rep1 = objects.send(id, 18, {1}); // report(1) = class NPCstat
+					if (uint8_t *p = objects.classStaticPtr(id, kNPC, 0, 2)) {
+						p[0] = rep1 & 0xFF;
+						p[1] = (rep1 >> 8) & 0xFF;
+					}
+				} catch (const std::exception &) {}
 			}
+			// SEND "restore" (M:2) to EVERY restored object -- restore_range does
+			// `RT_execute(index, MSG_RESTORE)` unconditionally (restoring=1 at all
+			// level-load call sites in EYE.C). NPC.restore registers the
+			// watch-for-party notify + "schedule attack"; teleporters.restore arms
+			// the step-on trigger (`notify(THIS, trigger, 32, y<<16|x)`) that fires
+			// change_level -- with monsters-only, stairs never triggered.
+			try { objects.send(id, 2, {}); }
+			catch (const std::exception &) {}
 			++placed;
 		} catch (const std::exception &) {
 			// Rollback: a later step may have thrown after createProgram
