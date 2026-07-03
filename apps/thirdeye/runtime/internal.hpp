@@ -33,8 +33,10 @@ namespace THIRDEYE::savegame { struct TransferState; }
 namespace THIRDEYE::runtime {
 
 // Thrown by pumpHost to unwind the SOP main loop on quit/ESC. Caught in
-// bootObject (engine.cpp).
-struct QuitRequested {};
+// bootObject (engine.cpp). `reason` is empty for an actual window-close/ESC;
+// non-window terminal conditions (e.g. an unknown launch() target) set it so
+// the catch site doesn't misreport them as "Window closed".
+struct QuitRequested { std::string reason; };
 
 // Thrown by `launch` to model AESOP's program chain. In the original, launch()
 // exec-replaces the process with a sub-program (cine.exe/chgen.exe); when that

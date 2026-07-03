@@ -582,8 +582,10 @@ void THIRDEYE::Engine::runResourceVM(RESOURCES::Resource &resource) {
 				// AMAZE demo's exit sentinel (launch("xxx.exe")): no bootObject
 				// wrapper here to chain sub-programs, so treat as terminal.
 				std::cout << "END (launch \"" << r.program << "\")" << std::endl;
-			} catch (const QuitRequested &) {
-				std::cout << "END (quit)" << std::endl;
+			} catch (const QuitRequested &q) {
+				std::cout << "END (quit"
+				          << (q.reason.empty() ? "" : ": " + q.reason) << ")"
+				          << std::endl;
 			}
 		}
 	}
@@ -767,8 +769,9 @@ void THIRDEYE::Engine::bootObject(RESOURCES::Resource &resource,
 			std::cout << "Boot handler returned " << result << " -- quitting."
 			          << std::endl;
 			quit = true; // start returned normally (e.g. "Abandon the Quest")
-		} catch (const QuitRequested &) {
-			std::cout << "\nWindow closed -- quitting." << std::endl;
+		} catch (const QuitRequested &q) {
+			std::cout << "\n" << (q.reason.empty() ? "Window closed" : q.reason)
+			          << " -- quitting." << std::endl;
 			quit = true;
 		} catch (const Relaunch &r) {
 			relaunch = r.program.empty() ? " " : r.program; // mark for handling
@@ -788,8 +791,9 @@ void THIRDEYE::Engine::bootObject(RESOURCES::Resource &resource,
 					std::cout << "  [sub-program cancelled -- next start: INTR]"
 					          << std::endl;
 				}
-			} catch (const QuitRequested &) {
-				std::cout << "\nWindow closed -- quitting." << std::endl;
+			} catch (const QuitRequested &q) {
+				std::cout << "\n" << (q.reason.empty() ? "Window closed" : q.reason)
+				          << " -- quitting." << std::endl;
 				quit = true;
 			}
 		}
@@ -886,7 +890,7 @@ bool THIRDEYE::Engine::runExternalProgram(const std::string &program,
 	std::cout << "  [program chain: \"" << program
 	          << "\" -> unknown target; quitting session]"
 	          << std::endl;
-	throw QuitRequested{};
+	throw QuitRequested{"unknown launch target \"" + program + "\""};
 }
 
 // Play a GFF cinematic (INTRO.GFF/FINALE.GFF/...) that lives beside the game's

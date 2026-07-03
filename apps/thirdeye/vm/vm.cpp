@@ -137,6 +137,8 @@ void Interpreter::enterFrame(uint32_t handlerOffset, uint16_t thisIndex,
 	// zero-init locals.
 	if (autoSize > kOffThis) {
 		uint32_t nZeros = autoSize - kOffThis;
+		boundsCheck(mFptr - autoSize, nZeros); // autoSize from a malformed MHDR
+		                                        // can underflow mFptr - autoSize
 		if (kAutoInitTrace) {
 			// Count how often the fix actually matters (any nonzero byte in
 			// the auto region at frame entry means a handler would have read
@@ -691,8 +693,11 @@ Value Interpreter::callRuntime(Value handle, const std::vector<Value>& args) {
 uint8_t* Interpreter::staticPtr(uint32_t off, uint32_t size) {
 	if (mStatics == nullptr)
 		throw VmError("static variable access but no instance storage is set");
-	off += mStaticBase; // statics are relative to the defining class's block
-	if (static_cast<uint64_t>(off) + size > mStatics->size()) {
+	// off carries a negative index wrapped into uint32_t (see LSBA/SSBA etc.);
+	// widen to int64_t before rebasing so e.g. off == -mStaticBase doesn't wrap
+	// back to 0 and alias a real static instead of hitting the sinkhole below.
+	int64_t absOff = static_cast<int64_t>(static_cast<int32_t>(off)) + mStaticBase;
+	if (absOff < 0 || static_cast<uint64_t>(absOff) + size > mStatics->size()) {
 		// ponytail: DOS-permissive static OOB. AESOP SOP frequently generates
 		// negative indexes into static byte/word arrays (e.g. an entity's
 		// signed dx/dy coord stored raw, then read back via LSBA and used to
@@ -707,16 +712,20 @@ uint8_t* Interpreter::staticPtr(uint32_t off, uint32_t size) {
 		// chase the offending SSBA in the SOP.
 		++gStaticOobHits;
 		if (kStaticOobTrace >= 2)
-			std::fprintf(stderr, "[static-oob] PC=%u off=%d size=%u block=%zu\n",
-			             (unsigned)mPC, static_cast<int32_t>(off),
+			std::fprintf(stderr, "[static-oob] PC=%u off=%lld size=%u block=%zu\n",
+			             (unsigned)mPC, (long long)absOff,
 			             (unsigned)size, mStatics->size());
 		else if (kStaticOobTrace && (gStaticOobHits & 0xFFF) == 0)
 			std::fprintf(stderr, "[static-oob] %llu absorbed OOB accesses\n",
 			             (unsigned long long)gStaticOobHits);
+		// Shared by all OOB static accesses -- reset on every hit so an OOB
+		// read always sees zero rather than a byte a prior OOB write left
+		// behind (reads and writes alias the same buffer).
 		static uint8_t sinkhole[8] = {0};
+		std::memset(sinkhole, 0, sizeof(sinkhole));
 		return sinkhole; // caller may read/write up to 4 bytes
 	}
-	return mStatics->data() + off;
+	return mStatics->data() + absOff;
 }
 
 uint8_t* Interpreter::externPtr(uint16_t obj, uint32_t xrOffset, uint32_t extra,

@@ -24,7 +24,7 @@ RUN_SECS=${RUN_SECS:-20}
 res_abs=$(cd "$(dirname "$RES")" && pwd)/$(basename "$RES")
 src_abs=$(pwd)
 case "$res_abs" in
-  "$src_abs"/*) cres="/src${res_abs#$src_abs}"; extra_mount="" ;;
+  "$src_abs"/*) cres="/src${res_abs#"$src_abs"}"; extra_mount="" ;;
   *) cres="/data/$(basename "$RES")"
      extra_mount="-v $(dirname "$res_abs"):/data" ;;
 esac
@@ -62,7 +62,7 @@ docker run --rm -v "$PWD":/src $extra_mount -v thirdeye-valgrind-build:/build th
       --error-limit=no \
       --vgdb=yes \
       --log-file=/src/valgrind.log \
-      /build/thirdeye '"$cres"' --vm --skip-intro '"$*"' \
+      /build/thirdeye '"$cres"' --vm --skip-intro "$@" \
       >/src/thirdeye.log 2>&1 &
   vgpid=$!
   sleep '"$RUN_SECS"'
@@ -81,7 +81,7 @@ docker run --rm -v "$PWD":/src $extra_mount -v thirdeye-valgrind-build:/build th
   wait $vgpid 2>/dev/null || true
   echo "=== valgrind summary ==="
   tail -n 80 /src/valgrind.log
-'
+' sh "$@"
 
 echo
 echo "Full report: valgrind.log (game stdout: thirdeye.log)"
