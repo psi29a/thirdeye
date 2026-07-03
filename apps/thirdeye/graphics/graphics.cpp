@@ -378,6 +378,10 @@ void GRAPHICS::Graphics::pixelFade(int x0, int y0, int x1, int y1,
 			          reinterpret_cast<const uint32_t *>(srow)[px]);
 		}
 		update();
+		// pixelFade blocks for `intervals` frames (30-ish typical, ~500ms
+		// wall time); pump so the OS doesn't beach-ball. SDL_EVENT_QUIT
+		// stays in the queue and gets picked up on the next dispatch_event.
+		SDL_PumpEvents();
 		SDL_Delay(16); // ~1 vblank per interval, matching VFX_pixel_fade pacing
 	}
 	SDL_DestroySurface(newSnap);

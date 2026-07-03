@@ -228,8 +228,14 @@ void MAP_compile(MAP_class *MAP) {
 		// limit param through the RLE decoder -- not worth it for a dev
 		// tool reading the developer's own art.)
 		if (body >= file + flen) {
+			// Match every other MAP_error path in this function: abort
+			// compilation and free, rather than falling through to
+			// RF_write_entry with a partially-filled map buffer.
 			MAP_error(MAP->IDR->RS, MSG_BFT, NULL);
-			break;
+			mem_free(map);
+			mem_free(buffer);
+			mem_free(file);
+			return;
 		}
 		LBM_fetch_line(&body, buffer, width);
 

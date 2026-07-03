@@ -3,6 +3,7 @@
 #include "../resources/res.hpp"
 #include "../sound/sound.hpp"
 
+#include <climits>
 #include <cstdint>
 #include <cstdlib>
 #include <iostream>
@@ -56,11 +57,17 @@ bool tryHandle(Context &ctx, const std::string &fn,
 	if (fn == "load_sound_block" && args.size() >= 3) {
 		constexpr int kBlkCommon = 0, kFirstLevel = 50;
 		int firstBlock = static_cast<int>(args[0]);
-		int idx = (firstBlock == kBlkCommon) ? 0 : kFirstLevel;
-		// Clear the range we're about to (re)load so a level change doesn't leave
-		// the previous level's clips shadowing the new ones.
+		int base = (firstBlock == kBlkCommon) ? 0 : kFirstLevel;
+		int idx = base;
+		// Clear ONLY the bank segment we're about to (re)load: a COMMON
+		// reload (base 0) with an inclusive-erase-from-base would blow away
+		// the LEVEL clips at indices 50+ too. LEVEL reloads have no cap so
+		// keep the tail unbounded.
+		int endExclusive = (firstBlock == kBlkCommon) ? kFirstLevel
+		                                              : INT_MAX;
 		for (auto it = gBank.begin(); it != gBank.end();) {
-			if (it->first >= idx) it = gBank.erase(it);
+			if (it->first >= base && it->first < endExclusive)
+				it = gBank.erase(it);
 			else ++it;
 		}
 		int loaded = 0;

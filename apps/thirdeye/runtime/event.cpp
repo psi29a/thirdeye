@@ -475,7 +475,9 @@ void runDebugHooks(VM::ObjectSystem &objects, RESOURCES::Resource &res) {
 					return -99;
 				};
 				std::cout << "  [pickup: in_hand before=" << ksw(241) << "]\n";
-				try { objects.send(kn, 248, {ix, iy, 2}); }
+				// Probe with the SAME quadrant the item was placed in (reg), or
+				// a THIRDEYE_ITEMREGION override would make the probe miss.
+				try { objects.send(kn, 248, {ix, iy, reg}); }
 				catch (const std::exception &e) {
 					std::cout << "  [pickup: M:248 threw: " << e.what() << "]\n";
 				}

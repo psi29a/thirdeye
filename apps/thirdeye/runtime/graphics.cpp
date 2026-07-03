@@ -574,174 +574,249 @@ bool tryHandle(Context &ctx, const std::string &fn,
 	// the exact pixels they cover and restore them each frame, so they leave
 	// no residue. Frame-paced like the originals' vblank waits.
 	if ((fn == "do_dots" || fn == "do_ice") && ctx.gfx != nullptr) {
-		constexpr int kMaxDots = 150, kAccur = 6, kFriction = 1, kGravity = 5;
-		static std::minstd_rand rng{0xD075};
-		auto rnd = [&](int lo, int hi) -> int { // EYE.C rnd(): inclusive range
+		constexpr int kMaxParticles = 150;
+		constexpr int kAccurShift   = 6;  // ACCUR: fixed-point fraction bits
+		constexpr int kFriction     = 1;  // per-frame horizontal drag
+		constexpr int kGravity      = 5;  // per-frame downward accel
+
+		static std::minstd_rand prng{0xD075};
+		// EYE.C rnd(): inclusive range on both ends.
+		auto randInRange = [&](int lo, int hi) -> int {
 			if (hi <= lo) return lo;
-			return lo + static_cast<int>(rng() % (hi - lo + 1));
+			return lo + static_cast<int>(prng() % (hi - lo + 1));
 		};
-		// colors is a BYTE* -- a Code-space ramp table (or a static buffer).
-		auto colAt = [&](VM::Value addr, uint32_t idx) -> int {
-			int b = ctx.vm.codeByte(addr, idx);
-			if (b >= 0)
-				return b;
-			VM::Addr a = VM::decodeAddr(addr);
-			if (a.space == VM::AddrSpace::Static ||
-			    a.space == VM::AddrSpace::Extern) {
+		// The `colors` argument is a BYTE* -- a Code-space colour ramp table
+		// (most common), or occasionally a static buffer. Return 0 (XCOLOR) if
+		// unreadable: the particle loop treats that as "particle expired".
+		auto colorRampAt = [&](VM::Value colorsAddr, uint32_t rampIdx) -> int {
+			int codeByteVal = ctx.vm.codeByte(colorsAddr, rampIdx);
+			if (codeByteVal >= 0)
+				return codeByteVal;
+			VM::Addr addr = VM::decodeAddr(colorsAddr);
+			if (addr.space == VM::AddrSpace::Static ||
+			    addr.space == VM::AddrSpace::Extern) {
 				try {
-					if (uint8_t *p = ctx.objects.staticsPtr(a.obj, a.offset + idx, 1))
-						return *p;
+					if (uint8_t *sp = ctx.objects.staticsPtr(
+					        addr.obj, addr.offset + rampIdx, 1))
+						return *sp;
 				} catch (const std::exception &) {}
 			}
-			return 0; // XCOLOR: ends the particle
+			return 0;
 		};
-		std::array<int16_t, kMaxDots> xpos{}, ypos{}, xvel{}, yvel{}, colcnt{},
-		    colidx{}, delay{};
-		// Saved background per dot: position + raw pixel, restored each frame.
-		std::array<int, kMaxDots> sx{}, sy{};
-		std::array<uint32_t, kMaxDots> sbg{};
-		std::array<bool, kMaxDots> saved{};
-		int guard = 0;
+
+		// One entry per particle. WORD physics on positions/velocities
+		// (matches the original's 16-bit overflow behaviour); saved
+		// background is the exact 32-bit pixel we overwrote last frame.
+		struct Particle {
+			int16_t  xPos = 0, yPos = 0;   // fixed-point position (>>ACCUR = px)
+			int16_t  xVel = 0, yVel = 0;
+			int16_t  colorStep = 0;        // rate: per-frame increment of...
+			int16_t  colorIdx  = 0;        //   ...index into the colour ramp
+			int16_t  emitDelay = 0;        // ice: frames before this dot starts
+			int      savedX = 0, savedY = 0;
+			uint32_t savedBg = 0;
+			bool     bgIsSaved = false;
+		};
+		std::array<Particle, kMaxParticles> particles{};
+		int frameGuard = 0; // runaway backstop (both effects fizzle out)
+
 		if (fn == "do_dots" && args.size() >= 10) {
-			// do_dots(view, scrn, exp_x, exp_y, scale, power, dots, life, upval,
-			//         colors)
-			static const int kFloorTbl[4] = {119, 103, 79, 63};
-			int scale = static_cast<int>(args[4]) & 3;
-			int power = static_cast<int>(args[5]);
-			int dots = std::min<int>(static_cast<int>(args[6]), kMaxDots);
-			int life = std::max<int>(1, static_cast<int>(args[7]));
-			int upval = std::clamp<int>(static_cast<int>(args[8]), 0, 7);
-			int floor = kFloorTbl[scale];
-			if (scale) scale--;
-			int roof = 0, lwall = -100, rwall = 276;
-			int top = 0, bottom = 119, lside = 0, rside = 175;
-			ctx.events.windowRect(args[0], lside, top, rside, bottom);
-			int cx = static_cast<int>(args[2]), cy = static_cast<int>(args[3]);
-			for (int i = 0; i < dots; i++) {
-				xpos[i] = ypos[i] = 0;
-				xvel[i] = static_cast<int16_t>(rnd(0, power) - (power >> 1));
-				yvel[i] = static_cast<int16_t>(rnd(0, power) - (power >> 1) -
-				                               (power >> (8 - upval)));
-				colcnt[i] = static_cast<int16_t>(
-				    rnd((4 << 8) / life, (8 << 8) / life));
-				colidx[i] = static_cast<int16_t>(scale << 8);
+			// do_dots(view, scrn, expX, expY, scaleIn, power, count, life,
+			//         upval, colors) -- fireball burst centred on expX/expY.
+			static const int kFloorPerScale[4] = {119, 103, 79, 63};
+			int scaleIn = static_cast<int>(args[4]) & 3;
+			int power   = static_cast<int>(args[5]);
+			int count   = std::min<int>(static_cast<int>(args[6]), kMaxParticles);
+			int life    = std::max<int>(1, static_cast<int>(args[7]));
+			int upBias  = std::clamp<int>(static_cast<int>(args[8]), 0, 7);
+			int floorY  = kFloorPerScale[scaleIn];
+			int scale   = scaleIn ? scaleIn - 1 : 0; // >>scale applied to positions
+			// Simulation bounds (matches EYE.C literals; wider than the view).
+			constexpr int kRoofY  = 0;
+			constexpr int kLWallX = -100;
+			constexpr int kRWallX = 276;
+			// View clip (from the SOP window handle) -- dots only draw inside.
+			int viewX0 = 0, viewY0 = 0, viewX1 = 175, viewY1 = 119;
+			ctx.events.windowRect(args[0], viewX0, viewY0, viewX1, viewY1);
+			int centerX = static_cast<int>(args[2]);
+			int centerY = static_cast<int>(args[3]);
+			int colorHi = (8 << 8) / life;
+			int colorLo = (4 << 8) / life;
+
+			for (int i = 0; i < count; i++) {
+				Particle &p = particles[i];
+				p.xVel = static_cast<int16_t>(randInRange(0, power) - (power >> 1));
+				p.yVel = static_cast<int16_t>(randInRange(0, power) - (power >> 1)
+				                              - (power >> (8 - upBias)));
+				p.colorStep = static_cast<int16_t>(randInRange(colorLo, colorHi));
+				p.colorIdx  = static_cast<int16_t>(scale << 8);
 			}
-			int active = 2;
-			while (active && ++guard < 1500) {
+			int active = 2; // sentinel: "just entered, nothing to erase yet"
+			while (active && ++frameGuard < 1500) {
 				if (active != 2)
-					for (int i = dots - 1; i >= 0; i--)
-						if (saved[i])
-							ctx.gfx->pokePixel(sx[i], sy[i], sbg[i]);
+					for (int i = count - 1; i >= 0; i--) {
+						Particle &p = particles[i];
+						if (p.bgIsSaved)
+							ctx.gfx->pokePixel(p.savedX, p.savedY, p.savedBg);
+					}
 				active = 0;
-				for (int i = 0; i < dots; i++) {
-					if (xvel[i] > 0) xvel[i] -= kFriction;
-					else             xvel[i] += kFriction;
-					xpos[i] += xvel[i];
-					yvel[i] += kGravity;
-					ypos[i] += yvel[i];
-					colidx[i] += colcnt[i];
-					int px = ((xpos[i] >> kAccur) >> scale) + cx;
-					int py = ((ypos[i] >> kAccur) >> scale) + cy;
-					if (py >= floor || py < roof) yvel[i] = static_cast<int16_t>(-(yvel[i] >> 1));
-					if (px >= rwall || px < lwall) xvel[i] = static_cast<int16_t>(-(xvel[i] >> 1));
-					if (py > floor) py = floor;
-					int pixcol = colAt(args[9],
-					                   static_cast<uint16_t>(colidx[i]) >> 8);
-					saved[i] = false;
-					if (pixcol != 0) {
+				for (int i = 0; i < count; i++) {
+					Particle &p = particles[i];
+					// Friction: nudge each frame TOWARDS zero horizontal velocity.
+					p.xVel = static_cast<int16_t>(p.xVel + (p.xVel > 0 ? -kFriction : kFriction));
+					p.xPos = static_cast<int16_t>(p.xPos + p.xVel);
+					p.yVel = static_cast<int16_t>(p.yVel + kGravity);
+					p.yPos = static_cast<int16_t>(p.yPos + p.yVel);
+					p.colorIdx = static_cast<int16_t>(p.colorIdx + p.colorStep);
+					int screenX = ((p.xPos >> kAccurShift) >> scale) + centerX;
+					int screenY = ((p.yPos >> kAccurShift) >> scale) + centerY;
+					// Bounce off floor / ceiling / side walls (half-elastic).
+					if (screenY >= floorY || screenY < kRoofY)
+						p.yVel = static_cast<int16_t>(-(p.yVel >> 1));
+					if (screenX >= kRWallX || screenX < kLWallX)
+						p.xVel = static_cast<int16_t>(-(p.xVel >> 1));
+					if (screenY > floorY) screenY = floorY;
+					int pixColor = colorRampAt(args[9],
+					    static_cast<uint16_t>(p.colorIdx) >> 8);
+					p.bgIsSaved = false;
+					if (pixColor != 0) {
 						active = 1;
-						if (px >= lside && px <= rside && py >= top && py <= bottom) {
-							sbg[i] = ctx.gfx->peekPixel(px, py);
-							sx[i] = px; sy[i] = py; saved[i] = true;
-							ctx.gfx->pokePixel(px, py,
-							                   ctx.gfx->mapColor(
-							                       static_cast<uint8_t>(pixcol)));
+						if (screenX >= viewX0 && screenX <= viewX1 &&
+						    screenY >= viewY0 && screenY <= viewY1) {
+							p.savedBg = ctx.gfx->peekPixel(screenX, screenY);
+							p.savedX = screenX;
+							p.savedY = screenY;
+							p.bgIsSaved = true;
+							ctx.gfx->pokePixel(screenX, screenY,
+							    ctx.gfx->mapColor(static_cast<uint8_t>(pixColor)));
 						}
-					} else colcnt[i] = 0;
+					} else p.colorStep = 0;
 				}
 				ctx.gfx->update();
+				// The particle loop blocks for up to ~50s of wall clock;
+				// pumpHost drains the SDL queue (including SDL_EVENT_QUIT via
+				// QuitRequested) so the OS doesn't beach-ball the window.
+				pumpHost(*ctx.gfx, ctx.events);
 				SDL_Delay(32); // two vblank waits in the original (~30 fps)
 			}
 			result = 0;
 			return true;
 		}
 		if (fn == "do_ice" && args.size() >= 7) {
-			// do_ice(view, scrn, dots, mag, grav, life, colors)
-			int dots = std::min<int>(static_cast<int>(args[2]), kMaxDots);
-			int mag = static_cast<int>(args[3]) << kAccur;
-			int grav = std::max<int>(1, static_cast<int>(args[4]));
-			int life = std::max<int>(1, static_cast<int>(args[5]));
-			int top = 0, bottom = 119, lside = 0, rside = 175;
-			ctx.events.windowRect(args[0], lside, top, rside, bottom);
-			const int cx = 88, cy = 48;
-			for (int i = 0; i < dots; i++) {
-				int m = rnd(mag >> 2, mag);
-				int16_t v = 0, t = 0;
-				while (t < m) { v = static_cast<int16_t>(v + grav);
-				                t = static_cast<int16_t>(t + v); }
-				switch (rng() & 3) {
-				case 0: xpos[i] = 1 << (kAccur - 1); ypos[i] = t;
-				        xvel[i] = v; yvel[i] = 0; break;
-				case 1: xpos[i] = t; ypos[i] = 1 << (kAccur - 1);
-				        xvel[i] = 0; yvel[i] = v; break;
-				case 2: xpos[i] = 1 << (kAccur - 1); ypos[i] = static_cast<int16_t>(-t);
-				        xvel[i] = v; yvel[i] = 0; break;
-				default: xpos[i] = static_cast<int16_t>(-t); ypos[i] = 1 << (kAccur - 1);
-				        xvel[i] = 0; yvel[i] = v; break;
+			// do_ice(view, scrn, count, magnitude, gravity, life, colors) --
+			// cone of cold: particles launched outward on the 4 cardinal axes
+			// from screen centre, arcing back toward it.
+			int count     = std::min<int>(static_cast<int>(args[2]), kMaxParticles);
+			int magnitude = static_cast<int>(args[3]) << kAccurShift;
+			int gravity   = std::max<int>(1, static_cast<int>(args[4]));
+			int life      = std::max<int>(1, static_cast<int>(args[5]));
+			int viewX0 = 0, viewY0 = 0, viewX1 = 175, viewY1 = 119;
+			ctx.events.windowRect(args[0], viewX0, viewY0, viewX1, viewY1);
+			constexpr int kCenterX = 88, kCenterY = 48;
+			// Half-pixel offset: launch position sits mid-pixel so the
+			// discrete >>ACCUR quantises symmetrically around each axis.
+			constexpr int16_t kHalf = 1 << (kAccurShift - 1);
+			// Per-particle scaling factor for the eventual colour-ramp step.
+			int colorHi = (8 << 8) / life;
+			int colorLo = (4 << 8) / life;
+
+			// Ballistics helper: integrate v += gravity, distance += v until
+			// distance reaches `magnitude`. Both `distance` and `velocity` are
+			// wide `int` here (was `int16_t` = CodeQL cpp/comparison-with-wider-
+			// type on `while (t < magnitude)`: overflow before reach = infinite
+			// loop). We narrow to int16_t when stashing into the particle so
+			// the WORD physics behaviour still holds through the sim.
+			auto simulateLaunch = [gravity](int mag, int16_t &outVel, int16_t &outDist) {
+				int velocity = 0, distance = 0;
+				while (distance < mag) {
+					velocity += gravity;
+					distance += velocity;
 				}
-				if (rng() & 1) { xvel[i] = static_cast<int16_t>(-xvel[i]);
-				                 yvel[i] = static_cast<int16_t>(-yvel[i]); }
-				colcnt[i] = static_cast<int16_t>(
-				    rnd((4 << 8) / life, (8 << 8) / life));
-				colidx[i] = 0;
-				delay[i] = static_cast<int16_t>(rnd(0, life >> 2));
+				outVel  = static_cast<int16_t>(velocity);
+				outDist = static_cast<int16_t>(distance);
+			};
+
+			for (int i = 0; i < count; i++) {
+				Particle &p = particles[i];
+				int launchMag = randInRange(magnitude >> 2, magnitude);
+				int16_t launchVel = 0, launchDist = 0;
+				simulateLaunch(launchMag, launchVel, launchDist);
+
+				// Emit direction: 4 cardinals + optional 180° flip.
+				switch (prng() & 3) {
+				case 0: // East:  x mid-pixel, y offset, moving east
+					p.xPos = kHalf; p.yPos = launchDist; p.xVel = launchVel; break;
+				case 1: // South: x offset, y mid-pixel, moving south
+					p.xPos = launchDist; p.yPos = kHalf; p.yVel = launchVel; break;
+				case 2: // West:  x mid-pixel, negated y offset, moving west
+					p.xPos = kHalf; p.yPos = static_cast<int16_t>(-launchDist);
+					p.xVel = launchVel; break;
+				default: // North: negated x offset, y mid-pixel, moving north
+					p.xPos = static_cast<int16_t>(-launchDist); p.yPos = kHalf;
+					p.yVel = launchVel; break;
+				}
+				if (prng() & 1) { // half the particles emit in the opposite direction
+					p.xVel = static_cast<int16_t>(-p.xVel);
+					p.yVel = static_cast<int16_t>(-p.yVel);
+				}
+				p.colorStep = static_cast<int16_t>(randInRange(colorLo, colorHi));
+				p.emitDelay = static_cast<int16_t>(randInRange(0, life >> 2));
 			}
 			int active = 2;
-			while (active && ++guard < 1500) {
+			// The ice cone uses a weaker "attractive" gravity (gravity*7/8)
+			// when a velocity is already moving toward centre -- accelerate
+			// less, so particles overshoot and oscillate around the origin
+			// rather than snapping to it.
+			int gravitySoft = (gravity >> 1) + (gravity >> 2) + (gravity >> 3);
+			while (active && ++frameGuard < 1500) {
 				if (active != 2)
-					for (int i = dots - 1; i >= 0; i--)
-						if (saved[i])
-							ctx.gfx->pokePixel(sx[i], sy[i], sbg[i]);
-				active = 0;
-				int grav78 = (grav >> 1) + (grav >> 2) + (grav >> 3);
-				for (int i = 0; i < dots; i++) {
-					if (delay[i])
-						delay[i]--;
-					else {
-						if (xpos[i] > 0)
-							xvel[i] = static_cast<int16_t>(
-							    xvel[i] - (xvel[i] > 0 ? grav : grav78));
-						else
-							xvel[i] = static_cast<int16_t>(
-							    xvel[i] + (xvel[i] < 0 ? grav : grav78));
-						if (ypos[i] > 0)
-							yvel[i] = static_cast<int16_t>(
-							    yvel[i] - (yvel[i] > 0 ? grav : grav78));
-						else
-							yvel[i] = static_cast<int16_t>(
-							    yvel[i] + (yvel[i] < 0 ? grav : grav78));
-						xpos[i] += xvel[i];
-						ypos[i] += yvel[i];
-						colidx[i] += colcnt[i];
+					for (int i = count - 1; i >= 0; i--) {
+						Particle &p = particles[i];
+						if (p.bgIsSaved)
+							ctx.gfx->pokePixel(p.savedX, p.savedY, p.savedBg);
 					}
-					int px = (xpos[i] >> kAccur) + cx;
-					int py = (ypos[i] >> kAccur) + cy;
-					int pixcol = colAt(args[6],
-					                   static_cast<uint16_t>(colidx[i]) >> 8);
-					saved[i] = false;
-					if (pixcol != 0) {
+				active = 0;
+				for (int i = 0; i < count; i++) {
+					Particle &p = particles[i];
+					if (p.emitDelay) {
+						p.emitDelay--;
+					} else {
+						// Gravity pulls each particle back toward the origin
+						// on each axis: full gravity when already moving TOWARDS,
+						// softer 7/8 gravity when moving AWAY.
+						if (p.xPos > 0)
+							p.xVel = static_cast<int16_t>(p.xVel - (p.xVel > 0 ? gravity : gravitySoft));
+						else
+							p.xVel = static_cast<int16_t>(p.xVel + (p.xVel < 0 ? gravity : gravitySoft));
+						if (p.yPos > 0)
+							p.yVel = static_cast<int16_t>(p.yVel - (p.yVel > 0 ? gravity : gravitySoft));
+						else
+							p.yVel = static_cast<int16_t>(p.yVel + (p.yVel < 0 ? gravity : gravitySoft));
+						p.xPos = static_cast<int16_t>(p.xPos + p.xVel);
+						p.yPos = static_cast<int16_t>(p.yPos + p.yVel);
+						p.colorIdx = static_cast<int16_t>(p.colorIdx + p.colorStep);
+					}
+					int screenX = (p.xPos >> kAccurShift) + kCenterX;
+					int screenY = (p.yPos >> kAccurShift) + kCenterY;
+					int pixColor = colorRampAt(args[6],
+					    static_cast<uint16_t>(p.colorIdx) >> 8);
+					p.bgIsSaved = false;
+					if (pixColor != 0) {
 						active = 1;
-						if (!delay[i] && px >= lside && px <= rside &&
-						    py >= top && py <= bottom) {
-							sbg[i] = ctx.gfx->peekPixel(px, py);
-							sx[i] = px; sy[i] = py; saved[i] = true;
-							ctx.gfx->pokePixel(px, py,
-							                   ctx.gfx->mapColor(
-							                       static_cast<uint8_t>(pixcol)));
+						if (!p.emitDelay &&
+						    screenX >= viewX0 && screenX <= viewX1 &&
+						    screenY >= viewY0 && screenY <= viewY1) {
+							p.savedBg = ctx.gfx->peekPixel(screenX, screenY);
+							p.savedX = screenX;
+							p.savedY = screenY;
+							p.bgIsSaved = true;
+							ctx.gfx->pokePixel(screenX, screenY,
+							    ctx.gfx->mapColor(static_cast<uint8_t>(pixColor)));
 						}
-					} else colcnt[i] = 0;
+					} else p.colorStep = 0;
 				}
 				ctx.gfx->update();
+				pumpHost(*ctx.gfx, ctx.events); // drain quit / OS events
 				SDL_Delay(16); // one vblank wait in the original (~60 fps)
 			}
 			result = 0;

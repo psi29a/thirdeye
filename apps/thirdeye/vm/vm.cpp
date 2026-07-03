@@ -790,6 +790,36 @@ bool Interpreter::selfTest() {
 	                S((uint8_t)O::PUSH), S((uint8_t)O::LAW), 4,0, // reload into fresh slot
 	                S((uint8_t)O::END) }, 42);
 
+	// codeByte / codeWord probes: park a known 4-byte pattern in the PHDR
+	// prefix (bytes 4..7 of the code buffer, unused during execute()) and
+	// read it back through the tagged-address helpers.
+	{
+		std::vector<uint8_t> body = { S((uint8_t)O::SHTC), 0, S((uint8_t)O::END) };
+		std::vector<uint8_t> c(14, 0);
+		c[4] = 0x11; c[5] = 0x22; c[6] = 0x33; c[7] = 0x44;
+		c.push_back(0x04); c.push_back(0x00);
+		c.insert(c.end(), body.begin(), body.end());
+		Interpreter vm(c);
+		Value codeAddr = makeAddr(AddrSpace::Code, 4);
+		Value stackAddr = makeAddr(AddrSpace::Stack, 0);
+		auto expect = [&](const char *name, int32_t got, int32_t want) {
+			if (got != want) {
+				std::cerr << "VM selfTest FAIL: " << name << " expected " << want
+				          << " got " << got << "\n";
+				ok = false;
+			}
+		};
+		expect("codeByte[0]", vm.codeByte(codeAddr, 0), 0x11);
+		expect("codeByte[3]", vm.codeByte(codeAddr, 3), 0x44);
+		expect("codeWord[0]", vm.codeWord(codeAddr, 0), 0x2211);
+		expect("codeWord[1]", vm.codeWord(codeAddr, 1), 0x4433);
+		expect("codeByte-non-code", vm.codeByte(stackAddr, 0), -1);
+		expect("codeWord-non-code", vm.codeWord(stackAddr, 0), -1);
+		expect("codeByte-oob",
+		       vm.codeByte(codeAddr, static_cast<uint32_t>(c.size())), -1);
+		expect("codeWord-oob",
+		       vm.codeWord(codeAddr, static_cast<uint32_t>(c.size())), -1);
+	}
 	if (ok) std::cerr << "VM selfTest: all passed\n";
 	return ok;
 }
