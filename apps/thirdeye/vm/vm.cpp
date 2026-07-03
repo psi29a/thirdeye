@@ -21,6 +21,25 @@ std::string hexByte(uint8_t b) {
 	std::snprintf(buf, sizeof(buf), "0x%02X", b);
 	return buf;
 }
+
+// THIRDEYE_AUTOINIT=1 -> log a periodic summary of how often a frame started
+// with nonzero bytes in its locals region (would have been read as garbage
+// without enterFrame's memset). =2 -> log every dirty frame's PC. Off = 0.
+int kAutoInitTrace = []{
+	const char *e = std::getenv("THIRDEYE_AUTOINIT");
+	return e ? std::atoi(e) : 0;
+}();
+uint64_t gAutoInitFrames = 0;
+uint64_t gAutoInitDirty  = 0;
+
+// THIRDEYE_STATIC_OOB=1 -> log every static-block OOB access (read or write)
+// that the permissive fallback absorbs. =2 -> also log the PC and offset.
+// Off (default) = 0: silent.
+int kStaticOobTrace = []{
+	const char *e = std::getenv("THIRDEYE_STATIC_OOB");
+	return e ? std::atoi(e) : 0;
+}();
+uint64_t gStaticOobHits = 0;
 }
 
 namespace VM {
@@ -108,6 +127,42 @@ void Interpreter::enterFrame(uint32_t handlerOffset, uint16_t thisIndex,
 	mPC = handlerOffset;
 	uint16_t autoSize = fetch16();                // MHDR.auto_size (includes THIS)
 	mSp = mFptr - autoSize - kValueSize;          // first free operand slot
+	// Zero the local (auto) region below THIS. Without this, a handler that
+	// reads a local before assigning it (e.g. `LAD @0` where @0 was never
+	// written) picks up the caller's operand-stack bytes as its "value" -- a
+	// silent sign-extended garbage feed that later blew up as
+	// static-array-OOB deep in a level-init handler on level 3. DOS AESOP's
+	// RT.ASM prologue effectively zeros autos (via the initial heap state
+	// plus the compiler's frame layout), and the language semantics assume
+	// zero-init locals.
+	if (autoSize > kOffThis) {
+		uint32_t nZeros = autoSize - kOffThis;
+		if (kAutoInitTrace) {
+			// Count how often the fix actually matters (any nonzero byte in
+			// the auto region at frame entry means a handler would have read
+			// garbage without the memset). Gated so it's free when off.
+			bool dirty = false;
+			for (uint32_t i = 0; i < nZeros; ++i)
+				if (mStk[mFptr - autoSize + i] != 0) { dirty = true; break; }
+			++gAutoInitFrames;
+			if (dirty) {
+				++gAutoInitDirty;
+				if (kAutoInitTrace > 1)
+					std::fprintf(stderr, "[autoinit] dirty frame at PC=%u "
+					             "autoSize=%u (dirty/frames = %llu/%llu)\n",
+					             (unsigned)handlerOffset, (unsigned)autoSize,
+					             (unsigned long long)gAutoInitDirty,
+					             (unsigned long long)gAutoInitFrames);
+			}
+			// Periodic summary so we see the rate without --debug spam.
+			if ((gAutoInitFrames & 0xFFF) == 0)
+				std::fprintf(stderr, "[autoinit] %llu/%llu frames had dirty "
+				             "locals at entry\n",
+				             (unsigned long long)gAutoInitDirty,
+				             (unsigned long long)gAutoInitFrames);
+		}
+		std::memset(&mStk[mFptr - autoSize], 0, nZeros);
+	}
 	// mPC now points just past the 2-byte MHDR, at the first instruction.
 }
 
@@ -637,9 +692,30 @@ uint8_t* Interpreter::staticPtr(uint32_t off, uint32_t size) {
 	if (mStatics == nullptr)
 		throw VmError("static variable access but no instance storage is set");
 	off += mStaticBase; // statics are relative to the defining class's block
-	if (static_cast<uint64_t>(off) + size > mStatics->size())
-		throw VmError("static variable access out of range (offset " +
-		              std::to_string(off) + ", size " + std::to_string(size) + ")");
+	if (static_cast<uint64_t>(off) + size > mStatics->size()) {
+		// ponytail: DOS-permissive static OOB. AESOP SOP frequently generates
+		// negative indexes into static byte/word arrays (e.g. an entity's
+		// signed dx/dy coord stored raw, then read back via LSBA and used to
+		// address a level grid at static offset 0). DOS-AESOP's static block
+		// lived in a heap malloc with adjacent zeroed slack, so `static[-56]`
+		// just returned a heap byte -- effectively zero. Our stricter bounds
+		// check throws and unwinds the entire SOP tick. Mirror the DOS
+		// behavior by pointing OOB reads at a zero buffer and OOB writes at
+		// a sinkhole. Same seam as the extern-permissive fallback below.
+		// Upgrade path: if a real bug ever manifests as "silently wrong
+		// gameplay behind a sinkholed store", drop this back to a throw and
+		// chase the offending SSBA in the SOP.
+		++gStaticOobHits;
+		if (kStaticOobTrace >= 2)
+			std::fprintf(stderr, "[static-oob] PC=%u off=%d size=%u block=%zu\n",
+			             (unsigned)mPC, static_cast<int32_t>(off),
+			             (unsigned)size, mStatics->size());
+		else if (kStaticOobTrace && (gStaticOobHits & 0xFFF) == 0)
+			std::fprintf(stderr, "[static-oob] %llu absorbed OOB accesses\n",
+			             (unsigned long long)gStaticOobHits);
+		static uint8_t sinkhole[8] = {0};
+		return sinkhole; // caller may read/write up to 4 bytes
+	}
 	return mStatics->data() + off;
 }
 

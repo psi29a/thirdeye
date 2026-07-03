@@ -578,6 +578,12 @@ void THIRDEYE::Engine::runResourceVM(RESOURCES::Resource &resource) {
 				std::cout << "END (returned " << result << ")" << std::endl;
 			} catch (const VM::VmError &e) {
 				std::cout << "stopped -- " << e.what() << std::endl;
+			} catch (const Relaunch &r) {
+				// AMAZE demo's exit sentinel (launch("xxx.exe")): no bootObject
+				// wrapper here to chain sub-programs, so treat as terminal.
+				std::cout << "END (launch \"" << r.program << "\")" << std::endl;
+			} catch (const QuitRequested &) {
+				std::cout << "END (quit)" << std::endl;
 			}
 		}
 	}
@@ -872,10 +878,15 @@ bool THIRDEYE::Engine::runExternalProgram(const std::string &program,
 		          << std::endl;
 		return true;
 	}
+	// DOS `launch()` (arun/src/EYE.C:1169) always terminates the current
+	// process via exit(127); a loader outside AESOP execs the next program.
+	// An unknown target name matches "exec failed" -- terminal, not a silent
+	// re-boot. SAMPLE.RES's `launch("xxx.exe")` is a demo exit sentinel that
+	// used to spin us here forever.
 	std::cout << "  [program chain: \"" << program
-	          << "\" -> no thirdeye equivalent yet; re-booting start]"
+	          << "\" -> unknown target; quitting session]"
 	          << std::endl;
-	return true;
+	throw QuitRequested{};
 }
 
 // Play a GFF cinematic (INTRO.GFF/FINALE.GFF/...) that lives beside the game's
