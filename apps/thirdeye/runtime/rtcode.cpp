@@ -2,6 +2,7 @@
 
 #include "../resources/res.hpp"
 
+#include <algorithm>
 #include <cctype>
 #include <chrono>
 #include <cstdlib>
@@ -87,10 +88,21 @@ bool tryHandle(Context &ctx, const std::string &fn,
 		result = sum;
 		return true;
 	}
-	if (fn == "rnd" && args.size() >= 1) {
+	// rnd(low, high): INCLUSIVE range -- RTCODE.C `low + rand() % (high-low+1)`.
+	// This was misported as a one-arg modulo, so rnd(1,20) = rng()%1 = 0
+	// forever: no to-hit roll ever landed, monster AI direction picks were
+	// always 0, and the NPCstat report(1) seeding in loadLevelObjects was
+	// added to paper over the misses -- which marked every monster petrified
+	// (NPCstat bit 0x40) and produced one-hit kills + the "statue crumbles to
+	// dust" message on every melee death. One wrong opcode-level semantic,
+	// three gameplay bugs (see CLAUDE.md: the bug is always in our runtime).
+	if (fn == "rnd" && args.size() >= 2) {
 		static std::mt19937 rng(0x9e3779b9u);
-		int n = static_cast<int>(args[0]);
-		result = n > 0 ? static_cast<int>(rng() % static_cast<uint32_t>(n)) : 0;
+		int lo = static_cast<int>(args[0]);
+		int hi = static_cast<int>(args[1]);
+		if (hi < lo) std::swap(lo, hi);
+		result = lo + static_cast<int>(
+		                  rng() % static_cast<uint32_t>(hi - lo + 1));
 		return true;
 	}
 	// --- string helpers (RTCODE.C) ---

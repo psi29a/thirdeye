@@ -5,7 +5,7 @@
 #include <filesystem>
 
 namespace RESOURCES { class Resource; }
-namespace VM { class ObjectSystem; }
+namespace VM { class ObjectSystem; class EventSystem; }
 
 namespace THIRDEYE::savegame {
 
@@ -25,9 +25,14 @@ namespace THIRDEYE::savegame {
 // THIRDEYE::savegame::loadAreaInstances + runtime set_palette CALLs), so this
 // helper no longer needs to collect monster classes for the caller.
 //
+// Destroy-before-restore mirrors RTOBJECT.C destroy_object: MSG_DESTROY plus
+// cancel_entity_requests -- hence the EventSystem parameter (skipping the
+// cancel leaked every replaced object's notify requests until the 768-slot
+// list overflowed and late-loading monsters lost their AI notifies).
+//
 // Returns the number of objects placed.
 int loadLevelObjects(int level, VM::ObjectSystem &objects,
-                     RESOURCES::Resource &res);
+                     VM::EventSystem &events, RESOURCES::Resource &res);
 
 // Serialize object slots [first..last] in RTOBJECT.C save_range's SF_BIN
 // format: a 0x1A byte, then for EVERY slot in the range a CDESC
