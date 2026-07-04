@@ -63,8 +63,6 @@ void MIXER::Mixer::update() {
 			iter != mSources.end(); iter++) {
 		alGetSourcei(iter->second.sourceId, AL_SOURCE_STATE, &state);
 		if (state != AL_PLAYING && iter->second.bufferId > 0) {
-			std::cout << "We are done playing buffer " << iter->second.bufferId
-					<< " with source " << iter->second.sourceId << std::endl;
 			alSourceStop(iter->second.sourceId);			// stop playing
 			alSourcei(iter->second.sourceId, AL_BUFFER, 0); // unload buffer from source
 			alDeleteBuffers(1, &iter->second.bufferId);		// delete buffer
