@@ -962,14 +962,23 @@ void GRAPHICS::Graphics::loadMouse(std::vector<uint8_t> &bitmap,
 	SDL_Surface *cImage = makeIndexedSurfaceFrom(&cursorData[0],
 			image.getWidth(index), image.getHeight(index),
 			image.getWidth(index), mPalette);
+	// Palette index 0 is the transparent colour (same key every draw path
+	// uses). The key must sit on the INDEXED source: the blit below then skips
+	// those pixels, leaving the ARGB canvas's alpha at 0 there -- and the alpha
+	// channel is the only transparency SDL_CreateColorCursor honours. (Keying
+	// the ARGB surface after the blit happened to work on macOS's cursor
+	// backend but wayland ignores it: the sword showed on an opaque black box.)
+	SDL_SetSurfaceColorKey(cImage, true, 0);
 
 	SDL_Surface *cImage32 = SDL_CreateSurface(image.getWidth(index),
 			image.getHeight(index), SDL_PIXELFORMAT_ARGB8888);
+	SDL_FillSurfaceRect(cImage32, nullptr, 0); // start fully transparent
 	SDL_BlitSurface(cImage, NULL, cImage32, NULL);
 
+	// Copy the alpha channel verbatim through the scale (the default BLEND
+	// mode would re-blend it against the uninitialised dest).
+	SDL_SetSurfaceBlendMode(cImage32, SDL_BLENDMODE_NONE);
 	SDL_BlitSurfaceScaled(cImage32, nullptr, cursor, nullptr, SDL_SCALEMODE_NEAREST);
-
-	SDL_SetSurfaceColorKey(cursor, true, SDL_MapSurfaceRGB(cursor, 0, 0, 0));
 
 	// loadMouse is called every time the SOP swaps the cursor sprite; free
 	// the previous one (SDL doesn't take ownership through SDL_SetCursor).

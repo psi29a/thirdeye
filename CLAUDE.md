@@ -74,6 +74,13 @@ save present the menu starts on "Continue the Quest" (a `5000` Down moves you to
 "Gather a New Party" → chargen); the Florn Falconhand cutscene now shows a
 dialog selector — an extra `0d` picks the first choice and dismisses it.
 
+Don't hand-author long sequences: play the flow once with `THIRDEYE_RECORD=1` and
+paste the printed line. Recorded sessions live in `scripts/walks/*.walk`
+(comment-stripped token files); `WALK=scripts/walks/<f>.walk RES=../data/EYE.RES
+scripts/ci-valgrind.sh` replays one under valgrind in docker and fails on memory
+errors (the walk ends with an in-game quit, so leak reports cover the real quit
+path).
+
 ## What runs today
 
 - Intro cinematic (with music), title screen/menu graphics, palette + mouse cursor; SFX/XMIDI
@@ -134,6 +141,9 @@ Full list in [docs/perf_notes.md](docs/perf_notes.md). The first-reach-for ones:
 - `THIRDEYE_AUTOWALK=4d00` (or comma-list `5000,0d,0d,4900,4800,4800,4800`) — scripted
   SYS_KEYDOWN(s) every ~40 pumps; last value repeats. Drives headless e2e/regression
   tests (4800=fwd, 4b00/4d00=strafe L/R, 4700/4900=turn L/R, 0d=Enter, 1b=Esc).
+- `THIRDEYE_RECORD=1` (or `=<path>`) — record real keys/clicks during a hand-played
+  session; at exit prints (and with a path, writes) the replayable `THIRDEYE_AUTOWALK=`
+  line. The record→replay lever for building CI/valgrind scripts.
 - `THIRDEYE_TIMING=1` — log when each runtime fn is first called; `=2` logs every call.
 - `THIRDEYE_SLOWOP=1` — log any single opcode (CALL/SEND) that took >50 ms.
 - `THIRDEYE_PERF=1` — per-present `{draws, drawImage µs, present ms, gap}`.

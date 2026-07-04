@@ -1207,6 +1207,18 @@ bool tryHandle(Context &ctx, const std::string &fn,
 				ih[0] = 0xFF;
 				ih[1] = 0xFF;
 			}
+			// B:bar_graphs@247 + B:sounds@248: kernel OPTION bytes. The kernel
+			// only ever READS B:sounds (kernel.dasm 4316-4320: "activate
+			// adventure screen" does set_sound_status(B:sounds)); the original
+			// restores the value with the object-0 record from ITEMS.TMP
+			// (save_range 0..999 includes the kernel). Our stand-in resume
+			// doesn't restore the kernel record, so the zero-filled byte turned
+			// ALL in-game SFX/music off at boot. Seed from the save (both are 1
+			// in the shipped QSP scaffold; parser defaults to 1 without a save).
+			if (uint8_t *op = ctx.objects.classStaticPtr(kernel, kKernelClass, 247, 2)) {
+				op[0] = items.barGraphs;
+				op[1] = items.soundsOn;
+			}
 		}
 		// Load the level's objects (doors/levers/monsters/items from LVLnn.TMP)
 		// into the dungeon. The maze data, wall-set bitmap number, and all

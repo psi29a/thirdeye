@@ -1,0 +1,15 @@
+# THIRDEYE_AUTOWALK sequence, recorded with THIRDEYE_RECORD=1 (July 2026).
+# EOB3 QSP session: title menu -> Continue the Quest -> load slot 1 (Quick
+# Start Party) -> tour level 1 (movement, camp/space interactions) -> find the
+# stairs and enter level 2 -> quit to title via the camp menu -> Abandon the
+# Quest. Self-exits cleanly, so a valgrind run over it reports leaks past the
+# real quit path (not a mid-flight snapshot).
+#
+# Requires the user's EOB3 install at RES's dir with a QSP save in slot 1
+# (SAVEGAME/ITEMS.TMP + LVLnn.TMP present).
+#
+# Replay natively:  THIRDEYE_AUTOWALK=$(grep -v '^#' this_file | tr -d ' \n') \
+#                     build/thirdeye ../data/EYE.RES --skip-intro --vm
+# Under valgrind:   RES=../data/EYE.RES WALK=scripts/walks/eob3-qsp-l1-to-l2.walk \
+#                     scripts/ci-valgrind.sh
+_,_,_,_,d,_,d,_,_,_,_,_,_,_,_,_,_,_,_,_,L210:6,_,_,_,L272:6,_,_,_,_,4800,4800,4800,4b00,_,4800,4800,4800,4800,4800,4800,4800,4800,_,4800,20,_,_,4800,_,_,20,_,20,_,_,5000,4900,_,4800,4800,4800,4800,4800,4b00,4800,_,4800,4700,4700,4700,_,4800,4800,4800,4800,4800,4800,4800,20,_,d,_,d,_,d,_,4800,4800,4800,4800,4800,4800,_,4800,4d00,4d00,_,_,4800,_,20,_,_,_,4d00,_,4900,_,4b00,_,4800,4800,4800,4800,4800,4b00,4b00,_,4800,20,4800,4800,4800,4800,_,4800,4800,4800,4800,5000,4d00,4d00,4d00,4d00,_,4900,4b00,_,4800,_,_,4700,4d00,4d00,4d00,_,4d00,4d00,4d00,4d00,4d00,4d00,4900,_,20,_,4800,_,4d00,_,_,_,4800,_,4800,_,4800,_,_,d,_,4800,4800,4800,_,4800,_,_,_,_,_,1b,_,5000,5000,5000,d,_,d,_,_,_,5000,5000,5000,d,_

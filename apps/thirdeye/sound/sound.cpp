@@ -14,7 +14,50 @@ extern "C" {
 #include <wildmidi_lib.h>
 }
 
+// The name of the device an open ALCdevice is playing on (OpenMW's
+// getDeviceName): full name under ALC_ENUMERATE_ALL_EXT, error-checked
+// fallback to the basic specifier.
+static const ALCchar *deviceName(ALCdevice *dev) {
+	const ALCchar *name = nullptr;
+	if (alcIsExtensionPresent(dev, "ALC_ENUMERATE_ALL_EXT"))
+		name = alcGetString(dev, ALC_ALL_DEVICES_SPECIFIER);
+	if (alcGetError(dev) != AL_NO_ERROR || name == nullptr)
+		name = alcGetString(dev, ALC_DEVICE_SPECIFIER);
+	return name != nullptr ? name : "";
+}
+
+// The CURRENT system default output device's name ("" if unqueryable).
+static std::string systemDefaultDevice() {
+	const ALCchar *n = nullptr;
+	if (alcIsExtensionPresent(nullptr, "ALC_ENUMERATE_ALL_EXT"))
+		n = alcGetString(nullptr, ALC_DEFAULT_ALL_DEVICES_SPECIFIER);
+	if (n == nullptr || *n == '\0')
+		n = alcGetString(nullptr, ALC_DEFAULT_DEVICE_SPECIFIER);
+	return n != nullptr ? n : "";
+}
+
+void MIXER::Mixer::followDefaultDevice() {
+#ifdef ALC_SOFT_reopen_device
+	if (mReopenFn == nullptr || device == nullptr)
+		return;
+	auto now = std::chrono::steady_clock::now();
+	if (now - mLastDevCheck < std::chrono::seconds(2))
+		return;
+	mLastDevCheck = now;
+	std::string def = systemDefaultDevice();
+	if (def.empty() || def == mOpenedName)
+		return;
+	auto reopen = reinterpret_cast<LPALCREOPENDEVICESOFT>(mReopenFn);
+	if (reopen(device, def.c_str(), nullptr)) {
+		mOpenedName = def;
+		std::cout << "  [audio: default output changed, now using: " << def
+				<< "]" << std::endl;
+	}
+#endif
+}
+
 void MIXER::Mixer::update() {
+	followDefaultDevice();
 	ALenum state = 0;
 	for (std::map<ALuint, Sources>::iterator iter = mSources.begin();
 			iter != mSources.end(); iter++) {
@@ -132,16 +175,22 @@ void MIXER::Mixer::playSound(std::vector<uint8_t> snd) {
 }
 
 MIXER::Mixer::Mixer() {
-	std::vector<std::string> devices = enumerate();
-	defaultDeviceName = devices[0].c_str();
+	enumerate(); // informational listing only
 	mt32 = true;
 
-	// setup our audio devices and contexts
-	device = alcOpenDevice(defaultDeviceName);
+	// Open the DEFAULT output device (NULL), never the first enumerated one:
+	// enumeration order is arbitrary. On a Linux/pipewire box the GPU's HDMI
+	// audio enumerates first, so hardcoding devices[0] silently sent every
+	// sound to the monitor; NULL lets openal-soft route to the sink the user
+	// actually has selected. (macOS masked this -- there the default device
+	// happened to enumerate first.)
+	device = alcOpenDevice(nullptr);
 	if (!device) {
 		std::cerr << "OpenAL: Unable to open default device." << std::endl;
 		return;
 	}
+	mOpenedName = deviceName(device);
+	std::cout << "  Using: " << mOpenedName << std::endl;
 
 	context = alcCreateContext(device, NULL);
 	if (!alcMakeContextCurrent(context)) {
@@ -149,6 +198,14 @@ MIXER::Mixer::Mixer() {
 				<< std::endl;
 		return;
 	}
+
+#ifdef ALC_SOFT_reopen_device
+	// Migration point for followDefaultDevice(); absent on non-openal-soft
+	// implementations, in which case we simply stay on the boot-time device.
+	if (alcIsExtensionPresent(device, "ALC_SOFT_reopen_device"))
+		mReopenFn = reinterpret_cast<void *>(
+				alcGetProcAddress(device, "alcReopenDeviceSOFT"));
+#endif
 
 	// setup our sources
 	for (uint8_t i = 0; i < MAX_SOURCES; i++) {
