@@ -1,17 +1,76 @@
 #include "sound.hpp"
 
-/* Define this to the location of the wildmidi config file */
-#define WILDMIDI_CFG "/etc/wildmidi/wildmidi.cfg"
 #define MUSIC_RATE 	32072
 #define SOUND_RATE 	8000
 #define MAX_SOURCES 16
 #define MUSIC_ID	0
 
+#include <cstdlib>
+#include <filesystem>
 #include <iostream>
 #include <vector>
 
+#include <SDL3/SDL_filesystem.h>
+
 extern "C" {
 #include <wildmidi_lib.h>
+}
+
+namespace {
+// Explicit override from --wildmidi-cfg or the launcher. Empty = fall through
+// to env var / dot-dir / platform defaults in findMusicConfig().
+std::string gMusicCfgOverride;
+
+// Walk the search order and return the first path that names an existing file,
+// or an empty string if nothing is set up. Order:
+//   1. Explicit override (setMusicConfigPath)
+//   2. THIRDEYE_WILDMIDI_CFG env var
+//   3. SDL app-data (~/Library/Application Support/... on macOS,
+//      $XDG_DATA_HOME/... on Linux, %APPDATA%/... on Windows) — where the
+//      launcher writes patches. Space-safe because our patched WildMIDI
+//      handles quoted paths in wildmidi.cfg.
+//   4. Platform-native system locations (freepats, distro-installed WildMIDI).
+std::string findMusicConfig() {
+	namespace fs = std::filesystem;
+	std::error_code ec;
+
+	if (!gMusicCfgOverride.empty())
+		return gMusicCfgOverride;
+
+	if (const char* env = std::getenv("THIRDEYE_WILDMIDI_CFG"); env && *env)
+		return env;
+
+	if (char* pref = SDL_GetPrefPath("Mindwerks", "Thirdeye")) {
+		std::string appdata = std::string(pref) + "patches/wildmidi.cfg";
+		SDL_free(pref);
+		if (fs::exists(appdata, ec))
+			return appdata;
+	}
+
+	static const char* kSystemDefaults[] = {
+#ifdef __APPLE__
+		"/opt/homebrew/etc/wildmidi/wildmidi.cfg",
+		"/usr/local/etc/wildmidi/wildmidi.cfg",
+#elif defined(_WIN32)
+		// Windows has no standard system location — app-data via the launcher
+		// is the only path. Left empty on purpose.
+#else
+		"/etc/wildmidi/wildmidi.cfg",
+		"/usr/share/wildmidi/wildmidi.cfg",
+#endif
+	};
+	for (const char* p : kSystemDefaults) {
+		if (fs::exists(p, ec))
+			return p;
+	}
+	return {};
+}
+} // namespace
+
+namespace MIXER {
+void setMusicConfigPath(const std::string& path) {
+	gMusicCfgOverride = path;
+}
 }
 
 // The name of the device an open ALCdevice is playing on (OpenMW's
@@ -84,7 +143,17 @@ void MIXER::Mixer::stopMusic() {
 }
 
 void MIXER::Mixer::playMusic(std::vector<uint8_t> xmidi) {
-	std::string config_file = WILDMIDI_CFG;
+	std::string config_file = findMusicConfig();
+	if (config_file.empty()) {
+		static bool warned = false;
+		if (!warned) {
+			std::cerr << "  [music: no WildMIDI config found — music disabled. "
+			             "Set via --wildmidi-cfg=<path>, THIRDEYE_WILDMIDI_CFG, "
+			             "or the launcher's Music setup.]" << std::endl;
+			warned = true;
+		}
+		return;
+	}
 	uint32_t mixer_options = 0;
 	uint8_t music_volume = 100;
 

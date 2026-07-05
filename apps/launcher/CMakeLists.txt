@@ -1,7 +1,9 @@
 # Qt6 launcher. Enable with -DBUILD_LAUNCHER=ON. find_package picks up
 # Homebrew qt6, Ubuntu qt6-base-dev, and the official Qt SDK on Windows.
 
-find_package(Qt6 6.5 COMPONENTS Widgets REQUIRED)
+find_package(Qt6 6.5 COMPONENTS Widgets Network REQUIRED)
+# libWildMidi comes from the top-level FetchContent (patched build). The
+# WILDMIDI_LIBRARY / WILDMIDI_INCLUDE_DIR variables are set there.
 
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
@@ -36,7 +38,10 @@ add_executable(thirdeye-launcher
 
 target_link_libraries(thirdeye-launcher PRIVATE
     Qt6::Widgets
+    Qt6::Network
+    ${WILDMIDI_LIBRARY}
 )
+target_include_directories(thirdeye-launcher PRIVATE ${WILDMIDI_INCLUDE_DIR})
 
 if(DPKG_PROGRAM)
     INSTALL(TARGETS thirdeye-launcher RUNTIME DESTINATION games COMPONENT thirdeye-launcher)

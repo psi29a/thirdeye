@@ -198,8 +198,25 @@ if(OPENAL_LIBRARY)
     message(STATUS "Using OpenAL library: ${OPENAL_LIBRARY}")
 endif()
 
-# Find WildMIDI
-Find_package(WILDMIDI REQUIRED)
+# WildMIDI — vendored via FetchContent + local patch. The patch teaches the
+# cfg tokenizer to honour double-quotes so paths with spaces
+# (`dir "~/Library/Application Support/..."`) parse as a single token.
+# TEMPORARY: drop the PATCH_COMMAND + bump GIT_TAG when the fix ships upstream
+# (psi29a is the maintainer, so this'll be a short-lived local carry).
+FetchContent_Declare(
+    wildmidi
+    GIT_REPOSITORY https://github.com/Mindwerks/wildmidi.git
+    GIT_TAG        wildmidi-0.4.6
+    PATCH_COMMAND  git apply --whitespace=nowarn
+                   "${CMAKE_SOURCE_DIR}/cmake/patches/wildmidi-quoted-paths.patch"
+    UPDATE_DISCONNECTED TRUE   # don't re-fetch (and re-patch) on every configure
+)
+set(WANT_PLAYER  OFF CACHE BOOL "" FORCE)  # skip WildMIDI's CLI player
+set(WANT_STATIC  OFF CACHE BOOL "" FORCE)
+FetchContent_MakeAvailable(wildmidi)
+# Preserve the WILDMIDI_LIBRARY / WILDMIDI_INCLUDE_DIR names our subdirs use.
+set(WILDMIDI_LIBRARY libwildmidi)
+set(WILDMIDI_INCLUDE_DIR "${wildmidi_SOURCE_DIR}/include")
 include_directories(${WILDMIDI_INCLUDE_DIR})
 
 if (APPLE)
@@ -226,6 +243,35 @@ if (APPLE AND APPLE_BUNDLE_ENABLED)
     set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${APP_BUNDLE_DIR}/Contents/MacOS")
 else()
     set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${Thirdeye_BINARY_DIR}")
+endif()
+
+# unsf: converts SF2 soundfonts to GUS .pat files that WildMIDI can read.
+# Shipped inside the app bundle so the launcher's "Set up authentic OPL-3
+# music" flow can spawn it after downloading OPL-3_FM_128M.sf2 on the user's
+# machine. Gated on BUILD_LAUNCHER — nothing else in the tree needs it.
+# Placed *after* CMAKE_RUNTIME_OUTPUT_DIRECTORY is set so unsf's binaries
+# land next to thirdeye in the bundle instead of _deps/unsf-build/.
+#
+# TEMPORARY: this whole pipeline (fetch unsf + convert on user machine) goes
+# away the day libWildMidi reads .sf2 natively; at that point the launcher
+# just downloads the .sf2 and points --wildmidi-cfg at it directly.
+if (BUILD_LAUNCHER)
+    FetchContent_Declare(
+        unsf
+        GIT_REPOSITORY https://github.com/psi29a/unsf.git
+        GIT_TAG        master
+    )
+    # unsf still says cmake_minimum_required(VERSION 2.8); modern CMake refuses
+    # that. Scope the compat shim to just unsf's parse.
+    set(CMAKE_POLICY_VERSION_MINIMUM 3.5)
+    FetchContent_MakeAvailable(unsf)
+    unset(CMAKE_POLICY_VERSION_MINIMUM)
+    # unsf's own CMakeLists does `SET(CMAKE_RUNTIME_OUTPUT_DIRECTORY ...)`,
+    # overriding our top-level path. Set the target property directly so unsf
+    # (and its dylib) land next to thirdeye/thirdeye-launcher in the bundle.
+    set_target_properties(unsf libunsf_dynamic PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}"
+        LIBRARY_OUTPUT_DIRECTORY "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}")
 endif()
 
 if (NOT WIN32 AND NOT APPLE)
@@ -605,13 +651,14 @@ if (APPLE)
             # engine can't load on a machine without Homebrew.
             COMMAND ${MACDEPLOYQT_EXE} "${_dmg_stage_app}"
                     -executable=${_dmg_stage_app}/Contents/MacOS/thirdeye
+                    -executable=${_dmg_stage_app}/Contents/MacOS/unsf
                     -verbose=1
             COMMAND hdiutil create
                     -volname Thirdeye
                     -srcfolder "${_dmg_stage_app}"
                     -ov -format UDZO
                     "${_dmg_path}"
-            DEPENDS thirdeye thirdeye-launcher
+            DEPENDS thirdeye thirdeye-launcher unsf
             WORKING_DIRECTORY "${Thirdeye_BINARY_DIR}"
             COMMENT "Bundling Qt + producing ${_dmg_path}"
             VERBATIM

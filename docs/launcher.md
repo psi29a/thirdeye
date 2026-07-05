@@ -169,6 +169,85 @@ it — the "Buy on GOG" link in the help dialog is enough.
 
 Kept last so the shippable launcher doesn't wait on this.
 
+### Phase 4 — music setup (WildMIDI patches, issue #34)
+
+> **⚠ This whole pipeline is temporary.** It exists only because libWildMidi
+> cannot read `.sf2` soundfonts directly — it wants GUS `.pat` files listed in
+> a `wildmidi.cfg`. The `unsf` converter and the convert-after-download step
+> get **deleted** the day WildMIDI grows native SF2 support; at that point
+> the launcher just downloads `OPL-3_FM_128M.sf2` and points the engine at
+> it — this section collapses to one download button.
+
+**Problem.** XMIDI music needs WildMIDI, WildMIDI needs GUS patches, and
+[sound.cpp](../apps/thirdeye/sound/sound.cpp) hardcodes
+`/etc/wildmidi/wildmidi.cfg` — on a clean macOS/Windows box `WildMidi_Init`
+fails and the game runs silently. The soundfont of choice is
+[Mindwerks/opl3-soundfont](https://github.com/Mindwerks/opl3-soundfont)
+(`OPL-3_FM_128M.sf2`, **135 MB**) — OPL-3 FM synthesis, i.e. the AdLib sound
+EOB3 was actually scored for.
+
+**The division of labour:** the *launcher* downloads the soundfont and
+converts it on the user's machine, on demand. No CI conversion job, no
+release tarball, no music bytes in the DMG/installers — just the tiny
+`unsf` converter shipped alongside the binaries.
+
+**Build side (CMake):**
+
+- [ ] FetchContent [psi29a/unsf](https://github.com/psi29a/unsf) — a small
+      C program, builds in seconds, always built (no option gate). Ship the
+      `unsf` binary next to `thirdeye`/`thirdeye-launcher` in the bundle so
+      the launcher can invoke it.
+- [ ] The 135 MB soundfont is **never** touched at build time.
+
+**Engine side (standalone, unblocks Linux immediately):**
+
+- [ ] Replace `#define WILDMIDI_CFG` with a search order:
+      1. `--wildmidi-cfg=<path>` CLI flag (what the launcher passes)
+      2. `THIRDEYE_WILDMIDI_CFG` env var
+      3. Platform defaults: `/etc/wildmidi/wildmidi.cfg`,
+         `/usr/local/etc/...`, `/opt/homebrew/etc/...`, the launcher's
+         app-data patches dir
+      4. Nothing found → one loud log line ("no MIDI patches — music
+         disabled; see the launcher's Music setup"), keep running silent.
+
+**Launcher side — test, then offer to fix (same pattern as the game-files
+flow):**
+
+- [ ] **Validate**: probe the same paths the engine searches, and actually
+      test the winner — link `libWildMidi` (already a project dep) and call
+      `WildMidi_Init(cfg)`/`WildMidi_Shutdown()`. A cfg that points at
+      missing `.pat` files fails here, not five minutes into the game.
+      Status row: `✓ Music configured (<path>)` / `✗ Music not set up
+      (game runs silent)`.
+- [ ] **Set up authentic OPL-3 music (recommended)** — primary button when
+      validation fails. Explicitly names the vibe so the user knows what
+      they're getting: this is the SoundBlaster 16 / AdLib sound EOB3 was
+      actually scored for. One click does the whole thing:
+      1. `QNetworkAccessManager` downloads `OPL-3_FM_128M.sf2` (135 MB,
+         progress bar + cancel) from the Mindwerks/opl3-soundfont GitHub
+         release — our own freely-licensed asset, no consent ceremony.
+      2. Run the bundled `unsf` via `QProcess` →
+         `QStandardPaths::AppDataLocation/patches/` (`.pat` set + cfg).
+      3. Fix up `wildmidi.cfg` with an absolute `dir` line, save the path
+         in `QSettings`, delete the `.sf2` (patches are what WildMIDI
+         reads; no point keeping 135 MB around).
+      4. Re-run the `WildMidi_Init` validation → green check.
+- [ ] **Browse for existing patches…** — secondary link for users who
+      already have a WildMIDI-compatible config (freepats, timidity General
+      MIDI). Store the cfg path in `QSettings`, pass `--wildmidi-cfg=` on
+      Play. Not the default path — most users don't have this and shouldn't
+      have to know what a GUS patch is.
+- [ ] **Tooltips** (Qt's built-in `QWidget::setToolTip`, hover to reveal):
+      - *OPL-3 button*: "Downloads the OPL-3 FM synthesis soundfont (135 MB)
+        from Mindwerks and converts it to WildMIDI patches on your machine.
+        OPL-3 is the SoundBlaster 16 / AdLib chipset EOB3 was scored for —
+        this is the authentic 90s sound."
+      - *Browse button*: "Point at an existing wildmidi.cfg (e.g. freepats,
+        timidity). Only if you know what a GUS patch is — otherwise use the
+        OPL-3 button above."
+      - *Status row when missing*: "Music won't play until you set up a
+        WildMIDI patch set. The game runs fine without it — silent."
+
 ### Later — nice-to-have
 
 - Auto-detect GOG / Steam install paths (registry on Windows, plist on mac)
