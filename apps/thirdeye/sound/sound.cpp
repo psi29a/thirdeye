@@ -1,7 +1,5 @@
 #include "sound.hpp"
 
-/* Define this to the location of the wildmidi config file */
-#define WILDMIDI_CFG "/etc/wildmidi/wildmidi.cfg"
 #define MUSIC_RATE 	32072
 #define SOUND_RATE 	8000
 #define MAX_SOURCES 16
@@ -10,8 +8,22 @@
 #include <iostream>
 #include <vector>
 
+#include <components/files/wildmidicfg.hpp>
+
 extern "C" {
 #include <wildmidi_lib.h>
+}
+
+namespace {
+// Explicit override from --wildmidi-cfg or the launcher. Empty = fall through
+// to the shared search order in Files::findWildmidiCfg().
+std::string gMusicCfgOverride;
+} // namespace
+
+namespace MIXER {
+void setMusicConfigPath(const std::string& path) {
+	gMusicCfgOverride = path;
+}
 }
 
 // The name of the device an open ALCdevice is playing on (OpenMW's
@@ -84,7 +96,17 @@ void MIXER::Mixer::stopMusic() {
 }
 
 void MIXER::Mixer::playMusic(std::vector<uint8_t> xmidi) {
-	std::string config_file = WILDMIDI_CFG;
+	std::string config_file = Files::findWildmidiCfg(gMusicCfgOverride);
+	if (config_file.empty()) {
+		static bool warned = false;
+		if (!warned) {
+			std::cerr << "  [music: no WildMIDI config found — music disabled. "
+			             "Set via --wildmidi-cfg=<path>, THIRDEYE_WILDMIDI_CFG, "
+			             "or the launcher's Music setup.]" << std::endl;
+			warned = true;
+		}
+		return;
+	}
 	uint32_t mixer_options = 0;
 	uint8_t music_volume = 100;
 

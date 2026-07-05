@@ -6,6 +6,7 @@
 #include <CLI/CLI.hpp>
 
 #include "engine.hpp"
+#include "sound/sound.hpp"
 
 #include <components/files/configurationmanager.hpp>
 
@@ -81,10 +82,17 @@ int main(int argc, char** argv) {
                      "the chargen UI in isolation.");
         app.add_flag("--debug", debug, "Enable debug mode");
         app.add_flag("--nosound", nosound, "Disable all sounds");
+        std::string wildmidiCfg;
+        app.add_option("--wildmidi-cfg", wildmidiCfg,
+                       "Path to a wildmidi.cfg (overrides the built-in search "
+                       "order: THIRDEYE_WILDMIDI_CFG → app-data → system)");
         app.add_flag("--new-game", newGame, "Activate new game mechanics");
         app.add_flag("--fs-strict", fsStrict, "Use strict file system handling");
 
         CLI11_PARSE(app, argc, argv); // handles --help/--version (exits cleanly)
+
+        if (!wildmidiCfg.empty())
+            MIXER::setMusicConfigPath(wildmidiCfg);
 
         // Bridge into the config system: stuff the parsed values into the map,
         // then let config files override (matching prior behaviour).

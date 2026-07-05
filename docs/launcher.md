@@ -1,0 +1,279 @@
+# Launcher — plan
+
+A small Qt6 front-end that finds `EYE.RES`, remembers a few launch flags, and
+runs `thirdeye`. One window, tabs allowed but not required.
+
+## Goal
+
+Non-technical user double-clicks a single icon, gets pointed at their game
+files if they don't have them yet, tweaks scale / fullscreen, hits **Play**.
+No shell required.
+
+## Non-goals
+
+- **Not a game-store front-end.** No auto-download of copyrighted bits (see
+  [Open question 1](#open-questions) below).
+- **Not a settings editor for every `THIRDEYE_*` env var.** Those are for us,
+  not the player. Launcher exposes only the QoL flags below.
+- **Not a save manager, not a mod manager.** Both are Phase-4 material at
+  earliest; if we build them they live elsewhere.
+- **Not cross-integrated with the engine.** Launcher spawns `thirdeye` via
+  `QProcess` and forgets it. No shared state, no IPC.
+
+## What ships (MVP)
+
+One window, one Play button. Tabs behind it iff the flat layout gets crowded.
+
+### Fields
+
+| Field | Widget | Persisted as |
+|---|---|---|
+| Path to `EYE.RES` | `QLineEdit` + Browse | `QSettings` `gamePath` |
+| Scale | `QComboBox` (1×–5×, default 3×) | `scale` |
+| Skip intro | `QCheckBox` (default on) | `skipIntro` |
+| Skip menu | `QCheckBox` (default off) | `skipMenu` |
+| Disable sound | `QCheckBox` (default off) | `nosound` |
+| VM debug trace | `QCheckBox` (default off) | `debug` |
+
+Fullscreen deferred — engine has no `--fullscreen` flag yet; add it to
+`apps/thirdeye/main.cpp` and surface a checkbox as a follow-up.
+
+`QSettings` is Qt-stdlib — no config file format to invent. Writes to
+`~/Library/Preferences/…`, `~/.config/…`, or the registry per platform.
+
+### Layout sketch
+
+```text
+┌─ Thirdeye Launcher ─────────────────────────┐
+│ Game folder: [/path/to/eob3       ] [Browse]│
+│              ✓ Found EYE.RES                │
+│                                             │
+│ Video ─ Scale: [3× ▾]                       │
+│                                             │
+│ Boot  ─ ☑ Skip intro cinematic              │
+│         ☐ Skip title menu                   │
+│         ☐ Disable sound                     │
+│         ☐ VM debug trace (verbose stdout)   │
+│                                             │
+│ [ Where do I get the game? ]    [ Play ▶ ]  │
+└─────────────────────────────────────────────┘
+```
+
+Single page. Add tabs (Video / Gameplay / Debug) only if a Phase-2 addition
+makes this feel cramped.
+
+### "Where do I get the game?"
+
+Opens a small dialog with two options and clear language about what each is:
+
+- **Buy it from GOG** —
+  <https://www.gog.com/game/forgotten_realms_the_archives_collection_two>
+  (EOB3 ships inside this collection alongside EOB1 and EOB2). Opens in the
+  system browser. Purchase-only; GOG has no anonymous download API.
+- **Download from the Internet Archive** —
+  <https://archive.org/details/eye-of-the-beholder-3>. Abandonware upload,
+  not officially licensed. Dialog says so verbatim; the user clicks through
+  knowing that's on them.
+- **"I already have the files"** — closes the dialog, focus goes back to the
+  path picker.
+
+Phase 1 launcher fetches no bytes itself. Phase 3 optionally automates the
+archive.org path — see below.
+
+### Path validation
+
+On path change, check for `EYE.RES` (case-sensitive — see CLAUDE.md gotcha).
+Green check if present, red X + one-line reason otherwise. Play button
+disabled until green.
+
+### Launch
+
+Resolve the engine beside the launcher via
+`QCoreApplication::applicationDirPath() + "/thirdeye"` (`+ ".exe"` on
+Windows), then `QProcess::startDetached(exe, args)`. Args built from the
+checkboxes. Launcher exits after spawn — no "running" state to babysit.
+
+## Tech choices (short)
+
+- **Qt 6.7+**, CMake, C++20, single new subdir `apps/launcher/`. Add to the
+  top-level `CMakeLists.txt` behind `option(THIRDEYE_BUILD_LAUNCHER ON)` so a
+  headless CI still builds without Qt.
+- **QSettings** for persistence. Not JSON, not TOML, not our own.
+- **QProcess** to launch. `startDetached` — no lifecycle to manage.
+- **QDesktopServices::openUrl** for the "where do I get it" link.
+- **No custom widgets.** Everything is stock Qt.
+- **No .ui XML files** unless the layout genuinely warrants Designer. A
+  ~150-line `QWidget` subclass is smaller than an XML round-trip.
+- Bundle: `macdeployqt` / `windeployqt` / linuxdeploy — Qt-stdlib scripts.
+
+## Phased rollout
+
+### Phase 1 — the actual launcher (MVP above)
+
+Enough to replace the current "open a terminal and type flags" ritual. This
+is the whole product for most users.
+
+- [x] `apps/launcher/CMakeLists.txt` with Qt6::Widgets + AUTOMOC
+      (`BUILD_LAUNCHER=ON` already existed in top-level; kept OFF by default
+      so CI without Qt still builds)
+- [x] `MainWindow` with fields above
+- [x] `QSettings` load/save (native store per platform)
+- [x] Path validation (looks for `EYE.RES` in picked folder)
+- [x] Play button → `QProcess::startDetached(applicationDirPath()+"/thirdeye"[+".exe" on Win], args)`
+- [x] "Where do I get it?" dialog with GOG + Internet Archive buttons
+- [ ] **Deferred:** Fullscreen checkbox — engine has no `--fullscreen` flag
+      yet. Add a flag to `apps/thirdeye/main.cpp` + wire it through the SDL
+      window setup, then surface the checkbox. Follow-up.
+- [ ] **Deferred:** macOS `.app` bundle for the launcher itself. Right now
+      the launcher binary lives *inside* `thirdeye.app/Contents/MacOS/` next
+      to the engine — invokable but not double-clickable. Add a separate
+      `thirdeye-launcher.app` with its own `Info.plist` when we do proper
+      packaging.
+- [ ] **Deferred:** `macdeployqt`/`windeployqt`/`linuxdeploy` runs — needed
+      before distributable builds, not for local dev.
+
+### Phase 2 — zip/arj unpack (optional, gated on Open question 1)
+
+Only if we decide it's OK to *touch* archive files the user provides. Launcher
+still doesn't download.
+
+- [ ] "I have a `.zip`" flow → user picks a file → we extract
+- [ ] Zip via shell-out to system `unzip` (mac/linux/`tar -xf` on Win 10+) —
+      no library dep
+- [ ] `.arj` via `arj`/`7z` if present on PATH; otherwise a "please install
+      arj / 7-zip" nudge with copy-pasteable install commands
+
+`ponytail:` shell-out over bundling libarchive; swap if a Windows user hits a
+`tar`-can't-read-arj wall.
+
+### Phase 3 — auto-download from archive.org
+
+The user has to say yes each time — the dialog spells out that the source is
+an abandonware mirror and clicking "Download" is their call, not ours.
+Thirdeye still ships zero copyrighted bytes; we just automate what the user
+would otherwise do manually.
+
+- [ ] Consent dialog (checkbox: "I understand this is not an official
+      source"). No download without it. No hidden default that skips it.
+- [ ] `QNetworkAccessManager` fetches `EOB3_Disk{1..4}.zip` from
+      `https://archive.org/download/eye-of-the-beholder-3/`. Progress bar,
+      resume on 206 if the server allows it, cancel button.
+- [ ] Extract + arj-unpack per Phase 2 → drop `EYE.RES` etc. into the folder
+      the user picked → auto-fill the game-path field.
+
+**GOG automation is out of scope.** GOG has no anonymous download API;
+community CLIs like `lgogdownloader` need the user's login and 2FA. Bundling
+that is a big surface (credential handling, GOG-ToS territory) for a feature
+most GOG buyers can do faster with GOG Galaxy. Recommendation: don't build
+it — the "Buy on GOG" link in the help dialog is enough.
+
+Kept last so the shippable launcher doesn't wait on this.
+
+### Phase 4 — music setup (WildMIDI patches, issue #34)
+
+> **⚠ This whole pipeline is temporary.** It exists only because libWildMidi
+> cannot read `.sf2` soundfonts directly — it wants GUS `.pat` files listed in
+> a `wildmidi.cfg`. The `unsf` converter and the convert-after-download step
+> get **deleted** the day WildMIDI grows native SF2 support; at that point
+> the launcher just downloads `OPL-3_FM_128M.sf2` and points the engine at
+> it — this section collapses to one download button.
+
+**Problem.** XMIDI music needs WildMIDI, WildMIDI needs GUS patches, and
+[sound.cpp](../apps/thirdeye/sound/sound.cpp) hardcodes
+`/etc/wildmidi/wildmidi.cfg` — on a clean macOS/Windows box `WildMidi_Init`
+fails and the game runs silently. The soundfont of choice is
+[Mindwerks/opl3-soundfont](https://github.com/Mindwerks/opl3-soundfont)
+(`OPL-3_FM_128M.sf2`, **135 MB**) — OPL-3 FM synthesis, i.e. the AdLib sound
+EOB3 was actually scored for.
+
+**The division of labour:** the *launcher* downloads the soundfont and
+converts it on the user's machine, on demand. No CI conversion job, no
+release tarball, no music bytes in the DMG/installers — just the tiny
+`unsf` converter shipped alongside the binaries.
+
+**Build side (CMake):**
+
+- [ ] FetchContent [psi29a/unsf](https://github.com/psi29a/unsf) — a small
+      C program, builds in seconds, always built (no option gate). Ship the
+      `unsf` binary next to `thirdeye`/`thirdeye-launcher` in the bundle so
+      the launcher can invoke it.
+- [ ] The 135 MB soundfont is **never** touched at build time.
+
+**Engine side (standalone, unblocks Linux immediately):**
+
+- [ ] Replace `#define WILDMIDI_CFG` with a search order:
+      1. `--wildmidi-cfg=<path>` CLI flag (what the launcher passes)
+      2. `THIRDEYE_WILDMIDI_CFG` env var
+      3. Platform defaults: `/etc/wildmidi/wildmidi.cfg`,
+         `/usr/local/etc/...`, `/opt/homebrew/etc/...`, the launcher's
+         app-data patches dir
+      4. Nothing found → one loud log line ("no MIDI patches — music
+         disabled; see the launcher's Music setup"), keep running silent.
+
+**Launcher side — test, then offer to fix (same pattern as the game-files
+flow):**
+
+- [ ] **Validate**: probe the same paths the engine searches, and actually
+      test the winner — link `libWildMidi` (already a project dep) and call
+      `WildMidi_Init(cfg)`/`WildMidi_Shutdown()`. A cfg that points at
+      missing `.pat` files fails here, not five minutes into the game.
+      Status row: `✓ Music configured (<path>)` / `✗ Music not set up
+      (game runs silent)`.
+- [ ] **Set up authentic OPL-3 music (recommended)** — primary button when
+      validation fails. Explicitly names the vibe so the user knows what
+      they're getting: this is the SoundBlaster 16 / AdLib sound EOB3 was
+      actually scored for. One click does the whole thing:
+      1. `QNetworkAccessManager` downloads `OPL-3_FM_128M.sf2` (135 MB,
+         progress bar + cancel) from the Mindwerks/opl3-soundfont GitHub
+         release — our own freely-licensed asset, no consent ceremony.
+      2. Run the bundled `unsf` via `QProcess` →
+         `QStandardPaths::AppDataLocation/patches/` (`.pat` set + cfg).
+      3. Fix up `wildmidi.cfg` with an absolute `dir` line, save the path
+         in `QSettings`, delete the `.sf2` (patches are what WildMIDI
+         reads; no point keeping 135 MB around).
+      4. Re-run the `WildMidi_Init` validation → green check.
+- [ ] **Browse for existing patches…** — secondary link for users who
+      already have a WildMIDI-compatible config (freepats, timidity General
+      MIDI). Store the cfg path in `QSettings`, pass `--wildmidi-cfg=` on
+      Play. Not the default path — most users don't have this and shouldn't
+      have to know what a GUS patch is.
+- [ ] **Tooltips** (Qt's built-in `QWidget::setToolTip`, hover to reveal):
+      - *OPL-3 button*: "Downloads the OPL-3 FM synthesis soundfont (135 MB)
+        from Mindwerks and converts it to WildMIDI patches on your machine.
+        OPL-3 is the SoundBlaster 16 / AdLib chipset EOB3 was scored for —
+        this is the authentic 90s sound."
+      - *Browse button*: "Point at an existing wildmidi.cfg (e.g. freepats,
+        timidity). Only if you know what a GUS patch is — otherwise use the
+        OPL-3 button above."
+      - *Status row when missing*: "Music won't play until you set up a
+        WildMIDI patch set. The game runs fine without it — silent."
+
+### Later — nice-to-have
+
+- Auto-detect GOG / Steam install paths (registry on Windows, plist on mac)
+- Save-slot browser (needs the save format work in [roadmap.md](roadmap.md)
+  Phase 3 to land first)
+- Update check against the GitHub releases API
+
+## Open questions
+
+1. ~~Auto-download from archive.org — yes / no?~~ **Resolved 2026-07-05:**
+   yes, gated behind an explicit consent dialog. Thirdeye still ships no
+   copyrighted bytes; if the user accepts the archive.org path, that's their
+   call. GOG stays as a "Buy it" link only — no automation (see Phase 3).
+2. ~~One binary or two?~~ **Resolved 2026-07-05:** two binaries.
+   `thirdeye-launcher` alongside `thirdeye`. Launcher spawns engine via
+   `QProcess::startDetached`; power users keep invoking `thirdeye` directly.
+3. ~~Linux launcher?~~ **Resolved 2026-07-05:** yes, full cross-platform —
+   Linux, macOS, Windows. Same CMake target on all three; packaging per
+   platform (`linuxdeploy`/AppImage, `macdeployqt`/`.app`, `windeployqt`/
+   installer).
+
+## What we're deliberately not building
+
+- A config editor for every `THIRDEYE_*` env var — those are debug tools,
+  not player settings.
+- A custom settings-file format — `QSettings` is fine.
+- A `.ui` Designer file — the layout is a dozen widgets in a grid.
+- Our own zip/arj library — shell out to what's on the box.
+- A crash reporter, telemetry, update notifier — YAGNI until someone asks.

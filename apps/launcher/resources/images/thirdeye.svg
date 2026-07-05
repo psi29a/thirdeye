@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-label="Thirdeye">
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="35%" r="80%">
+      <stop offset="0%"  stop-color="#241436"/>
+      <stop offset="55%" stop-color="#0c0618"/>
+      <stop offset="100%" stop-color="#050208"/>
+    </radialGradient>
+
+    <radialGradient id="iris" cx="50%" cy="50%" r="55%">
+      <stop offset="0%"   stop-color="#ffcf6b"/>
+      <stop offset="45%"  stop-color="#c47a12"/>
+      <stop offset="85%"  stop-color="#6a3808"/>
+      <stop offset="100%" stop-color="#2a1404"/>
+    </radialGradient>
+
+    <linearGradient id="sclera" x1="50%" y1="0%" x2="50%" y2="100%">
+      <stop offset="0%"   stop-color="#f6ead0"/>
+      <stop offset="50%"  stop-color="#ecd9a6"/>
+      <stop offset="100%" stop-color="#c9a970"/>
+    </linearGradient>
+
+    <clipPath id="eyeClip">
+      <path d="M 512 80
+               C 720 260, 720 764, 512 944
+               C 304 764, 304 260, 512 80 Z"/>
+    </clipPath>
+
+    <radialGradient id="glow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%"   stop-color="#ffcf6b" stop-opacity="0.55"/>
+      <stop offset="100%" stop-color="#ffcf6b" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <!-- Rounded-square backdrop (iOS/macOS-friendly) -->
+  <rect x="0" y="0" width="1024" height="1024" rx="200" fill="url(#bg)"/>
+
+  <!-- Soft mystical glow behind the eye -->
+  <ellipse cx="512" cy="512" rx="360" ry="500" fill="url(#glow)"/>
+
+  <!-- Vertical almond sclera -->
+  <path d="M 512 80
+           C 720 260, 720 764, 512 944
+           C 304 764, 304 260, 512 80 Z"
+        fill="url(#sclera)"/>
+
+  <!-- Iris + pupil, clipped by the almond -->
+  <g clip-path="url(#eyeClip)">
+    <circle cx="512" cy="512" r="245" fill="url(#iris)"/>
+    <!-- iris texture ring -->
+    <circle cx="512" cy="512" r="245" fill="none"
+            stroke="#3a1a04" stroke-width="6" stroke-opacity="0.6"/>
+    <!-- vertical slit pupil (the "reptile / third eye" vibe) -->
+    <ellipse cx="512" cy="512" rx="26" ry="205" fill="#050208"/>
+    <!-- catchlight -->
+    <ellipse cx="470" cy="420" rx="34" ry="42" fill="#fff9e6" opacity="0.9"/>
+    <ellipse cx="560" cy="600" rx="14" ry="18" fill="#fff9e6" opacity="0.55"/>
+  </g>
+
+  <!-- Eyelid rim (dark, adds definition at small sizes) -->
+  <path d="M 512 80
+           C 720 260, 720 764, 512 944
+           C 304 764, 304 260, 512 80 Z"
+        fill="none" stroke="#1a0a2a" stroke-width="18" stroke-linejoin="round"/>
+
+  <!-- Inner rim highlight (subtle purple glow along the almond edge) -->
+  <path d="M 512 80
+           C 720 260, 720 764, 512 944
+           C 304 764, 304 260, 512 80 Z"
+        fill="none" stroke="#5a3080" stroke-width="4" stroke-opacity="0.55"/>
+</svg>

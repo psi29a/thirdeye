@@ -1,0 +1,5 @@
+<!DOCTYPE RCC><RCC version="1.0">
+<qresource prefix="/">
+    <file alias="thirdeye.png">images/thirdeye.png</file>
+</qresource>
+</RCC>

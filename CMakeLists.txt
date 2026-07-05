@@ -198,8 +198,25 @@ if(OPENAL_LIBRARY)
     message(STATUS "Using OpenAL library: ${OPENAL_LIBRARY}")
 endif()
 
-# Find WildMIDI
-Find_package(WILDMIDI REQUIRED)
+# WildMIDI — vendored via FetchContent + local patch. The patch teaches the
+# cfg tokenizer to honour double-quotes so paths with spaces
+# (`dir "~/Library/Application Support/..."`) parse as a single token.
+# TEMPORARY: drop the PATCH_COMMAND + bump GIT_TAG when the fix ships upstream
+# (psi29a is the maintainer, so this'll be a short-lived local carry).
+FetchContent_Declare(
+    wildmidi
+    GIT_REPOSITORY https://github.com/Mindwerks/wildmidi.git
+    GIT_TAG        wildmidi-0.4.6
+    PATCH_COMMAND  git apply --whitespace=nowarn
+                   "${CMAKE_SOURCE_DIR}/cmake/patches/wildmidi-quoted-paths.patch"
+    UPDATE_DISCONNECTED TRUE   # don't re-fetch (and re-patch) on every configure
+)
+set(WANT_PLAYER  OFF CACHE BOOL "" FORCE)  # skip WildMIDI's CLI player
+set(WANT_STATIC  OFF CACHE BOOL "" FORCE)
+FetchContent_MakeAvailable(wildmidi)
+# Preserve the WILDMIDI_LIBRARY / WILDMIDI_INCLUDE_DIR names our subdirs use.
+set(WILDMIDI_LIBRARY libwildmidi)
+set(WILDMIDI_INCLUDE_DIR "${wildmidi_SOURCE_DIR}/include")
 include_directories(${WILDMIDI_INCLUDE_DIR})
 
 if (APPLE)
@@ -226,6 +243,38 @@ if (APPLE AND APPLE_BUNDLE_ENABLED)
     set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${APP_BUNDLE_DIR}/Contents/MacOS")
 else()
     set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${Thirdeye_BINARY_DIR}")
+endif()
+
+# unsf: converts SF2 soundfonts to GUS .pat files that WildMIDI can read.
+# Shipped inside the app bundle so the launcher's "Set up authentic OPL-3
+# music" flow can spawn it after downloading OPL-3_FM_128M.sf2 on the user's
+# machine. Gated on BUILD_LAUNCHER — nothing else in the tree needs it.
+# Placed *after* CMAKE_RUNTIME_OUTPUT_DIRECTORY is set so unsf's binaries
+# land next to thirdeye in the bundle instead of _deps/unsf-build/.
+#
+# TEMPORARY: this whole pipeline (fetch unsf + convert on user machine) goes
+# away the day libWildMidi reads .sf2 natively; at that point the launcher
+# just downloads the .sf2 and points --wildmidi-cfg at it directly.
+if (BUILD_LAUNCHER)
+    FetchContent_Declare(
+        unsf
+        GIT_REPOSITORY https://github.com/psi29a/unsf.git
+        GIT_TAG        c5e5a8c30c88203d52f48a492ed57099e44a2ad2 # master 2026-07
+    )
+    # unsf still says cmake_minimum_required(VERSION 2.8); modern CMake refuses
+    # that. Scope the compat shim to just unsf's parse.
+    set(CMAKE_POLICY_VERSION_MINIMUM 3.5)
+    FetchContent_MakeAvailable(unsf)
+    unset(CMAKE_POLICY_VERSION_MINIMUM)
+    # Ship the *static* unsf binary (renamed to plain `unsf` next to
+    # thirdeye-launcher) — self-contained, no libunsf dylib to bundle.
+    # unsf's dynamic exe target links a hardcoded ${CMAKE_BINARY_DIR}/libunsf
+    # path that breaks when output dirs are redirected, so exclude the
+    # dynamic targets from ALL rather than fight it.
+    set_target_properties(unsf libunsf_dynamic PROPERTIES EXCLUDE_FROM_ALL ON)
+    set_target_properties(unsf-static PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}"
+        OUTPUT_NAME unsf)
 endif()
 
 if (NOT WIN32 AND NOT APPLE)
@@ -286,7 +335,7 @@ if(DPKG_PROGRAM)
     SET(CPACK_DEBIAN_PACKAGE_DESCRIPTION "Thirdeye is an attempt at recreating the engine for the popular role-playing games produced by Strategic Simulations, Inc. You need to own and install the original games for Thirdeye to work.")
     SET(CPACK_DEBIAN_PACKAGE_NAME "Thirdeye")
     SET(CPACK_DEBIAN_PACKAGE_VERSION "${VERSION_STRING}")
-    SET(CPACK_PACKAGE_EXECUTABLES "thirdeye;Thirdeye thirdeyelauncher;ThirdeyeLauncher daesop;Daesop;runtests;RunTests")
+    SET(CPACK_PACKAGE_EXECUTABLES "thirdeye;Thirdeye thirdeye-launcher;ThirdeyeLauncher daesop;Daesop;runtests;RunTests")
     SET(CPACK_DEBIAN_PACKAGE_DEPENDS "libc6 (>= 2.11.2), libstdc++6 (>= 4.4.5), libuuid1 (>= 2.17.2)")
     SET(CPACK_DEBIAN_PACKAGE_SECTION "Games")
     string(TOLOWER "${CPACK_PACKAGE_NAME}" CPACK_PACKAGE_NAME_LOWERCASE)
@@ -307,7 +356,7 @@ if(WIN32)
     INSTALL(FILES
         "${Thirdeye_SOURCE_DIR}/README.md"
         "${Thirdeye_SOURCE_DIR}/GPL3.txt"
-        "${Thirdeye_BINARY_DIR}/Release/thirdeyelauncher.exe"
+        "${Thirdeye_BINARY_DIR}/Release/thirdeye-launcher.exe"
         "${Thirdeye_BINARY_DIR}/Release/thirdeye.exe"
         "${Thirdeye_BINARY_DIR}/Release/daesop.exe"
         "${Thirdeye_BINARY_DIR}/Release/runtests.exe"
@@ -321,7 +370,7 @@ if(WIN32)
     SET(CPACK_PACKAGE_VERSION_MAJOR ${THIRDEYE_VERSION_MAJOR})
     SET(CPACK_PACKAGE_VERSION_MINOR ${THIRDEYE_VERSION_MINOR})
     SET(CPACK_PACKAGE_VERSION_PATCH ${THIRDEYE_VERSION_RELEASE})
-    SET(CPACK_PACKAGE_EXECUTABLES "thirdeye;Thirdeye;thirdeyelauncher;Thirdeye Launcher;daesop;Daesop;runtests;RunTests")
+    SET(CPACK_PACKAGE_EXECUTABLES "thirdeye;Thirdeye;thirdeye-launcher;Thirdeye Launcher;daesop;Daesop;runtests;RunTests")
     SET(CPACK_NSIS_CREATE_ICONS_EXTRA "CreateShortCut '\$SMPROGRAMS\\\\$STARTMENU_FOLDER\\\\Readme.lnk' '\$INSTDIR\\\\README.md'")
     SET(CPACK_NSIS_DELETE_ICONS_EXTRA "
         !insertmacro MUI_STARTMENU_GETFOLDER Application $MUI_TEMP
@@ -333,7 +382,7 @@ if(WIN32)
     SET(CPACK_NSIS_DISPLAY_NAME "Thirdeye ${THIRDEYE_VERSION}")
     SET(CPACK_NSIS_HELP_LINK "http:\\\\\\\\www.mindwerks.net")
     SET(CPACK_NSIS_URL_INFO_ABOUT "http:\\\\\\\\www.mindwerks.net")
-    SET(CPACK_NSIS_INSTALLED_ICON_NAME "thirdeyelauncher.exe")
+    SET(CPACK_NSIS_INSTALLED_ICON_NAME "thirdeye-launcher.exe")
     SET(CPACK_NSIS_MUI_ICON "${Thirdeye_SOURCE_DIR}/apps/launcher/resources/images/thirdeye.ico")
     SET(CPACK_NSIS_MUI_UNIICON "${Thirdeye_SOURCE_DIR}/apps/launcher/resources/images/thirdeye.ico")
     SET(CPACK_PACKAGE_ICON "${Thirdeye_SOURCE_DIR}\\\\files\\\\thirdeye.bmp")
@@ -443,7 +492,7 @@ if (WIN32)
 
     set_target_properties(components PROPERTIES COMPILE_FLAGS ${WARNINGS})
     if (BUILD_LAUNCHER)
-		set_target_properties(thirdeyelauncher PROPERTIES COMPILE_FLAGS ${WARNINGS})
+		set_target_properties(thirdeye-launcher PROPERTIES COMPILE_FLAGS ${WARNINGS})
 	endif (BUILD_LAUNCHER)
     if (BUILD_DAESOP)
         set_target_properties(daesop PROPERTIES COMPILE_FLAGS ${WARNINGS})
@@ -551,6 +600,73 @@ if (APPLE)
         fixup_bundle(\"${APPS}\" \"${PLUGINS}\" \"${DIRS}\")
         " COMPONENT Runtime)
         include(CPack)
+
+    # `dmg` target: build a distributable .dmg. Needs BUILD_LAUNCHER=ON so the
+    # bundle's CFBundleExecutable (thirdeye-launcher) actually exists.
+    #
+    # We stage a copy of the .app into build/dmg-staging/, strip dev-only tools
+    # (arc, daesop, runtests, daesoptests, bytecode.def), let macdeployqt bundle
+    # Qt frameworks + platform plugins into the staged copy, then hdiutil-wrap
+    # it. Staging keeps the build tree usable after packaging — daesop still
+    # has its bytecode.def next to it in build/thirdeye.app/.
+    if (BUILD_LAUNCHER)
+        # Qt's imported targets (Qt6::qmake) are created inside apps/launcher's
+        # scope by find_package(Qt6), so they're not guaranteed visible here.
+        # Qt6_DIR is a CACHE variable (globally visible) set to the dir holding
+        # Qt6Config.cmake, i.e. <qt>/lib/cmake/Qt6 -- three levels up is <qt>,
+        # and macdeployqt ships in <qt>/bin.
+        find_program(MACDEPLOYQT_EXE macdeployqt
+                     HINTS "${Qt6_DIR}/../../../bin"
+                     REQUIRED)
+
+        set(_dmg_stage    "${Thirdeye_BINARY_DIR}/dmg-staging")
+        set(_dmg_stage_app "${_dmg_stage}/thirdeye.app")
+        set(_dmg_path     "${Thirdeye_BINARY_DIR}/Thirdeye-${THIRDEYE_VERSION}.dmg")
+
+        add_custom_target(dmg
+            COMMAND ${CMAKE_COMMAND} -E rm -f  "${_dmg_path}"
+            COMMAND ${CMAKE_COMMAND} -E rm -rf "${_dmg_stage}"
+            COMMAND ${CMAKE_COMMAND} -E make_directory "${_dmg_stage}"
+            # cp -RP preserves the Versions/Current symlinks inside .framework
+            # bundles; cmake -E copy_directory materializes them as directories,
+            # which trips codesign with "bundle format is ambiguous".
+            COMMAND cp -RP "${APP_BUNDLE_DIR}" "${_dmg_stage_app}"
+            # Strip dev-only binaries + bytecode.def from the staged copy.
+            COMMAND ${CMAKE_COMMAND} -E rm -f
+                    "${_dmg_stage_app}/Contents/MacOS/arc"
+                    "${_dmg_stage_app}/Contents/MacOS/daesop"
+                    "${_dmg_stage_app}/Contents/MacOS/daesoptests"
+                    "${_dmg_stage_app}/Contents/MacOS/runtests"
+                    "${_dmg_stage_app}/Contents/MacOS/bytecode.def"
+            # Wipe any bundled Qt state that may have been left in the build
+            # tree by earlier deploy runs. Otherwise macdeployqt sees "file
+            # exists" and skips, leaving stale frameworks whose plugins
+            # collide with fresh Homebrew Qt at dev-runtime.
+            COMMAND ${CMAKE_COMMAND} -E rm -rf
+                    "${_dmg_stage_app}/Contents/Frameworks"
+                    "${_dmg_stage_app}/Contents/PlugIns"
+                    "${_dmg_stage_app}/Contents/Resources/qt.conf"
+            # macdeployqt's default target is the bundle's main executable
+            # (thirdeye-launcher, which links Qt). Pass -executable= for the
+            # engine so its non-Qt deps (SDL3, WildMIDI, OpenAL) also get
+            # copied into Contents/Frameworks/ and their install_names
+            # rewritten to @executable_path/../Frameworks/... — otherwise the
+            # engine can't load on a machine without Homebrew.
+            COMMAND ${MACDEPLOYQT_EXE} "${_dmg_stage_app}"
+                    -executable=${_dmg_stage_app}/Contents/MacOS/thirdeye
+                    -executable=${_dmg_stage_app}/Contents/MacOS/unsf
+                    -verbose=1
+            COMMAND hdiutil create
+                    -volname Thirdeye
+                    -srcfolder "${_dmg_stage_app}"
+                    -ov -format UDZO
+                    "${_dmg_path}"
+            DEPENDS thirdeye thirdeye-launcher unsf-static
+            WORKING_DIRECTORY "${Thirdeye_BINARY_DIR}"
+            COMMENT "Bundling Qt + producing ${_dmg_path}"
+            VERBATIM
+        )
+    endif()
 endif (APPLE)
 
 if (NOT WIN32 AND NOT DPKG_PROGRAM AND NOT APPLE)
@@ -567,7 +683,7 @@ if (NOT WIN32 AND NOT DPKG_PROGRAM AND NOT APPLE)
     # Install binaries
     INSTALL(PROGRAMS "${Thirdeye_BINARY_DIR}/thirdeye" DESTINATION "${BINDIR}" )
     IF(BUILD_LAUNCHER)
-        INSTALL(PROGRAMS "${Thirdeye_BINARY_DIR}/thirdeyelauncher" DESTINATION "${BINDIR}" )
+        INSTALL(PROGRAMS "${Thirdeye_BINARY_DIR}/thirdeye-launcher" DESTINATION "${BINDIR}" )
     ENDIF(BUILD_LAUNCHER)
     IF(BUILD_DAESOP)
         INSTALL(PROGRAMS "${Thirdeye_BINARY_DIR}/daesop" DESTINATION "${BINDIR}" )

@@ -70,6 +70,11 @@ Sources() {
 }
 };
 
+// Point the mixer at a specific wildmidi.cfg for the process lifetime. Wins
+// over the built-in search order (env var → SDL app-data → platform defaults).
+// Called by main.cpp from --wildmidi-cfg, and by the launcher just before Play.
+void setMusicConfigPath(const std::string& path);
+
 class Mixer {
 private:
 	ALCdevice *device = nullptr;

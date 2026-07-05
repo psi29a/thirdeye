@@ -3,7 +3,7 @@ project (Components)
 # source files
 add_component_dir (files
     linuxpath windowspath macospath fixedpath multidircollection collections fileops configurationmanager
-    filelibrary lowlevelfile
+    filelibrary lowlevelfile wildmidicfg
     )
 
 add_component_dir (misc
