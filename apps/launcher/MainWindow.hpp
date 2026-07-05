@@ -30,11 +30,10 @@ private:
     void saveSettings() const;
     QString engineBinaryPath() const;
 
-    // Music-config resolution mirrors the engine's search order in
-    // apps/thirdeye/sound/sound.cpp so the launcher shows the user the same
-    // cfg the engine will use at Play-time.
+    // Resolution delegates to Files::findWildmidiCfg (components/files/
+    // wildmidicfg.hpp) — the same code the engine runs at Play-time, so the
+    // launcher can never drift from what the engine will actually use.
     QString findMusicCfg() const;
-    QString appDataMusicCfg() const;
 
     QLineEdit*   m_pathEdit    {};
     QLabel*      m_pathStatus  {};

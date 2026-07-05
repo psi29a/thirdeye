@@ -20,14 +20,14 @@
 #include <QNetworkReply>
 #include <QNetworkRequest>
 #include <QProcess>
-#include <QProcessEnvironment>
 #include <QProgressDialog>
 #include <QPushButton>
 #include <QSettings>
-#include <QStandardPaths>
 #include <QTextStream>
 #include <QUrl>
 #include <QVBoxLayout>
+
+#include <components/files/wildmidicfg.hpp>
 
 extern "C" {
 #include <wildmidi_lib.h>
@@ -266,40 +266,15 @@ void MainWindow::saveSettings() const {
 // Music setup
 // -----------------------------------------------------------------------------
 
-QString MainWindow::appDataMusicCfg() const {
-    // Native app-data location on every platform, matching SDL_GetPrefPath
-    // in the engine (sound.cpp findMusicConfig). Paths with spaces are safe
-    // because our vendored WildMIDI supports double-quoted paths in cfg
-    // (cmake/patches/wildmidi-quoted-paths.patch).
-    return QStandardPaths::writableLocation(QStandardPaths::AppDataLocation)
-        + "/patches/wildmidi.cfg";
-}
-
 QString MainWindow::findMusicCfg() const {
-    // Mirror sound.cpp's search order: user override → env → app-data → system.
-    if (!m_musicCfg.isEmpty() && QFileInfo::exists(m_musicCfg))
-        return m_musicCfg;
-    const QString env = QProcessEnvironment::systemEnvironment()
-        .value(QStringLiteral("THIRDEYE_WILDMIDI_CFG"));
-    if (!env.isEmpty() && QFileInfo::exists(env))
-        return env;
-    const QString appdata = appDataMusicCfg();
-    if (QFileInfo::exists(appdata))
-        return appdata;
-    static const char* kSystem[] = {
-#ifdef Q_OS_MACOS
-        "/opt/homebrew/etc/wildmidi/wildmidi.cfg",
-        "/usr/local/etc/wildmidi/wildmidi.cfg",
-#elif defined(Q_OS_WIN)
-        // no standard Windows location
-#else
-        "/etc/wildmidi/wildmidi.cfg",
-        "/usr/share/wildmidi/wildmidi.cfg",
-#endif
-    };
-    for (const char* p : kSystem)
-        if (QFileInfo::exists(p)) return QString::fromLatin1(p);
-    return {};
+    // Same search the engine runs at Play-time (components/files/wildmidicfg).
+    // Pre-check our stored override so a stale path falls through to the
+    // shared search instead of being trusted blindly.
+    const QString override_ =
+        (!m_musicCfg.isEmpty() && QFileInfo::exists(m_musicCfg))
+            ? m_musicCfg : QString();
+    return QString::fromStdString(
+        Files::findWildmidiCfg(override_.toStdString()));
 }
 
 void MainWindow::validateMusic() {
@@ -348,10 +323,15 @@ void MainWindow::setupOpl3Music() {
                "Mindwerks and convert it to WildMIDI patches on your machine. "
                "Continue?")) != QMessageBox::Yes) return;
 
-    // Native app-data — matches engine's SDL_GetPrefPath(). Safe for paths
-    // with spaces thanks to our WildMIDI quoted-paths patch.
-    const QString appdata = QStandardPaths::writableLocation(
-        QStandardPaths::AppDataLocation);
+    // Shared app-data dir (components/files/wildmidicfg) — the same place the
+    // engine's search looks. Paths with spaces (macOS "Application Support")
+    // are safe thanks to our WildMIDI quoted-paths patch.
+    const QString appdata = QString::fromStdString(Files::thirdeyeAppDataDir());
+    if (appdata.isEmpty()) {
+        QMessageBox::critical(this, tr("No home directory"),
+            tr("Could not resolve your user data directory."));
+        return;
+    }
     const QString patches = appdata + QStringLiteral("/patches");
     const QString sf2Path = appdata + QStringLiteral("/OPL-3_FM_128M.sf2");
     QDir().mkpath(patches);

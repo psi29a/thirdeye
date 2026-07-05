@@ -266,12 +266,15 @@ if (BUILD_LAUNCHER)
     set(CMAKE_POLICY_VERSION_MINIMUM 3.5)
     FetchContent_MakeAvailable(unsf)
     unset(CMAKE_POLICY_VERSION_MINIMUM)
-    # unsf's own CMakeLists does `SET(CMAKE_RUNTIME_OUTPUT_DIRECTORY ...)`,
-    # overriding our top-level path. Set the target property directly so unsf
-    # (and its dylib) land next to thirdeye/thirdeye-launcher in the bundle.
-    set_target_properties(unsf libunsf_dynamic PROPERTIES
+    # Ship the *static* unsf binary (renamed to plain `unsf` next to
+    # thirdeye-launcher) — self-contained, no libunsf dylib to bundle.
+    # unsf's dynamic exe target links a hardcoded ${CMAKE_BINARY_DIR}/libunsf
+    # path that breaks when output dirs are redirected, so exclude the
+    # dynamic targets from ALL rather than fight it.
+    set_target_properties(unsf libunsf_dynamic PROPERTIES EXCLUDE_FROM_ALL ON)
+    set_target_properties(unsf-static PROPERTIES
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}"
-        LIBRARY_OUTPUT_DIRECTORY "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}")
+        OUTPUT_NAME unsf)
 endif()
 
 if (NOT WIN32 AND NOT APPLE)
@@ -658,7 +661,7 @@ if (APPLE)
                     -srcfolder "${_dmg_stage_app}"
                     -ov -format UDZO
                     "${_dmg_path}"
-            DEPENDS thirdeye thirdeye-launcher unsf
+            DEPENDS thirdeye thirdeye-launcher unsf-static
             WORKING_DIRECTORY "${Thirdeye_BINARY_DIR}"
             COMMENT "Bundling Qt + producing ${_dmg_path}"
             VERBATIM

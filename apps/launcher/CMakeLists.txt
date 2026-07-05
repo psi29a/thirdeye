@@ -40,6 +40,7 @@ target_link_libraries(thirdeye-launcher PRIVATE
     Qt6::Widgets
     Qt6::Network
     ${WILDMIDI_LIBRARY}
+    components
 )
 target_include_directories(thirdeye-launcher PRIVATE ${WILDMIDI_INCLUDE_DIR})
 
