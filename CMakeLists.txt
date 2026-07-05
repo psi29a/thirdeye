@@ -259,7 +259,7 @@ if (BUILD_LAUNCHER)
     FetchContent_Declare(
         unsf
         GIT_REPOSITORY https://github.com/psi29a/unsf.git
-        GIT_TAG        master
+        GIT_TAG        c5e5a8c30c88203d52f48a492ed57099e44a2ad2 # master 2026-07
     )
     # unsf still says cmake_minimum_required(VERSION 2.8); modern CMake refuses
     # that. Scope the compat shim to just unsf's parse.

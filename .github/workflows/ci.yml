@@ -160,7 +160,7 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           mkdir -p artifacts
-          tar -czf artifacts/thirdeye-${{ matrix.os }}.tgz build/thirdeye build/daesop || true
+          tar -czf artifacts/thirdeye-${{ matrix.os }}.tgz build/thirdeye build/daesop
         shell: bash
 
       - name: Collect DMG artifact (macOS)

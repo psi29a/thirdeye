@@ -23,14 +23,19 @@ std::string thirdeyeAppDataDir();
 /// thirdeyeAppDataDir() + "/patches/wildmidi.cfg". Empty if no home.
 std::string appDataWildmidiCfg();
 
-/// First existing wildmidi.cfg in the search order:
-///   1. `override` (returned as-is when non-empty — caller decides whether
-///      to pre-check existence; the engine wants a bad --wildmidi-cfg to
-///      fail loudly in WildMidi_Init rather than silently fall through)
-///   2. THIRDEYE_WILDMIDI_CFG env var
-///   3. appDataWildmidiCfg()
-///   4. platform system locations (freepats / distro WildMIDI)
+/// Locate wildmidi.cfg. Search order:
+///   1. `override` — returned as-is when non-empty
+///   2. THIRDEYE_WILDMIDI_CFG env var — returned as-is when set
+///   3. appDataWildmidiCfg() — only if the file exists
+///   4. platform system locations (freepats / distro WildMIDI) — only if
+///      the file exists
 /// Empty string if nothing is set up.
+///
+/// 1 and 2 are deliberately NOT existence-checked: both express explicit
+/// user intent (--wildmidi-cfg flag, exported env var), and a typo there
+/// should fail loudly in WildMidi_Init — not silently fall through to a
+/// different soundfont the user never chose. Callers that prefer fallback
+/// over failure (the launcher's status row) pre-check before passing.
 std::string findWildmidiCfg(const std::string& override_ = {});
 
 } // namespace Files

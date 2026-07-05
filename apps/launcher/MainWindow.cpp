@@ -130,7 +130,9 @@ MainWindow::MainWindow(QWidget* parent) : QWidget(parent) {
 
     // Persist any change
     connect(m_pathEdit, &QLineEdit::textChanged, this, &MainWindow::validatePath);
-    connect(m_pathEdit, &QLineEdit::textChanged, this, [this] { saveSettings(); });
+    // Persist on focus-leave/Enter, not per keystroke — typing a long path by
+    // hand shouldn't hit QSettings I/O once per character.
+    connect(m_pathEdit, &QLineEdit::editingFinished, this, [this] { saveSettings(); });
     connect(m_scale, &QComboBox::currentIndexChanged, this, [this](int) { saveSettings(); });
     for (auto* cb : {m_skipIntro, m_skipMenu, m_nosound, m_debug})
         connect(cb, &QCheckBox::toggled, this, [this](bool) { saveSettings(); });
@@ -143,7 +145,10 @@ MainWindow::MainWindow(QWidget* parent) : QWidget(parent) {
 void MainWindow::browsePath() {
     const QString dir = QFileDialog::getExistingDirectory(this,
         tr("Locate your Eye of the Beholder III folder"), m_pathEdit->text());
-    if (!dir.isEmpty()) m_pathEdit->setText(dir);
+    if (!dir.isEmpty()) {
+        m_pathEdit->setText(dir);
+        saveSettings(); // editingFinished doesn't fire on programmatic setText
+    }
 }
 
 void MainWindow::showGetGameDialog() {
@@ -226,7 +231,12 @@ void MainWindow::play() {
     if (m_skipMenu->isChecked())  args << "--skip-menu";
     if (m_nosound->isChecked())   args << "--nosound";
     if (m_debug->isChecked())     args << "--debug";
-    if (!m_musicCfg.isEmpty())    args << QString("--wildmidi-cfg=%1").arg(m_musicCfg);
+    // Pass the *resolved* cfg (same search the status row shows), not the raw
+    // stored setting — a stale m_musicCfg would override the engine's own
+    // fallback search and silently kill music.
+    const QString musicCfg = findMusicCfg();
+    if (!musicCfg.isEmpty())
+        args << QString("--wildmidi-cfg=%1").arg(musicCfg);
 
     saveSettings();
     if (!QProcess::startDetached(exe, args)) {
@@ -415,7 +425,12 @@ void MainWindow::setupOpl3Music() {
             // the discovered cfg by absolute path, so cwd never matters.
             QDir patchesDir(patches);
             QString unsfCfg;
-            for (const QString& c : patchesDir.entryList({"*.cfg"}, QDir::Files)) {
+            // Newest first (QDir::Time): a re-run must pick the cfg unsf just
+            // wrote, not a stale one from a previous conversion. Sorting beats
+            // pre-cleaning the dir — a failed download can't destroy a
+            // previously working setup.
+            for (const QString& c :
+                 patchesDir.entryList({"*.cfg"}, QDir::Files, QDir::Time)) {
                 if (c != "wildmidi.cfg") {
                     unsfCfg = patchesDir.filePath(c);
                     break;
