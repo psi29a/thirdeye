@@ -275,16 +275,17 @@ bool tryHandle(Context &ctx, const std::string &fn,
 		// party-death screen. Until the ITEMS serializer matches the format
 		// the loader reads (roadmap Phase 3), write the items half to a
 		// .thirdeye sidecar so a real save slot can never be destroyed.
-		bool ok = THIRDEYE::savegame::saveRange(
+		// Best-effort sidecar: its failure must not gate the real LVL write.
+		THIRDEYE::savegame::saveRange(
 		    ctx.objects,
 		    dir / ("ITEMS_" + std::string(nn) + ".BIN.thirdeye"), 0, 999);
 		std::cerr << "[save_game: ITEMS_" << nn << ".BIN NOT written (items "
 		             "serializer doesn't round-trip yet; wrote .thirdeye "
 		             "sidecar) -- restore uses the existing slot file]\n";
-		ok = ok && THIRDEYE::savegame::saveRange(
-		               ctx.objects,
-		               dir / ("LVL" + std::string(ll) + "_" + nn + ".BIN"),
-		               1000, 1999);
+		bool ok = THIRDEYE::savegame::saveRange(
+		              ctx.objects,
+		              dir / ("LVL" + std::string(ll) + "_" + nn + ".BIN"),
+		              1000, 1999);
 		int copied = 0;
 		for (int l = 1; ok && l <= 14; ++l) {
 			if (l == lvl) continue;

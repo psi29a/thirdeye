@@ -241,8 +241,13 @@ void THIRDEYE::runtime::pumpHost(GRAPHICS::Graphics &gfx, VM::EventSystem &event
 	// pump's tick.
 	static const bool recording = [] {
 		if (const char *v = std::getenv("THIRDEYE_RECORD")) {
-			gRecorder.enabled = true;
-			gRecorder.dest = v;
+			std::string val = v;
+			// Treat GATE-style falsy values (0/false/empty) as disabled so
+			// THIRDEYE_RECORD=0 doesn't write a stray "0" file.
+			if (!val.empty() && val != "0" && val != "false") {
+				gRecorder.enabled = true;
+				gRecorder.dest = val;
+			}
 		}
 		return gRecorder.enabled;
 	}();

@@ -969,6 +969,11 @@ void GRAPHICS::Graphics::loadMouse(std::vector<uint8_t> &bitmap,
 	// the ARGB surface after the blit happened to work on macOS's cursor
 	// backend but wayland ignores it: the sword showed on an opaque black box.)
 	SDL_SetSurfaceColorKey(cImage, true, 0);
+	// Make the alpha-copy blit semantics explicit rather than relying on the
+	// SDL default: RGB->RGBA copy with source in BLENDMODE_NONE sets dest
+	// alpha to the source's per-surface alpha, which is what populates
+	// cImage32's alpha channel from the keyed source.
+	SDL_SetSurfaceBlendMode(cImage, SDL_BLENDMODE_NONE);
 
 	SDL_Surface *cImage32 = SDL_CreateSurface(image.getWidth(index),
 			image.getHeight(index), SDL_PIXELFORMAT_ARGB8888);
