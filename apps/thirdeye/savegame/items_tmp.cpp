@@ -106,6 +106,12 @@ ItemsTmp parseItemsTmp(const std::vector<uint8_t> &data) {
 	out.position.y      = data[kPosOff + 1];
 	out.position.facing = data[kPosOff + 2];
 	out.position.level  = data[kPosOff + 3];
+	// The next two kernel statics are option bytes (B:bar_graphs@247,
+	// B:sounds@248); rescue them so resume_level can seed the live kernel.
+	if (data.size() > kPosOff + 5) {
+		out.barGraphs = data[kPosOff + 4];
+		out.soundsOn  = data[kPosOff + 5];
+	}
 
 	for (size_t i = 0; i < kMaxRecords; ++i) {
 		size_t base = kPcRecordBase + i * kPcStride;

@@ -1274,12 +1274,16 @@ void freeExportArray(EXPORTENTRYPOINTER *aArray) {
 }
 
 // Free a RESINFO array allocated by getResourcesInformationTable.
-// Walks the NULL-terminated slots (also handles partial builds where later
-// slots are still NULL), freeing each populated entry's owned strings.
+// The table is DENSE with a NULL terminator (same contract
+// displayResourcesInfoEntries iterates on), and the error paths only ever
+// free NULL-initialized tails -- so stop at the first NULL. aCapacity is an
+// upper bound only: callers pass MAX_NUMBER_OF_DICTIONARY_ITEMS, which is far
+// larger than the actual allocation (loNumberOfResources + 1); walking all of
+// it read past the block into heap garbage and free(garbage->name) crashed
+// every daesop invocation at cleanup (truncating buffered dasm output).
 void freeResInfoArray(RESINFOPOINTER *aArray, int aCapacity) {
 	if (aArray == NULL) return;
-	for (int i = 0; i < aCapacity; ++i) {
-		if (aArray[i] == NULL) continue;
+	for (int i = 0; i < aCapacity && aArray[i] != NULL; ++i) {
 		free(aArray[i]->name);
 		free(aArray[i]->infoFromResource1);
 		free(aArray[i]->infoFromResource2);
@@ -1379,9 +1383,11 @@ RESINFOPOINTER *getResourcesInformationTable(FILE *aResFile,
 	// There is always at least one NULL entry (end marker)
 	loAllocatedInfoEntries = loNumberOfResources + 1;
 
-	// allocate space for the dictionary array
+	// allocate space for the dictionary array (an array of POINTERS -- sizing
+	// by the struct over-allocated ~6x, which is what let the old
+	// past-the-end free loop above limp along as far as it did)
 	loAllocatedInfoEntriesSizeInBytes = (size_t) loAllocatedInfoEntries
-			* sizeof(struct INTERNAL_RESOURCE_INFO);
+			* sizeof(RESINFOPOINTER);
 	loResult = (RESINFOPOINTER *) malloc(loAllocatedInfoEntriesSizeInBytes);
 	if (loResult == NULL) {
 		printf(

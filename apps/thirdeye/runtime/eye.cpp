@@ -268,12 +268,24 @@ bool tryHandle(Context &ctx, const std::string &fn,
 		std::snprintf(nn, sizeof(nn), "%02d", idx);
 		std::snprintf(ll, sizeof(ll), "%02d", lvl);
 		auto dir = ctx.res.resourcePath().parent_path() / "SAVEGAME";
+		// QUARANTINED: saveRange's ITEMS output (raw CDESC statics dump) does
+		// NOT round-trip through parseItemsTmp (fixed-layout reader) -- a
+		// save_game wrote an unreadable ITEMS_01.BIN over the shipped Quick
+		// Start Party save (July 2026): next boot found 0 PCs and showed the
+		// party-death screen. Until the ITEMS serializer matches the format
+		// the loader reads (roadmap Phase 3), write the items half to a
+		// .thirdeye sidecar so a real save slot can never be destroyed.
+		// Best-effort sidecar: its failure must not gate the real LVL write.
+		THIRDEYE::savegame::saveRange(
+		    ctx.objects,
+		    dir / ("ITEMS_" + std::string(nn) + ".BIN.thirdeye"), 0, 999);
+		std::cerr << "[save_game: ITEMS_" << nn << ".BIN NOT written (items "
+		             "serializer doesn't round-trip yet; wrote .thirdeye "
+		             "sidecar) -- restore uses the existing slot file]\n";
 		bool ok = THIRDEYE::savegame::saveRange(
-		    ctx.objects, dir / ("ITEMS_" + std::string(nn) + ".BIN"), 0, 999);
-		ok = ok && THIRDEYE::savegame::saveRange(
-		               ctx.objects,
-		               dir / ("LVL" + std::string(ll) + "_" + nn + ".BIN"),
-		               1000, 1999);
+		              ctx.objects,
+		              dir / ("LVL" + std::string(ll) + "_" + nn + ".BIN"),
+		              1000, 1999);
 		int copied = 0;
 		for (int l = 1; ok && l <= 14; ++l) {
 			if (l == lvl) continue;
@@ -302,8 +314,12 @@ bool tryHandle(Context &ctx, const std::string &fn,
 	if (fn == "suspend_game" && args.size() >= 1) {
 		int lvl = static_cast<int>(args[0]);
 		auto dir = ctx.res.resourcePath().parent_path() / "SAVEGAME";
-		bool ok = THIRDEYE::savegame::saveRange(ctx.objects,
-		                                        dir / "ITEMS.TMP", 0, 999);
+		// Items half quarantined -- same round-trip gap as save_game above
+		// (this is what smeared an unreadable ITEMS.TMP over the live one on
+		// quit). LVLxx.TMP below round-trips fine (loadLevelObjects reads the
+		// CDESC stream saveRange writes) and keeps doors/kills persistent.
+		bool ok = THIRDEYE::savegame::saveRange(
+		    ctx.objects, dir / "ITEMS.TMP.thirdeye", 0, 999);
 		if (lvl >= 1 && lvl <= 14) {
 			char ll[3];
 			std::snprintf(ll, sizeof(ll), "%02d", lvl);
@@ -837,7 +853,8 @@ bool tryHandle(Context &ctx, const std::string &fn,
 				          << std::endl;
 		}
 		if (newLvl >= 1 && newLvl <= 14)
-			THIRDEYE::savegame::loadLevelObjects(newLvl, ctx.objects, ctx.res);
+			THIRDEYE::savegame::loadLevelObjects(newLvl, ctx.objects,
+			                                     ctx.events, ctx.res);
 		result = 0;
 		return true;
 	}
@@ -1207,6 +1224,18 @@ bool tryHandle(Context &ctx, const std::string &fn,
 				ih[0] = 0xFF;
 				ih[1] = 0xFF;
 			}
+			// B:bar_graphs@247 + B:sounds@248: kernel OPTION bytes. The kernel
+			// only ever READS B:sounds (kernel.dasm 4316-4320: "activate
+			// adventure screen" does set_sound_status(B:sounds)); the original
+			// restores the value with the object-0 record from ITEMS.TMP
+			// (save_range 0..999 includes the kernel). Our stand-in resume
+			// doesn't restore the kernel record, so the zero-filled byte turned
+			// ALL in-game SFX/music off at boot. Seed from the save (both are 1
+			// in the shipped QSP scaffold; parser defaults to 1 without a save).
+			if (uint8_t *op = ctx.objects.classStaticPtr(kernel, kKernelClass, 247, 2)) {
+				op[0] = items.barGraphs;
+				op[1] = items.soundsOn;
+			}
 		}
 		// Load the level's objects (doors/levers/monsters/items from LVLnn.TMP)
 		// into the dungeon. The maze data, wall-set bitmap number, and all
@@ -1216,7 +1245,8 @@ bool tryHandle(Context &ctx, const std::string &fn,
 		if (kernel >= 0)
 			if (uint8_t *p = ctx.objects.classStaticPtr(kernel, kKernelClass, 246, 1))
 				lvl = *p ? *p : 1;
-		THIRDEYE::savegame::loadLevelObjects(lvl, ctx.objects, ctx.res);
+		THIRDEYE::savegame::loadLevelObjects(lvl, ctx.objects, ctx.events,
+		                                     ctx.res);
 		// Pre-create the 14 area-class singletons from ITEMS_00.BIN. They live
 		// at object slots 1..14 in the native CDESC format and are what dungeon's
 		// SOP "init level" handler looks up via SOLE -- once present, the kernel
@@ -1252,14 +1282,15 @@ bool tryHandle(Context &ctx, const std::string &fn,
 		// "worked" while the dead stack bytes still held the references; adding
 		// a Context member shifted the frame layout and it became a segfault.
 		ctx.objects.setPostSendHook(
-		    [&objects = ctx.objects, &res = ctx.res](int objIndex, int message) {
+		    [&objects = ctx.objects, &events = ctx.events,
+		     &res = ctx.res](int objIndex, int message) {
 			    if (objIndex != 2001 || message != 232) return;
 			    uint8_t lvl = 1;
 			    int kn = objects.firstObjectOfClass(1382);
 			    if (kn >= 0)
 				    if (uint8_t *p = objects.classStaticPtr(kn, 1382, 246, 1))
 					    lvl = *p ? *p : 1;
-			    THIRDEYE::savegame::loadLevelObjects(lvl, objects, res);
+			    THIRDEYE::savegame::loadLevelObjects(lvl, objects, events, res);
 		    });
 		result = 0;
 		return true;

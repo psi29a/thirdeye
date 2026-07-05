@@ -15,6 +15,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <chrono>
@@ -157,6 +158,73 @@ std::filesystem::path resolveChildCI(const std::filesystem::path &parent,
 	return exact;
 }
 
+// THIRDEYE_RECORD=1 (print at exit) or =<path> (also write the raw sequence to
+// a file): capture the session's real keypresses + clicks in THIRDEYE_AUTOWALK's
+// token language, on its 40-pump window cadence, and emit the replayable
+// sequence when the engine quits. Closes the record->replay loop: play a
+// session once by hand, then pin it in a CI/valgrind run via the printed
+// THIRDEYE_AUTOWALK. Only input that reaches pumpHost's SDL loop is captured
+// (the chargen screen runs its own SDL loop and is not recorded).
+struct InputRecorder {
+	bool enabled = false;
+	std::string dest;   // env value: "1" = print only; anything else = file path
+	long tick = -1;     // pump counter -- the same timebase AUTOWALK replays on
+	struct Rec {
+		long tick;
+		std::string token;
+	};
+	std::vector<Rec> recs;
+
+	std::string sequence() const {
+		// One token per 40-pump window, `_` filling the idle windows so replay
+		// keeps the session's pacing. Round UP to the next window: replay fires
+		// at a window's first pump, so rounding down could fire up to 39 pumps
+		// EARLIER than the human pressed the key (e.g. before the menu that
+		// consumed it existed). A same-window burst spills into consecutive
+		// windows -- order preserved, timing stretched.
+		std::string out;
+		long nextWin = 0;
+		bool first = true;
+		for (const Rec &r : recs) {
+			long win = std::max(r.tick / 40 + 1, nextWin);
+			// Cap the lead-in: idle-at-the-title-screen before the first input
+			// is dead time, and replay crawls through it (badly so under
+			// valgrind). Keep a few windows for boot to settle; inner gaps
+			// stay faithful (they may be waiting out a cutscene/dialog).
+			if (first) {
+				win = std::min(win, 4L);
+				first = false;
+			}
+			for (; nextWin < win; ++nextWin)
+				out += "_,";
+			out += r.token;
+			out += ',';
+			++nextWin;
+		}
+		out += '_'; // AUTOWALK repeats its last token forever; end on a no-op
+		return out;
+	}
+
+	void dump() const {
+		if (recs.empty()) {
+			std::cout << "  [record: no input captured]" << std::endl;
+			return;
+		}
+		const std::string seq = sequence();
+		if (dest != "1") {
+			std::ofstream f(dest, std::ios::trunc);
+			f << seq << '\n';
+			std::cout << "  [record: sequence "
+			          << (f ? "written to " + dest : "FAILED writing " + dest)
+			          << "]" << std::endl;
+		}
+		std::cout << "  [record: " << recs.size() << " inputs over "
+		          << (tick + 1) << " pumps]\n"
+		          << "THIRDEYE_AUTOWALK=" << seq << std::endl;
+	}
+};
+InputRecorder gRecorder;
+
 } // close anon namespace -- pumpHost lives in THIRDEYE::runtime so the
   // dispatch_event handler in runtime/event.cpp can call it via internal.hpp.
 
@@ -168,6 +236,24 @@ std::filesystem::path resolveChildCI(const std::filesystem::path &parent,
 // frame-paced loop and makes the window render live (instead of only after the
 // loop ends). Throws QuitRequested on window-close / ESC.
 void THIRDEYE::runtime::pumpHost(GRAPHICS::Graphics &gfx, VM::EventSystem &events) {
+	// THIRDEYE_RECORD: arm the input recorder (see InputRecorder above) and
+	// advance its pump clock BEFORE polling, so input seen this pump gets this
+	// pump's tick.
+	static const bool recording = [] {
+		if (const char *v = std::getenv("THIRDEYE_RECORD")) {
+			std::string val = v;
+			// Treat GATE-style falsy values (0/false/empty) as disabled so
+			// THIRDEYE_RECORD=0 doesn't write a stray "0" file.
+			if (!val.empty() && val != "0" && val != "false") {
+				gRecorder.enabled = true;
+				gRecorder.dest = val;
+			}
+		}
+		return gRecorder.enabled;
+	}();
+	if (recording)
+		++gRecorder.tick;
+
 	SDL_Event ev;
 	while (SDL_PollEvent(&ev)) {
 		// SDL3 dropped SDL2's automatic event-coordinate rescaling under
@@ -214,8 +300,14 @@ void THIRDEYE::runtime::pumpHost(GRAPHICS::Graphics &gfx, VM::EventSystem &event
 					break;
 				}
 			}
-			if (key != 0)
+			if (key != 0) {
 				events.postEvent(0, VM::SYS_KEYDOWN, key);
+				if (gRecorder.enabled) {
+					char tok[16];
+					std::snprintf(tok, sizeof(tok), "%x", key);
+					gRecorder.recs.push_back({gRecorder.tick, tok});
+				}
+			}
 			break;
 		}
 		case SDL_EVENT_MOUSE_MOTION: {
@@ -240,6 +332,17 @@ void THIRDEYE::runtime::pumpHost(GRAPHICS::Graphics &gfx, VM::EventSystem &event
 			                   static_cast<int>(ev.button.y), lx, ly);
 			events.mouseMove(lx, ly);
 			events.mouseButton(leftDown, rightDown);
+			// Record press edges only: the AUTOWALK L/R click token replays the
+			// release itself (~5 pumps after the press), so drags don't round-trip.
+			if (gRecorder.enabled && down &&
+			    (ev.button.button == SDL_BUTTON_LEFT ||
+			     ev.button.button == SDL_BUTTON_RIGHT)) {
+				char tok[24];
+				std::snprintf(tok, sizeof(tok), "%c%d:%d",
+				              ev.button.button == SDL_BUTTON_LEFT ? 'L' : 'R',
+				              lx, ly);
+				gRecorder.recs.push_back({gRecorder.tick, tok});
+			}
 			break;
 		}
 		default:
@@ -658,14 +761,22 @@ void THIRDEYE::Engine::bootObject(RESOURCES::Resource &resource,
 		       std::filesystem::exists(root / "savegame" / "items.tmp", ec);
 	};
 	std::map<int32_t, int32_t> mem;
-	int32_t bootMode = MODE_INTR;
-	if (mChargen)       bootMode = MODE_CHGN;
-	else if (mSkipMenu) bootMode = saveExists() ? MODE_CINE : MODE_CHGN;
+	// Cold boot = 0: cell 1264 is the DOS Inter-Application Communication Area
+	// (0000:04F0), which holds zeros when no prior program poked it. start's
+	// create handler dispatches on it, and its default path is the DOS boot
+	// experience: pokemem(1264,'INTR') + launch("cine.exe") -- intro first,
+	// then the title menu when cine chains back (start.dasm LBL_79). Seeding
+	// a mode here is only for the shortcut flags.
+	int32_t bootMode = 0;
+	if (mChargen)        bootMode = MODE_CHGN;
+	else if (mSkipMenu)  bootMode = saveExists() ? MODE_CINE : MODE_CHGN;
+	else if (mSkipIntro) bootMode = MODE_INTR;
 	mem.insert_or_assign(1264, bootMode);
 	std::cout << "  [boot mode = "
 	          << (bootMode == MODE_CINE ? "CINE (continue from save)"
 	            : bootMode == MODE_CHGN ? "CHGN (chargen + game)"
-	            : "INTR (title menu)")
+	            : bootMode == MODE_INTR ? "INTR (title menu)"
+	            : "cold boot (intro, then menu)")
 	          << "]" << std::endl;
 	TransferState xfer; // char-gen party transfer file (CHARGEN\CREATE.SAV)
 
@@ -801,6 +912,12 @@ void THIRDEYE::Engine::bootObject(RESOURCES::Resource &resource,
 
 	if (gfx)
 		gfx->saveScreenshot("/tmp/thirdeye_boot.bmp"); // last frame, for inspection
+
+	// THIRDEYE_RECORD: emit the session's input as a replayable AUTOWALK line.
+	// This is the common exit seam -- every quit path (menu quit, window close,
+	// boot-wall) falls through here.
+	if (gRecorder.enabled)
+		gRecorder.dump();
 }
 
 // A menu choice handed off to an external DOS sub-program via launch(). We can't
@@ -1031,151 +1148,12 @@ void THIRDEYE::Engine::go() {
 		return;
 	}
 
-	MIXER::Mixer mixer;		// setup our sound mixer
-	GRAPHICS::Graphics gfx(mScale); // setup our graphics
-
-	/*
-	 Settings::Manager settings;
-	 std::string settingspath;
-
-	 settingspath = loadSettings (settings);
-	 */
-
-	std::vector<uint8_t> &snd = resource.getAsset("BIRD4");
-	std::vector<uint8_t> &xmidi = resource.getAsset("CUE1");
-
-	//std::vector<uint8_t> &font = resource.getAsset("8x8 font");
-	//std::vector<uint8_t> &font2 = resource.getAsset("6x8 font");
-	//std::vector<uint8_t> &font3 = resource.getAsset("Ornate font");
-
-	//std::vector<uint8_t> &bmp = resource.getAsset("Backdrop");
-	//std::vector<uint8_t> &bmp = resource.getAsset("Menu shapes");
-	std::vector<uint8_t> &icons = resource.getAsset("Icons");
-	//std::vector<uint8_t> &marble = resource.getAsset("Marble walls");
-	//std::vector<uint8_t> &basePalette = resource.getAsset("Fixed palette");
-	std::vector<uint8_t> &basePalette = resource.getAsset("Title palette");
-	//std::vector<uint8_t> &subPalette = resource.getAsset("Marble palette");
-
-	gfx.loadPalette(basePalette);
-	gfx.loadMouse(icons, 0);
-
-	//gfx.drawImage(bmp, 0, 0, 0, true);
-
-
-	 /*
-	 gfx.loadPalette(basePalette, subPalette, text);
-	 gfx.drawImage(marble, 18, 0, 0, true);
-	 gfx.drawImage(marble, 0, 0, 0, true);
-	 gfx.drawImage(marble, 1, 24, 8, true);
-	 gfx.drawImage(marble, 2, 48, 20, true);
-	 gfx.drawImage(marble, 3, 64, 28, true);
-
-	 gfx.drawImage(icons, 1, 25, 120, true);
-	 gfx.drawText(font,"Welcome to Thirdeye!", 8, 181);
-	 */
-
-	uint32_t clock = 0;	//  wall clock in ms resolution
-	uint32_t currentSecond = 0;	// our wall clock with 1s resolution
-	uint32_t fps = 0;	// number of fps (iterations of main loop)
-
-	// get our intro cinematic, set state and play
-	RESOURCES::GFFI introVideo(std::move(introPath));
-	mixer.playMusic(introVideo.getMusic());
-	gfx.playVideo(introVideo.getSequence());
-	uint8_t state = STATE_INTRO;
-
-	// Start the main rendering loop
-	SDL_Event event;
-	bool done = false;
-	bool isSecond = false;
-	while (!done)  // Enter main loop.
-	{
-		// get our clock
-		clock = SDL_GetTicks();
-		fps++;
-		if (clock / 1000 > currentSecond) {
-			currentSecond = clock / 1000;
-			//update = true;
-			isSecond = true;
-		}
-
-		// what state are we in
-		switch (state) {
-			case STATE_INTRO: // change state to menu when finished playing intro
-				if ( !gfx.isVideoPlaying() ){
-					state = STATE_MENU;
-					std::vector<uint8_t> &menuBMP = resource.getAsset("Menu shapes");
-					std::vector<uint8_t> &menuPAL = resource.getAsset("Title palette");
-					gfx.loadPalette(menuPAL);
-					gfx.zoomIntoImage(menuBMP);
-				}
-
-		}
-
-		// poll our inputs
-		while (SDL_PollEvent(&event)) {
-			switch (event.type) {
-			// this is the window x being clicked.
-			case SDL_EVENT_QUIT:
-				done = true;
-				break;
-				// process the mouse data by passing it to ngl class
-			case SDL_EVENT_MOUSE_MOTION:
-			case SDL_EVENT_MOUSE_BUTTON_DOWN:
-			case SDL_EVENT_MOUSE_BUTTON_UP:
-				break;
-
-				// now we look for a keydown event
-			case SDL_EVENT_KEY_DOWN: {
-				switch (event.key.key) {
-				// if it's the escape key quit
-				case SDLK_ESCAPE:
-					if ( state == STATE_INTRO ){
-						gfx.stopVideo();
-						mixer.stopMusic();
-					} else
-						done = true;
-					break;
-				case SDLK_W:
-					mixer.playSound(snd);
-					break;
-				case SDLK_S:
-					mixer.playMusic(xmidi);
-					break;
-				default:
-					break;
-				} // end of key process
-			}
-				break; // end of keydown
-
-			default:
-				break;
-			} // end of event switch
-		} // end pool loop
-
-
-		gfx.update();		// update our screen
-		mixer.update();		// update our sounds
-
-		if (isSecond) {
-			std::cout << "Wall Clock: " << std::dec << currentSecond << " average " << fps << "fps"
-					//<< " sleeping for: " << (int) gfx.getSleep() << "ms "
-					<< "\r" << std::flush;
-			isSecond = false;
-			fps = 0;
-		}
-
-		uint32_t sleep = gfx.getSleep();
-		if ( sleep > 0 )
-			SDL_Delay(gfx.getSleep());
-		else {
-			SDL_Delay(fps/5);
-		}
-	}
-
-	// Save user settings
-	//settings.saveUser(settingspath);
-
-	std::cout << "Quitting peacefully." << std::endl;
+	// A real game install, no flags: the full game. The SOP boot plays the
+	// intro via the program chain (CINE mode / auto-detect), then runs the
+	// interactive title menu -- everything the old hand-coded intro/menu demo
+	// loop that lived here faked, minus the dead ends (its faded-in title
+	// image had no SOP behind it, so nothing was selectable). Museum code
+	// removed; git history has it.
+	bootObject(resource, "start");
 }
 

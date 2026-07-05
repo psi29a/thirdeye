@@ -3,7 +3,9 @@
 
 #include "xmidi.hpp"
 
+#include <chrono>
 #include <map>
+#include <string>
 #include <vector>
 #include <stdint.h>
 #include <iostream>
@@ -70,12 +72,21 @@ Sources() {
 
 class Mixer {
 private:
-	const ALCchar *defaultDeviceName = nullptr;
 	ALCdevice *device = nullptr;
 	ALCcontext *context = nullptr;
 	bool mt32 = false;
 	std::map<ALuint, Sources> mSources;
 	std::vector<std::string> enumerate();
+	// Follow the system default output while running (OpenMW's
+	// DefaultDeviceThread, sans thread: polled from update() every ~2 s and
+	// migrated in place with alcReopenDeviceSOFT -- playing sources survive).
+	// mReopenFn is the ALC_SOFT_reopen_device entry point (null if absent,
+	// e.g. Apple's framework OpenAL); stored untyped so the header needs no
+	// alext.h guards.
+	void followDefaultDevice();
+	void *mReopenFn = nullptr;
+	std::string mOpenedName;
+	std::chrono::steady_clock::time_point mLastDevCheck{};
 public:
 	Mixer();
 	virtual ~Mixer();

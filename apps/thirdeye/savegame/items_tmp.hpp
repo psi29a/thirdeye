@@ -106,6 +106,11 @@ struct ItemsTmp {
 	};
 
 	Position position{};
+	// Kernel option bytes from the same object-0 record (B:bar_graphs@247,
+	// B:sounds@248 -- see kernel.dasm exported variables). Default 1, matching
+	// the shipped QSP scaffold, for truncated/absent saves.
+	uint8_t barGraphs = 1;
+	uint8_t soundsOn = 1;
 	// Up to 10 character records: 4 party + 2 joined NPCs + 4 reserve slots.
 	// Empty slots have classNumber=0 (and an empty name); the caller should
 	// gate on classNumber == 1369 to act on live PC records only.

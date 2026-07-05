@@ -224,6 +224,8 @@ private:
 
 	int32_t mCurrentEventType = SYS_FREE; // event being dispatched (cancel guard)
 	int32_t mLastTimerBeat = INT32_MIN;   // last heartbeat we posted a timer for
+	int32_t mTimerBase = INT32_MIN;       // heartbeat rebase per program launch
+	                                      // (DOS exec-replace semantics; see reset())
 	bool mVerbose = false;
 };
 

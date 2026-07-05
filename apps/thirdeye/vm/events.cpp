@@ -51,6 +51,19 @@ void EventSystem::reset() {
 		mWindows[i] = Win{0, 0, 319, 199, -1, true};
 	mPointX = mPointY = 0;
 	mLastLeft = mLastRight = false;
+
+	// Timer rebase: in DOS every program launch() EXEC-REPLACES the process,
+	// so INTRFACE.C's heartbeat restarts at 0 for each program (menu, game,
+	// ...). Our single process keeps SDL ticks monotonic across the chain, so
+	// without a rebase the game session inherits the menu's elapsed
+	// heartbeats -- and every SOP notify threshold computed from the kernel's
+	// tick counter (monster my-turn = tick+N, ~100) is instantly and forever
+	// expired against a heartbeat already in the thousands: every monster
+	// acted on EVERY tick and the QSP party was dead one second after boot.
+	// reset() runs at each program relaunch (the exec-replace stand-in), so
+	// re-arming the baseline here restores the DOS timeline.
+	mTimerBase = INT32_MIN;
+	mLastTimerBeat = INT32_MIN;
 }
 
 // add_notify_request(): pop a slot off the free chain and append it to the end
@@ -463,6 +476,11 @@ void EventSystem::postTimer(int32_t heartbeat) {
 	if (heartbeat == mLastTimerBeat)
 		return;
 	mLastTimerBeat = heartbeat;
+	// Rebase to the first heartbeat seen after reset() so each program in the
+	// chain starts at ~0, like the DOS exec-replace did (see reset()).
+	if (mTimerBase == INT32_MIN)
+		mTimerBase = heartbeat;
+	heartbeat -= mTimerBase;
 	int32_t ev = findEvent(SYS_TIMER, -1);
 	if (ev == -1)
 		addEvent(SYS_TIMER, heartbeat, -1);

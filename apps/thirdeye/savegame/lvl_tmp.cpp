@@ -1,6 +1,7 @@
 #include "lvl_tmp.hpp"
 
 #include "../resources/res.hpp"
+#include "../vm/events.hpp"
 #include "../vm/objects.hpp"
 
 #include <algorithm>
@@ -15,7 +16,7 @@
 namespace THIRDEYE::savegame {
 
 int loadLevelObjects(int level, VM::ObjectSystem &objects,
-                     RESOURCES::Resource &res) {
+                     VM::EventSystem &events, RESOURCES::Resource &res) {
 	constexpr uint16_t kDungeonClass = 1381, kEntities = 1370, kNPC = 1622;
 	int dn = objects.firstObjectOfClass(kDungeonClass);
 	if (dn < 0)
@@ -71,13 +72,18 @@ int loadLevelObjects(int level, VM::ObjectSystem &objects,
 		// global object below. Don't trust the on-disk id.
 		if (id < 1000 || id > 1999)
 			continue;
-		// restore_range: whatever lives in the slot is torn down first (its
-		// MSG_DESTROY handler cancels its notify requests) -- both for dead
-		// file slots (destroy_object + continue in the original) and before
-		// re-creating a live one. Without this, a level transition leaves the
-		// old level's entities alive and event-registered as ghosts.
+		// restore_range: whatever lives in the slot is torn down first -- both
+		// for dead file slots (destroy_object + continue in the original) and
+		// before re-creating a live one. destroy_object in RTOBJECT.C is
+		// MSG_DESTROY *plus* cancel_entity_requests -- the cancel is the
+		// runtime's job, NOT the SOP handler's. Skipping it leaked every
+		// destroyed object's notify requests; with the boot flow loading each
+		// level twice, the 768-slot list overflowed already at LVL03, so the
+		// tail of the second load's monsters never got their AI notifies
+		// (watch-for-party / my-turn) registered -- passive mists.
 		try { objects.destroyObject(id); }
 		catch (const std::exception &) {}
+		events.cancelEntityRequests(id);
 		if (clsName == 0xFFFFFFFFu || size < 6)
 			continue; // dead slot
 		uint16_t cls = static_cast<uint16_t>(clsName);
@@ -148,24 +154,15 @@ int loadLevelObjects(int level, VM::ObjectSystem &objects,
 				cellp[0] = id & 0xFF;
 				cellp[1] = (id >> 8) & 0xFF;
 			}
-			// Seed W:NPCstat@1622:0 from report(1) for monsters. NPC.restore
-			// caches report(1) into a scratch local but NEVER writes W:NPCstat
-			// wholesale (it only conditionally ORs bit 0x20) -- the class stat
-			// flags (incl. 0x40 = incorporeal) are placed into W:NPCstat when a
-			// monster is first built, which the original save then persists. The
-			// shipped QSP LVLnn.TMP carries a stale W:NPCstat (0x0001) at that
-			// offset, so without this seed PC.roll-to-hit reads bit 0x40 = 0 and
-			// never auto-hits ethereal monsters (grave mist / sword wraith): every
-			// swing "misses". Seed BEFORE restore so its 0x20 tweak lands on top.
-			if (isMonster) {
-				try {
-					int32_t rep1 = objects.send(id, 18, {1}); // report(1) = class NPCstat
-					if (uint8_t *p = objects.classStaticPtr(id, kNPC, 0, 2)) {
-						p[0] = rep1 & 0xFF;
-						p[1] = (rep1 >> 8) & 0xFF;
-					}
-				} catch (const std::exception &) {}
-			}
+			// W:NPCstat comes VERBATIM from the save file (the memcpy above),
+			// exactly like the original restore_range -- the 0x0001 the shipped
+			// QSP LVLnn.TMP carries is correct, not stale. A previous bring-up
+			// hack seeded it from report(1) (the class CAPABILITY flags) to
+			// force hits to land; report(1)'s bit 0x40 overlaps NPCstat's
+			// "petrified" bit, so every monster died to one blow with the
+			// weapons class's petrified-kill message ("The statue crumbles to
+			// dust"). The real reason swings missed was the misported rnd()
+			// (see rtcode.cpp): rnd(1,20) rolled 0 forever.
 			// SEND "restore" (M:2) to EVERY restored object -- restore_range does
 			// `RT_execute(index, MSG_RESTORE)` unconditionally (restoring=1 at all
 			// level-load call sites in EYE.C). NPC.restore registers the
@@ -182,6 +179,7 @@ int loadLevelObjects(int level, VM::ObjectSystem &objects,
 			if (created) {
 				try { objects.destroyObject(id); }
 				catch (const std::exception &) {}
+				events.cancelEntityRequests(id);
 			}
 		}
 	}

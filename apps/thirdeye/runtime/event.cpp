@@ -259,9 +259,13 @@ void runDebugHooks(VM::ObjectSystem &objects, RESOURCES::Resource &res) {
 			setS(1622, 5, carriedHead, 2);  // NPC carried (head of carried-item chain)
 			// ponytail: this exists because NPC.die loops on W:carried != -1; an
 			// uninitialized 0 walks into obj 0 and stalls the death path.
-			int32_t ns = 0;
-			try { ns = objects.send(monIdx, 18, {1}); } catch (...) {}
-			setS(1622, 0, ns, 2); // NPCstat (from report(1))
+			// NPCstat = 1, matching the shipped save records. Do NOT seed it
+			// from report(1): those are class CAPABILITY flags whose bit 0x40
+			// overlaps NPCstat's "petrified" bit -- a petrified target dies to
+			// one blow with the "statue crumbles to dust" message (weapons
+			// class kill branch). See lvl_tmp.cpp.
+			int32_t ns = 1;
+			setS(1622, 0, ns, 2); // NPCstat
 			if (uint8_t *p = objects.classStaticPtr(
 			        dn, 1381, 1024 + 4096 + (fy * 64 + fx * 2), 2)) {
 				p[0] = monIdx & 0xFF; p[1] = (monIdx >> 8) & 0xFF;
