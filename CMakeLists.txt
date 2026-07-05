@@ -584,6 +584,14 @@ if (APPLE)
                     "${_dmg_stage_app}/Contents/MacOS/daesoptests"
                     "${_dmg_stage_app}/Contents/MacOS/runtests"
                     "${_dmg_stage_app}/Contents/MacOS/bytecode.def"
+            # Wipe any bundled Qt state that may have been left in the build
+            # tree by earlier deploy runs. Otherwise macdeployqt sees "file
+            # exists" and skips, leaving stale frameworks whose plugins
+            # collide with fresh Homebrew Qt at dev-runtime.
+            COMMAND ${CMAKE_COMMAND} -E rm -rf
+                    "${_dmg_stage_app}/Contents/Frameworks"
+                    "${_dmg_stage_app}/Contents/PlugIns"
+                    "${_dmg_stage_app}/Contents/Resources/qt.conf"
             # macdeployqt's default target is the bundle's main executable
             # (thirdeye-launcher, which links Qt). Pass -executable= for the
             # engine so its non-Qt deps (SDL3, WildMIDI, OpenAL) also get
