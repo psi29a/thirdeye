@@ -29,28 +29,34 @@ One window, one Play button. Tabs behind it iff the flat layout gets crowded.
 | Field | Widget | Persisted as |
 |---|---|---|
 | Path to `EYE.RES` | `QLineEdit` + Browse | `QSettings` `gamePath` |
-| Scale | `QComboBox` (1/2/3/4) | `scale` |
-| Fullscreen | `QCheckBox` | `fullscreen` |
+| Scale | `QComboBox` (1×–5×, default 3×) | `scale` |
 | Skip intro | `QCheckBox` (default on) | `skipIntro` |
 | Skip menu | `QCheckBox` (default off) | `skipMenu` |
-| Debug VM trace → file | `QCheckBox` + path | `debugLog` |
+| Disable sound | `QCheckBox` (default off) | `nosound` |
+| VM debug trace | `QCheckBox` (default off) | `debug` |
+
+Fullscreen deferred — engine has no `--fullscreen` flag yet; add it to
+`apps/thirdeye/main.cpp` and surface a checkbox as a follow-up.
 
 `QSettings` is Qt-stdlib — no config file format to invent. Writes to
 `~/Library/Preferences/…`, `~/.config/…`, or the registry per platform.
 
 ### Layout sketch
 
-```
-┌─ Thirdeye ──────────────────────────────────┐
-│ Game folder: [/path/to/eob3        ] [Browse]│
-│              ✓ Found EYE.RES                 │
-│                                              │
-│ Video:  Scale [3x ▾]   ☐ Fullscreen          │
-│ Boot:   ☑ Skip intro   ☐ Skip menu           │
-│ Debug:  ☐ Write VM trace to [~/thirdeye.log ]│
-│                                              │
-│ [ Where do I get the game? ]      [ Play ▶ ] │
-└──────────────────────────────────────────────┘
+```text
+┌─ Thirdeye Launcher ─────────────────────────┐
+│ Game folder: [/path/to/eob3       ] [Browse]│
+│              ✓ Found EYE.RES                │
+│                                             │
+│ Video ─ Scale: [3× ▾]                       │
+│                                             │
+│ Boot  ─ ☑ Skip intro cinematic              │
+│         ☐ Skip title menu                   │
+│         ☐ Disable sound                     │
+│         ☐ VM debug trace (verbose stdout)   │
+│                                             │
+│ [ Where do I get the game? ]    [ Play ▶ ]  │
+└─────────────────────────────────────────────┘
 ```
 
 Single page. Add tabs (Video / Gameplay / Debug) only if a Phase-2 addition
@@ -82,8 +88,10 @@ disabled until green.
 
 ### Launch
 
-`QProcess::startDetached("thirdeye", args)`. Args built from the checkboxes.
-Launcher exits after spawn — no "running" state to babysit.
+Resolve the engine beside the launcher via
+`QCoreApplication::applicationDirPath() + "/thirdeye"` (`+ ".exe"` on
+Windows), then `QProcess::startDetached(exe, args)`. Args built from the
+checkboxes. Launcher exits after spawn — no "running" state to babysit.
 
 ## Tech choices (short)
 
@@ -111,7 +119,7 @@ is the whole product for most users.
 - [x] `MainWindow` with fields above
 - [x] `QSettings` load/save (native store per platform)
 - [x] Path validation (looks for `EYE.RES` in picked folder)
-- [x] Play button → `QProcess::startDetached("./thirdeye", args)`
+- [x] Play button → `QProcess::startDetached(applicationDirPath()+"/thirdeye"[+".exe" on Win], args)`
 - [x] "Where do I get it?" dialog with GOG + Internet Archive buttons
 - [ ] **Deferred:** Fullscreen checkbox — engine has no `--fullscreen` flag
       yet. Add a flag to `apps/thirdeye/main.cpp` + wire it through the SDL

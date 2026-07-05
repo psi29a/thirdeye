@@ -561,9 +561,14 @@ if (APPLE)
     # it. Staging keeps the build tree usable after packaging — daesop still
     # has its bytecode.def next to it in build/thirdeye.app/.
     if (BUILD_LAUNCHER)
-        get_target_property(_qt_qmake Qt6::qmake IMPORTED_LOCATION)
-        get_filename_component(_qt_bin "${_qt_qmake}" DIRECTORY)
-        find_program(MACDEPLOYQT_EXE macdeployqt HINTS "${_qt_bin}" REQUIRED)
+        # Qt's imported targets (Qt6::qmake) are created inside apps/launcher's
+        # scope by find_package(Qt6), so they're not guaranteed visible here.
+        # Qt6_DIR is a CACHE variable (globally visible) set to the dir holding
+        # Qt6Config.cmake, i.e. <qt>/lib/cmake/Qt6 -- three levels up is <qt>,
+        # and macdeployqt ships in <qt>/bin.
+        find_program(MACDEPLOYQT_EXE macdeployqt
+                     HINTS "${Qt6_DIR}/../../../bin"
+                     REQUIRED)
 
         set(_dmg_stage    "${Thirdeye_BINARY_DIR}/dmg-staging")
         set(_dmg_stage_app "${_dmg_stage}/thirdeye.app")
