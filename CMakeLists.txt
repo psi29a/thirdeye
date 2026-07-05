@@ -286,7 +286,7 @@ if(DPKG_PROGRAM)
     SET(CPACK_DEBIAN_PACKAGE_DESCRIPTION "Thirdeye is an attempt at recreating the engine for the popular role-playing games produced by Strategic Simulations, Inc. You need to own and install the original games for Thirdeye to work.")
     SET(CPACK_DEBIAN_PACKAGE_NAME "Thirdeye")
     SET(CPACK_DEBIAN_PACKAGE_VERSION "${VERSION_STRING}")
-    SET(CPACK_PACKAGE_EXECUTABLES "thirdeye;Thirdeye thirdeyelauncher;ThirdeyeLauncher daesop;Daesop;runtests;RunTests")
+    SET(CPACK_PACKAGE_EXECUTABLES "thirdeye;Thirdeye thirdeye-launcher;ThirdeyeLauncher daesop;Daesop;runtests;RunTests")
     SET(CPACK_DEBIAN_PACKAGE_DEPENDS "libc6 (>= 2.11.2), libstdc++6 (>= 4.4.5), libuuid1 (>= 2.17.2)")
     SET(CPACK_DEBIAN_PACKAGE_SECTION "Games")
     string(TOLOWER "${CPACK_PACKAGE_NAME}" CPACK_PACKAGE_NAME_LOWERCASE)
@@ -307,7 +307,7 @@ if(WIN32)
     INSTALL(FILES
         "${Thirdeye_SOURCE_DIR}/README.md"
         "${Thirdeye_SOURCE_DIR}/GPL3.txt"
-        "${Thirdeye_BINARY_DIR}/Release/thirdeyelauncher.exe"
+        "${Thirdeye_BINARY_DIR}/Release/thirdeye-launcher.exe"
         "${Thirdeye_BINARY_DIR}/Release/thirdeye.exe"
         "${Thirdeye_BINARY_DIR}/Release/daesop.exe"
         "${Thirdeye_BINARY_DIR}/Release/runtests.exe"
@@ -321,7 +321,7 @@ if(WIN32)
     SET(CPACK_PACKAGE_VERSION_MAJOR ${THIRDEYE_VERSION_MAJOR})
     SET(CPACK_PACKAGE_VERSION_MINOR ${THIRDEYE_VERSION_MINOR})
     SET(CPACK_PACKAGE_VERSION_PATCH ${THIRDEYE_VERSION_RELEASE})
-    SET(CPACK_PACKAGE_EXECUTABLES "thirdeye;Thirdeye;thirdeyelauncher;Thirdeye Launcher;daesop;Daesop;runtests;RunTests")
+    SET(CPACK_PACKAGE_EXECUTABLES "thirdeye;Thirdeye;thirdeye-launcher;Thirdeye Launcher;daesop;Daesop;runtests;RunTests")
     SET(CPACK_NSIS_CREATE_ICONS_EXTRA "CreateShortCut '\$SMPROGRAMS\\\\$STARTMENU_FOLDER\\\\Readme.lnk' '\$INSTDIR\\\\README.md'")
     SET(CPACK_NSIS_DELETE_ICONS_EXTRA "
         !insertmacro MUI_STARTMENU_GETFOLDER Application $MUI_TEMP
@@ -333,7 +333,7 @@ if(WIN32)
     SET(CPACK_NSIS_DISPLAY_NAME "Thirdeye ${THIRDEYE_VERSION}")
     SET(CPACK_NSIS_HELP_LINK "http:\\\\\\\\www.mindwerks.net")
     SET(CPACK_NSIS_URL_INFO_ABOUT "http:\\\\\\\\www.mindwerks.net")
-    SET(CPACK_NSIS_INSTALLED_ICON_NAME "thirdeyelauncher.exe")
+    SET(CPACK_NSIS_INSTALLED_ICON_NAME "thirdeye-launcher.exe")
     SET(CPACK_NSIS_MUI_ICON "${Thirdeye_SOURCE_DIR}/apps/launcher/resources/images/thirdeye.ico")
     SET(CPACK_NSIS_MUI_UNIICON "${Thirdeye_SOURCE_DIR}/apps/launcher/resources/images/thirdeye.ico")
     SET(CPACK_PACKAGE_ICON "${Thirdeye_SOURCE_DIR}\\\\files\\\\thirdeye.bmp")
@@ -443,7 +443,7 @@ if (WIN32)
 
     set_target_properties(components PROPERTIES COMPILE_FLAGS ${WARNINGS})
     if (BUILD_LAUNCHER)
-		set_target_properties(thirdeyelauncher PROPERTIES COMPILE_FLAGS ${WARNINGS})
+		set_target_properties(thirdeye-launcher PROPERTIES COMPILE_FLAGS ${WARNINGS})
 	endif (BUILD_LAUNCHER)
     if (BUILD_DAESOP)
         set_target_properties(daesop PROPERTIES COMPILE_FLAGS ${WARNINGS})
@@ -551,6 +551,59 @@ if (APPLE)
         fixup_bundle(\"${APPS}\" \"${PLUGINS}\" \"${DIRS}\")
         " COMPONENT Runtime)
         include(CPack)
+
+    # `dmg` target: build a distributable .dmg. Needs BUILD_LAUNCHER=ON so the
+    # bundle's CFBundleExecutable (thirdeye-launcher) actually exists.
+    #
+    # We stage a copy of the .app into build/dmg-staging/, strip dev-only tools
+    # (arc, daesop, runtests, daesoptests, bytecode.def), let macdeployqt bundle
+    # Qt frameworks + platform plugins into the staged copy, then hdiutil-wrap
+    # it. Staging keeps the build tree usable after packaging — daesop still
+    # has its bytecode.def next to it in build/thirdeye.app/.
+    if (BUILD_LAUNCHER)
+        get_target_property(_qt_qmake Qt6::qmake IMPORTED_LOCATION)
+        get_filename_component(_qt_bin "${_qt_qmake}" DIRECTORY)
+        find_program(MACDEPLOYQT_EXE macdeployqt HINTS "${_qt_bin}" REQUIRED)
+
+        set(_dmg_stage    "${Thirdeye_BINARY_DIR}/dmg-staging")
+        set(_dmg_stage_app "${_dmg_stage}/thirdeye.app")
+        set(_dmg_path     "${Thirdeye_BINARY_DIR}/Thirdeye-${THIRDEYE_VERSION}.dmg")
+
+        add_custom_target(dmg
+            COMMAND ${CMAKE_COMMAND} -E rm -f  "${_dmg_path}"
+            COMMAND ${CMAKE_COMMAND} -E rm -rf "${_dmg_stage}"
+            COMMAND ${CMAKE_COMMAND} -E make_directory "${_dmg_stage}"
+            # cp -RP preserves the Versions/Current symlinks inside .framework
+            # bundles; cmake -E copy_directory materializes them as directories,
+            # which trips codesign with "bundle format is ambiguous".
+            COMMAND cp -RP "${APP_BUNDLE_DIR}" "${_dmg_stage_app}"
+            # Strip dev-only binaries + bytecode.def from the staged copy.
+            COMMAND ${CMAKE_COMMAND} -E rm -f
+                    "${_dmg_stage_app}/Contents/MacOS/arc"
+                    "${_dmg_stage_app}/Contents/MacOS/daesop"
+                    "${_dmg_stage_app}/Contents/MacOS/daesoptests"
+                    "${_dmg_stage_app}/Contents/MacOS/runtests"
+                    "${_dmg_stage_app}/Contents/MacOS/bytecode.def"
+            # macdeployqt's default target is the bundle's main executable
+            # (thirdeye-launcher, which links Qt). Pass -executable= for the
+            # engine so its non-Qt deps (SDL3, WildMIDI, OpenAL) also get
+            # copied into Contents/Frameworks/ and their install_names
+            # rewritten to @executable_path/../Frameworks/... — otherwise the
+            # engine can't load on a machine without Homebrew.
+            COMMAND ${MACDEPLOYQT_EXE} "${_dmg_stage_app}"
+                    -executable=${_dmg_stage_app}/Contents/MacOS/thirdeye
+                    -verbose=1
+            COMMAND hdiutil create
+                    -volname Thirdeye
+                    -srcfolder "${_dmg_stage_app}"
+                    -ov -format UDZO
+                    "${_dmg_path}"
+            DEPENDS thirdeye thirdeye-launcher
+            WORKING_DIRECTORY "${Thirdeye_BINARY_DIR}"
+            COMMENT "Bundling Qt + producing ${_dmg_path}"
+            VERBATIM
+        )
+    endif()
 endif (APPLE)
 
 if (NOT WIN32 AND NOT DPKG_PROGRAM AND NOT APPLE)
@@ -567,7 +620,7 @@ if (NOT WIN32 AND NOT DPKG_PROGRAM AND NOT APPLE)
     # Install binaries
     INSTALL(PROGRAMS "${Thirdeye_BINARY_DIR}/thirdeye" DESTINATION "${BINDIR}" )
     IF(BUILD_LAUNCHER)
-        INSTALL(PROGRAMS "${Thirdeye_BINARY_DIR}/thirdeyelauncher" DESTINATION "${BINDIR}" )
+        INSTALL(PROGRAMS "${Thirdeye_BINARY_DIR}/thirdeye-launcher" DESTINATION "${BINDIR}" )
     ENDIF(BUILD_LAUNCHER)
     IF(BUILD_DAESOP)
         INSTALL(PROGRAMS "${Thirdeye_BINARY_DIR}/daesop" DESTINATION "${BINDIR}" )

@@ -39,7 +39,7 @@ jobs:
       - name: Install dependencies (macOS)
         if: runner.os == 'macOS'
         run: |
-          brew install cmake ninja sdl3 openal-soft wildmidi
+          brew install cmake ninja sdl3 openal-soft wildmidi qt
 
       # Expose the GitHub Actions cache endpoint/token to vcpkg's x-gha binary
       # source (set via VCPKG_BINARY_SOURCES above).
@@ -109,10 +109,16 @@ jobs:
       - name: Configure (Linux/macOS)
         if: runner.os != 'Windows'
         run: |
+          EXTRA_ARGS=""
+          if [ "${{ runner.os }}" = "macOS" ]; then
+            # macOS builds a distributable .dmg -> needs the Qt6 launcher
+            EXTRA_ARGS="-DBUILD_LAUNCHER=ON -DCMAKE_PREFIX_PATH=$(brew --prefix qt)"
+          fi
           cmake -S . -B build -G Ninja \
             -DCMAKE_BUILD_TYPE=${{ matrix.config }} \
             -DCMAKE_C_COMPILER_LAUNCHER=ccache \
-            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
+            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
+            $EXTRA_ARGS
         shell: bash
 
       - name: Configure (Windows)
@@ -141,11 +147,27 @@ jobs:
           $env:PATH = "$env:USERPROFILE\vcpkg\installed\x64-windows\bin;$env:PATH"
           ctest --test-dir build --output-on-failure -C ${{ matrix.config }}
 
-      - name: Package artifacts (Linux/macOS)
-        if: runner.os != 'Windows'
+      # macOS: build a distributable .dmg. The `dmg` target (defined in the
+      # top-level CMakeLists.txt when BUILD_LAUNCHER=ON) runs macdeployqt to
+      # bundle Qt frameworks + platform plugins, then hdiutil-wraps the .app
+      # in a compressed read-only DMG. End users can mount and drag-install.
+      - name: Build DMG (macOS)
+        if: runner.os == 'macOS'
+        run: cmake --build build --target dmg
+        shell: bash
+
+      - name: Package artifacts (Linux)
+        if: runner.os == 'Linux'
         run: |
           mkdir -p artifacts
-          tar -czf artifacts/thirdeye-${{ matrix.os }}.tgz build/thirdeye build/daesop build/thirdeye.app || true
+          tar -czf artifacts/thirdeye-${{ matrix.os }}.tgz build/thirdeye build/daesop || true
+        shell: bash
+
+      - name: Collect DMG artifact (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          mkdir -p artifacts
+          cp build/Thirdeye-*.dmg artifacts/
         shell: bash
 
       - name: Package artifacts (Windows)
