@@ -42,12 +42,19 @@ bool tryHandle(Context &ctx, const std::string &fn,
 	// start -- so a menu choice's poke+launch routes to the right next mode
 	// instead of falling through to the following CASE branch.
 	if (fn == "launch") {
-		std::string program;
+		// launch(mode, program, arg1, arg2). mode is an int, the rest are Code-
+		// space string addresses. Collect every non-empty string: the first is
+		// the program ("CINE.EXE"), the rest are the sub-program's own args
+		// (e.g. "INTRO.GFF" / "FINALE.GFF" for CINE.EXE) — runExternalProgram
+		// dispatches on them.
+		Relaunch r;
 		for (const VM::Value &a : args) {
 			std::string s = ctx.vm.readCodeString(static_cast<uint32_t>(a));
-			if (!s.empty()) { program = std::move(s); break; }
+			if (s.empty()) continue;
+			if (r.program.empty()) r.program = std::move(s);
+			else                   r.extras.push_back(std::move(s));
 		}
-		throw Relaunch{std::move(program)};
+		throw r;
 	}
 	return false;
 }

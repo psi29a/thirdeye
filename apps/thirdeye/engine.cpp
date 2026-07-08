@@ -841,7 +841,8 @@ void THIRDEYE::Engine::bootObject(RESOURCES::Resource &resource,
 		// false -> we quit instead of relaunching. allocAt(0, ...) replaces
 		// whatever stale tombstone is at slot 0 each time.
 		int objIndex = objects.createInstanceAt(0, classNumber);
-		std::string relaunch; // non-empty => a sub-program to run, then re-boot
+		std::string relaunch;                 // non-empty => sub-program to run
+		std::vector<std::string> relaunchExtras;
 		try {
 			VM::Value result = objects.send(objIndex, MSG_CREATE, {});
 			// AESOP self-destroy convention: when start cancels back to itself
@@ -886,6 +887,7 @@ void THIRDEYE::Engine::bootObject(RESOURCES::Resource &resource,
 			quit = true;
 		} catch (const Relaunch &r) {
 			relaunch = r.program.empty() ? " " : r.program; // mark for handling
+			relaunchExtras = r.extras;
 		} catch (const VM::VmError &e) {
 			handleBootWall(e, gfx.get());
 			quit = true;
@@ -897,7 +899,8 @@ void THIRDEYE::Engine::bootObject(RESOURCES::Resource &resource,
 		// the next start lands on the title menu rather than the chargen-transfer.
 		if (!relaunch.empty()) {
 			try {
-				if (!runExternalProgram(relaunch, gfx.get(), resource)) {
+				if (!runExternalProgram(relaunch, gfx.get(), resource, mixer,
+			                        relaunchExtras)) {
 					mem.insert_or_assign(1264, MODE_INTR);
 					std::cout << "  [sub-program cancelled -- next start: INTR]"
 					          << std::endl;
@@ -926,14 +929,31 @@ void THIRDEYE::Engine::bootObject(RESOURCES::Resource &resource,
 // thing; here we drive the rich behaviour for the programs we can.
 bool THIRDEYE::Engine::runExternalProgram(const std::string &program,
                                           GRAPHICS::Graphics *gfx,
-                                          RESOURCES::Resource &resource) {
+                                          RESOURCES::Resource &resource,
+                                          MIXER::Mixer &mixer,
+                                          const std::vector<std::string> &extras) {
 	std::string p = program;
 	std::transform(p.begin(), p.end(), p.begin(),
 	               [](unsigned char c) { return std::tolower(c); });
 	if (p.find("cine") != std::string::npos) {
-		// "Introduction": the original launches CINE.EXE to play INTRO.GFF, then
-		// chain-launches back to the title menu. Drive thirdeye's own GFF player.
-		playCinematic(gfx, resource, "INTRO.GFF");
+		// CINE.EXE takes the .GFF to play as its arg -- INTRO.GFF for the
+		// title-menu intro, FINALE.GFF for the quit farewell, DARK.GFF /
+		// LICH.GFF for the mid-game cutscenes. Pick the first extra that
+		// looks like a .gff filename; fall back to INTRO for the original
+		// argless "Introduction" behaviour.
+		std::string gff = "INTRO.GFF";
+		for (const std::string &e : extras) {
+			std::string el = e;
+			std::transform(el.begin(), el.end(), el.begin(),
+			               [](unsigned char c) { return std::tolower(c); });
+			if (el.size() >= 4 &&
+			    el.compare(el.size() - 4, 4, ".gff") == 0) {
+				gff = e;
+				break;
+			}
+		}
+		std::cout << "  [program chain: CINE -> " << gff << "]" << std::endl;
+		playCinematic(gfx, resource, gff, mixer);
 		return true;
 	}
 	if (p.find("chgen") != std::string::npos ||
@@ -1017,7 +1037,8 @@ bool THIRDEYE::Engine::runExternalProgram(const std::string &program,
 // draws the menu over the final frame.
 void THIRDEYE::Engine::playCinematic(GRAPHICS::Graphics *gfx,
                                      RESOURCES::Resource &resource,
-                                     const std::string &gffName) {
+                                     const std::string &gffName,
+                                     MIXER::Mixer &mixer) {
 	if (mSkipIntro) {
 		std::cout << "  [program chain: --skip-intro set; skipping " << gffName
 		          << "]" << std::endl;
@@ -1038,7 +1059,12 @@ void THIRDEYE::Engine::playCinematic(GRAPHICS::Graphics *gfx,
 	// abort the boot (we're on the relaunch path), so skip the cinematic instead.
 	// QuitRequested (below) is not a std::exception, so window-close still unwinds.
 	try {
-		MIXER::Mixer mixer;
+		// Use the caller-supplied session mixer (a stack local in bootObject,
+		// passed down as a param). A second Mixer would open its own OpenAL
+		// device+context, steal current-context on construct, then destroy
+		// that context on scope-exit — leaving *no* context current. The
+		// rest of the game then silently no-ops every alSourcePlay. Reusing
+		// the session mixer ensures the game's audio survives the intro.
 		RESOURCES::GFFI video(std::move(gffPath));
 		mixer.playMusic(video.getMusic());
 		gfx->playVideo(video.getSequence());
@@ -1063,8 +1089,14 @@ void THIRDEYE::Engine::playCinematic(GRAPHICS::Graphics *gfx,
 			uint32_t sleep = gfx->getSleep();
 			SDL_Delay(sleep > 0 ? sleep : 16);
 		}
+		// Video ended on its own (not skipped, not quit). The old local-Mixer
+		// version relied on the dtor to shut music down; now that we share
+		// the session mixer, we have to say so explicitly, or the cinematic's
+		// music keeps playing into the next screen.
+		mixer.stopMusic();
 	} catch (const std::exception &e) {
 		gfx->stopVideo();
+		mixer.stopMusic();
 		std::cout << "  [program chain: failed to play " << gffName << " ("
 		          << e.what() << "); skipping cinematic]" << std::endl;
 	}

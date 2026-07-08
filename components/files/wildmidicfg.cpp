@@ -42,6 +42,18 @@ std::string thirdeyeAppDataDir()
 #endif
 }
 
+std::string appDataOpl3Sf2()
+{
+    std::string dir = thirdeyeAppDataDir();
+    if (dir.empty())
+        return {};
+#if defined(_WIN32)
+    return dir + "\\OPL-3_FM_128M.sf2";
+#else
+    return dir + "/OPL-3_FM_128M.sf2";
+#endif
+}
+
 std::string appDataWildmidiCfg()
 {
     std::string dir = thirdeyeAppDataDir();
@@ -64,6 +76,10 @@ std::string findWildmidiCfg(const std::string& override_)
 
     if (std::string env = envOrEmpty("THIRDEYE_WILDMIDI_CFG"); !env.empty())
         return env;
+
+    if (std::string sf2 = appDataOpl3Sf2();
+        !sf2.empty() && fs::exists(sf2, ec))
+        return sf2;
 
     if (std::string appdata = appDataWildmidiCfg();
         !appdata.empty() && fs::exists(appdata, ec))

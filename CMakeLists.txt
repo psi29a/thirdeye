@@ -198,18 +198,18 @@ if(OPENAL_LIBRARY)
     message(STATUS "Using OpenAL library: ${OPENAL_LIBRARY}")
 endif()
 
-# WildMIDI — vendored via FetchContent + local patch. The patch teaches the
-# cfg tokenizer to honour double-quotes so paths with spaces
-# (`dir "~/Library/Application Support/..."`) parse as a single token.
-# TEMPORARY: drop the PATCH_COMMAND + bump GIT_TAG when the fix ships upstream
-# (psi29a is the maintainer, so this'll be a short-lived local carry).
+# WildMIDI — vendored via FetchContent. Pinned to a master commit ahead of
+# the 0.5.0 tag for two features we depend on:
+#   * SoundFont2 (SF2) rendering via TinySoundFont — WildMidi_Init now takes
+#     either a .sf2 file or a cfg; the launcher's OPL-3 setup just downloads
+#     the .sf2 and points at it, no unsf conversion step.
+#   * Quoted paths in cfg files (our previous local carry, now upstream).
+# Bump to GIT_TAG wildmidi-0.5.0 once that's tagged and drop this note.
 FetchContent_Declare(
     wildmidi
     GIT_REPOSITORY https://github.com/Mindwerks/wildmidi.git
-    GIT_TAG        wildmidi-0.4.6
-    PATCH_COMMAND  git apply --whitespace=nowarn
-                   "${CMAKE_SOURCE_DIR}/cmake/patches/wildmidi-quoted-paths.patch"
-    UPDATE_DISCONNECTED TRUE   # don't re-fetch (and re-patch) on every configure
+    GIT_TAG        46b10bf9c18644c20de9a925a252da38198e2df5 # master 2026-07-08
+    UPDATE_DISCONNECTED TRUE   # don't re-fetch on every configure
 )
 set(WANT_PLAYER  OFF CACHE BOOL "" FORCE)  # skip WildMIDI's CLI player
 set(WANT_STATIC  OFF CACHE BOOL "" FORCE)
@@ -245,37 +245,6 @@ else()
     set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${Thirdeye_BINARY_DIR}")
 endif()
 
-# unsf: converts SF2 soundfonts to GUS .pat files that WildMIDI can read.
-# Shipped inside the app bundle so the launcher's "Set up authentic OPL-3
-# music" flow can spawn it after downloading OPL-3_FM_128M.sf2 on the user's
-# machine. Gated on BUILD_LAUNCHER — nothing else in the tree needs it.
-# Placed *after* CMAKE_RUNTIME_OUTPUT_DIRECTORY is set so unsf's binaries
-# land next to thirdeye in the bundle instead of _deps/unsf-build/.
-#
-# TEMPORARY: this whole pipeline (fetch unsf + convert on user machine) goes
-# away the day libWildMidi reads .sf2 natively; at that point the launcher
-# just downloads the .sf2 and points --wildmidi-cfg at it directly.
-if (BUILD_LAUNCHER)
-    FetchContent_Declare(
-        unsf
-        GIT_REPOSITORY https://github.com/psi29a/unsf.git
-        GIT_TAG        c5e5a8c30c88203d52f48a492ed57099e44a2ad2 # master 2026-07
-    )
-    # unsf still says cmake_minimum_required(VERSION 2.8); modern CMake refuses
-    # that. Scope the compat shim to just unsf's parse.
-    set(CMAKE_POLICY_VERSION_MINIMUM 3.5)
-    FetchContent_MakeAvailable(unsf)
-    unset(CMAKE_POLICY_VERSION_MINIMUM)
-    # Ship the *static* unsf binary (renamed to plain `unsf` next to
-    # thirdeye-launcher) — self-contained, no libunsf dylib to bundle.
-    # unsf's dynamic exe target links a hardcoded ${CMAKE_BINARY_DIR}/libunsf
-    # path that breaks when output dirs are redirected, so exclude the
-    # dynamic targets from ALL rather than fight it.
-    set_target_properties(unsf libunsf_dynamic PROPERTIES EXCLUDE_FROM_ALL ON)
-    set_target_properties(unsf-static PROPERTIES
-        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}"
-        OUTPUT_NAME unsf)
-endif()
 
 if (NOT WIN32 AND NOT APPLE)
     configure_file(${Thirdeye_SOURCE_DIR}/files/thirdeye.desktop
@@ -654,14 +623,27 @@ if (APPLE)
             # engine can't load on a machine without Homebrew.
             COMMAND ${MACDEPLOYQT_EXE} "${_dmg_stage_app}"
                     -executable=${_dmg_stage_app}/Contents/MacOS/thirdeye
-                    -executable=${_dmg_stage_app}/Contents/MacOS/unsf
                     -verbose=1
+            # macdeployqt scans Homebrew qtbase's plugin dir and copies
+            # everything it finds into the bundle, then walks each plugin's
+            # deps. QtPdf / QtSvg / QtVirtualKeyboard live in *separate*
+            # Homebrew formulae we don't install, so the walk fails on those
+            # plugins and prints "ERROR: Cannot resolve rpath ..." — but the
+            # plugins are still copied (broken). Strip them post-hoc so we
+            # don't ship dylibs that will fail to load at runtime. Our
+            # launcher uses none of these plugins. `rm -f` no-ops on absent
+            # files, so this stays safe if macdeployqt gets smarter later.
+            COMMAND ${CMAKE_COMMAND} -E rm -f
+                    "${_dmg_stage_app}/Contents/PlugIns/imageformats/libqpdf.dylib"
+                    "${_dmg_stage_app}/Contents/PlugIns/imageformats/libqsvg.dylib"
+                    "${_dmg_stage_app}/Contents/PlugIns/iconengines/libqsvgicon.dylib"
+                    "${_dmg_stage_app}/Contents/PlugIns/platforminputcontexts/libqtvirtualkeyboardplugin.dylib"
             COMMAND hdiutil create
                     -volname Thirdeye
                     -srcfolder "${_dmg_stage_app}"
                     -ov -format UDZO
                     "${_dmg_path}"
-            DEPENDS thirdeye thirdeye-launcher unsf-static
+            DEPENDS thirdeye thirdeye-launcher
             WORKING_DIRECTORY "${Thirdeye_BINARY_DIR}"
             COMMENT "Bundling Qt + producing ${_dmg_path}"
             VERBATIM

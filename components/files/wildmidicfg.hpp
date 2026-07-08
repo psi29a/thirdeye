@@ -4,9 +4,14 @@
 #include <string>
 
 /**
- * Single source of truth for locating wildmidi.cfg. Shared by the engine
- * (sound.cpp, at play-time) and the launcher (Music panel validation +
- * where the OPL-3 setup flow writes patches) so the two can never drift.
+ * Single source of truth for locating what WildMidi_Init should open. Shared
+ * by the engine (sound.cpp, at play-time) and the launcher (Music panel
+ * validation + where the OPL-3 setup writes the .sf2) so the two can never
+ * drift.
+ *
+ * The returned path may be an .sf2 (rendered via TinySoundFont) or a legacy
+ * WildMIDI cfg — WildMidi_Init since 0.5.0 dispatches on the file itself, so
+ * callers pass the string through unchanged.
  */
 namespace Files
 {
@@ -19,15 +24,23 @@ namespace Files
 /// Empty if the environment gives us no home.
 std::string thirdeyeAppDataDir();
 
-/// Where the launcher's OPL-3 setup writes the WildMIDI config:
-/// thirdeyeAppDataDir() + "/patches/wildmidi.cfg". Empty if no home.
+/// Where the launcher's OPL-3 setup writes the soundfont:
+/// thirdeyeAppDataDir() + "/OPL-3_FM_128M.sf2". Empty if no home.
+/// Existence-agnostic (naming convention only) — check with fs::exists.
+std::string appDataOpl3Sf2();
+
+/// Legacy WildMIDI config path (thirdeyeAppDataDir() + "/patches/wildmidi.cfg").
+/// Still recognized in the search order for users with existing configs
+/// (freepats, timidity, older Thirdeye installs). New setups use the .sf2.
 std::string appDataWildmidiCfg();
 
-/// Locate wildmidi.cfg. Search order:
+/// Locate the music path WildMidi_Init should open. Search order:
 ///   1. `override` — returned as-is when non-empty
 ///   2. THIRDEYE_WILDMIDI_CFG env var — returned as-is when set
-///   3. appDataWildmidiCfg() — only if the file exists
-///   4. platform system locations (freepats / distro WildMIDI) — only if
+///   3. appDataOpl3Sf2() — only if the file exists (preferred: what the
+///      launcher's OPL-3 setup writes)
+///   4. appDataWildmidiCfg() — only if the file exists (legacy)
+///   5. platform system locations (freepats / distro WildMIDI) — only if
 ///      the file exists
 /// Empty string if nothing is set up.
 ///
