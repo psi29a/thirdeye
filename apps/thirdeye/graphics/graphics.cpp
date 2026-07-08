@@ -443,6 +443,18 @@ void GRAPHICS::Graphics::zoomIntoImage(std::vector<uint8_t> &bmp) {
 }
 
 void GRAPHICS::Graphics::playVideo(sequence video) {
+	// Reset the same fields stopVideo() clears. Otherwise a second cinematic
+	// (e.g. FINALE/INTRO after in-game Abandon) inherits the game session's
+	// mState — the advance guard at update()'s `mState == NOOP && ...` never
+	// fires and no frames get drawn, even though isVideoPlaying() is true
+	// (so the event loop still runs and the user has to press ESC to skip
+	// an invisible playback).
+	stopVideo();
+	// Also wipe the framebuffer to black. Cinematics only paint the main play
+	// rect; the compass / HUD region a prior game session drew stays visible
+	// otherwise, bleeding through the cinematic. Cold-boot cinematics don't
+	// hit this because the screen was already blank on first draw.
+	fillRect(0, 0, WIDTH - 1, HEIGHT - 1, 0);
 	mVideo = std::move(video);
 }
 

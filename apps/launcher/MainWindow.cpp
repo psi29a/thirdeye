@@ -23,7 +23,6 @@
 #include <QProgressDialog>
 #include <QPushButton>
 #include <QSettings>
-#include <QTextStream>
 #include <QUrl>
 #include <QVBoxLayout>
 
@@ -87,15 +86,14 @@ MainWindow::MainWindow(QWidget* parent) : QWidget(parent) {
     m_musicSetup  = new QPushButton(
         tr("Set up authentic OPL-3 music (recommended)"), this);
     m_musicSetup->setToolTip(tr(
-        "Downloads the OPL-3 FM synthesis soundfont (~135 MB) from Mindwerks "
-        "and converts it to WildMIDI patches on your machine. OPL-3 is the "
-        "SoundBlaster 16 / AdLib chipset EOB3 was scored for — this is the "
-        "authentic 90s sound."));
-    m_musicBrowse = new QPushButton(tr("Browse for existing patches…"), this);
+        "Downloads the OPL-3 FM synthesis soundfont (~135 MB) from Mindwerks. "
+        "OPL-3 is the SoundBlaster 16 / AdLib chipset EOB3 was scored for — "
+        "this is the authentic 90s sound. WildMIDI renders the .sf2 directly."));
+    m_musicBrowse = new QPushButton(tr("Browse for existing soundfont or config…"), this);
     m_musicBrowse->setToolTip(tr(
-        "Point at an existing wildmidi.cfg (e.g. freepats, timidity). Only "
-        "if you know what a GUS patch is — otherwise use the OPL-3 button "
-        "above."));
+        "Point at your own .sf2 soundfont or an existing wildmidi.cfg "
+        "(e.g. freepats, timidity). Only if you already have one — "
+        "otherwise use the OPL-3 button above."));
     connect(m_musicSetup,  &QPushButton::clicked, this, &MainWindow::setupOpl3Music);
     connect(m_musicBrowse, &QPushButton::clicked, this, &MainWindow::browseMusicCfg);
     auto* musicBox = new QGroupBox(tr("Music"), this);
@@ -318,9 +316,9 @@ void MainWindow::validateMusic() {
 
 void MainWindow::browseMusicCfg() {
     const QString f = QFileDialog::getOpenFileName(this,
-        tr("Locate wildmidi.cfg"),
+        tr("Locate soundfont or WildMIDI config"),
         m_musicCfg.isEmpty() ? QDir::homePath() : m_musicCfg,
-        tr("WildMIDI config (wildmidi.cfg *.cfg);;All files (*)"));
+        tr("Soundfont / config (*.sf2 *.cfg);;All files (*)"));
     if (f.isEmpty()) return;
     m_musicCfg = f;
     saveSettings();
@@ -330,8 +328,7 @@ void MainWindow::browseMusicCfg() {
 void MainWindow::setupOpl3Music() {
     if (QMessageBox::question(this, tr("Set up OPL-3 music"),
             tr("This will download the OPL-3 FM soundfont (~135 MB) from "
-               "Mindwerks and convert it to WildMIDI patches on your machine. "
-               "Continue?")) != QMessageBox::Yes) return;
+               "Mindwerks. Continue?")) != QMessageBox::Yes) return;
 
     // Shared app-data dir (components/files/wildmidicfg) — the same place the
     // engine's search looks. Paths with spaces (macOS "Application Support")
@@ -342,19 +339,8 @@ void MainWindow::setupOpl3Music() {
             tr("Could not resolve your user data directory."));
         return;
     }
-    const QString patches = appdata + QStringLiteral("/patches");
-    const QString sf2Path = appdata + QStringLiteral("/OPL-3_FM_128M.sf2");
-    QDir().mkpath(patches);
-
-    QString unsfExe = QCoreApplication::applicationDirPath() + "/unsf";
-#ifdef Q_OS_WIN
-    unsfExe += ".exe";
-#endif
-    if (!QFileInfo::exists(unsfExe)) {
-        QMessageBox::critical(this, tr("unsf missing"),
-            tr("Bundled unsf binary not found at:\n%1").arg(unsfExe));
-        return;
-    }
+    QDir().mkpath(appdata);
+    const QString sf2Path = QString::fromStdString(Files::appDataOpl3Sf2());
 
     auto* nam   = new QNetworkAccessManager(this);
     auto* prog  = new QProgressDialog(tr("Downloading OPL-3 soundfont…"),
@@ -379,7 +365,7 @@ void MainWindow::setupOpl3Music() {
     connect(prog, &QProgressDialog::canceled, reply, &QNetworkReply::abort);
 
     connect(reply, &QNetworkReply::finished, this,
-            [this, reply, nam, prog, sf2Path, patches, unsfExe]() {
+            [this, reply, nam, prog, sf2Path]() {
         prog->close(); prog->deleteLater();
         nam->deleteLater();
         if (reply->error() != QNetworkReply::NoError) {
@@ -389,75 +375,26 @@ void MainWindow::setupOpl3Music() {
             reply->deleteLater();
             return;
         }
-        QFile out(sf2Path);
+        // Write to a .part file then rename atomically, so an interrupted
+        // save can't leave a half-written .sf2 that WildMidi_Init would
+        // silently reject on the next launch.
+        const QString partPath = sf2Path + ".part";
+        QFile out(partPath);
         if (!out.open(QIODevice::WriteOnly)) {
             QMessageBox::critical(this, tr("Write failed"),
-                                  tr("Could not write:\n%1").arg(sf2Path));
+                                  tr("Could not write:\n%1").arg(partPath));
             reply->deleteLater();
             return;
         }
         out.write(reply->readAll());
         out.close();
         reply->deleteLater();
+        QFile::remove(sf2Path);            // no-op if absent
+        QFile::rename(partPath, sf2Path);
 
-        // Convert. unsf is fast enough that a spinner (0/0) is fine — no
-        // percentage available anyway.
-        auto* conv = new QProgressDialog(
-            tr("Converting OPL-3 soundfont to WildMIDI patches…"),
-            QString(), 0, 0, this);
-        conv->setWindowModality(Qt::WindowModal);
-        conv->show();
-        auto* proc = new QProcess(this);
-        connect(proc, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished),
-                this, [this, proc, conv, sf2Path, patches](int code, QProcess::ExitStatus) {
-            conv->close(); conv->deleteLater();
-            if (code != 0) {
-                QMessageBox::critical(this, tr("Conversion failed"),
-                    QString::fromUtf8(proc->readAllStandardError()));
-                proc->deleteLater();
-                return;
-            }
-            // unsf names its cfg after the SF2 basename (OPL-3_FM_128M.cfg),
-            // not "timidity.cfg", and its bank entries use paths relative to
-            // the *patches* dir. Discover the cfg (glob, so we don't hardcode
-            // a name that changes if the URL is retagged), then write our own
-            // wildmidi.cfg on top with an absolute `dir` line + `source` of
-            // the discovered cfg by absolute path, so cwd never matters.
-            QDir patchesDir(patches);
-            QString unsfCfg;
-            // Newest first (QDir::Time): a re-run must pick the cfg unsf just
-            // wrote, not a stale one from a previous conversion. Sorting beats
-            // pre-cleaning the dir — a failed download can't destroy a
-            // previously working setup.
-            for (const QString& c :
-                 patchesDir.entryList({"*.cfg"}, QDir::Files, QDir::Time)) {
-                if (c != "wildmidi.cfg") {
-                    unsfCfg = patchesDir.filePath(c);
-                    break;
-                }
-            }
-            if (unsfCfg.isEmpty()) {
-                QMessageBox::critical(this, tr("Conversion incomplete"),
-                    tr("unsf did not produce a .cfg in:\n%1").arg(patches));
-                proc->deleteLater();
-                return;
-            }
-            const QString cfg = patches + "/wildmidi.cfg";
-            QFile f(cfg);
-            if (f.open(QIODevice::WriteOnly | QIODevice::Text)) {
-                QTextStream ts(&f);
-                // Double-quote so paths like ~/Library/Application Support/...
-                // parse as a single token (our WildMIDI patch handles this).
-                ts << "dir \""    << patches << "\"\n";
-                ts << "source \"" << unsfCfg << "\"\n";
-                f.close();
-            }
-            QFile::remove(sf2Path); // 135 MB — patches are what WildMIDI reads
-            m_musicCfg = cfg;
-            saveSettings();
-            validateMusic();
-            proc->deleteLater();
-        });
-        proc->start(unsfExe, {"-O", patches, sf2Path});
+        // WildMidi_Init opens the .sf2 directly (0.5.0+ TinySoundFont path).
+        m_musicCfg = sf2Path;
+        saveSettings();
+        validateMusic();
     });
 }

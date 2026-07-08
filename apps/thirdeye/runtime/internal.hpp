@@ -45,7 +45,12 @@ struct QuitRequested { std::string reason; };
 // launch() unwinds the VM back to bootObject, which runs our internal
 // equivalent of the named program and then re-enters start.MSG_CREATE -- same
 // effect.
-struct Relaunch { std::string program; };
+struct Relaunch {
+    std::string program;              // launch()'s program name ("CINE.EXE", ...)
+    std::vector<std::string> extras;  // subsequent string args, e.g. GFF filename
+                                      // ("INTRO.GFF" for the title-menu intro,
+                                      // "FINALE.GFF" for the quit farewell, ...)
+};
 
 // Per-call references handed to every category. These come from the engine's
 // call site; the host TU owns the storage. Reference members make copy/move

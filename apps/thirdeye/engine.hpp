@@ -11,10 +11,13 @@
 #include <components/files/configurationmanager.hpp>
 
 #include <map>
+#include <vector>
 #include <iostream>
 
 #include <filesystem>
 #include <SDL3/SDL.h>
+
+namespace MIXER { class Mixer; }
 
 // Types of games
 #define GAME_UNKN	0
@@ -106,13 +109,17 @@ private:
 	/// hit Esc out of the chargen entry screen) -- caller then resets
 	/// mem[1264] to MODE_INTR so the next start lands on the title menu.
 	bool runExternalProgram(const std::string &program, GRAPHICS::Graphics *gfx,
-	                        RESOURCES::Resource &resource);
+	                        RESOURCES::Resource &resource, MIXER::Mixer &mixer,
+	                        const std::vector<std::string> &extras = {});
 
 	/// Play a GFF cinematic (e.g. INTRO.GFF) that sits beside the game's .RES,
 	/// reusing thirdeye's GFF player. Honors --skip-intro; ESC/Enter skips;
 	/// closing the window throws QuitRequested to end the session.
+	/// `mixer` is the game's live Mixer -- reusing it (rather than constructing
+	/// a local) avoids the second OpenAL context stealing current-context from
+	/// the game's, then leaving no context current at end-of-scope.
 	void playCinematic(GRAPHICS::Graphics *gfx, RESOURCES::Resource &resource,
-	                   const std::string &gffName);
+	                   const std::string &gffName, MIXER::Mixer &mixer);
 
 	/// Hold a partially-rendered frame on screen after the VM hits an
 	/// unimplemented runtime function/opcode (a bring-up wall), until the user
