@@ -624,6 +624,20 @@ if (APPLE)
             COMMAND ${MACDEPLOYQT_EXE} "${_dmg_stage_app}"
                     -executable=${_dmg_stage_app}/Contents/MacOS/thirdeye
                     -verbose=1
+            # macdeployqt scans Homebrew qtbase's plugin dir and copies
+            # everything it finds into the bundle, then walks each plugin's
+            # deps. QtPdf / QtSvg / QtVirtualKeyboard live in *separate*
+            # Homebrew formulae we don't install, so the walk fails on those
+            # plugins and prints "ERROR: Cannot resolve rpath ..." — but the
+            # plugins are still copied (broken). Strip them post-hoc so we
+            # don't ship dylibs that will fail to load at runtime. Our
+            # launcher uses none of these plugins. `rm -f` no-ops on absent
+            # files, so this stays safe if macdeployqt gets smarter later.
+            COMMAND ${CMAKE_COMMAND} -E rm -f
+                    "${_dmg_stage_app}/Contents/PlugIns/imageformats/libqpdf.dylib"
+                    "${_dmg_stage_app}/Contents/PlugIns/imageformats/libqsvg.dylib"
+                    "${_dmg_stage_app}/Contents/PlugIns/iconengines/libqsvgicon.dylib"
+                    "${_dmg_stage_app}/Contents/PlugIns/platforminputcontexts/libqtvirtualkeyboardplugin.dylib"
             COMMAND hdiutil create
                     -volname Thirdeye
                     -srcfolder "${_dmg_stage_app}"
