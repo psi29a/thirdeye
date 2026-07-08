@@ -8,6 +8,28 @@ find_package(Qt6 6.5 COMPONENTS Widgets Network REQUIRED)
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 
+# Git build info (configure-time; CI configures fresh every run so this is
+# accurate where it matters). LAUNCHER_GIT_TAG is non-empty only when HEAD is
+# exactly on a tag — that's what distinguishes a release build from a dev/CI
+# build in the version label.
+find_package(Git QUIET)
+set(LAUNCHER_GIT_TAG "")
+set(LAUNCHER_GIT_COMMIT "")
+if (GIT_FOUND)
+    execute_process(
+        COMMAND ${GIT_EXECUTABLE} describe --tags --exact-match
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+        OUTPUT_VARIABLE LAUNCHER_GIT_TAG
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+        ERROR_QUIET)
+    execute_process(
+        COMMAND ${GIT_EXECUTABLE} rev-parse --short HEAD
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+        OUTPUT_VARIABLE LAUNCHER_GIT_COMMIT
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+        ERROR_QUIET)
+endif()
+
 # config file
 configure_file ("${CMAKE_CURRENT_SOURCE_DIR}/config.hpp.cmake" "${CMAKE_CURRENT_SOURCE_DIR}/config.hpp")
 

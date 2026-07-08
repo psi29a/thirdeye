@@ -41,7 +41,7 @@ ENDIF()
 
 # Version
 set (THIRDEYE_VERSION_MAJOR 0)
-set (THIRDEYE_VERSION_MINOR 87)
+set (THIRDEYE_VERSION_MINOR 88)
 set (THIRDEYE_VERSION_RELEASE 0)
 
 set (THIRDEYE_VERSION "${THIRDEYE_VERSION_MAJOR}.${THIRDEYE_VERSION_MINOR}.${THIRDEYE_VERSION_RELEASE}")
@@ -58,7 +58,7 @@ option(UNIT_TESTS "Run unit tests" ON)
 
 # Apps and tools
 option(BUILD_DAESOP "Build Daesop" ON)
-option(BUILD_LAUNCHER "Build Thirdeye Launcher" OFF)
+option(BUILD_LAUNCHER "Build Thirdeye Launcher" ON)
 option(BUILD_ARC "Build ARC" ON)
 
 # Source directory: libs

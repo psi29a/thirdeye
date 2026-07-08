@@ -1,4 +1,5 @@
 #include "MainWindow.hpp"
+#include "config.hpp"
 
 #include <QApplication>
 #include <QCheckBox>
@@ -15,6 +16,8 @@
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QLineEdit>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QMessageBox>
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
@@ -24,7 +27,9 @@
 #include <QPushButton>
 #include <QSettings>
 #include <QUrl>
+#include <QRegularExpression>
 #include <QVBoxLayout>
+#include <QVersionNumber>
 
 #include <components/files/wildmidicfg.hpp>
 
@@ -38,6 +43,23 @@ namespace {
 constexpr auto OPL3_URL =
     "https://github.com/Mindwerks/opl3-soundfont/releases/download/1.0/"
     "OPL-3_FM_128M.sf2";
+
+// Fixed window width; the hero banner is scaled to exactly this so it sits
+// flush against both sides.
+constexpr int WINDOW_W = 520;
+
+// GitHub "latest release" endpoint for the update check. Tags are named
+// thirdeye-X.Y.Z; stripVersion() below reduces either form to X.Y.Z.
+constexpr auto RELEASES_API_URL =
+    "https://api.github.com/repos/psi29a/thirdeye/releases/latest";
+
+QVersionNumber stripVersion(QString v) {
+    // "thirdeye-0.87.0" / "v0.87.0" / "0.87.0" -> QVersionNumber(0,87,0)
+    static const QRegularExpression prefix(
+        QStringLiteral("^[A-Za-z-]*"));
+    v.remove(prefix);
+    return QVersionNumber::fromString(v);
+}
 }
 
 namespace {
@@ -108,21 +130,64 @@ MainWindow::MainWindow(QWidget* parent) : QWidget(parent) {
     m_playBtn = new QPushButton(tr("Play ▶"), this);
     m_playBtn->setDefault(true);
     connect(m_playBtn, &QPushButton::clicked, this, &MainWindow::play);
+
+    // Version label: the tag on release builds; version-dev (commit) on
+    // dev/CI builds. Baked at configure time (config.hpp).
+    QString version = QStringLiteral(LAUNCHER_GIT_TAG);
+    if (version.isEmpty()) {
+        version = QStringLiteral(LAUNCHER_VERSION "-dev");
+        if (*LAUNCHER_GIT_COMMIT)
+            version += QStringLiteral(" (" LAUNCHER_GIT_COMMIT ")");
+    }
+    auto* versionLabel = new QLabel(version, this);
+    versionLabel->setStyleSheet(QStringLiteral("color: gray; font-size: 11px;"));
+
+    m_upgradeBtn = new QPushButton(tr("Upgrade"), this);
+    m_upgradeBtn->setEnabled(false);
+    m_upgradeBtn->setToolTip(tr("Checking for updates…"));
+    connect(m_upgradeBtn, &QPushButton::clicked, this, [this] {
+        if (!m_latestReleaseUrl.isEmpty())
+            QDesktopServices::openUrl(QUrl(m_latestReleaseUrl));
+    });
+
     auto* buttons = new QHBoxLayout;
     buttons->addWidget(whereBtn);
     buttons->addStretch(1);
+    buttons->addWidget(versionLabel);
+    buttons->addSpacing(24);
+    buttons->addWidget(m_upgradeBtn);
+    buttons->addSpacing(8);
     buttons->addWidget(m_playBtn);
 
-    // Root layout
+    // Hero banner: the eye + gold "Thirdeye" plaque (baked from
+    // resources/images/hero.svg at 2x; DPR 2 keeps it crisp on retina).
+    // Flush against the window's top and sides: the root layout has zero
+    // margins, and the width is locked below so the banner always spans
+    // edge to edge.
+    auto* hero = new QLabel(this);
+    QPixmap heroPm(QStringLiteral(":/hero.png")); // 2000x340 physical
+    heroPm = heroPm.scaledToWidth(2 * WINDOW_W, Qt::SmoothTransformation);
+    heroPm.setDevicePixelRatio(2.0);
+    hero->setPixmap(heroPm);
+
+    // Root layout: margin-free so the banner touches the window edges; the
+    // actual controls live in an inner layout that restores the margins.
     auto* main = new QVBoxLayout(this);
-    main->addWidget(new QLabel(tr("Game folder:"), this));
-    main->addLayout(pathRow);
-    main->addWidget(m_pathStatus);
-    main->addWidget(videoBox);
-    main->addWidget(bootBox);
-    main->addWidget(musicBox);
-    main->addStretch(1);
-    main->addLayout(buttons);
+    main->setContentsMargins(0, 0, 0, 0);
+    main->setSpacing(0);
+    main->addWidget(hero);
+
+    auto* content = new QVBoxLayout;
+    content->setContentsMargins(11, 8, 11, 11);
+    main->addLayout(content);
+    content->addWidget(new QLabel(tr("Game folder:"), this));
+    content->addLayout(pathRow);
+    content->addWidget(m_pathStatus);
+    content->addWidget(videoBox);
+    content->addWidget(bootBox);
+    content->addWidget(musicBox);
+    content->addStretch(1);
+    content->addLayout(buttons);
 
     loadSettings();
 
@@ -137,7 +202,57 @@ MainWindow::MainWindow(QWidget* parent) : QWidget(parent) {
 
     validatePath();
     validateMusic();
-    resize(520, 480);
+    checkForUpdate();
+    // Lock the width so the flush hero banner always spans edge to edge;
+    // height stays user-resizable (the stretch above the buttons absorbs it).
+    setFixedWidth(WINDOW_W);
+    resize(WINDOW_W, 560);
+}
+
+void MainWindow::checkForUpdate() {
+    // Fire-and-forget probe of GitHub's latest-release endpoint. Failure of
+    // any kind (offline, rate-limited, no releases yet) just leaves the
+    // Upgrade button greyed out with an explanatory tooltip — never a dialog.
+    auto* nam = new QNetworkAccessManager(this);
+    QNetworkRequest req{QUrl(QString::fromLatin1(RELEASES_API_URL))};
+    // GitHub's API rejects requests without a User-Agent.
+    req.setHeader(QNetworkRequest::UserAgentHeader,
+                  QStringLiteral("thirdeye-launcher"));
+    req.setRawHeader("Accept", "application/vnd.github+json");
+    QNetworkReply* reply = nam->get(req);
+    connect(reply, &QNetworkReply::finished, this, [this, reply, nam]() {
+        reply->deleteLater();
+        nam->deleteLater();
+        if (reply->error() != QNetworkReply::NoError) {
+            m_upgradeBtn->setToolTip(
+                tr("Could not check for updates: %1").arg(reply->errorString()));
+            return;
+        }
+        const QJsonObject obj = QJsonDocument::fromJson(reply->readAll()).object();
+        const QString latestTag = obj.value(QStringLiteral("tag_name")).toString();
+        const QString url       = obj.value(QStringLiteral("html_url")).toString();
+        const QVersionNumber latest  = stripVersion(latestTag);
+        // Compare against the running build: the exact tag on release
+        // builds, the baked base version on dev/CI builds.
+        const QVersionNumber current = stripVersion(
+            *LAUNCHER_GIT_TAG ? QStringLiteral(LAUNCHER_GIT_TAG)
+                              : QStringLiteral(LAUNCHER_VERSION));
+        if (latest.isNull() || current.isNull()) {
+            m_upgradeBtn->setToolTip(
+                tr("Could not parse release versions (latest: %1)").arg(latestTag));
+            return;
+        }
+        if (latest > current) {
+            m_latestReleaseUrl = url;
+            m_upgradeBtn->setEnabled(true);
+            m_upgradeBtn->setText(tr("Upgrade to %1").arg(latestTag));
+            m_upgradeBtn->setToolTip(
+                tr("A newer release is available — opens the download page."));
+        } else {
+            m_upgradeBtn->setToolTip(tr("You're up to date (latest: %1).")
+                                         .arg(latestTag));
+        }
+    });
 }
 
 void MainWindow::browsePath() {
