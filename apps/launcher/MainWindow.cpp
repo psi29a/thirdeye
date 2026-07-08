@@ -377,7 +377,9 @@ void MainWindow::setupOpl3Music() {
         }
         // Write to a .part file then rename atomically, so an interrupted
         // save can't leave a half-written .sf2 that WildMidi_Init would
-        // silently reject on the next launch.
+        // silently reject on the next launch. Every step is checked — a
+        // failed write or rename must not clobber a previously-working
+        // soundfont at sf2Path.
         const QString partPath = sf2Path + ".part";
         QFile out(partPath);
         if (!out.open(QIODevice::WriteOnly)) {
@@ -386,11 +388,33 @@ void MainWindow::setupOpl3Music() {
             reply->deleteLater();
             return;
         }
-        out.write(reply->readAll());
-        out.close();
+        const QByteArray data = reply->readAll();
         reply->deleteLater();
-        QFile::remove(sf2Path);            // no-op if absent
-        QFile::rename(partPath, sf2Path);
+        if (out.write(data) != data.size()) {
+            out.close();
+            QFile::remove(partPath);
+            QMessageBox::critical(this, tr("Write failed"),
+                tr("Could not save the download (disk full?):\n%1").arg(partPath));
+            return;
+        }
+        out.close();
+
+        // Try rename first — it's atomic on POSIX and replaces the target.
+        // On Windows QFile::rename fails when the destination exists, so
+        // fall back to remove-then-rename there. Order matters: only touch
+        // sf2Path once we know partPath is complete and we're about to
+        // succeed; a rename failure after remove leaves the user with no
+        // soundfont, so surface that clearly.
+        if (!QFile::rename(partPath, sf2Path)) {
+            QFile::remove(sf2Path);
+            if (!QFile::rename(partPath, sf2Path)) {
+                QFile::remove(partPath);
+                QMessageBox::critical(this, tr("Save failed"),
+                    tr("Could not move the downloaded file into place:\n%1")
+                        .arg(sf2Path));
+                return;
+            }
+        }
 
         // WildMidi_Init opens the .sf2 directly (0.5.0+ TinySoundFont path).
         m_musicCfg = sf2Path;

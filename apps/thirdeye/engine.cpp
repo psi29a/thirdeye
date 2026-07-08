@@ -1059,12 +1059,12 @@ void THIRDEYE::Engine::playCinematic(GRAPHICS::Graphics *gfx,
 	// abort the boot (we're on the relaunch path), so skip the cinematic instead.
 	// QuitRequested (below) is not a std::exception, so window-close still unwinds.
 	try {
-		// Use the Engine's shared mixer (this->mixer), not a local. A second
-		// Mixer would open its own OpenAL device+context, steal current-context
-		// on construct, then destroy that context on scope-exit — leaving *no*
-		// context current. The rest of the game then silently no-ops every
-		// alSourcePlay. Reusing the member ensures the game's audio survives
-		// the intro.
+		// Use the caller-supplied session mixer (a stack local in bootObject,
+		// passed down as a param). A second Mixer would open its own OpenAL
+		// device+context, steal current-context on construct, then destroy
+		// that context on scope-exit — leaving *no* context current. The
+		// rest of the game then silently no-ops every alSourcePlay. Reusing
+		// the session mixer ensures the game's audio survives the intro.
 		RESOURCES::GFFI video(std::move(gffPath));
 		mixer.playMusic(video.getMusic());
 		gfx->playVideo(video.getSequence());
@@ -1089,8 +1089,14 @@ void THIRDEYE::Engine::playCinematic(GRAPHICS::Graphics *gfx,
 			uint32_t sleep = gfx->getSleep();
 			SDL_Delay(sleep > 0 ? sleep : 16);
 		}
+		// Video ended on its own (not skipped, not quit). The old local-Mixer
+		// version relied on the dtor to shut music down; now that we share
+		// the session mixer, we have to say so explicitly, or the cinematic's
+		// music keeps playing into the next screen.
+		mixer.stopMusic();
 	} catch (const std::exception &e) {
 		gfx->stopVideo();
+		mixer.stopMusic();
 		std::cout << "  [program chain: failed to play " << gffName << " ("
 		          << e.what() << "); skipping cinematic]" << std::endl;
 	}
