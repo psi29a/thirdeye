@@ -317,6 +317,35 @@ if(DPKG_PROGRAM)
 
 
     include(CPack)
+
+    # `appimage` target: parallel to macOS `dmg` and Windows `nsis`. Needs
+    # linuxdeploy + linuxdeploy-plugin-qt on PATH (CI installs the AppImage
+    # binaries; locally: grab from github.com/linuxdeploy/*/releases). Stages
+    # via `cmake --install` into build/AppDir/usr — the DPKG INSTALL rules
+    # above already put the launcher, icon, and .desktop in the right layout.
+    find_program(LINUXDEPLOY_EXE linuxdeploy)
+    if(BUILD_LAUNCHER AND LINUXDEPLOY_EXE)
+        set(_appdir       "${Thirdeye_BINARY_DIR}/AppDir")
+        set(_appimage_out "Thirdeye-${THIRDEYE_VERSION}-x86_64.AppImage")
+        add_custom_target(appimage
+            COMMAND ${CMAKE_COMMAND} -E rm -rf "${_appdir}"
+            COMMAND ${CMAKE_COMMAND} --install "${Thirdeye_BINARY_DIR}"
+                    --prefix "${_appdir}/usr"
+            # OUTPUT= names the final .AppImage. APPIMAGE_EXTRACT_AND_RUN=1
+            # lets linuxdeploy (itself an AppImage) run on hosts without
+            # FUSE — required on GitHub runners.
+            COMMAND ${CMAKE_COMMAND} -E env
+                    OUTPUT=${_appimage_out}
+                    APPIMAGE_EXTRACT_AND_RUN=1
+                    ${LINUXDEPLOY_EXE} --appdir "${_appdir}"
+                        --plugin qt
+                        --output appimage
+            DEPENDS thirdeye thirdeye-launcher
+            WORKING_DIRECTORY "${Thirdeye_BINARY_DIR}"
+            COMMENT "Producing ${_appimage_out}"
+            VERBATIM
+        )
+    endif()
 endif(DPKG_PROGRAM)
 
 if(WIN32)
