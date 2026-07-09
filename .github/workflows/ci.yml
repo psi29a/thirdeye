@@ -8,7 +8,10 @@ on:
   pull_request:
 
 permissions:
-  contents: read
+  # write needed by the tag-push Release step to attach dmg/exe/tgz as
+  # assets. Read-only for regular push/PR builds — those don't hit the
+  # release step (guarded by `if: startsWith(github.ref, 'refs/tags/')`).
+  contents: write
 
 jobs:
   build:
@@ -184,25 +187,13 @@ jobs:
         run: cmake --build build --target dmg
         shell: bash
 
-      - name: Package artifacts (Linux)
+      - name: Package tarball (Linux)
         if: runner.os == 'Linux'
-        run: |
-          mkdir -p artifacts
-          tar -czf artifacts/thirdeye-${{ matrix.os }}.tgz build/thirdeye build/daesop
-        shell: bash
-
-      - name: Collect DMG artifact (macOS)
-        if: runner.os == 'macOS'
-        run: |
-          mkdir -p artifacts
-          cp build/Thirdeye-*.dmg artifacts/
-          # SHA256 for release checksum verification (macOS `shasum -a 256`
-          # matches the OpenSSL/coreutils output on Linux + Windows).
-          (cd artifacts && shasum -a 256 Thirdeye-*.dmg > Thirdeye.dmg.sha256)
+        run: tar -czf build/thirdeye-${{ matrix.os }}.tgz -C build thirdeye daesop
         shell: bash
 
       # Windows: build a distributable .exe installer via CPack NSIS (parallel
-      # to macOS `dmg`). windows-latest ships NSIS 3.x. Before cpack:
+      # to macOS `dmg`). Before cpack:
       # 1) copy vcpkg runtime DLLs (SDL3, OpenAL32, libWildMidi) into build/
       # 2) run windeployqt on the launcher to stage Qt6 DLLs + plugin
       #    subdirs (platforms/, styles/, ...) alongside it
@@ -217,18 +208,29 @@ jobs:
           windeployqt --dir build --no-translations --no-compiler-runtime build\thirdeye-launcher.exe
           cmake --build build --target nsis
 
-      - name: Collect installer artifact (Windows)
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: |
-          $artifactDir = "artifacts"
-          New-Item -ItemType Directory -Force -Path $artifactDir | Out-Null
-          Copy-Item -Path build\Thirdeye-*-win64.exe -Destination $artifactDir
-          $exe = Get-ChildItem "$artifactDir\Thirdeye-*-win64.exe" | Select-Object -First 1
-          $hash = (Get-FileHash $exe.FullName -Algorithm SHA256).Hash.ToLower()
-          "$hash  $($exe.Name)" | Out-File -Encoding ascii "$artifactDir\Thirdeye.exe.sha256"
-
+      # Upload the single shipping artifact per platform. GitHub always zips
+      # workflow artifacts on download (platform behavior — no flag to
+      # disable), so users clicking the workflow page still get
+      # thirdeye-<os>.zip. The unzipped dmg/exe surface is the Release step
+      # below, which only fires on tag push.
       - uses: actions/upload-artifact@v4
         with:
           name: thirdeye-${{ matrix.os }}
-          path: artifacts
+          path: |
+            build/Thirdeye-*.dmg
+            build/Thirdeye-*-win64.exe
+            build/thirdeye-*.tgz
+          if-no-files-found: ignore
+
+      # Tag push -> GitHub Release with the raw dmg/exe/tgz attached as
+      # assets (not zipped). GitHub shows the SHA256 on each asset page +
+      # attest-build-provenance below signs it, so no sidecar .sha256 needed.
+      - name: Attach to Release (on tag)
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            build/Thirdeye-*.dmg
+            build/Thirdeye-*-win64.exe
+            build/thirdeye-*.tgz
+          fail_on_unmatched_files: false
