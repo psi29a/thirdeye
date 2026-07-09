@@ -41,13 +41,18 @@ jobs:
       # linuxdeploy + qt plugin, for the AppImage packaging step. Both ship
       # as AppImages themselves; we chmod +x and drop them on PATH.
       # APPIMAGE_EXTRACT_AND_RUN=1 (set on the cmake target) lets them run
-      # without FUSE on the runner.
+      # without FUSE on the runner. `curl -fL`: -f fails the step on HTTP
+      # errors instead of silently saving an HTML 404 as the binary; -L
+      # follows GitHub's release-asset redirect. `continuous` is what
+      # linuxdeploy upstream itself recommends — they have no tagged
+      # releases — so pinning would be to a dated alpha snapshot, not a
+      # meaningfully more stable point.
       - name: Install linuxdeploy (Linux)
         if: runner.os == 'Linux'
         run: |
-          curl -sSL -o /usr/local/bin/linuxdeploy \
+          sudo curl -fL -o /usr/local/bin/linuxdeploy \
             https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
-          curl -sSL -o /usr/local/bin/linuxdeploy-plugin-qt \
+          sudo curl -fL -o /usr/local/bin/linuxdeploy-plugin-qt \
             https://github.com/linuxdeploy/linuxdeploy-plugin-qt/releases/download/continuous/linuxdeploy-plugin-qt-x86_64.AppImage
           sudo chmod +x /usr/local/bin/linuxdeploy /usr/local/bin/linuxdeploy-plugin-qt
 
