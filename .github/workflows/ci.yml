@@ -88,6 +88,20 @@ jobs:
         if: runner.os == 'Windows'
         uses: seanmiddleditch/gha-setup-ninja@master
 
+      # Prebuilt Qt6 for the launcher. Way cheaper than adding qt-base to
+      # vcpkg (which is a 45+ min from-source build). The action sets Qt6_DIR
+      # + PATH so find_package(Qt6) just works, and gives us windeployqt for
+      # runtime staging before cpack.
+      - name: Install Qt6 (Windows)
+        if: runner.os == 'Windows'
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.7.*'
+          host: 'windows'
+          target: 'desktop'
+          arch: 'win64_msvc2022_64'
+          cache: true
+
       # The Ninja generator needs cl.exe on PATH, which requires the MSVC
       # developer environment to be activated.
       - name: Set up MSVC environment (Windows)
@@ -133,7 +147,7 @@ jobs:
             -DCMAKE_BUILD_TYPE=${{ matrix.config }} `
             -DCMAKE_C_COMPILER_LAUNCHER=ccache `
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache `
-            -DBUILD_LAUNCHER=OFF `
+            -DBUILD_LAUNCHER=ON `
             -DCMAKE_TOOLCHAIN_FILE="$env:USERPROFILE\vcpkg\scripts\buildsystems\vcpkg.cmake"
 
       - name: Build
@@ -173,19 +187,37 @@ jobs:
         run: |
           mkdir -p artifacts
           cp build/Thirdeye-*.dmg artifacts/
+          # SHA256 for release checksum verification (macOS `shasum -a 256`
+          # matches the OpenSSL/coreutils output on Linux + Windows).
+          (cd artifacts && shasum -a 256 Thirdeye-*.dmg > Thirdeye.dmg.sha256)
         shell: bash
 
-      - name: Package artifacts (Windows)
+      # Windows: build a distributable .exe installer via CPack NSIS (parallel
+      # to macOS `dmg`). windows-latest ships NSIS 3.x. Before cpack:
+      # 1) copy vcpkg runtime DLLs (SDL3, OpenAL32, libWildMidi) into build/
+      # 2) run windeployqt on the launcher to stage Qt6 DLLs + plugin
+      #    subdirs (platforms/, styles/, ...) alongside it
+      # The install-time DLL glob + INSTALL(DIRECTORY) in CMakeLists.txt then
+      # sweep both into the installer.
+      - name: Build NSIS installer (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $vcpkgBin = "$env:USERPROFILE\vcpkg\installed\x64-windows\bin"
+          Copy-Item -Path "$vcpkgBin\*.dll" -Destination build -Force
+          windeployqt --dir build --no-translations --no-compiler-runtime build\thirdeye-launcher.exe
+          cmake --build build --target nsis
+
+      - name: Collect installer artifact (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
           $artifactDir = "artifacts"
           New-Item -ItemType Directory -Force -Path $artifactDir | Out-Null
-          # Copy the vcpkg runtime DLLs (SDL3, OpenAL32, libWildMidi, ...) next to
-          # the executables so the zipped artifact runs standalone.
-          $vcpkgBin = "$env:USERPROFILE\vcpkg\installed\x64-windows\bin"
-          Copy-Item -Path "$vcpkgBin\*.dll" -Destination build -Force
-          Compress-Archive -Path build\thirdeye.exe,build\daesop.exe,build\*.dll -DestinationPath "$artifactDir\thirdeye-${{ matrix.os }}.zip" -Force
+          Copy-Item -Path build\Thirdeye-*-win64.exe -Destination $artifactDir
+          $exe = Get-ChildItem "$artifactDir\Thirdeye-*-win64.exe" | Select-Object -First 1
+          $hash = (Get-FileHash $exe.FullName -Algorithm SHA256).Hash.ToLower()
+          "$hash  $($exe.Name)" | Out-File -Encoding ascii "$artifactDir\Thirdeye.exe.sha256"
 
       - uses: actions/upload-artifact@v4
         with:
