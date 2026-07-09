@@ -338,7 +338,7 @@ if(WIN32)
     ")
     INSTALL(FILES
         "${Thirdeye_SOURCE_DIR}/README.md"
-        "${Thirdeye_SOURCE_DIR}/GPL3.txt"
+        "${Thirdeye_SOURCE_DIR}/LICENSE.txt"
         "${Thirdeye_BINARY_DIR}/thirdeye.exe"
         DESTINATION ".")
     if(BUILD_DAESOP)
@@ -347,7 +347,10 @@ if(WIN32)
     if(BUILD_LAUNCHER)
         INSTALL(FILES "${Thirdeye_BINARY_DIR}/thirdeye-launcher.exe" DESTINATION ".")
     endif()
-    INSTALL(DIRECTORY "${Thirdeye_BINARY_DIR}/resources" DESTINATION ".")
+    # ponytail: no ${BINARY_DIR}/resources exists — add_thirdeye_dir() is a
+    # source-file group macro, nothing populates a runtime tree. The Linux
+    # DPKG + macOS APPLE blocks reference it too and silently install an
+    # empty dir; not worth fixing there for a Windows-only PR.
 
     SET(CPACK_GENERATOR "NSIS")
     SET(CPACK_PACKAGE_NAME "Thirdeye")
@@ -371,7 +374,7 @@ if(WIN32)
         Delete \\\"$SMPROGRAMS\\\\$MUI_TEMP\\\\Readme.lnk\\\"
         ")
     SET(CPACK_RESOURCE_FILE_README "${Thirdeye_SOURCE_DIR}/README.md")
-    SET(CPACK_RESOURCE_FILE_LICENSE "${Thirdeye_SOURCE_DIR}/GPL3.txt")
+    SET(CPACK_RESOURCE_FILE_LICENSE "${Thirdeye_SOURCE_DIR}/LICENSE.txt")
     SET(CPACK_NSIS_EXECUTABLES_DIRECTORY ".")
     SET(CPACK_NSIS_DISPLAY_NAME "Thirdeye ${THIRDEYE_VERSION}")
     SET(CPACK_NSIS_PACKAGE_NAME "Thirdeye ${THIRDEYE_VERSION}")
