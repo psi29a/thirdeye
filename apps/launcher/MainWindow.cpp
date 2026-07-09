@@ -219,6 +219,11 @@ void MainWindow::checkForUpdate() {
     req.setHeader(QNetworkRequest::UserAgentHeader,
                   QStringLiteral("thirdeye-launcher"));
     req.setRawHeader("Accept", "application/vnd.github+json");
+    // Cap a stalled connect/download so the Upgrade button doesn't sit at
+    // "Checking for updates…" forever on a bad network. On timeout the reply
+    // aborts with OperationCanceledError, which the existing error branch
+    // below already surfaces via the tooltip.
+    req.setTransferTimeout(std::chrono::seconds(15));
     QNetworkReply* reply = nam->get(req);
     connect(reply, &QNetworkReply::finished, this, [this, reply, nam]() {
         reply->deleteLater();
