@@ -297,8 +297,10 @@ if(DPKG_PROGRAM)
     INSTALL(FILES "${Thirdeye_BINARY_DIR}/thirdeye.desktop" DESTINATION "share/applications/" PERMISSIONS OWNER_READ OWNER_WRITE GROUP_READ WORLD_READ COMPONENT "thirdeye")
     INSTALL(FILES "${Thirdeye_SOURCE_DIR}/apps/launcher/resources/images/thirdeye.png" DESTINATION "share/pixmaps/" PERMISSIONS OWNER_READ OWNER_WRITE GROUP_READ WORLD_READ COMPONENT "thirdeye")
 
-    #Install resources
-    INSTALL(DIRECTORY "${Thirdeye_BINARY_DIR}/resources" DESTINATION "share/games/thirdeye/" FILE_PERMISSIONS OWNER_READ GROUP_READ WORLD_READ COMPONENT "Resources")
+    # ponytail: no ${BINARY_DIR}/resources exists — add_thirdeye_dir() is a
+    # source-file group macro, nothing populates a runtime tree. Old cpack
+    # -G DEB tolerated the missing dir; `cmake --install` (used by AppImage)
+    # hard-errors. Same cleanup applied to the WIN32 block earlier.
     INSTALL(DIRECTORY DESTINATION "share/games/thirdeye/data/" COMPONENT "Resources")
 
     SET(CPACK_GENERATOR "DEB")
@@ -325,17 +327,17 @@ if(DPKG_PROGRAM)
 
     # `appimage` target: parallel to macOS `dmg` and Windows `nsis`. Needs
     # linuxdeploy + linuxdeploy-plugin-qt on PATH (CI installs the AppImage
-    # binaries; locally: grab from github.com/linuxdeploy/*/releases). Stages
-    # via `cmake --install` into build/AppDir/usr — the DPKG INSTALL rules
-    # above already put the launcher, icon, and .desktop in the right layout.
+    # binaries; locally: grab from github.com/linuxdeploy/*/releases). We
+    # bypass `cmake --install` and hand linuxdeploy the exe/desktop/icon
+    # directly — the DPKG INSTALL rules put binaries in usr/games/ (Debian
+    # convention) but linuxdeploy expects usr/bin/, and its --executable
+    # flag stages them in the right place.
     find_program(LINUXDEPLOY_EXE linuxdeploy)
     if(BUILD_LAUNCHER AND LINUXDEPLOY_EXE)
         set(_appdir       "${Thirdeye_BINARY_DIR}/AppDir")
         set(_appimage_out "Thirdeye-${THIRDEYE_VERSION}-x86_64.AppImage")
         add_custom_target(appimage
             COMMAND ${CMAKE_COMMAND} -E rm -rf "${_appdir}"
-            COMMAND ${CMAKE_COMMAND} --install "${Thirdeye_BINARY_DIR}"
-                    --prefix "${_appdir}/usr"
             # OUTPUT= names the final .AppImage. APPIMAGE_EXTRACT_AND_RUN=1
             # lets linuxdeploy (itself an AppImage) run on hosts without
             # FUSE — required on GitHub runners.
@@ -343,6 +345,10 @@ if(DPKG_PROGRAM)
                     OUTPUT=${_appimage_out}
                     APPIMAGE_EXTRACT_AND_RUN=1
                     ${LINUXDEPLOY_EXE} --appdir "${_appdir}"
+                        --executable $<TARGET_FILE:thirdeye>
+                        --executable $<TARGET_FILE:thirdeye-launcher>
+                        --desktop-file "${Thirdeye_BINARY_DIR}/thirdeye.desktop"
+                        --icon-file "${Thirdeye_SOURCE_DIR}/apps/launcher/resources/images/thirdeye.png"
                         --plugin qt
                         --output appimage
             DEPENDS thirdeye thirdeye-launcher
