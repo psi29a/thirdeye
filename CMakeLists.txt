@@ -65,6 +65,11 @@ option(BUILD_ARC "Build ARC" ON)
 set(LIBDIR ${CMAKE_SOURCE_DIR}/libs)
 
 # Platform specific variables
+## Debian/Ubuntu detection — gates the DEB CPack + AppImage packaging blocks
+## below. Historically the gate was set only via `-DDPKG_PROGRAM=...`; auto-
+## detecting makes local dev builds on Debian match CI.
+find_program(DPKG_PROGRAM dpkg)
+
 ## Location of game data files
 if(DPKG_PROGRAM)
     set(GAME_DATA_FILES "/usr/share/games/thirdeye/data/" CACHE PATH "Location of Thirdeye data files")
