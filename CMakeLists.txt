@@ -386,6 +386,13 @@ if(WIN32)
     SET(CPACK_NSIS_MODIFY_PATH OFF)
     SET(CPACK_NSIS_INSTALL_ROOT "$PROGRAMFILES64")
 
+    # Ship the MSVC runtime DLLs (vcruntime140.dll, msvcp140.dll, ...) next
+    # to the executables. Without these the launcher fails with "MSVCP140.dll
+    # was not found" on a clean Windows 10/11 install. InstallRequiredSystem
+    # Libraries queries the active MSVC toolchain to pick the right ones.
+    set(CMAKE_INSTALL_SYSTEM_RUNTIME_DESTINATION ".")
+    include(InstallRequiredSystemLibraries)
+
     include(CPack)
 
     # Parallel to `dmg` on macOS: `cmake --build build --target nsis`
