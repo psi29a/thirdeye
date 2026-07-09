@@ -1,0 +1,96 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 170" role="img" aria-label="Thirdeye">
+  <defs>
+    <radialGradient id="bg" cx="30%" cy="40%" r="90%">
+      <stop offset="0%"  stop-color="#241436"/>
+      <stop offset="55%" stop-color="#0c0618"/>
+      <stop offset="100%" stop-color="#050208"/>
+    </radialGradient>
+
+    <radialGradient id="iris" cx="50%" cy="50%" r="55%">
+      <stop offset="0%"   stop-color="#ffcf6b"/>
+      <stop offset="45%"  stop-color="#c47a12"/>
+      <stop offset="85%"  stop-color="#6a3808"/>
+      <stop offset="100%" stop-color="#2a1404"/>
+    </radialGradient>
+
+    <linearGradient id="sclera" x1="50%" y1="0%" x2="50%" y2="100%">
+      <stop offset="0%"   stop-color="#f6ead0"/>
+      <stop offset="50%"  stop-color="#ecd9a6"/>
+      <stop offset="100%" stop-color="#c9a970"/>
+    </linearGradient>
+
+    <radialGradient id="glow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%"   stop-color="#ffcf6b" stop-opacity="0.5"/>
+      <stop offset="100%" stop-color="#ffcf6b" stop-opacity="0"/>
+    </radialGradient>
+
+    <!-- Gold lettering: bright top edge -> rich gold -> deep bronze, the
+         classic beveled-metal ramp of the EOB3 title lettering. -->
+    <linearGradient id="goldText" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%"   stop-color="#fff3c4"/>
+      <stop offset="25%"  stop-color="#ffd97a"/>
+      <stop offset="55%"  stop-color="#e0a83c"/>
+      <stop offset="80%"  stop-color="#a86f1a"/>
+      <stop offset="100%" stop-color="#7a4c10"/>
+    </linearGradient>
+
+    <linearGradient id="goldTrim" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%"   stop-color="#e9c97e"/>
+      <stop offset="50%"  stop-color="#b58a3a"/>
+      <stop offset="100%" stop-color="#8a6423"/>
+    </linearGradient>
+
+    <clipPath id="eyeClip">
+      <path d="M 105 16
+               C 157 60, 157 110, 105 154
+               C 53 110, 53 60, 105 16 Z"/>
+    </clipPath>
+  </defs>
+
+  <!-- Plaque backdrop + gold double border (echoes the in-game panels) -->
+  <rect x="2"  y="2"  width="996" height="166"  fill="url(#bg)"/>
+  <rect x="5"  y="5"  width="990" height="160"  fill="none"
+        stroke="url(#goldTrim)" stroke-width="3"/>
+  <rect x="11" y="11" width="978" height="148"  fill="none"
+        stroke="url(#goldTrim)" stroke-width="1.2" stroke-opacity="0.7"/>
+
+  <!-- ══ Eye (from the app icon, sans rounded-square) ══ -->
+  <ellipse cx="105" cy="85" rx="78" ry="80" fill="url(#glow)"/>
+  <path d="M 105 16
+           C 157 60, 157 110, 105 154
+           C 53 110, 53 60, 105 16 Z"
+        fill="url(#sclera)"/>
+  <g clip-path="url(#eyeClip)">
+    <circle cx="105" cy="85" r="44" fill="url(#iris)"/>
+    <circle cx="105" cy="85" r="44" fill="none"
+            stroke="#3a1a04" stroke-width="1.4" stroke-opacity="0.6"/>
+    <ellipse cx="105" cy="85" rx="5.5" ry="37" fill="#050208"/>
+    <ellipse cx="97"  cy="68" rx="6.5" ry="8" fill="#fff9e6" opacity="0.9"/>
+    <ellipse cx="114" cy="101" rx="3" ry="3.8" fill="#fff9e6" opacity="0.55"/>
+  </g>
+  <path d="M 105 16
+           C 157 60, 157 110, 105 154
+           C 53 110, 53 60, 105 16 Z"
+        fill="none" stroke="#1a0a2a" stroke-width="4" stroke-linejoin="round"/>
+  <path d="M 105 16
+           C 157 60, 157 110, 105 154
+           C 53 110, 53 60, 105 16 Z"
+        fill="none" stroke="#5a3080" stroke-width="1.2" stroke-opacity="0.55"/>
+
+  <!-- ══ Title ══ -->
+  <!-- drop shadow layer -->
+  <text x="580" y="115" text-anchor="middle"
+        font-family="Luminari, Trattatello, serif" font-size="98"
+        fill="#000000" opacity="0.55"
+        transform="translate(5,6)">Thirdeye</text>
+  <!-- dark bronze under-stroke (gives the chiseled edge) -->
+  <text x="580" y="115" text-anchor="middle"
+        font-family="Luminari, Trattatello, serif" font-size="98"
+        fill="none" stroke="#3a2004" stroke-width="10"
+        stroke-linejoin="round">Thirdeye</text>
+  <!-- gold face -->
+  <text x="580" y="115" text-anchor="middle"
+        font-family="Luminari, Trattatello, serif" font-size="98"
+        fill="url(#goldText)" stroke="#2a1604" stroke-width="1.5">Thirdeye</text>
+</svg>

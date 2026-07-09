@@ -109,10 +109,14 @@ jobs:
       - name: Configure (Linux/macOS)
         if: runner.os != 'Windows'
         run: |
-          EXTRA_ARGS=""
+          # macOS ships the launcher (Qt6 installed above; DMG target below).
+          # Linux CI doesn't install Qt6 yet — launcher packaging on Linux is
+          # deferred (see docs/launcher.md), so opt out explicitly and match
+          # the actual shipped surface. Same story on the Windows step below.
           if [ "${{ runner.os }}" = "macOS" ]; then
-            # macOS builds a distributable .dmg -> needs the Qt6 launcher
             EXTRA_ARGS="-DBUILD_LAUNCHER=ON -DCMAKE_PREFIX_PATH=$(brew --prefix qt)"
+          else
+            EXTRA_ARGS="-DBUILD_LAUNCHER=OFF"
           fi
           cmake -S . -B build -G Ninja \
             -DCMAKE_BUILD_TYPE=${{ matrix.config }} \
@@ -129,6 +133,7 @@ jobs:
             -DCMAKE_BUILD_TYPE=${{ matrix.config }} `
             -DCMAKE_C_COMPILER_LAUNCHER=ccache `
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache `
+            -DBUILD_LAUNCHER=OFF `
             -DCMAKE_TOOLCHAIN_FILE="$env:USERPROFILE\vcpkg\scripts\buildsystems\vcpkg.cmake"
 
       - name: Build

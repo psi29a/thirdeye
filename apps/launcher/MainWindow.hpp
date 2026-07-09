@@ -24,6 +24,7 @@ private slots:
     void browseMusicCfg();
     void setupOpl3Music();  // download SF2 + run unsf; wired next round
     void validateMusic();
+    void checkForUpdate();  // async GitHub releases/latest probe
 
 private:
     void loadSettings();
@@ -45,7 +46,12 @@ private:
     QLabel*      m_musicStatus {};
     QPushButton* m_musicSetup  {};
     QPushButton* m_musicBrowse {};
+    QPushButton* m_upgradeBtn  {};
     QPushButton* m_playBtn     {};
+
+    // Filled by checkForUpdate when a newer GitHub release exists; the
+    // Upgrade button opens it in the browser.
+    QString      m_latestReleaseUrl;
 
     // User-picked or launcher-downloaded cfg path; empty = fall back to
     // engine's search. Persisted as `musicCfg` in QSettings, passed on Play
