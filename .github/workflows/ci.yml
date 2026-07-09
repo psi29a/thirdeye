@@ -88,6 +88,15 @@ jobs:
         if: runner.os == 'Windows'
         uses: seanmiddleditch/gha-setup-ninja@master
 
+      # NSIS is not preinstalled on windows-latest; choco has it and adds it
+      # to PATH via GITHUB_PATH so cpack -G NSIS finds makensis later.
+      - name: Install NSIS (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          choco install nsis -y --no-progress
+          echo "C:\Program Files (x86)\NSIS" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
       # Prebuilt Qt6 for the launcher. Way cheaper than adding qt-base to
       # vcpkg (which is a 45+ min from-source build). The action sets Qt6_DIR
       # + PATH so find_package(Qt6) just works, and gives us windeployqt for
