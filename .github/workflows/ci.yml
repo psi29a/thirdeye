@@ -34,7 +34,27 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y cmake ninja-build build-essential libsdl3-dev libopenal-dev libwildmidi-dev
+          sudo apt-get install -y cmake ninja-build build-essential \
+            libsdl3-dev libopenal-dev libwildmidi-dev \
+            qt6-base-dev libgl1-mesa-dev
+
+      # linuxdeploy + qt plugin, for the AppImage packaging step. Both ship
+      # as AppImages themselves; we chmod +x and drop them on PATH.
+      # APPIMAGE_EXTRACT_AND_RUN=1 (set on the cmake target) lets them run
+      # without FUSE on the runner. `curl -fL`: -f fails the step on HTTP
+      # errors instead of silently saving an HTML 404 as the binary; -L
+      # follows GitHub's release-asset redirect. `continuous` is what
+      # linuxdeploy upstream itself recommends — they have no tagged
+      # releases — so pinning would be to a dated alpha snapshot, not a
+      # meaningfully more stable point.
+      - name: Install linuxdeploy (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo curl -fL -o /usr/local/bin/linuxdeploy \
+            https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
+          sudo curl -fL -o /usr/local/bin/linuxdeploy-plugin-qt \
+            https://github.com/linuxdeploy/linuxdeploy-plugin-qt/releases/download/continuous/linuxdeploy-plugin-qt-x86_64.AppImage
+          sudo chmod +x /usr/local/bin/linuxdeploy /usr/local/bin/linuxdeploy-plugin-qt
 
       # `brew update` is the slow part (~30s on a clean macos-latest runner that
       # already ships with a recent brew). The formulae we need (cmake/ninja/sdl3/
@@ -135,19 +155,16 @@ jobs:
       - name: Configure (Linux/macOS)
         if: runner.os != 'Windows'
         run: |
-          # macOS ships the launcher (Qt6 installed above; DMG target below).
-          # Linux CI doesn't install Qt6 yet — launcher packaging on Linux is
-          # deferred (see docs/launcher.md), so opt out explicitly and match
-          # the actual shipped surface. Same story on the Windows step below.
+          # macOS: Qt6 from brew (DMG target below).
+          # Linux: Qt6 from apt (qt6-base-dev), launcher shipped in AppImage.
           if [ "${{ runner.os }}" = "macOS" ]; then
-            EXTRA_ARGS="-DBUILD_LAUNCHER=ON -DCMAKE_PREFIX_PATH=$(brew --prefix qt)"
-          else
-            EXTRA_ARGS="-DBUILD_LAUNCHER=OFF"
+            EXTRA_ARGS="-DCMAKE_PREFIX_PATH=$(brew --prefix qt)"
           fi
           cmake -S . -B build -G Ninja \
             -DCMAKE_BUILD_TYPE=${{ matrix.config }} \
             -DCMAKE_C_COMPILER_LAUNCHER=ccache \
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
+            -DBUILD_LAUNCHER=ON \
             $EXTRA_ARGS
         shell: bash
 
@@ -187,9 +204,14 @@ jobs:
         run: cmake --build build --target dmg
         shell: bash
 
-      - name: Package tarball (Linux)
+      # Linux: build a distributable .AppImage. The `appimage` target
+      # (defined in CMakeLists.txt DPKG block when BUILD_LAUNCHER=ON +
+      # linuxdeploy on PATH) stages the install into build/AppDir/usr, runs
+      # linuxdeploy-plugin-qt to bundle Qt6 + platform plugins, then
+      # squashes to a single self-contained executable.
+      - name: Build AppImage (Linux)
         if: runner.os == 'Linux'
-        run: tar -czf build/thirdeye-${{ matrix.os }}.tgz -C build thirdeye daesop
+        run: cmake --build build --target appimage
         shell: bash
 
       # Windows: build a distributable .exe installer via CPack NSIS (parallel
@@ -219,7 +241,7 @@ jobs:
           path: |
             build/Thirdeye-*.dmg
             build/Thirdeye-*-win64.exe
-            build/thirdeye-*.tgz
+            build/Thirdeye-*-x86_64.AppImage
           if-no-files-found: ignore
 
       # Tag push -> GitHub Release with the raw dmg/exe/tgz attached as
@@ -232,5 +254,5 @@ jobs:
           files: |
             build/Thirdeye-*.dmg
             build/Thirdeye-*-win64.exe
-            build/thirdeye-*.tgz
+            build/Thirdeye-*-x86_64.AppImage
           fail_on_unmatched_files: false
