@@ -320,59 +320,99 @@ if(DPKG_PROGRAM)
 endif(DPKG_PROGRAM)
 
 if(WIN32)
-    FILE(GLOB dll_files "${Thirdeye_BINARY_DIR}/Release/*.dll")
-    INSTALL(FILES ${dll_files} DESTINATION ".")
+    # Ninja + single-config MSVC drop binaries directly into ${BINARY_DIR},
+    # not into a Release/ subdir. Glob DLLs at install-time (not configure)
+    # so vcpkg runtime DLLs (SDL3, OpenAL32, libWildMidi) + windeployqt's
+    # Qt6 DLLs staged into build/ just before `cpack` runs both get picked
+    # up. windeployqt also drops Qt plugins into subdirs (platforms/,
+    # styles/, imageformats/, iconengines/, networkinformation/, tls/) —
+    # sweep any that exist.
+    INSTALL(CODE "
+        file(GLOB _thirdeye_dlls \"${Thirdeye_BINARY_DIR}/*.dll\")
+        file(INSTALL \${_thirdeye_dlls} DESTINATION \"\${CMAKE_INSTALL_PREFIX}\")
+        foreach(_qt_plugin_subdir platforms styles imageformats iconengines networkinformation tls generic)
+            if(IS_DIRECTORY \"${Thirdeye_BINARY_DIR}/\${_qt_plugin_subdir}\")
+                file(INSTALL \"${Thirdeye_BINARY_DIR}/\${_qt_plugin_subdir}\" DESTINATION \"\${CMAKE_INSTALL_PREFIX}\")
+            endif()
+        endforeach()
+    ")
     INSTALL(FILES
         "${Thirdeye_SOURCE_DIR}/README.md"
-        "${Thirdeye_SOURCE_DIR}/GPL3.txt"
-        "${Thirdeye_BINARY_DIR}/Release/thirdeye-launcher.exe"
-        "${Thirdeye_BINARY_DIR}/Release/thirdeye.exe"
-        "${Thirdeye_BINARY_DIR}/Release/daesop.exe"
-        "${Thirdeye_BINARY_DIR}/Release/runtests.exe"
+        "${Thirdeye_SOURCE_DIR}/LICENSE.txt"
+        "${Thirdeye_BINARY_DIR}/thirdeye.exe"
         DESTINATION ".")
-    INSTALL(DIRECTORY "${Thirdeye_BINARY_DIR}/resources" DESTINATION ".")
+    if(BUILD_DAESOP)
+        INSTALL(FILES "${Thirdeye_BINARY_DIR}/daesop.exe" DESTINATION ".")
+    endif()
+    if(BUILD_LAUNCHER)
+        INSTALL(FILES "${Thirdeye_BINARY_DIR}/thirdeye-launcher.exe" DESTINATION ".")
+    endif()
+    # ponytail: no ${BINARY_DIR}/resources exists — add_thirdeye_dir() is a
+    # source-file group macro, nothing populates a runtime tree. The Linux
+    # DPKG + macOS APPLE blocks reference it too and silently install an
+    # empty dir; not worth fixing there for a Windows-only PR.
 
     SET(CPACK_GENERATOR "NSIS")
     SET(CPACK_PACKAGE_NAME "Thirdeye")
+    SET(CPACK_PACKAGE_FILE_NAME "Thirdeye-${THIRDEYE_VERSION}-win64")
+    SET(CPACK_PACKAGE_INSTALL_DIRECTORY "Thirdeye")
     SET(CPACK_PACKAGE_VENDOR "Mindwerks.net")
     SET(CPACK_PACKAGE_VERSION ${THIRDEYE_VERSION})
     SET(CPACK_PACKAGE_VERSION_MAJOR ${THIRDEYE_VERSION_MAJOR})
     SET(CPACK_PACKAGE_VERSION_MINOR ${THIRDEYE_VERSION_MINOR})
     SET(CPACK_PACKAGE_VERSION_PATCH ${THIRDEYE_VERSION_RELEASE})
-    SET(CPACK_PACKAGE_EXECUTABLES "thirdeye;Thirdeye;thirdeye-launcher;Thirdeye Launcher;daesop;Daesop;runtests;RunTests")
+    if(BUILD_LAUNCHER)
+        SET(CPACK_PACKAGE_EXECUTABLES "thirdeye-launcher;Thirdeye Launcher;thirdeye;Thirdeye")
+        SET(CPACK_NSIS_INSTALLED_ICON_NAME "thirdeye-launcher.exe")
+    else()
+        SET(CPACK_PACKAGE_EXECUTABLES "thirdeye;Thirdeye")
+        SET(CPACK_NSIS_INSTALLED_ICON_NAME "thirdeye.exe")
+    endif()
     SET(CPACK_NSIS_CREATE_ICONS_EXTRA "CreateShortCut '\$SMPROGRAMS\\\\$STARTMENU_FOLDER\\\\Readme.lnk' '\$INSTDIR\\\\README.md'")
     SET(CPACK_NSIS_DELETE_ICONS_EXTRA "
         !insertmacro MUI_STARTMENU_GETFOLDER Application $MUI_TEMP
         Delete \\\"$SMPROGRAMS\\\\$MUI_TEMP\\\\Readme.lnk\\\"
         ")
     SET(CPACK_RESOURCE_FILE_README "${Thirdeye_SOURCE_DIR}/README.md")
-    SET(CPACK_PACKAGE_DESCRIPTION_FILE "${Thirdeye_SOURCE_DIR}/README.md")
+    SET(CPACK_RESOURCE_FILE_LICENSE "${Thirdeye_SOURCE_DIR}/LICENSE.txt")
     SET(CPACK_NSIS_EXECUTABLES_DIRECTORY ".")
     SET(CPACK_NSIS_DISPLAY_NAME "Thirdeye ${THIRDEYE_VERSION}")
-    SET(CPACK_NSIS_HELP_LINK "http:\\\\\\\\www.mindwerks.net")
-    SET(CPACK_NSIS_URL_INFO_ABOUT "http:\\\\\\\\www.mindwerks.net")
-    SET(CPACK_NSIS_INSTALLED_ICON_NAME "thirdeye-launcher.exe")
+    SET(CPACK_NSIS_PACKAGE_NAME "Thirdeye ${THIRDEYE_VERSION}")
+    SET(CPACK_NSIS_HELP_LINK "http://www.mindwerks.net")
+    SET(CPACK_NSIS_URL_INFO_ABOUT "http://www.mindwerks.net")
     SET(CPACK_NSIS_MUI_ICON "${Thirdeye_SOURCE_DIR}/apps/launcher/resources/images/thirdeye.ico")
     SET(CPACK_NSIS_MUI_UNIICON "${Thirdeye_SOURCE_DIR}/apps/launcher/resources/images/thirdeye.ico")
-    SET(CPACK_PACKAGE_ICON "${Thirdeye_SOURCE_DIR}\\\\files\\\\thirdeye.bmp")
+    SET(CPACK_NSIS_ENABLE_UNINSTALL_BEFORE_INSTALL ON)
+    SET(CPACK_NSIS_MODIFY_PATH OFF)
+    SET(CPACK_NSIS_INSTALL_ROOT "$PROGRAMFILES64")
 
-    SET(VCREDIST32 "${Thirdeye_BINARY_DIR}/vcredist_x86.exe")
-    if(EXISTS ${VCREDIST32})
-        INSTALL(FILES ${VCREDIST32} DESTINATION "redist")
-        SET(CPACK_NSIS_EXTRA_INSTALL_COMMANDS "ExecWait '\\\"$INSTDIR\\\\redist\\\\vcredist_x86.exe\\\" /q'" )
-    endif(EXISTS ${VCREDIST32})
-
-    SET(VCREDIST64 "${Thirdeye_BINARY_DIR}/vcredist_x64.exe")
-    if(EXISTS ${VCREDIST64})
-        INSTALL(FILES ${VCREDIST64} DESTINATION "redist")
-        SET(CPACK_NSIS_EXTRA_INSTALL_COMMANDS "ExecWait '\\\"$INSTDIR\\\\redist\\\\vcredist_x64.exe\\\" /q'" )
-    endif(EXISTS ${VCREDIST64})
-
-    if(CMAKE_CL_64)
-        SET(CPACK_NSIS_INSTALL_ROOT "$PROGRAMFILES64")
-    endif()
+    # Ship the MSVC runtime DLLs (vcruntime140.dll, msvcp140.dll, ...) next
+    # to the executables. Without these the launcher fails with "MSVCP140.dll
+    # was not found" on a clean Windows 10/11 install. InstallRequiredSystem
+    # Libraries queries the active MSVC toolchain to pick the right ones.
+    set(CMAKE_INSTALL_SYSTEM_RUNTIME_DESTINATION ".")
+    include(InstallRequiredSystemLibraries)
 
     include(CPack)
+
+    # Parallel to `dmg` on macOS: `cmake --build build --target nsis`
+    # produces build/Thirdeye-<version>-win64.exe via cpack. DEPENDS ensures
+    # the exes exist from a clean tree — otherwise `--target nsis` would run
+    # cpack against unbuilt targets and fail.
+    set(_nsis_deps thirdeye)
+    if(BUILD_DAESOP)
+        list(APPEND _nsis_deps daesop)
+    endif()
+    if(BUILD_LAUNCHER)
+        list(APPEND _nsis_deps thirdeye-launcher)
+    endif()
+    add_custom_target(nsis
+        COMMAND ${CMAKE_CPACK_COMMAND} -G NSIS --config "${Thirdeye_BINARY_DIR}/CPackConfig.cmake"
+        WORKING_DIRECTORY "${Thirdeye_BINARY_DIR}"
+        DEPENDS ${_nsis_deps}
+        COMMENT "Producing NSIS installer via cpack"
+        VERBATIM
+    )
 endif(WIN32)
 
 # Components

@@ -8,7 +8,10 @@ on:
   pull_request:
 
 permissions:
-  contents: read
+  # write needed by the tag-push Release step to attach dmg/exe/tgz as
+  # assets. Read-only for regular push/PR builds — those don't hit the
+  # release step (guarded by `if: startsWith(github.ref, 'refs/tags/')`).
+  contents: write
 
 jobs:
   build:
@@ -88,6 +91,29 @@ jobs:
         if: runner.os == 'Windows'
         uses: seanmiddleditch/gha-setup-ninja@master
 
+      # NSIS is not preinstalled on windows-latest; choco has it and adds it
+      # to PATH via GITHUB_PATH so cpack -G NSIS finds makensis later.
+      - name: Install NSIS (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          choco install nsis -y --no-progress
+          echo "C:\Program Files (x86)\NSIS" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+      # Prebuilt Qt6 for the launcher. Way cheaper than adding qt-base to
+      # vcpkg (which is a 45+ min from-source build). The action sets Qt6_DIR
+      # + PATH so find_package(Qt6) just works, and gives us windeployqt for
+      # runtime staging before cpack.
+      - name: Install Qt6 (Windows)
+        if: runner.os == 'Windows'
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.8.*'
+          host: 'windows'
+          target: 'desktop'
+          arch: 'win64_msvc2022_64'
+          cache: true
+
       # The Ninja generator needs cl.exe on PATH, which requires the MSVC
       # developer environment to be activated.
       - name: Set up MSVC environment (Windows)
@@ -133,7 +159,7 @@ jobs:
             -DCMAKE_BUILD_TYPE=${{ matrix.config }} `
             -DCMAKE_C_COMPILER_LAUNCHER=ccache `
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache `
-            -DBUILD_LAUNCHER=OFF `
+            -DBUILD_LAUNCHER=ON `
             -DCMAKE_TOOLCHAIN_FILE="$env:USERPROFILE\vcpkg\scripts\buildsystems\vcpkg.cmake"
 
       - name: Build
@@ -161,33 +187,50 @@ jobs:
         run: cmake --build build --target dmg
         shell: bash
 
-      - name: Package artifacts (Linux)
+      - name: Package tarball (Linux)
         if: runner.os == 'Linux'
-        run: |
-          mkdir -p artifacts
-          tar -czf artifacts/thirdeye-${{ matrix.os }}.tgz build/thirdeye build/daesop
+        run: tar -czf build/thirdeye-${{ matrix.os }}.tgz -C build thirdeye daesop
         shell: bash
 
-      - name: Collect DMG artifact (macOS)
-        if: runner.os == 'macOS'
-        run: |
-          mkdir -p artifacts
-          cp build/Thirdeye-*.dmg artifacts/
-        shell: bash
-
-      - name: Package artifacts (Windows)
+      # Windows: build a distributable .exe installer via CPack NSIS (parallel
+      # to macOS `dmg`). Before cpack:
+      # 1) copy vcpkg runtime DLLs (SDL3, OpenAL32, libWildMidi) into build/
+      # 2) run windeployqt on the launcher to stage Qt6 DLLs + plugin
+      #    subdirs (platforms/, styles/, ...) alongside it
+      # The install-time DLL glob + INSTALL(DIRECTORY) in CMakeLists.txt then
+      # sweep both into the installer.
+      - name: Build NSIS installer (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          $artifactDir = "artifacts"
-          New-Item -ItemType Directory -Force -Path $artifactDir | Out-Null
-          # Copy the vcpkg runtime DLLs (SDL3, OpenAL32, libWildMidi, ...) next to
-          # the executables so the zipped artifact runs standalone.
           $vcpkgBin = "$env:USERPROFILE\vcpkg\installed\x64-windows\bin"
           Copy-Item -Path "$vcpkgBin\*.dll" -Destination build -Force
-          Compress-Archive -Path build\thirdeye.exe,build\daesop.exe,build\*.dll -DestinationPath "$artifactDir\thirdeye-${{ matrix.os }}.zip" -Force
+          windeployqt --dir build --no-translations --no-compiler-runtime build\thirdeye-launcher.exe
+          cmake --build build --target nsis
 
+      # Upload the single shipping artifact per platform. GitHub always zips
+      # workflow artifacts on download (platform behavior — no flag to
+      # disable), so users clicking the workflow page still get
+      # thirdeye-<os>.zip. The unzipped dmg/exe surface is the Release step
+      # below, which only fires on tag push.
       - uses: actions/upload-artifact@v4
         with:
           name: thirdeye-${{ matrix.os }}
-          path: artifacts
+          path: |
+            build/Thirdeye-*.dmg
+            build/Thirdeye-*-win64.exe
+            build/thirdeye-*.tgz
+          if-no-files-found: ignore
+
+      # Tag push -> GitHub Release with the raw dmg/exe/tgz attached as
+      # assets (not zipped). GitHub shows the SHA256 on each asset page +
+      # attest-build-provenance below signs it, so no sidecar .sha256 needed.
+      - name: Attach to Release (on tag)
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            build/Thirdeye-*.dmg
+            build/Thirdeye-*-win64.exe
+            build/thirdeye-*.tgz
+          fail_on_unmatched_files: false
