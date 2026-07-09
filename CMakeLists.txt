@@ -396,10 +396,20 @@ if(WIN32)
     include(CPack)
 
     # Parallel to `dmg` on macOS: `cmake --build build --target nsis`
-    # produces build/Thirdeye-<version>-win64.exe via cpack.
+    # produces build/Thirdeye-<version>-win64.exe via cpack. DEPENDS ensures
+    # the exes exist from a clean tree — otherwise `--target nsis` would run
+    # cpack against unbuilt targets and fail.
+    set(_nsis_deps thirdeye)
+    if(BUILD_DAESOP)
+        list(APPEND _nsis_deps daesop)
+    endif()
+    if(BUILD_LAUNCHER)
+        list(APPEND _nsis_deps thirdeye-launcher)
+    endif()
     add_custom_target(nsis
         COMMAND ${CMAKE_CPACK_COMMAND} -G NSIS --config "${Thirdeye_BINARY_DIR}/CPackConfig.cmake"
         WORKING_DIRECTORY "${Thirdeye_BINARY_DIR}"
+        DEPENDS ${_nsis_deps}
         COMMENT "Producing NSIS installer via cpack"
         VERBATIM
     )
