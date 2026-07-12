@@ -203,17 +203,16 @@ if(OPENAL_LIBRARY)
     message(STATUS "Using OpenAL library: ${OPENAL_LIBRARY}")
 endif()
 
-# WildMIDI — vendored via FetchContent. Pinned to a master commit ahead of
-# the 0.5.0 tag for two features we depend on:
-#   * SoundFont2 (SF2) rendering via TinySoundFont — WildMidi_Init now takes
-#     either a .sf2 file or a cfg; the launcher's OPL-3 setup just downloads
-#     the .sf2 and points at it, no unsf conversion step.
-#   * Quoted paths in cfg files (our previous local carry, now upstream).
-# Bump to GIT_TAG wildmidi-0.5.0 once that's tagged and drop this note.
+# WildMIDI — vendored via FetchContent. Pinned to a master commit past 0.5.0
+# for the Nuked-OPL3-fast integration: WildMidi_Init recognises the "@opl3"
+# sentinel and synthesises General MIDI from a built-in DMXOPL bank, no
+# patches or soundfont required. Passing a .cfg / .sf2 / .op2 path still
+# works (via --wildmidi-cfg or THIRDEYE_WILDMIDI_CFG).
+# Bump to GIT_TAG wildmidi-0.5.1 once that's tagged and drop this note.
 FetchContent_Declare(
     wildmidi
     GIT_REPOSITORY https://github.com/Mindwerks/wildmidi.git
-    GIT_TAG        46b10bf9c18644c20de9a925a252da38198e2df5 # master 2026-07-08
+    GIT_TAG        0a888289ea4d1d1934559dbce38695fcef48eb75 # master 2026-07-12
     UPDATE_DISCONNECTED TRUE   # don't re-fetch on every configure
 )
 set(WANT_PLAYER  OFF CACHE BOOL "" FORCE)  # skip WildMIDI's CLI player

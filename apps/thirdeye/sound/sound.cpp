@@ -97,16 +97,6 @@ void MIXER::Mixer::stopMusic() {
 
 void MIXER::Mixer::playMusic(std::vector<uint8_t> xmidi) {
 	std::string config_file = Files::findWildmidiCfg(gMusicCfgOverride);
-	if (config_file.empty()) {
-		static bool warned = false;
-		if (!warned) {
-			std::cerr << "  [music: no WildMIDI config found — music disabled. "
-			             "Set via --wildmidi-cfg=<path>, THIRDEYE_WILDMIDI_CFG, "
-			             "or the launcher's Music setup.]" << std::endl;
-			warned = true;
-		}
-		return;
-	}
 	uint32_t mixer_options = 0;
 	uint8_t music_volume = 100;
 
