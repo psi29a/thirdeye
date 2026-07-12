@@ -717,6 +717,14 @@ if (APPLE)
                     "${_dmg_stage_app}/Contents/PlugIns/imageformats/libqsvg.dylib"
                     "${_dmg_stage_app}/Contents/PlugIns/iconengines/libqsvgicon.dylib"
                     "${_dmg_stage_app}/Contents/PlugIns/platforminputcontexts/libqtvirtualkeyboardplugin.dylib"
+            # Ad-hoc code sign: no Developer ID / notarization, but on
+            # Sequoia+ this flips Gatekeeper from the "app is damaged, move
+            # to Trash" dialog (unsigned + quarantined) to the softer
+            # "unidentified developer" one, which the user can bypass with
+            # right-click -> Open. macdeployqt rewrites install_names last,
+            # so we sign AFTER it. --deep re-signs every nested framework/
+            # dylib; --force replaces any stale signature.
+            COMMAND codesign --force --deep --sign - "${_dmg_stage_app}"
             COMMAND hdiutil create
                     -volname Thirdeye
                     -srcfolder "${_dmg_stage_app}"
