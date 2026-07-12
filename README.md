@@ -2,9 +2,9 @@ Thirdeye is from-scratch C++ reimplementation of SSI/Westwood's **AESOP** engine
 
 **End goal:** play Eye of the Beholder 3 and Dungeon Hack natively from the original game data. You must own the original games — Thirdeye ships no game assets.
 
-![Thirdeye](https://github.com/psi29a/thirdeye/releases/download/thirdeye-0.87.0/Screenshot.2026-06-15.at.16.48.39.png "Thirdeye")
+![Thirdeye](https://private-user-images.githubusercontent.com/1122069/616466373-a3bf25d0-402b-4074-8602-b7e9bad37d71.png?jwt=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJnaXRodWIuY29tIiwiYXVkIjoicmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSIsImtleSI6ImtleTUiLCJleHAiOjE3ODM4NjYxMzMsIm5iZiI6MTc4Mzg2NTgzMywicGF0aCI6Ii8xMTIyMDY5LzYxNjQ2NjM3My1hM2JmMjVkMC00MDJiLTQwNzQtODYwMi1iN2U5YmFkMzdkNzEucG5nP1gtQW16LUFsZ29yaXRobT1BV1M0LUhNQUMtU0hBMjU2JlgtQW16LUNyZWRlbnRpYWw9QUtJQVZDT0RZTFNBNTNQUUs0WkElMkYyMDI2MDcxMiUyRnVzLWVhc3QtMSUyRnMzJTJGYXdzNF9yZXF1ZXN0JlgtQW16LURhdGU9MjAyNjA3MTJUMTQxNzEzWiZYLUFtei1FeHBpcmVzPTMwMCZYLUFtei1TaWduYXR1cmU9ZWQ5MjVhMzA0NzE5OTI3ODk2NzQ3ZmU3ZWU2NjY4NzhkODVlOTJmMGIwZDM5MWNmZmI4ODM4M2YxNzhkZTIzZiZYLUFtei1TaWduZWRIZWFkZXJzPWhvc3QmcmVzcG9uc2UtY29udGVudC10eXBlPWltYWdlJTJGcG5nIn0.7KCqo63FrY42jSYVQIUjgzYoQni-FKTGxdjI8yrw24Q "Thirdeye")
 
-Version: 0.87.0  
+Version: 0.88.0  
 License: GPL (see GPL3.txt for more information)  
 Website:  http://www.mindwerks.net/projects/thirdeye/  
 
@@ -89,6 +89,62 @@ To configure without tests (also avoids the GoogleTest download):
     cmake -S . -B build -G Ninja -DUNIT_TESTS=OFF
 
 CHANGELOG
+
+0.88.0:
+Thirdeye grows from "walks a populated dungeon" into a game you can actually fight,
+loot and boot into from scratch -- and ships as a proper self-contained bundle on
+Linux, macOS and Windows.
+
+* Combat: monsters spot the party, close, attack; the party swings back with real
+  weapons. The troll dies, the sword-wraith dies on contact, monsters drop loot and
+  award XP, corpses decorate the tile, and monster sprites scale down over distance
+  in the view. HUD autoattack button + autoattack timer wired to the runtime.
+* Monster AI (port of MONSTER.C and friends): threat detection, path/facing update
+  on the timer, engage/disengage; the previously-stubbed post/pass/pass_monster_events
+  and companion CALLs implemented against John Miles' arun/runtime sources so the
+  SOP-driven combat handlers all land.
+* Item pickup and the hand cursor: clicking a dropped item in the dungeon view moves
+  it into the cursor and inventory. The ethereal-miss/pickup issue traced to an
+  uninitialised static the DOS loader had seeded (fixed in our loader, never the SOP).
+* Runtime coverage: pixel_fade, do_dots, do_ice, getkey, BRK, and a batch of
+  previously-stubbed CALLs implemented; unimplemented stubs mapped and named so the
+  next round is a fill-in rather than a search.
+* Cutscenes and level dressing: intro/level cutscene playback fixed; gravestones
+  and other level impediments now load and render on the map.
+* Chargen: initial chargen entry screen wired in, save-game read path works
+  end-to-end, Cancel goes back to the title menu instead of shutting the engine.
+  Reverse-engineered CHGEN.EXE / CHARCOPY.EXE (docs under eob3_research/).
+* AESOP VM: zero-init autos on frame entry and permissive static OOB access to
+  match DOS-AESOP semantics -- both load-bearing for combat and chargen.
+* Rendering: fixed the wall-clip regression at the dungeon-view edge (bbox now
+  caps at x=176 -- caught and locked down by the autowalk + BMP-diff harness);
+  text-window wipes when needed; palette choice now driven by the SOP instead
+  of guessed by us.
+* Launcher (new): a Qt6 launcher app (thirdeye-launcher) picks the game folder,
+  toggles skip-intro/skip-menu/nosound/debug, chooses render scale, checks GitHub
+  for updates and self-launches the engine. Installs side-by-side with the engine
+  on all three platforms.
+* Self-contained music: WildMIDI's new Nuked-OPL3-fast synth is the default
+  (@opl3 -- no patches or soundfont required, authentic SoundBlaster 16 / AdLib
+  timbres). --wildmidi-cfg=<file> still accepts a .sf2/.cfg/.op2 override.
+* Sound polish: OpenAL-soft device enumeration, follows the system default
+  output when it changes, mouse cursor fixes, sound effects and music now
+  play reliably on all three platforms.
+* Packaging: proper distributables on every platform -- macOS .dmg (macdeployqt
+  bundles Qt + engine deps), Windows NSIS installer (windeployqt + vcpkg-cached
+  runtime DLLs), Linux .AppImage (linuxdeploy) and .deb. `cmake --build build
+  --target dmg|nsis|appimage` for each.
+* Platform upgrade: SDL2 -> SDL3 across the codebase; ccache + vcpkg cache in CI
+  so pushes rebuild in seconds. GitHub Actions builds and runs unit tests on
+  Linux, macOS and Windows every push.
+* Regression harness: THIRDEYE_AUTOWALK / THIRDEYE_DUMP / THIRDEYE_RECORD to
+  script/record/replay a session, plus BMP diffs to lock down clip regressions;
+  ci-valgrind.sh replays a recorded walk under valgrind in Docker.
+* Correctness sweep: Coverity rounds 5-9, ASan build, valgrind fixes, MSVC
+  warnings cleaned up, security fixes across the RES loader / GFF reader / arc.
+* daesop / arc: bytecode.def looked up next to the binary; arc_compat helper
+  for arc; MSVC build works.
+
 
 0.87.0:
 Thirdeye grows from "plays the intro" into a SOP bytecode engine that boots Eye of

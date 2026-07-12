@@ -23,7 +23,6 @@
 #include <QNetworkReply>
 #include <QNetworkRequest>
 #include <QProcess>
-#include <QProgressDialog>
 #include <QPushButton>
 #include <QSettings>
 #include <QUrl>
@@ -31,19 +30,7 @@
 #include <QVBoxLayout>
 #include <QVersionNumber>
 
-#include <components/files/wildmidicfg.hpp>
-
-extern "C" {
-#include <wildmidi_lib.h>
-}
-
 namespace {
-// Latest release of Mindwerks/opl3-soundfont (as of 2026). Bump when they
-// tag a new version.
-constexpr auto OPL3_URL =
-    "https://github.com/Mindwerks/opl3-soundfont/releases/download/1.0/"
-    "OPL-3_FM_128M.sf2";
-
 // Fixed window width; the hero banner is scaled to exactly this so it sits
 // flush against both sides.
 constexpr int WINDOW_W = 520;
@@ -101,28 +88,6 @@ MainWindow::MainWindow(QWidget* parent) : QWidget(parent) {
     bootLayout->addWidget(m_skipMenu);
     bootLayout->addWidget(m_nosound);
     bootLayout->addWidget(m_debug);
-
-    // Music group — OPL-3 setup / browse for existing cfg / status.
-    m_musicStatus = new QLabel(this);
-    m_musicStatus->setWordWrap(true);
-    m_musicSetup  = new QPushButton(
-        tr("Set up authentic OPL-3 music (recommended)"), this);
-    m_musicSetup->setToolTip(tr(
-        "Downloads the OPL-3 FM synthesis soundfont (~135 MB) from Mindwerks. "
-        "OPL-3 is the SoundBlaster 16 / AdLib chipset EOB3 was scored for — "
-        "this is the authentic 90s sound. WildMIDI renders the .sf2 directly."));
-    m_musicBrowse = new QPushButton(tr("Browse for existing soundfont or config…"), this);
-    m_musicBrowse->setToolTip(tr(
-        "Point at your own .sf2 soundfont or an existing wildmidi.cfg "
-        "(e.g. freepats, timidity). Only if you already have one — "
-        "otherwise use the OPL-3 button above."));
-    connect(m_musicSetup,  &QPushButton::clicked, this, &MainWindow::setupOpl3Music);
-    connect(m_musicBrowse, &QPushButton::clicked, this, &MainWindow::browseMusicCfg);
-    auto* musicBox = new QGroupBox(tr("Music"), this);
-    auto* musicLayout = new QVBoxLayout(musicBox);
-    musicLayout->addWidget(m_musicStatus);
-    musicLayout->addWidget(m_musicSetup);
-    musicLayout->addWidget(m_musicBrowse);
 
     // Bottom buttons
     auto* whereBtn = new QPushButton(tr("Where do I get the game?"), this);
@@ -185,7 +150,6 @@ MainWindow::MainWindow(QWidget* parent) : QWidget(parent) {
     content->addWidget(m_pathStatus);
     content->addWidget(videoBox);
     content->addWidget(bootBox);
-    content->addWidget(musicBox);
     content->addStretch(1);
     content->addLayout(buttons);
 
@@ -201,7 +165,6 @@ MainWindow::MainWindow(QWidget* parent) : QWidget(parent) {
         connect(cb, &QCheckBox::toggled, this, [this](bool) { saveSettings(); });
 
     validatePath();
-    validateMusic();
     checkForUpdate();
     // Lock the width so the flush hero banner always spans edge to edge;
     // height stays user-resizable (the stretch above the buttons absorbs it).
@@ -349,12 +312,6 @@ void MainWindow::play() {
     if (m_skipMenu->isChecked())  args << "--skip-menu";
     if (m_nosound->isChecked())   args << "--nosound";
     if (m_debug->isChecked())     args << "--debug";
-    // Pass the *resolved* cfg (same search the status row shows), not the raw
-    // stored setting — a stale m_musicCfg would override the engine's own
-    // fallback search and silently kill music.
-    const QString musicCfg = findMusicCfg();
-    if (!musicCfg.isEmpty())
-        args << QString("--wildmidi-cfg=%1").arg(musicCfg);
 
     saveSettings();
     if (!QProcess::startDetached(exe, args)) {
@@ -376,7 +333,6 @@ void MainWindow::loadSettings() {
     m_skipMenu->setChecked(s.value("skipMenu", false).toBool());
     m_nosound->setChecked(s.value("nosound", false).toBool());
     m_debug->setChecked(s.value("debug", false).toBool());
-    m_musicCfg = s.value("musicCfg").toString();
 }
 
 void MainWindow::saveSettings() const {
@@ -387,158 +343,4 @@ void MainWindow::saveSettings() const {
     s.setValue("skipMenu", m_skipMenu->isChecked());
     s.setValue("nosound", m_nosound->isChecked());
     s.setValue("debug", m_debug->isChecked());
-    s.setValue("musicCfg", m_musicCfg);
-}
-
-// -----------------------------------------------------------------------------
-// Music setup
-// -----------------------------------------------------------------------------
-
-QString MainWindow::findMusicCfg() const {
-    // Same search the engine runs at Play-time (components/files/wildmidicfg).
-    // Pre-check our stored override so a stale path falls through to the
-    // shared search instead of being trusted blindly.
-    const QString override_ =
-        (!m_musicCfg.isEmpty() && QFileInfo::exists(m_musicCfg))
-            ? m_musicCfg : QString();
-    return QString::fromStdString(
-        Files::findWildmidiCfg(override_.toStdString()));
-}
-
-void MainWindow::validateMusic() {
-    // Short one-line status + full path/reason in the tooltip. Rich-text word
-    // wrap inside a QGroupBox is unreliable — keeping the label single-line
-    // avoids the mid-path truncation we hit last time.
-    const QString cfg = findMusicCfg();
-    if (cfg.isEmpty()) {
-        m_musicStatus->setText(
-            "<span style='color:#a80'>✗ Music not set up — game will run silent.</span>");
-        m_musicStatus->setToolTip(tr(
-            "No wildmidi.cfg found in any of the search locations. Click "
-            "\"Set up authentic OPL-3 music\" to fix, or Browse for an "
-            "existing config."));
-        return;
-    }
-    if (WildMidi_Init(cfg.toUtf8().constData(), 32072, 0) == -1) {
-        m_musicStatus->setText(
-            "<span style='color:#a00'>✗ Music config invalid — WildMIDI rejected it.</span>");
-        m_musicStatus->setToolTip(tr(
-            "Found: %1\n\nWildMIDI could not load this config (usually a "
-            "missing .pat file). Set up OPL-3 to replace, or Browse for a "
-            "different config.").arg(cfg));
-        return;
-    }
-    WildMidi_Shutdown();
-    m_musicStatus->setText(
-        "<span style='color:#080'>✓ Music configured.</span>");
-    m_musicStatus->setToolTip(cfg);
-}
-
-void MainWindow::browseMusicCfg() {
-    const QString f = QFileDialog::getOpenFileName(this,
-        tr("Locate soundfont or WildMIDI config"),
-        m_musicCfg.isEmpty() ? QDir::homePath() : m_musicCfg,
-        tr("Soundfont / config (*.sf2 *.cfg);;All files (*)"));
-    if (f.isEmpty()) return;
-    m_musicCfg = f;
-    saveSettings();
-    validateMusic();
-}
-
-void MainWindow::setupOpl3Music() {
-    if (QMessageBox::question(this, tr("Set up OPL-3 music"),
-            tr("This will download the OPL-3 FM soundfont (~135 MB) from "
-               "Mindwerks. Continue?")) != QMessageBox::Yes) return;
-
-    // Shared app-data dir (components/files/wildmidicfg) — the same place the
-    // engine's search looks. Paths with spaces (macOS "Application Support")
-    // are safe thanks to our WildMIDI quoted-paths patch.
-    const QString appdata = QString::fromStdString(Files::thirdeyeAppDataDir());
-    if (appdata.isEmpty()) {
-        QMessageBox::critical(this, tr("No home directory"),
-            tr("Could not resolve your user data directory."));
-        return;
-    }
-    QDir().mkpath(appdata);
-    const QString sf2Path = QString::fromStdString(Files::appDataOpl3Sf2());
-
-    auto* nam   = new QNetworkAccessManager(this);
-    auto* prog  = new QProgressDialog(tr("Downloading OPL-3 soundfont…"),
-                                      tr("Cancel"), 0, 100, this);
-    prog->setWindowModality(Qt::WindowModal);
-    prog->setMinimumDuration(0);
-    prog->setAutoClose(false);
-
-    QNetworkRequest req{QUrl(OPL3_URL)};
-    req.setAttribute(QNetworkRequest::RedirectPolicyAttribute,
-                     QNetworkRequest::NoLessSafeRedirectPolicy);
-    QNetworkReply* reply = nam->get(req);
-
-    connect(reply, &QNetworkReply::downloadProgress, prog,
-            [prog](qint64 rec, qint64 tot) {
-        if (tot <= 0) return;
-        prog->setValue(int(rec * 100 / tot));
-        prog->setLabelText(QObject::tr("Downloading OPL-3 soundfont…\n"
-                                       "%1 / %2 MB")
-                           .arg(rec / (1024*1024)).arg(tot / (1024*1024)));
-    });
-    connect(prog, &QProgressDialog::canceled, reply, &QNetworkReply::abort);
-
-    connect(reply, &QNetworkReply::finished, this,
-            [this, reply, nam, prog, sf2Path]() {
-        prog->close(); prog->deleteLater();
-        nam->deleteLater();
-        if (reply->error() != QNetworkReply::NoError) {
-            if (reply->error() != QNetworkReply::OperationCanceledError)
-                QMessageBox::critical(this, tr("Download failed"),
-                                      reply->errorString());
-            reply->deleteLater();
-            return;
-        }
-        // Write to a .part file then rename atomically, so an interrupted
-        // save can't leave a half-written .sf2 that WildMidi_Init would
-        // silently reject on the next launch. Every step is checked — a
-        // failed write or rename must not clobber a previously-working
-        // soundfont at sf2Path.
-        const QString partPath = sf2Path + ".part";
-        QFile out(partPath);
-        if (!out.open(QIODevice::WriteOnly)) {
-            QMessageBox::critical(this, tr("Write failed"),
-                                  tr("Could not write:\n%1").arg(partPath));
-            reply->deleteLater();
-            return;
-        }
-        const QByteArray data = reply->readAll();
-        reply->deleteLater();
-        if (out.write(data) != data.size()) {
-            out.close();
-            QFile::remove(partPath);
-            QMessageBox::critical(this, tr("Write failed"),
-                tr("Could not save the download (disk full?):\n%1").arg(partPath));
-            return;
-        }
-        out.close();
-
-        // Try rename first — it's atomic on POSIX and replaces the target.
-        // On Windows QFile::rename fails when the destination exists, so
-        // fall back to remove-then-rename there. Order matters: only touch
-        // sf2Path once we know partPath is complete and we're about to
-        // succeed; a rename failure after remove leaves the user with no
-        // soundfont, so surface that clearly.
-        if (!QFile::rename(partPath, sf2Path)) {
-            QFile::remove(sf2Path);
-            if (!QFile::rename(partPath, sf2Path)) {
-                QFile::remove(partPath);
-                QMessageBox::critical(this, tr("Save failed"),
-                    tr("Could not move the downloaded file into place:\n%1")
-                        .arg(sf2Path));
-                return;
-            }
-        }
-
-        // WildMidi_Init opens the .sf2 directly (0.5.0+ TinySoundFont path).
-        m_musicCfg = sf2Path;
-        saveSettings();
-        validateMusic();
-    });
 }
