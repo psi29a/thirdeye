@@ -2,7 +2,9 @@ Thirdeye is from-scratch C++ reimplementation of SSI/Westwood's **AESOP** engine
 
 **End goal:** play Eye of the Beholder 3 and Dungeon Hack natively from the original game data. You must own the original games — Thirdeye ships no game assets.
 
-![Thirdeye](https://private-user-images.githubusercontent.com/1122069/616466373-a3bf25d0-402b-4074-8602-b7e9bad37d71.png?jwt=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJnaXRodWIuY29tIiwiYXVkIjoicmF3LmdpdGh1YnVzZXJjb250ZW50LmNvbSIsImtleSI6ImtleTUiLCJleHAiOjE3ODM4NjYxMzMsIm5iZiI6MTc4Mzg2NTgzMywicGF0aCI6Ii8xMTIyMDY5LzYxNjQ2NjM3My1hM2JmMjVkMC00MDJiLTQwNzQtODYwMi1iN2U5YmFkMzdkNzEucG5nP1gtQW16LUFsZ29yaXRobT1BV1M0LUhNQUMtU0hBMjU2JlgtQW16LUNyZWRlbnRpYWw9QUtJQVZDT0RZTFNBNTNQUUs0WkElMkYyMDI2MDcxMiUyRnVzLWVhc3QtMSUyRnMzJTJGYXdzNF9yZXF1ZXN0JlgtQW16LURhdGU9MjAyNjA3MTJUMTQxNzEzWiZYLUFtei1FeHBpcmVzPTMwMCZYLUFtei1TaWduYXR1cmU9ZWQ5MjVhMzA0NzE5OTI3ODk2NzQ3ZmU3ZWU2NjY4NzhkODVlOTJmMGIwZDM5MWNmZmI4ODM4M2YxNzhkZTIzZiZYLUFtei1TaWduZWRIZWFkZXJzPWhvc3QmcmVzcG9uc2UtY29udGVudC10eXBlPWltYWdlJTJGcG5nIn0.7KCqo63FrY42jSYVQIUjgzYoQni-FKTGxdjI8yrw24Q "Thirdeye")
+![Thirdeye](https://github.com/user-attachments/assets/77952869-864c-44c2-890d-029d7bf5c29d "Thirdeye")
+
+
 
 Version: 0.88.0  
 License: GPL (see GPL3.txt for more information)  
