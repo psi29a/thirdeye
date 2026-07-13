@@ -376,15 +376,21 @@ bool tryHandle(Context &ctx, const std::string &fn,
 		result = 0;
 		return true;
 	}
-	// --- char-gen party transfer (EYE.C transfer-file API) ---
-	// open_transfer_file(name): buffer the CHGEN.EXE output (CHARGEN\CREATE.SAV)
-	// so player_attrib/item_attrib can read the created party out of it. The DOS
-	// path uses a backslash and is relative to the game dir; map it to the real
-	// sibling file beside the .RES.
+	// --- party transfer (EYE.C transfer-file API) ---
+	// open_transfer_file(name): buffer the transfer save so player_attrib/
+	// item_attrib can read the party out of it. Two callers:
+	//   M:16 "convert created party" -> "CHARGEN\CREATE.SAV" (CHGEN.EXE output)
+	//   M:14 "transfer from Eye II"  -> "TRANSFER.SAV"        (CHARCOPY.EXE output)
+	// Both flow into M:15 "transfer" with the same offset layout -- CHARCOPY just
+	// renames the EOB2 save into place (see ../eob3_research/CHARCOPY/README.md:
+	// `ren temptemp.sav transfer.sav`). The DOS path uses a backslash and is
+	// relative to the game dir; map it to the real sibling file beside the .RES.
+	//
+	// Return convention per arun/src/EYE.H:199 -- `void *cdecl open_transfer_file`
+	// returns a file handle: non-zero on success, zero on failure. M:14 checks
+	// staticVar0 == 0 to show "run CHARCOPY" dialog; M:16 ignores the return.
 	if (fn == "open_transfer_file" && args.size() >= 1) {
 		std::string name = ctx.vm.readCodeString(static_cast<uint32_t>(args[0]));
-		// Map the DOS path (e.g. "CHARGEN\CREATE.SAV") to a real sibling of the
-		// .RES: split on '\\' and rebuild with the host separator.
 		std::filesystem::path full = ctx.res.resourcePath().parent_path();
 		std::string part;
 		for (size_t i = 0; i <= name.size(); ++i) {
@@ -401,7 +407,8 @@ bool tryHandle(Context &ctx, const std::string &fn,
 		}
 		ctx.xfer.rebuildPlacement();
 		rt() << "  [open_transfer_file \"" << name << "\" -> " << full.string()
-		     << " (" << ctx.xfer.data.size() << " bytes)]" << std::endl;
+		     << " (" << ctx.xfer.data.size() << " bytes"
+		     << (ctx.xfer.data.empty() ? ", MISSING" : "") << ")]" << std::endl;
 		for (int pc = 0; pc < 4 && !ctx.xfer.data.empty(); ++pc) {
 			rt() << "  [xfer pc " << pc << " placement:";
 			for (int s = 0; s < 26; ++s)
@@ -409,7 +416,9 @@ bool tryHandle(Context &ctx, const std::string &fn,
 					rt() << " e" << s << "<-cs" << int(ctx.xfer.pcItemAtSlot[pc][s]);
 			rt() << "]" << std::endl;
 		}
-		result = ctx.xfer.data.empty() ? -1 : 0;
+		// ponytail: return a truthy "handle" value (buffer size) instead of a real
+		// FILE*: the SOP only tests non-zero-ness, and we buffer the whole file.
+		result = ctx.xfer.data.empty() ? 0 : static_cast<int32_t>(ctx.xfer.data.size());
 		return true;
 	}
 	if (fn == "close_transfer_file") {

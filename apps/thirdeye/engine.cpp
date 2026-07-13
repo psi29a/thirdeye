@@ -817,7 +817,26 @@ void THIRDEYE::Engine::bootObject(RESOURCES::Resource &resource,
 	            : bootMode == MODE_INTR ? "INTR (title menu)"
 	            : "cold boot (intro, then menu)")
 	          << "]" << std::endl;
-	TransferState xfer; // char-gen party transfer file (CHARGEN\CREATE.SAV)
+	TransferState xfer; // party transfer file (CHARGEN\CREATE.SAV or TRANSFER.SAV)
+
+	// CHARCOPY.EXE stand-in: if THIRDEYE_EOB12_SAVE points at an EOB1/2 save,
+	// copy it to TRANSFER.SAV beside the .RES so "Summon the Heroes of Darkmoon"
+	// (menu option 3) finds it. The real CHARCOPY walks drives + prompts; we skip
+	// the discovery UI and let the user hand us the path. See
+	// ../eob3_research/CHARCOPY/README.md -- the real utility just renames
+	// temptemp.sav to transfer.sav, no format conversion.
+	if (const char *src = std::getenv("THIRDEYE_EOB12_SAVE"); src && *src) {
+		std::error_code ec;
+		auto dst = resource.resourcePath().parent_path() / "TRANSFER.SAV";
+		std::filesystem::copy_file(
+		    src, dst, std::filesystem::copy_options::overwrite_existing, ec);
+		if (ec)
+			std::cout << "  [THIRDEYE_EOB12_SAVE: copy \"" << src << "\" -> "
+			          << dst << " FAILED: " << ec.message() << "]" << std::endl;
+		else
+			std::cout << "  [THIRDEYE_EOB12_SAVE: staged \"" << src << "\" as "
+			          << dst << "]" << std::endl;
+	}
 
 	objects.setRuntimeCall(
 		[&](VM::Interpreter &vm, const std::string &fn,
