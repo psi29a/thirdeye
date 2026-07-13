@@ -83,6 +83,7 @@ GRAPHICS::Graphics::~Graphics() {
 	SDL_DestroySurface(mScreen);
 	SDL_DestroySurface(mBackdrop);     // lazily created in drawImage (nullptr-safe)
 	SDL_DestroySurface(mCompassSnap);  // lazily created in snapshotCompass
+	SDL_DestroySurface(mScreenSnap);   // lazily created in snapshotScreen
 	SDL_DestroySurface(mLastShown);    // lazily created in update
 	if (mPresentTex != nullptr) SDL_DestroyTexture(mPresentTex);
 	SDL_DestroyPalette(mPalette);
@@ -282,12 +283,34 @@ void GRAPHICS::Graphics::drawIndexed(const std::vector<uint8_t> &pixels,
 static const SDL_Rect kCompassRect = { 0, 120, 116, 49 };
 
 void GRAPHICS::Graphics::snapshotCompass() {
+	// Skip while an overlay covers mScreen -- otherwise we'd snapshot the
+	// overlay pixels instead of the compass and restamp them on future frames.
+	if (mSuppressCompassSnap) return;
 	if (mCompassSnap == nullptr)
 		mCompassSnap = SDL_CreateSurface(kCompassRect.w, kCompassRect.h,
 		                                 SDL_PIXELFORMAT_ARGB8888);
 	SDL_SetSurfaceBlendMode(mScreen, SDL_BLENDMODE_NONE);
 	SDL_BlitSurface(mScreen, &kCompassRect, mCompassSnap, nullptr);
 	mCompassCovered = false; // freshly drawn: resume the per-present re-stamp
+}
+
+void GRAPHICS::Graphics::restoreBackdrop() {
+	if (mBackdrop == nullptr) return;
+	SDL_SetSurfaceBlendMode(mBackdrop, SDL_BLENDMODE_NONE);
+	SDL_BlitSurface(mBackdrop, nullptr, mScreen, nullptr);
+}
+
+void GRAPHICS::Graphics::snapshotScreen() {
+	if (mScreenSnap == nullptr)
+		mScreenSnap = SDL_CreateSurface(WIDTH, HEIGHT, SDL_PIXELFORMAT_ARGB8888);
+	SDL_SetSurfaceBlendMode(mScreen, SDL_BLENDMODE_NONE);
+	SDL_BlitSurface(mScreen, nullptr, mScreenSnap, nullptr);
+}
+
+void GRAPHICS::Graphics::restoreScreenSnapshot() {
+	if (mScreenSnap == nullptr) return;
+	SDL_SetSurfaceBlendMode(mScreenSnap, SDL_BLENDMODE_NONE);
+	SDL_BlitSurface(mScreenSnap, nullptr, mScreen, nullptr);
 }
 
 void GRAPHICS::Graphics::restoreCompass() {
@@ -316,8 +339,17 @@ void GRAPHICS::Graphics::fillRect(int x0, int y0, int x1, int y1, uint8_t color)
 	SDL_FillSurfaceRect(mScreen, &r, px);
 	// Keep the text-free backdrop snapshot in sync so a later text_window restore of
 	// this box shows the cleared colour, not the art the clear replaced.
-	if (mBackdrop != nullptr)
+	if (mBackdrop != nullptr && !mSuspendBackdrop)
 		SDL_FillSurfaceRect(mBackdrop, &r, px);
+}
+
+void GRAPHICS::Graphics::fillRectRGB(int x0, int y0, int x1, int y1,
+                                     uint8_t r, uint8_t g, uint8_t b) {
+	if (x1 < x0) std::swap(x0, x1);
+	if (y1 < y0) std::swap(y0, y1);
+	SDL_Rect rc = { x0, y0, x1 - x0 + 1, y1 - y0 + 1 };
+	Uint32 px = SDL_MapSurfaceRGB(mScreen, r, g, b);
+	SDL_FillSurfaceRect(mScreen, &rc, px);
 }
 
 uint32_t GRAPHICS::Graphics::peekPixel(int x, int y) const {
@@ -401,7 +433,7 @@ void GRAPHICS::Graphics::drawLine(int x0, int y0, int x1, int y1,
 	for (;;) {
 		SDL_Rect r = { x0, y0, 1, 1 };
 		SDL_FillSurfaceRect(mScreen, &r, px);
-		if (mBackdrop != nullptr)
+		if (mBackdrop != nullptr && !mSuspendBackdrop)
 			SDL_FillSurfaceRect(mBackdrop, &r, px);
 		if (x0 == x1 && y0 == y1) break;
 		int e2 = 2 * err;
@@ -420,7 +452,7 @@ void GRAPHICS::Graphics::hashRect(int x0, int y0, int x1, int y1,
 		for (int x = x0 + ((x0 ^ y) & 1); x <= x1; x += 2) {
 			SDL_Rect r = { x, y, 1, 1 };
 			SDL_FillSurfaceRect(mScreen, &r, px);
-			if (mBackdrop != nullptr)
+			if (mBackdrop != nullptr && !mSuspendBackdrop)
 				SDL_FillSurfaceRect(mBackdrop, &r, px);
 		}
 	}
@@ -847,6 +879,11 @@ void GRAPHICS::Graphics::update() {
 	// Re-apply the persistent compass (in-game) so HUD/inventory redraws can't erase
 	// the facing indicator the bytecode only redraws on a turn.
 	restoreCompass();
+
+	// Present-time overlay: runs after every SOP draw + compass restamp so
+	// the overlay (automap) lands on top of anything drawn during a recursive
+	// dispatch inside our pump. Set once from engine.cpp.
+	if (mPresentOverlay) mPresentOverlay();
 
 	// Persistent streaming texture. The previous loop did
 	// SDL_CreateTextureFromSurface + SDL_DestroyTexture every present, which

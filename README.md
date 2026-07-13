@@ -6,7 +6,7 @@ Thirdeye is from-scratch C++ reimplementation of SSI/Westwood's **AESOP** engine
 
 
 
-Version: 0.88.0  
+Version: 0.89.0  
 License: GPL (see GPL3.txt for more information)  
 Website:  http://www.mindwerks.net/projects/thirdeye/  
 
@@ -91,6 +91,14 @@ To configure without tests (also avoids the GoogleTest download):
     cmake -S . -B build -G Ninja -DUNIT_TESTS=OFF
 
 CHANGELOG
+
+0.89.0 (unreleased):
+
+* Automap (new): press M in-game to overlay a top-down map of what the party has
+  actually seen (fog of war; hidden doors and hackable trees count as walls until
+  removed). Legend for party/walls/stairs/traps/items/switches/marks; exploration
+  is staged live in a MAPS.TMP sidecar and persisted per save slot as
+  MAPS_nn.BIN -- original EOB3 save files stay DOS-compatible.
 
 0.88.0:
 Thirdeye grows from "walks a populated dungeon" into a game you can actually fight,

@@ -10,6 +10,7 @@
 
 #include <SDL3/SDL.h>
 
+#include <functional>
 #include <map>
 #include <unordered_map>
 #include <vector>
@@ -52,6 +53,11 @@ private:
 	// flat-fill clear (the title menu, whose "Menu shapes" bakes the options in).
 	SDL_Surface *mBackdrop = nullptr;
 	bool mTextRestoreBg = false;
+	bool mSuspendBackdrop = false;
+	bool mSuppressCompassSnap = false;
+	// Lazily-allocated full-screen snapshot (see snapshotScreen()).
+	SDL_Surface *mScreenSnap = nullptr;
+	std::function<void()> mPresentOverlay;
 	// The compass widget lives on its own AESOP page (104) that the original
 	// re-composites every frame, so it survives HUD redraws. We flatten pages onto
 	// one surface, so we instead snapshot the compass region when it refreshes and
@@ -194,6 +200,11 @@ public:
 	// the character-stats screen clears the equipment area first); also refreshes the
 	// text-free backdrop snapshot so later text overlays the cleared box, not stale art.
 	void fillRect(int x0, int y0, int x1, int y1, uint8_t color);
+	// RGB fill (bypasses the palette). Used by overlays (automap) that need
+	// stable UI colours across dungeon-specific palette swaps. Writes mScreen
+	// only, so overlay footprints don't leak into mBackdrop.
+	void fillRectRGB(int x0, int y0, int x1, int y1,
+	                 uint8_t r, uint8_t g, uint8_t b);
 	// Palette-indexed line (GIL2VFX_draw_line). Axis-aligned lines are one
 	// fillRect; diagonals walk Bresenham. Writes the backdrop too (a drawn
 	// line is panel state, same as fillRect).
@@ -201,6 +212,14 @@ public:
 	// Every-other-pixel checkerboard fill (VFX_rectangle_hash) -- the SOP's
 	// "grayed out" UI treatment.
 	void hashRect(int x0, int y0, int x1, int y1, uint8_t color);
+	// While true, fillRect/drawLine/hashRect write mScreen only, not mBackdrop.
+	// ponytail: keeps overlays (automap) from corrupting the SOP's text-restore
+	// snapshot; the overlay is redrawn each frame so mScreen churn is harmless.
+	void suspendBackdrop(bool s) { mSuspendBackdrop = s; }
+	// While true, snapshotCompass() is a no-op. Prevents the SOP's mid-frame
+	// compass snapshot from capturing overlay pixels drawn on top of the
+	// compass rect (would then get re-stamped as "compass" on future frames).
+	void suppressCompassSnapshot(bool s) { mSuppressCompassSnap = s; }
 	// Raw single-pixel access for the particle effects (do_dots/do_ice port):
 	// peek returns the mapped ARGB value (0 on OOB) so a particle can save and
 	// restore the exact background it covers; poke writes one back. mapColor
@@ -251,6 +270,21 @@ public:
 
 	uint32_t getSleep();
 	void update();
+	// ponytail: hook fired at the end of update() -- after all state-machine
+	// draws and the compass restamp, immediately before SDL_UpdateTexture and
+	// present. The automap uses this so its overlay lands ON TOP of anything
+	// the SOP drew during a recursive dispatch inside our pump.
+	void setPresentOverlay(std::function<void()> cb) { mPresentOverlay = std::move(cb); }
+	// Blit the text-restore snapshot back onto mScreen. The automap calls this
+	// on close so residual overlay pixels (legend column, title) that landed in
+	// gaps the SOP doesn't redraw get erased in one shot.
+	void restoreBackdrop();
+	// Full-screen mScreen snapshot/restore. Used by the automap around
+	// open/close so text + one-shot draws (character names, HP labels, arrow
+	// pad, CAMP button, status line) survive the overlay -- mBackdrop is
+	// text-free and can't restore those.
+	void snapshotScreen();
+	void restoreScreenSnapshot();
 
 	// Save the current screen surface to a BMP (debug / headless verification).
 	void saveScreenshot(const std::string &path);

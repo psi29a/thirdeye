@@ -709,7 +709,7 @@ bool tryHandle(Context &ctx, const std::string &fn,
 				// The particle loop blocks for up to ~50s of wall clock;
 				// pumpHost drains the SDL queue (including SDL_EVENT_QUIT via
 				// QuitRequested) so the OS doesn't beach-ball the window.
-				pumpHost(*ctx.gfx, ctx.events);
+				pumpHost(*ctx.gfx, ctx.events, ctx.objects, ctx.res);
 				SDL_Delay(32); // two vblank waits in the original (~30 fps)
 			}
 			result = 0;
@@ -829,7 +829,7 @@ bool tryHandle(Context &ctx, const std::string &fn,
 					} else p.colorStep = 0;
 				}
 				ctx.gfx->update();
-				pumpHost(*ctx.gfx, ctx.events); // drain quit / OS events
+				pumpHost(*ctx.gfx, ctx.events, ctx.objects, ctx.res); // drain quit / OS events
 				SDL_Delay(16); // one vblank wait in the original (~60 fps)
 			}
 			result = 0;

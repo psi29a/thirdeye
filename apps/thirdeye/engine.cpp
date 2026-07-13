@@ -1,4 +1,5 @@
 #include "engine.hpp"
+#include "automap.hpp"
 #include "resources/res.hpp"
 #include "resources/gffi.hpp"
 #include "sound/sound.hpp"
@@ -235,7 +236,8 @@ InputRecorder gRecorder;
 // when the queue is idle. That turns the 100% spin into an event-driven,
 // frame-paced loop and makes the window render live (instead of only after the
 // loop ends). Throws QuitRequested on window-close / ESC.
-void THIRDEYE::runtime::pumpHost(GRAPHICS::Graphics &gfx, VM::EventSystem &events) {
+void THIRDEYE::runtime::pumpHost(GRAPHICS::Graphics &gfx, VM::EventSystem &events,
+                                 VM::ObjectSystem &objects, RESOURCES::Resource &res) {
 	// THIRDEYE_RECORD: arm the input recorder (see InputRecorder above) and
 	// advance its pump clock BEFORE polling, so input seen this pump gets this
 	// pump's tick.
@@ -277,6 +279,18 @@ void THIRDEYE::runtime::pumpHost(GRAPHICS::Graphics &gfx, VM::EventSystem &event
 			// Q/E = turn, C = camp. They post the same DOS codes the arrow keys do (the
 			// kernel notifies move forward/back/strafe/turn on those). (No I->inventory:
 			// it defaulted to Bob with no indication of whose pack it opened.)
+			// M: automap overlay -- host-side, not posted to the SOP (the
+			// bytecode has no M handler). Consumes the event. Esc while the
+			// map is open closes it before the SOP can see it, so Esc doesn't
+			// also fire the camp/quit menu underneath.
+			if (ev.key.scancode == SDL_SCANCODE_M) {
+				THIRDEYE::automap::toggle();
+				break;
+			}
+			if (THIRDEYE::automap::isOpen() && ev.key.key == SDLK_ESCAPE) {
+				THIRDEYE::automap::close();
+				break;
+			}
 			int32_t key = 0;
 			switch (ev.key.scancode) {
 			case SDL_SCANCODE_W: key = 0x4800; break; // move forward
@@ -500,6 +514,22 @@ void THIRDEYE::runtime::pumpHost(GRAPHICS::Graphics &gfx, VM::EventSystem &event
 		}
 	}
 
+	// Automap: refresh visibility from the current party pose every pump
+	// (cheap; three static-ptr fetches + a 32x32 scan). The overlay itself
+	// renders inside gfx.update() via setPresentOverlay so it lands last on
+	// mScreen. Snapshot/restore mScreen at the open/close edges so text +
+	// one-shot draws (character names, HP labels, arrow pad, CAMP, status
+	// line) survive: mBackdrop is text-free and only holds panel art.
+	THIRDEYE::automap::tick(objects);
+	bool mapOpen = THIRDEYE::automap::isOpen();
+	static bool wasMapOpen = false;
+	if (!wasMapOpen && mapOpen)  gfx.snapshotScreen();
+	if (wasMapOpen && !mapOpen)  gfx.restoreScreenSnapshot();
+	wasMapOpen = mapOpen;
+	// Block SOP-driven compass snapshots while open: they'd capture overlay
+	// pixels covering the compass rect and re-stamp them on future frames.
+	gfx.suppressCompassSnapshot(mapOpen);
+
 	gfx.update();                 // present whatever the bytecode has drawn
 	if (!events.peekEvent())
 		SDL_Delay(10);            // idle: yield instead of spinning
@@ -705,6 +735,15 @@ void THIRDEYE::Engine::bootObject(RESOURCES::Resource &resource,
 	std::unique_ptr<GRAPHICS::Graphics> gfx;
 	try {
 		gfx = std::make_unique<GRAPHICS::Graphics>(mScale, mRenderer);
+		// Automap overlay hook: fires at the end of gfx.update() -- last thing
+		// on mScreen before texture upload, so the map lands on top of every
+		// SOP draw + the compass restamp. The captured raw pointer is safe:
+		// the callback lives on the same Graphics we're pointing at.
+		GRAPHICS::Graphics *gp = gfx.get();
+		gfx->setPresentOverlay([gp, &resource]() {
+			if (THIRDEYE::automap::isOpen())
+				THIRDEYE::automap::render(*gp, resource);
+		});
 	} catch (const std::exception &e) {
 		std::cout << "Graphics unavailable (" << e.what()
 		          << "); booting headless." << std::endl;
