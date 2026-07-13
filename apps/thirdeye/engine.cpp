@@ -819,23 +819,41 @@ void THIRDEYE::Engine::bootObject(RESOURCES::Resource &resource,
 	          << "]" << std::endl;
 	TransferState xfer; // party transfer file (CHARGEN\CREATE.SAV or TRANSFER.SAV)
 
-	// CHARCOPY.EXE stand-in: if THIRDEYE_EOB12_SAVE points at an EOB1/2 save,
-	// copy it to TRANSFER.SAV beside the .RES so "Summon the Heroes of Darkmoon"
-	// (menu option 3) finds it. The real CHARCOPY walks drives + prompts; we skip
-	// the discovery UI and let the user hand us the path. See
-	// ../eob3_research/CHARCOPY/README.md -- the real utility just renames
-	// temptemp.sav to transfer.sav, no format conversion.
-	if (const char *src = std::getenv("THIRDEYE_EOB12_SAVE"); src && *src) {
+	// CHARCOPY.EXE stand-in: if THIRDEYE_EOB2_SAVE points at an EOB2 save
+	// (EOBDATA?.SAV or FINAL.SAV), copy it to TRANSFER.SAV beside the .RES so
+	// "Summon the Heroes of Darkmoon" (menu option 3) finds it. The real CHARCOPY
+	// walks drives + prompts; we skip the discovery UI and let the user hand us
+	// the path. See ../eob3_research/CHARCOPY/README.md -- the real utility just
+	// renames temptemp.sav to transfer.sav, no format conversion, and it REJECTS
+	// EOB1 saves ("Eye of the Beholder III won't work with Eye I save games"):
+	// only EOB2's record layout (20-byte save name + 01 flag + 345-byte PC
+	// records at 0x16) matches what the xfer SOP's player_attrib offsets read.
+	// EOB1 saves have no save-name header (records start at 0x02, 243-byte
+	// stride), so importing one raw would read garbage into every stat.
+	if (const char *src = std::getenv("THIRDEYE_EOB2_SAVE"); src && *src) {
+		auto sniff = [](const std::filesystem::path &p) {
+			std::ifstream in(p, std::ios::binary);
+			uint8_t hdr[0x16] = {};
+			in.read(reinterpret_cast<char *>(hdr), sizeof hdr);
+			return in && TransferState::looksLikeEob2Save(hdr, sizeof hdr);
+		};
 		std::error_code ec;
 		auto dst = resource.resourcePath().parent_path() / "TRANSFER.SAV";
-		std::filesystem::copy_file(
-		    src, dst, std::filesystem::copy_options::overwrite_existing, ec);
-		if (ec)
-			std::cout << "  [THIRDEYE_EOB12_SAVE: copy \"" << src << "\" -> "
-			          << dst << " FAILED: " << ec.message() << "]" << std::endl;
-		else
-			std::cout << "  [THIRDEYE_EOB12_SAVE: staged \"" << src << "\" as "
-			          << dst << "]" << std::endl;
+		if (!sniff(src)) {
+			std::cout << "  [THIRDEYE_EOB2_SAVE: \"" << src << "\" is not an "
+			          << "EOB2 save (EOB1 saves can't be transferred -- play it "
+			          << "into EOB2 first, matching the original CHARCOPY)]"
+			          << std::endl;
+		} else {
+			std::filesystem::copy_file(
+			    src, dst, std::filesystem::copy_options::overwrite_existing, ec);
+			if (ec)
+				std::cout << "  [THIRDEYE_EOB2_SAVE: copy \"" << src << "\" -> "
+				          << dst << " FAILED: " << ec.message() << "]" << std::endl;
+			else
+				std::cout << "  [THIRDEYE_EOB2_SAVE: staged \"" << src << "\" as "
+				          << dst << "]" << std::endl;
+		}
 	}
 
 	objects.setRuntimeCall(

@@ -512,18 +512,32 @@ EOB3's item/level `.TMP` formats are not on the wiki. EOB3 had a 16-bit-
 pointer save bug (daesop's `/eob3menupatch` works around it for the
 original; our native VM sidesteps it).
 
-### 🚧 EOB1/EOB2 → EOB3 party import
+### ✅ EOB2 → EOB3 party import (2026-07-13)
 
 "Summon the Heroes of Darkmoon" (menu option 3): `start`→`LBL_521` creates `xfer` (1380) +
-SENDs "transfer from Eye II" (M:14), which reads an EOB1/2 save and converts to EOB3's. Wire
-M:14's runtime functions the same way as `convert created party` (M:16). A standalone
-EOB1/2→EOB3 converter tool could share this reader.
+SENDs "transfer from Eye II" (M:14). Working end-to-end against a real GOG EOB2 save
+(EOBDATA0.SAV → PERICLES/"STUMPY"/WOLFSPIRIT/LAURANN in-game with portraits, HP, gear).
 
-**De-risked**: `CHARCOPY.EXE` (the standalone DOS utility that stages the EOB1/2 save into
-the EOB3 dir) does **no format conversion** — it shells out to DOS `copy` and leaves the
-EOB1/2 save verbatim at `temptemp.sav` for M:14 to ingest. So the whole import lives in the
-SOP M:14 handler; **no DOS RE needed**. Full CHARCOPY artifact dump:
+Two runtime pieces landed:
+- **`open_transfer_file` return convention fixed** — per `arun/src/EYE.H:199` it returns a
+  `void *` handle (non-zero = success). We returned 0-on-success; M:16 never checked, but
+  M:14 gates on it (`staticVar0 == 0` → "run CHARCOPY" dialog), so the bug was latent
+  until this path.
+- **CHARCOPY.EXE stand-in** — `THIRDEYE_EOB2_SAVE=<path>` copies the EOB2 save to
+  `TRANSFER.SAV` beside the .RES at boot (the real utility is just drive-walk + DOS
+  `copy` + `ren temptemp.sav transfer.sav`, no format conversion). No new reader was
+  needed: **CREATE.SAV is EOB2-format** (CHGEN writes one), same 345-byte PC records at
+  0x16, same item array at 0x894 — which is why M:14 and M:16 share the M:15 "transfer"
+  handler, and why `TransferState` already parses it.
+
+**EOB1 saves are rejected by design**, matching the original CHARCOPY ("Eye of the
+Beholder III won't work with Eye I save games"): EOB1's layout differs (243-byte records
+at 0x02, no save-name header). The supported path is EOB1 → EOB2's own import → EOB3.
+The shim sniffs the header (save-valid flag at 0x14-0x15) and refuses non-EOB2 files.
+Full CHARCOPY artifact dump:
 [`../eob3_research/CHARCOPY/`](../eob3_research/CHARCOPY/README.md).
+
+Still open (nice-to-have): a file-picker UI instead of the env var.
 
 ### ⏳ Other stand-ins
 - ~~Level objects load the *saved* `LVLnn.TMP` (not the new-game source).~~ ✅

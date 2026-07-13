@@ -71,6 +71,15 @@ struct TransferState {
 
 	static SlotCat categoryForClass(int cls);
 
+	// EOB2 save sniff (for the CHARCOPY stand-in): EOB2 saves carry a 20-byte
+	// save-name header with a 00 01 save-valid flag at 0x14-0x15; EOB1 puts that
+	// flag at 0x00-0x01 instead (records start at 0x02, 243-byte stride -- a
+	// layout the xfer SOP's offsets can't read, which is why the original
+	// CHARCOPY refuses EOB1 saves too).
+	static bool looksLikeEob2Save(const uint8_t *hdr, size_t len) {
+		return len >= 0x16 && hdr[0x14] == 0 && hdr[0x15] == 1;
+	}
+
 	// Read `size` (1/2/4) little-endian bytes for player `pc`, attribute `attr`.
 	int32_t playerAttrib(int pc, int attr, int size) const;
 
