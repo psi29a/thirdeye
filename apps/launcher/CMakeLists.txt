@@ -3,6 +3,14 @@
 
 find_package(Qt6 6.5 COMPONENTS Widgets Network REQUIRED)
 
+# miniz — reads the game data straight out of GOG's Linux .sh installer (a
+# MojoSetup script with a plain ZIP appended; zip readers find the archive
+# from the end of the file, so the shell prefix is invisible).
+# Vendored in miniz/ (the amalgamated miniz.c/miniz.h from the 3.0.2 release
+# + its MIT license) so configuring needs no network.
+add_library(miniz STATIC ${CMAKE_CURRENT_SOURCE_DIR}/miniz/miniz.c)
+target_include_directories(miniz SYSTEM PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/miniz)
+
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 
@@ -34,11 +42,13 @@ configure_file ("${CMAKE_CURRENT_SOURCE_DIR}/config.hpp.cmake" "${CMAKE_CURRENT_
 set(LAUNCHER
     main.cpp
     MainWindow.cpp
+    unarj.cpp
     resources/launcher.qrc
 )
 
 set(LAUNCHER_HEADER
     MainWindow.hpp
+    unarj.hpp
     config.hpp
 )
 source_group(launcher FILES ${LAUNCHER} ${LAUNCHER_HEADER})
@@ -60,6 +70,7 @@ target_link_libraries(thirdeye-launcher PRIVATE
     Qt6::Widgets
     Qt6::Network
     components
+    miniz
 )
 
 if(DPKG_PROGRAM)
