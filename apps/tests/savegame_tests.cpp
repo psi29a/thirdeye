@@ -391,6 +391,29 @@ TEST(Transfer_Test, CategoryForKnownClasses) {
 	EXPECT_EQ(Cat::NECKLACE,  TS::categoryForClass(1355));
 }
 
+// EOB2 save sniff (the CHARCOPY stand-in's accept/reject gate). Header bytes
+// taken from real GOG saves: EOB2's EOBDATA0.SAV carries a 20-byte save name
+// + 00 01 valid flag at 0x14-0x15; EOB1's EOBDATA.SAV has the flag at
+// 0x00-0x01 and PC record data at 0x14-0x15 (see docs/roadmap.md -- EOB1
+// saves must be rejected, matching the original CHARCOPY).
+TEST(Transfer_Test, LooksLikeEob2SaveSniff) {
+	// "QUICK START PART" "Y\0...\0 \0 \1" -- real EOB2 header prefix.
+	uint8_t eob2[0x16] = {'Q','U','I','C','K',' ','S','T','A','R','T',' ',
+	                      'P','A','R','T','Y', 0, 0, 0, 0, 1};
+	EXPECT_TRUE(TransferState::looksLikeEob2Save(eob2, sizeof eob2));
+
+	// Real EOB1 header prefix: 00 01 "ALLABAR\0..." then ability scores
+	// (0x12 0x12 0x18 0x18 ...) landing at 0x14-0x15.
+	uint8_t eob1[0x16] = {0, 1, 'A','L','L','A','B','A','R', 0, 0, 0, 0,
+	                      0x12, 0x12, 0x18, 0x18, 0x0c, 0x0c, 0x0c, 0x0c, 0x11};
+	EXPECT_FALSE(TransferState::looksLikeEob2Save(eob1, sizeof eob1));
+
+	// Truncated / empty / null inputs never pass.
+	EXPECT_FALSE(TransferState::looksLikeEob2Save(eob2, 0x15));
+	EXPECT_FALSE(TransferState::looksLikeEob2Save(eob2, 0));
+	EXPECT_FALSE(TransferState::looksLikeEob2Save(nullptr, 0x16));
+}
+
 // Empty / unopened transfer file: item_attrib(1) = -1 (no type), 0 elsewhere.
 TEST(Transfer_Test, EmptyDataReturnsSafeDefaults) {
 	TransferState ts;

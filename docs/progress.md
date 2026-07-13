@@ -342,3 +342,18 @@ by a per-line RLE token stream: `0`=end-of-line, `1`=skip *n* transparent (next 
 row, `height` rows. `Bitmap` detects the `"1.10"` magic and uses this path; the older
 row/span format (the intro's GFF frames) keeps the original decoder. Reference: daesop
 `convert.cpp` new-bitmap writers (`addNew*Token`); GTest `Bitmap_Test.DecodesVFXShape1_10`.
+
+✅ **EOB2 → EOB3 party import ("Summon the Heroes of Darkmoon") working end-to-end**
+(issue #31). Verified with a real GOG EOB2 save: menu option 3 → M:14 "transfer from Eye
+II" → M:15 "transfer" imports PERICLES/"STUMPY"/WOLFSPIRIT/LAURANN with stats, portraits
+and gear. Two findings made this nearly free: (1) **CREATE.SAV is EOB2 save format** —
+CHGEN.EXE writes an EOB2-shaped file (same 20-byte save-name header, 345-byte PC records
+at 0x16, item array at 0x894), which is why M:14 and M:16 share the M:15 handler and
+`TransferState` needed no new reader; (2) `CHARCOPY.EXE` does no conversion — it stages
+the EOB2 save verbatim as `TRANSFER.SAV`. Our stand-in is `THIRDEYE_EOB2_SAVE=<path>`
+(boot-time copy + EOB2 header sniff). One real bug fixed on the way: `open_transfer_file`
+returned 0 on success, but per `arun/src/EYE.H:199` it returns a `void *` handle — M:16
+ignores the return so char-gen never noticed, M:14 branches on it ("run CHARCOPY" dialog).
+EOB1 saves are rejected by design, matching the original CHARCOPY ("Eye of the Beholder
+III won't work with Eye I save games"): EOB1's record layout differs (243-byte records at
+0x02) and the intended path is EOB1 → EOB2's importer → EOB3.

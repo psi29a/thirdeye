@@ -21,6 +21,7 @@ and the next silent-stall hunt will need the same toolkit.
 | `THIRDEYE_CLICK="x,y[;x,y;...]"` | Inject a click sequence (logical coords). `THIRDEYE_CLICK1=1` plays once and stops. |
 | `THIRDEYE_MAZE=x0,y0,x1,y1` | Dump maze cells in the given rect on level load. |
 | `THIRDEYE_PARTY=x,y,fdir` | Seed party position + facing for the new game. |
+| `THIRDEYE_EOB2_SAVE=<path>` | CHARCOPY.EXE stand-in: copy an EOB2 save (EOBDATA?.SAV/FINAL.SAV) to `TRANSFER.SAV` beside the .RES at boot, so "Summon the Heroes of Darkmoon" (menu option 3) can import the party. EOB1 saves are rejected (wrong record layout — matches the original CHARCOPY's refusal). |
 | `THIRDEYE_MONTRACE=1` | Trace creature SEND dispatch (combat msgs 163/77/78/71/162/43/82/55/22/235 + AI 91/85/107/99 on monster-range objects). Format: `[mon-msg] idx N msg M handler C arg…`. Capped at 600 lines. |
 | `THIRDEYE_TESTOBJ=1` | Spawn a Mausoleum skull door in front of the party. |
 | `THIRDEYE_NO_OBJECTS=1` | Skip `loadLevelObjects` (sanity check). |
