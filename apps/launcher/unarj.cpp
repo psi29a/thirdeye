@@ -474,7 +474,9 @@ bool parseVolume(const std::vector<uint8_t>& vol, int volIdx,
         const uint16_t hdrSize = rd16(&vol[pos + 2]);
         if (hdrSize == 0)               // end-of-archive marker
             return true;
-        if (pos + 4 + hdrSize + 4 > n) {
+        // 30 = first_hdr_size of every ARJ version; the fixed fields we read
+        // below (h[0]..h[23]) must all lie inside the declared header.
+        if (hdrSize < 30 || pos + 4 + hdrSize + 4 > n) {
             err = "truncated ARJ header";
             return false;
         }
