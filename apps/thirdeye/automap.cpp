@@ -55,7 +55,10 @@ constexpr RGB kColBg        = {   0,   0,   0 }; // fog
 constexpr RGB kColFloor     = { 235, 205, 145 }; // parchment cream
 constexpr RGB kColWall      = { 128, 128, 128 }; // grey
 constexpr RGB kColParty     = { 220,  40,  40 }; // red arrow on cream backing
-constexpr RGB kColStairs    = { 240, 230,  80 }; // yellow
+// Stairs draw as a tiny two-tone staircase glyph (see drawStairs), not a
+// flat dot -- the greys read as "structure" against both floor and wall.
+constexpr RGB kColStairLight = { 200, 200, 200 };
+constexpr RGB kColStairDark  = {  70,  70,  70 };
 constexpr RGB kColItem      = { 175,  80, 200 }; // purple
 constexpr RGB kColActivator = {  70, 130, 230 }; // blue
 constexpr RGB kColTrap      = {  70, 200,  90 }; // green
@@ -193,6 +196,21 @@ Feature plane0FeatureAt(VM::ObjectSystem &objects, int dn, int x, int y) {
 // Fill a rectangle in raw RGB (palette-independent).
 inline void rect(GRAPHICS::Graphics &gfx, int x, int y, int w, int h, RGB c) {
 	gfx.fillRectRGB(x, y, x + w - 1, y + h - 1, c.r, c.g, c.b);
+}
+
+// Staircase glyph in the cell's 3x3 inner area (px/py = inner top-left):
+// descending steps, alternating light/dark grey per tread so it reads as
+// stairs rather than a flat dot.
+//   . . L
+//   . L D
+//   L D L
+void drawStairs(GRAPHICS::Graphics &gfx, int px, int py) {
+	rect(gfx, px + 2, py,     1, 1, kColStairLight);
+	rect(gfx, px + 1, py + 1, 1, 1, kColStairLight);
+	rect(gfx, px + 2, py + 1, 1, 1, kColStairDark);
+	rect(gfx, px,     py + 2, 1, 1, kColStairLight);
+	rect(gfx, px + 1, py + 2, 1, 1, kColStairDark);
+	rect(gfx, px + 2, py + 2, 1, 1, kColStairLight);
 }
 
 // Party arrow -- a 5-pixel triangle pointing along fdir, painted with three
@@ -354,9 +372,12 @@ void render(GRAPHICS::Graphics &gfx, RESOURCES::Resource &res) {
 				// underlying tile visible around it). Priority: stairs beats
 				// items beats activator beats generic mark -- so a chest on
 				// a lever is drawn as ITEM, stairs at a lever spot as STAIRS.
+				if (bitGet(g.stairs, g.level, x, y)) {
+					drawStairs(gfx, px + 1, py + 1);
+					continue;
+				}
 				const RGB *dot = nullptr;
-				if      (bitGet(g.stairs,     g.level, x, y)) dot = &kColStairs;
-				else if (bitGet(g.traps,      g.level, x, y)) dot = &kColTrap;
+				if      (bitGet(g.traps,      g.level, x, y)) dot = &kColTrap;
 				else if (bitGet(g.items,      g.level, x, y)) dot = &kColItem;
 				else if (bitGet(g.activators, g.level, x, y)) dot = &kColActivator;
 				else if (bitGet(g.notable,    g.level, x, y)) dot = &kColNotable;
@@ -376,7 +397,10 @@ void render(GRAPHICS::Graphics &gfx, RESOURCES::Resource &res) {
 	// SOP indexes them by resource number), so we load CHARGEN/FONT8.FNT off
 	// disk once and cache. Same file the chargen already reads.
 	static std::vector<uint8_t> sFont;
-	if (sFont.empty()) {
+	static bool sFontProbed = false; // probe once -- not every frame on a
+	                                 // fontless install (CodeRabbit)
+	if (!sFontProbed) {
+		sFontProbed = true;
 		auto dir = res.resourcePath().parent_path();
 		// CHARGEN subdir may be lower-case on some installs; try both.
 		std::filesystem::path candidates[] = {
@@ -396,21 +420,31 @@ void render(GRAPHICS::Graphics &gfx, RESOURCES::Resource &res) {
 		std::snprintf(title, sizeof(title), "LEVEL %d", g.level);
 		gfx.drawText(sFont, title, kOx, 6);
 
-		struct Entry { RGB col; const char *label; };
+		struct Entry { RGB col; const char *label; bool stairGlyph; };
 		const Entry entries[] = {
-			{ kColParty,     "PARTY"  },
-			{ kColFloor,     "SEEN"   },
-			{ kColWall,      "WALL"   },
-			{ kColStairs,    "STAIRS" },
-			{ kColTrap,      "TRAP"   },
-			{ kColItem,      "ITEM"   },
-			{ kColActivator, "SWITCH" },
-			{ kColNotable,   "MARK"   },
-			{ kColBg,        "FOG"    },
+			{ kColParty,     "PARTY",  false },
+			{ kColFloor,     "SEEN",   false },
+			{ kColWall,      "WALL",   false },
+			{ kColBg,        "STAIRS", true  },
+			{ kColTrap,      "TRAP",   false },
+			{ kColItem,      "ITEM",   false },
+			{ kColActivator, "SWITCH", false },
+			{ kColNotable,   "MARK",   false },
+			{ kColBg,        "FOG",    false },
 		};
 		int ly = kOy;
 		for (const auto &e : entries) {
 			rect(gfx, kLegendX, ly, 8, 8, e.col);
+			if (e.stairGlyph) {
+				// The staircase glyph, scaled x2 in the 8x8 swatch: same
+				// pattern as the in-grid icon, 2px per tread pixel.
+				rect(gfx, kLegendX + 5, ly + 1, 2, 2, kColStairLight);
+				rect(gfx, kLegendX + 3, ly + 3, 2, 2, kColStairLight);
+				rect(gfx, kLegendX + 5, ly + 3, 2, 2, kColStairDark);
+				rect(gfx, kLegendX + 1, ly + 5, 2, 2, kColStairLight);
+				rect(gfx, kLegendX + 3, ly + 5, 2, 2, kColStairDark);
+				rect(gfx, kLegendX + 5, ly + 5, 2, 2, kColStairLight);
+			}
 			gfx.drawLine(kLegendX, ly, kLegendX + 7, ly, kColBorderIdx);
 			gfx.drawLine(kLegendX, ly + 7, kLegendX + 7, ly + 7, kColBorderIdx);
 			gfx.drawLine(kLegendX, ly, kLegendX, ly + 7, kColBorderIdx);
@@ -452,17 +486,27 @@ bool loadFrom(const std::filesystem::path &file) {
 	char m[4]{};
 	in.read(m, 4);
 	if (std::memcmp(m, kMagic, 4) != 0) return false;
+	// Stage into temporaries and commit only after every read succeeds, so a
+	// truncated MAPS file can't leave g.* half-old half-new (CodeRabbit).
+	decltype(g.visited) visited, stairs, traps, items, activators, notable;
 	auto r = [&](auto &a) {
 		in.read(reinterpret_cast<char *>(a.data()),
 		        static_cast<std::streamsize>(a.size()));
 	};
-	r(g.visited);
-	r(g.stairs);
-	r(g.traps);
-	r(g.items);
-	r(g.activators);
-	r(g.notable);
-	return static_cast<bool>(in);
+	r(visited);
+	r(stairs);
+	r(traps);
+	r(items);
+	r(activators);
+	r(notable);
+	if (!in) return false;
+	g.visited = visited;
+	g.stairs = stairs;
+	g.traps = traps;
+	g.items = items;
+	g.activators = activators;
+	g.notable = notable;
+	return true;
 }
 
 void reset() {

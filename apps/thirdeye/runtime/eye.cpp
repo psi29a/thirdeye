@@ -136,19 +136,23 @@ bool tryHandle(Context &ctx, const std::string &fn,
 		auto dir = ctx.res.resourcePath().parent_path() / "SAVEGAME";
 		bool ok = THIRDEYE::savegame::restoreItems(dir, idx);
 		// Automap sidecar: copy slot's MAPS_nn.BIN -> MAPS.TMP, then load into
-		// the module. Slot missing / file missing -> reset (fresh fog). Match
-		// slot semantics: idx verbatim = file suffix (see restore_items above).
+		// the module. Gated on the ITEMS restore succeeding AND the copy AND
+		// the parse -- otherwise a stale MAPS.TMP from another slot could
+		// smear its exploration onto this one (CodeRabbit). Any failure ->
+		// reset (fresh fog; strictly less information, never wrong info).
 		char nn[16];
 		std::snprintf(nn, sizeof(nn), "%02d", idx);
 		auto src = dir / ("MAPS_" + std::string(nn) + ".BIN");
 		auto live = dir / "MAPS.TMP";
 		std::error_code ec;
-		THIRDEYE::automap::reset();
-		if (std::filesystem::exists(src, ec)) {
-			std::filesystem::copy_file(src, live,
+		bool mapRestored = false;
+		if (ok && std::filesystem::exists(src, ec)) {
+			bool copied = std::filesystem::copy_file(src, live,
 			    std::filesystem::copy_options::overwrite_existing, ec);
-			THIRDEYE::automap::loadFrom(live);
+			mapRestored = copied && THIRDEYE::automap::loadFrom(live);
 		}
+		if (!mapRestored)
+			THIRDEYE::automap::reset();
 		rt() << "  [restore_items: slot " << idx
 		     << (ok ? " -> ITEMS.TMP OK" : " not found; ITEMS.TMP preserved")
 		     << "]" << std::endl;
@@ -320,12 +324,18 @@ bool tryHandle(Context &ctx, const std::string &fn,
 		// Automap sidecar: write MAPS.TMP + clone to MAPS_nn.BIN. Ours to own
 		// (separate file, no CDESC involvement) so the ITEMS.TMP round-trip
 		// quarantine above doesn't affect it. Save loss here is cosmetic
-		// (worst case the map re-fogs on load), so failures don't gate ok.
-		THIRDEYE::automap::saveTo(dir / "MAPS.TMP");
-		THIRDEYE::automap::saveTo(dir / ("MAPS_" + std::string(nn) + ".BIN"));
+		// (worst case the map re-fogs on load), so failures don't gate ok --
+		// but they are logged so a full-disk doesn't silently strand old maps.
+		bool mapsOk = THIRDEYE::automap::saveTo(dir / "MAPS.TMP");
+		mapsOk = THIRDEYE::automap::saveTo(
+		             dir / ("MAPS_" + std::string(nn) + ".BIN")) && mapsOk;
+		if (!mapsOk)
+			std::cerr << "[save_game: automap MAPS write failed (map may "
+			             "re-fog on restore); game save unaffected]\n";
 		rt() << "  [save_game slot " << idx << " lvl " << lvl
 		     << (ok ? " OK" : " FAILED") << " (+" << copied
-		     << " LVL??.TMP copies)]" << std::endl;
+		     << " LVL??.TMP copies, maps " << (mapsOk ? "OK" : "FAILED")
+		     << ")]" << std::endl;
 		result = ok ? 1 : 0;
 		return true;
 	}
@@ -348,9 +358,9 @@ bool tryHandle(Context &ctx, const std::string &fn,
 			         ctx.objects, dir / ("LVL" + std::string(ll) + ".TMP"),
 			         1000, 1999) && ok;
 		}
-		THIRDEYE::automap::saveTo(dir / "MAPS.TMP");
+		bool mapsOk = THIRDEYE::automap::saveTo(dir / "MAPS.TMP");
 		rt() << "  [suspend_game lvl " << lvl << (ok ? " OK" : " FAILED")
-		     << "]" << std::endl;
+		     << " (maps " << (mapsOk ? "OK" : "FAILED") << ")]" << std::endl;
 		result = 0;
 		return true;
 	}
