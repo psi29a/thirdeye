@@ -119,7 +119,11 @@ uint8_t *staticBytePtr(Context &ctx, VM::Value addr, uint32_t size);
 // The host seam (see CLAUDE.md). Called by event.cpp's dispatch_event /
 // peek_event. Pumps SDL input into AESOP events, presents the frame, yields
 // the CPU when the queue is idle. Throws QuitRequested on window-close/ESC.
-void pumpHost(GRAPHICS::Graphics &gfx, VM::EventSystem &events);
+// objects + res are needed by the automap overlay -- tick() reads party pose
+// and lvlmap; render() reads FONT8 -- so we plumb them through the seam
+// rather than smuggling globals.
+void pumpHost(GRAPHICS::Graphics &gfx, VM::EventSystem &events,
+              VM::ObjectSystem &objects, RESOURCES::Resource &res);
 
 // printf-style substitution shared by print()/sprint(): fill %d/%u/%i, %s
 // and %% in `fmt` from `args[start..]`. %s args are addresses (read via vm).

@@ -699,7 +699,7 @@ bool tryHandle(Context &ctx, const std::string &fn,
 				          << ms << " ms\n";
 			}
 		}
-		if (ctx.gfx) pumpHost(*ctx.gfx, ctx.events); // host seam: present + input + yield
+		if (ctx.gfx) pumpHost(*ctx.gfx, ctx.events, ctx.objects, ctx.res); // host seam: present + input + yield
 		ctx.events.dispatchEvent();
 		runDebugHooks(ctx.objects, ctx.res);
 		result = 0;
@@ -717,14 +717,14 @@ bool tryHandle(Context &ctx, const std::string &fn,
 	if (fn == "getkey") {
 		if (ctx.gfx != nullptr) {
 			while (ctx.events.findEvent(VM::SYS_KEYDOWN, -1) < 0)
-				pumpHost(*ctx.gfx, ctx.events);
+				pumpHost(*ctx.gfx, ctx.events, ctx.objects, ctx.res);
 		}
 		ctx.events.removeEvent(VM::SYS_KEYDOWN, -1, -1);
 		result = 0;
 		return true;
 	}
 	if (fn == "peek_event") {
-		if (ctx.gfx) pumpHost(*ctx.gfx, ctx.events);
+		if (ctx.gfx) pumpHost(*ctx.gfx, ctx.events, ctx.objects, ctx.res);
 		result = ctx.events.peekEvent() ? 1 : 0;
 		return true;
 	}

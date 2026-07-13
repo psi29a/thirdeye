@@ -6,11 +6,13 @@ configure_file ("${CMAKE_CURRENT_SOURCE_DIR}/config.hpp.cmake" "${CMAKE_CURRENT_
 set(GAME
     main.cpp
     engine.cpp
+    automap.cpp
 )
 
 set(GAME_HEADER
     engine.hpp
     config.hpp
+    automap.hpp
 )
 source_group(game FILES ${GAME} ${GAME_HEADER})
 

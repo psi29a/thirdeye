@@ -1,5 +1,6 @@
 #include "internal.hpp"
 
+#include "../automap.hpp"
 #include "../graphics/graphics.hpp"
 #include "../resources/res.hpp"
 #include "../savegame/items_tmp.hpp"
@@ -134,6 +135,20 @@ bool tryHandle(Context &ctx, const std::string &fn,
 		int idx  = slot;
 		auto dir = ctx.res.resourcePath().parent_path() / "SAVEGAME";
 		bool ok = THIRDEYE::savegame::restoreItems(dir, idx);
+		// Automap sidecar: copy slot's MAPS_nn.BIN -> MAPS.TMP, then load into
+		// the module. Slot missing / file missing -> reset (fresh fog). Match
+		// slot semantics: idx verbatim = file suffix (see restore_items above).
+		char nn[16];
+		std::snprintf(nn, sizeof(nn), "%02d", idx);
+		auto src = dir / ("MAPS_" + std::string(nn) + ".BIN");
+		auto live = dir / "MAPS.TMP";
+		std::error_code ec;
+		THIRDEYE::automap::reset();
+		if (std::filesystem::exists(src, ec)) {
+			std::filesystem::copy_file(src, live,
+			    std::filesystem::copy_options::overwrite_existing, ec);
+			THIRDEYE::automap::loadFrom(live);
+		}
 		rt() << "  [restore_items: slot " << idx
 		     << (ok ? " -> ITEMS.TMP OK" : " not found; ITEMS.TMP preserved")
 		     << "]" << std::endl;
@@ -302,6 +317,12 @@ bool tryHandle(Context &ctx, const std::string &fn,
 			// written every level yet); a save with the current level +
 			// items intact is still restorable.
 		}
+		// Automap sidecar: write MAPS.TMP + clone to MAPS_nn.BIN. Ours to own
+		// (separate file, no CDESC involvement) so the ITEMS.TMP round-trip
+		// quarantine above doesn't affect it. Save loss here is cosmetic
+		// (worst case the map re-fogs on load), so failures don't gate ok.
+		THIRDEYE::automap::saveTo(dir / "MAPS.TMP");
+		THIRDEYE::automap::saveTo(dir / ("MAPS_" + std::string(nn) + ".BIN"));
 		rt() << "  [save_game slot " << idx << " lvl " << lvl
 		     << (ok ? " OK" : " FAILED") << " (+" << copied
 		     << " LVL??.TMP copies)]" << std::endl;
@@ -327,6 +348,7 @@ bool tryHandle(Context &ctx, const std::string &fn,
 			         ctx.objects, dir / ("LVL" + std::string(ll) + ".TMP"),
 			         1000, 1999) && ok;
 		}
+		THIRDEYE::automap::saveTo(dir / "MAPS.TMP");
 		rt() << "  [suspend_game lvl " << lvl << (ok ? " OK" : " FAILED")
 		     << "]" << std::endl;
 		result = 0;
