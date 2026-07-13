@@ -10,6 +10,10 @@ find_package(Qt6 6.5 COMPONENTS Widgets Network REQUIRED)
 # + its MIT license) so configuring needs no network.
 add_library(miniz STATIC ${CMAKE_CURRENT_SOURCE_DIR}/miniz/miniz.c)
 target_include_directories(miniz SYSTEM PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/miniz)
+# The launcher only reads zips from memory — compile out the file-I/O and
+# archive-writing surface (also silences CodeQL's TOCTOU finding in the
+# unused stat-then-create writer path, alert #35).
+target_compile_definitions(miniz PUBLIC MINIZ_NO_STDIO MINIZ_NO_ARCHIVE_WRITING_APIS)
 
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
