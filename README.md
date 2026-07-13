@@ -97,8 +97,8 @@ CHANGELOG
 * Automap (new): press M in-game to overlay a top-down map of what the party has
   actually seen (fog of war; hidden doors and hackable trees count as walls until
   removed). Legend for party/walls/stairs/traps/items/switches/marks; exploration
-  persists per save slot in a MAPS.TMP sidecar -- original EOB3 save files stay
-  DOS-compatible.
+  is staged live in a MAPS.TMP sidecar and persisted per save slot as
+  MAPS_nn.BIN -- original EOB3 save files stay DOS-compatible.
 
 0.88.0:
 Thirdeye grows from "walks a populated dungeon" into a game you can actually fight,
