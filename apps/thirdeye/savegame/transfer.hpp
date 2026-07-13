@@ -77,7 +77,7 @@ struct TransferState {
 	// layout the xfer SOP's offsets can't read, which is why the original
 	// CHARCOPY refuses EOB1 saves too).
 	static bool looksLikeEob2Save(const uint8_t *hdr, size_t len) {
-		return len >= 0x16 && hdr[0x14] == 0 && hdr[0x15] == 1;
+		return hdr != nullptr && len >= 0x16 && hdr[0x14] == 0 && hdr[0x15] == 1;
 	}
 
 	// Read `size` (1/2/4) little-endian bytes for player `pc`, attribute `attr`.

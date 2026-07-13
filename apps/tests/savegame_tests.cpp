@@ -408,9 +408,10 @@ TEST(Transfer_Test, LooksLikeEob2SaveSniff) {
 	                      0x12, 0x12, 0x18, 0x18, 0x0c, 0x0c, 0x0c, 0x0c, 0x11};
 	EXPECT_FALSE(TransferState::looksLikeEob2Save(eob1, sizeof eob1));
 
-	// Truncated / empty files never pass.
+	// Truncated / empty / null inputs never pass.
 	EXPECT_FALSE(TransferState::looksLikeEob2Save(eob2, 0x15));
 	EXPECT_FALSE(TransferState::looksLikeEob2Save(eob2, 0));
+	EXPECT_FALSE(TransferState::looksLikeEob2Save(nullptr, 0x16));
 }
 
 // Empty / unopened transfer file: item_attrib(1) = -1 (no type), 0 elsewhere.

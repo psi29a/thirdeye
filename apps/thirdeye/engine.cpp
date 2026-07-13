@@ -839,17 +839,24 @@ void THIRDEYE::Engine::bootObject(RESOURCES::Resource &resource,
 		};
 		std::error_code ec;
 		auto dst = resource.resourcePath().parent_path() / "TRANSFER.SAV";
+		// The env var names THIS boot's intended party: drop any previously
+		// staged TRANSFER.SAV up front so a rejected source or failed copy
+		// can't silently import last boot's party (review: stale-file gap).
+		std::filesystem::remove(dst, ec);
 		if (!sniff(src)) {
 			std::cout << "  [THIRDEYE_EOB2_SAVE: \"" << src << "\" is not an "
 			          << "EOB2 save (EOB1 saves can't be transferred -- play it "
 			          << "into EOB2 first, matching the original CHARCOPY)]"
 			          << std::endl;
 		} else {
-			std::filesystem::copy_file(
-			    src, dst, std::filesystem::copy_options::overwrite_existing, ec);
-			if (ec)
+			std::filesystem::copy_file(src, dst, ec);
+			if (ec) {
 				std::cout << "  [THIRDEYE_EOB2_SAVE: copy \"" << src << "\" -> "
 				          << dst << " FAILED: " << ec.message() << "]" << std::endl;
+				// A failed copy can leave a partial file -- don't let M:14 eat it.
+				std::error_code ec2;
+				std::filesystem::remove(dst, ec2);
+			}
 			else
 				std::cout << "  [THIRDEYE_EOB2_SAVE: staged \"" << src << "\" as "
 				          << dst << "]" << std::endl;
