@@ -1,5 +1,6 @@
 #include "MainWindow.hpp"
 #include "config.hpp"
+#include "unarj.hpp"
 
 #include <QApplication>
 #include <QCheckBox>
@@ -9,6 +10,10 @@
 #include <QDialog>
 #include <QDialogButtonBox>
 #include <QDir>
+#include <QDirIterator>
+#include <QEventLoop>
+#include <QProgressDialog>
+#include <QtEndian>
 #include <QFileDialog>
 #include <QFileInfo>
 #include <QFormLayout>
@@ -25,10 +30,13 @@
 #include <QProcess>
 #include <QPushButton>
 #include <QSettings>
+#include <QStandardPaths>
 #include <QUrl>
 #include <QRegularExpression>
 #include <QVBoxLayout>
 #include <QVersionNumber>
+
+#include <miniz.h>
 
 namespace {
 // Fixed window width; the hero banner is scaled to exactly this so it sits
@@ -55,6 +63,25 @@ constexpr auto GOG_URL =
     "https://www.gog.com/game/forgotten_realms_the_archives_collection_two";
 constexpr auto ARCHIVE_URL =
     "https://archive.org/details/eye-of-the-beholder-3";
+constexpr auto ARCHIVE_DOWNLOAD_BASE =
+    "https://archive.org/download/eye-of-the-beholder-3/";
+
+// Offset of the actual ZIP inside a file that may have data prepended (GOG's
+// MojoSetup .sh stub): the delta between where the central directory really
+// sits and where the end-of-central-directory record claims it is. Zero for
+// plain .zips. miniz doesn't compensate for prepended data on its own.
+qsizetype zipStartOffset(const QByteArray& bytes) {
+    const auto* b = reinterpret_cast<const uchar*>(bytes.constData());
+    for (qsizetype i = bytes.size() - 22; i >= 0; --i) {
+        if (b[i] == 'P' && b[i + 1] == 'K' && b[i + 2] == 5 && b[i + 3] == 6) {
+            const quint32 cdSize = qFromLittleEndian<quint32>(b + i + 12);
+            const quint32 cdOfs  = qFromLittleEndian<quint32>(b + i + 16);
+            const qsizetype start = i - qsizetype(cdSize) - qsizetype(cdOfs);
+            return start > 0 ? start : 0;
+        }
+    }
+    return 0;
+}
 } // namespace
 
 MainWindow::MainWindow(QWidget* parent) : QWidget(parent) {
@@ -69,6 +96,15 @@ MainWindow::MainWindow(QWidget* parent) : QWidget(parent) {
     pathRow->addWidget(m_pathEdit, 1);
     pathRow->addWidget(browseBtn);
     m_pathStatus = new QLabel(this);
+
+    auto* installBtn =
+        new QPushButton(tr("Extract game data from a GOG installer…"), this);
+    connect(installBtn, &QPushButton::clicked,
+            this, &MainWindow::installFromInstaller);
+    auto* iaBtn = new QPushButton(
+        tr("Download the game from the Internet Archive…"), this);
+    connect(iaBtn, &QPushButton::clicked,
+            this, &MainWindow::downloadFromInternetArchive);
 
     // Video group
     m_scale = new QComboBox(this);
@@ -145,10 +181,15 @@ MainWindow::MainWindow(QWidget* parent) : QWidget(parent) {
     auto* content = new QVBoxLayout;
     content->setContentsMargins(11, 8, 11, 11);
     main->addLayout(content);
-    content->addWidget(new QLabel(tr("Game folder:"), this));
+    content->addWidget(new QLabel(tr("Game Installation:"), this));
     content->addLayout(pathRow);
     content->addWidget(m_pathStatus);
+    content->addWidget(installBtn);
+    content->addSpacing(8);
+    content->addWidget(iaBtn);
+    content->addSpacing(16);
     content->addWidget(videoBox);
+    content->addSpacing(16);
     content->addWidget(bootBox);
     content->addStretch(1);
     content->addLayout(buttons);
@@ -232,6 +273,284 @@ void MainWindow::browsePath() {
     }
 }
 
+void MainWindow::installFromInstaller() {
+    const QString archive = QFileDialog::getOpenFileName(this,
+        tr("Pick the installer you downloaded from GOG"),
+        QStandardPaths::writableLocation(QStandardPaths::DownloadLocation),
+        tr("GOG offline installer or zip (*.sh *.zip);;All files (*)"));
+    if (archive.isEmpty())
+        return;
+
+    const QString destRoot =
+        QStandardPaths::writableLocation(QStandardPaths::AppDataLocation)
+        + QStringLiteral("/eob3");
+
+    // ~50 MB of small files; finishes in well under a second. No progress UI.
+    QApplication::setOverrideCursor(Qt::WaitCursor);
+    QString err;
+    const QString gameDir = extractGameData(archive, destRoot, &err);
+    QApplication::restoreOverrideCursor();
+
+    if (gameDir.isEmpty()) {
+        QMessageBox::critical(this, tr("Could not extract the installer"), err);
+        return;
+    }
+    m_pathEdit->setText(gameDir);
+    saveSettings();
+    QMessageBox::information(this, tr("Game data installed"),
+        tr("Game data extracted to:\n%1\n\nThe launcher now points there — hit Play.")
+            .arg(gameDir));
+}
+
+QString MainWindow::extractGameData(const QString& archivePath,
+                                    const QString& destRoot, QString* err) {
+    // ponytail: whole archive slurped into RAM (the GOG installers are
+    // 26–110 MB) — sidesteps char*-path encoding portability in miniz's
+    // file API; switch to mz_zip_reader_init_cfile if it ever hurts.
+    QFile in(archivePath);
+    if (!in.open(QIODevice::ReadOnly)) {
+        *err = tr("Can't read %1:\n%2").arg(archivePath, in.errorString());
+        return {};
+    }
+    const QByteArray bytes = in.readAll();
+    const qsizetype zipStart = zipStartOffset(bytes);
+
+    mz_zip_archive zip{};
+    if (!mz_zip_reader_init_mem(&zip, bytes.constData() + zipStart,
+                                size_t(bytes.size() - zipStart), 0)) {
+        *err = tr("This file isn't an installer the launcher can open.\n\n"
+                  "Download GOG's *Linux* offline installer (the .sh file) — "
+                  "the launcher can extract it on every platform — or a plain "
+                  ".zip of the game folder.");
+        return {};
+    }
+
+    // GOG's MojoSetup .sh keeps the game under data/noarch/data/; when that
+    // prefix exists extract only it (drops DOSBox + GOG support files).
+    const QString gogPrefix = QStringLiteral("data/noarch/data/");
+    const mz_uint n = mz_zip_reader_get_num_files(&zip);
+    bool isGogSh = false;
+    mz_zip_archive_file_stat st;
+    for (mz_uint i = 0; i < n && !isGogSh; ++i)
+        isGogSh = mz_zip_reader_file_stat(&zip, i, &st)
+                  && QString::fromUtf8(st.m_filename).startsWith(gogPrefix);
+
+    int extracted = 0;
+    for (mz_uint i = 0; i < n; ++i) {
+        if (!mz_zip_reader_file_stat(&zip, i, &st) || st.m_is_directory)
+            continue;
+        QString name = QString::fromUtf8(st.m_filename);
+        if (isGogSh) {
+            if (!name.startsWith(gogPrefix))
+                continue;
+            name.remove(0, gogPrefix.size());
+        }
+        // Trust boundary: refuse paths that escape destRoot (zip-slip).
+        // (SAVEGAME/ is deliberately kept — it's GOG's quick-start party.)
+        if (name.startsWith(QLatin1Char('/'))
+            || name.contains(QStringLiteral("..")))
+            continue;
+
+        size_t sz = 0;
+        void* data = mz_zip_reader_extract_to_heap(&zip, i, &sz, 0);
+        if (!data) {
+            *err = tr("Failed to extract %1 — corrupt download?").arg(name);
+            mz_zip_reader_end(&zip);
+            return {};
+        }
+        const QString outPath = destRoot + QLatin1Char('/') + name;
+        QDir().mkpath(QFileInfo(outPath).path());
+        QFile out(outPath);
+        const bool ok = out.open(QIODevice::WriteOnly)
+            && out.write(static_cast<const char*>(data), qint64(sz))
+                   == qint64(sz);
+        mz_free(data);
+        if (!ok) {
+            *err = tr("Can't write %1:\n%2").arg(outPath, out.errorString());
+            mz_zip_reader_end(&zip);
+            return {};
+        }
+        ++extracted;
+    }
+    mz_zip_reader_end(&zip);
+
+    QDirIterator it(destRoot, {QString::fromLatin1(GAME_FILE)}, QDir::Files,
+                    QDirIterator::Subdirectories);
+    if (it.hasNext())
+        return QFileInfo(it.next()).absolutePath();
+    *err = tr("Extracted %1 file(s) to %2, but no %3 was inside — is this the "
+              "Eye of the Beholder III installer?")
+               .arg(extracted).arg(destRoot, QLatin1String(GAME_FILE));
+    return {};
+}
+
+void MainWindow::downloadFromInternetArchive() {
+    // Consent first — this is an abandonware mirror, not an official source,
+    // and no download happens until the user explicitly owns that choice.
+    QDialog consent(this);
+    consent.setWindowTitle(tr("Download from the Internet Archive"));
+    auto* v = new QVBoxLayout(&consent);
+    auto* warn = new QLabel(tr(
+        "<b>This is not an official source.</b><br><br>"
+        "The Internet Archive hosts an abandonware upload of the original "
+        "Eye of the Beholder III floppy disks. The upload could change or "
+        "disappear at any time, and downloading it does not make you an "
+        "owner of the game — you should own a real copy.<br><br>"
+        "If you'd rather buy it, GOG sells it (inside \"Forgotten Realms: "
+        "The Archives, Collection Two\"):"), &consent);
+    warn->setWordWrap(true);
+    v->addWidget(warn);
+    auto* gogBtn = new QPushButton(tr("Open the GOG page instead"), &consent);
+    connect(gogBtn, &QPushButton::clicked,
+            [] { QDesktopServices::openUrl(QUrl(GOG_URL)); });
+    v->addWidget(gogBtn);
+    auto* bb = new QDialogButtonBox(&consent);
+    auto* acceptBtn = bb->addButton(
+        tr("I accept the responsibility — download"),
+        QDialogButtonBox::AcceptRole);
+    bb->addButton(QDialogButtonBox::Cancel);
+    connect(bb, &QDialogButtonBox::accepted, &consent, &QDialog::accept);
+    connect(bb, &QDialogButtonBox::rejected, &consent, &QDialog::reject);
+    acceptBtn->setDefault(false);
+    v->addSpacing(8);
+    v->addWidget(bb);
+    if (consent.exec() != QDialog::Accepted)
+        return;
+
+    // Fetch the four disk zips (≈4.5 MB total), sequentially with progress.
+    QProgressDialog progress(tr("Downloading disk 1 of 4…"), tr("Cancel"),
+                             0, 400, this);
+    progress.setWindowModality(Qt::WindowModal);
+    progress.setMinimumDuration(0);
+    QNetworkAccessManager nam;
+    QHash<QString, QByteArray> arjVolumes;  // "DATA1.ARJ" … "DATA6.ARJ"
+    for (int disk = 1; disk <= 4; ++disk) {
+        progress.setLabelText(tr("Downloading disk %1 of 4…").arg(disk));
+        QNetworkRequest req{QUrl(QStringLiteral("%1EOB3_Disk%2.zip")
+                                     .arg(ARCHIVE_DOWNLOAD_BASE).arg(disk))};
+        req.setHeader(QNetworkRequest::UserAgentHeader,
+                      QStringLiteral("thirdeye-launcher"));
+        req.setTransferTimeout(std::chrono::minutes(5));
+        QNetworkReply* reply = nam.get(req);
+        QEventLoop loop;
+        connect(reply, &QNetworkReply::finished, &loop, &QEventLoop::quit);
+        connect(reply, &QNetworkReply::downloadProgress, this,
+                [&](qint64 got, qint64 total) {
+                    if (total > 0)
+                        progress.setValue((disk - 1) * 100
+                                          + int(got * 100 / total));
+                });
+        connect(&progress, &QProgressDialog::canceled,
+                reply, &QNetworkReply::abort);
+        loop.exec();
+        reply->deleteLater();
+        if (progress.wasCanceled())
+            return;
+        if (reply->error() != QNetworkReply::NoError) {
+            QMessageBox::critical(this, tr("Download failed"),
+                tr("Could not download disk %1:\n%2\n\nThe Internet Archive "
+                   "upload may have moved or vanished — this is why GOG is "
+                   "the reliable option.")
+                    .arg(disk).arg(reply->errorString()));
+            return;
+        }
+        const QByteArray zipBytes = reply->readAll();
+
+        // Pull the DATA*.ARJ volumes out of the disk zip, in memory.
+        mz_zip_archive zip{};
+        if (!mz_zip_reader_init_mem(&zip,
+                zipBytes.constData() + zipStartOffset(zipBytes),
+                size_t(zipBytes.size() - zipStartOffset(zipBytes)), 0)) {
+            QMessageBox::critical(this, tr("Download failed"),
+                tr("Disk %1 isn't a readable zip — the upload may have "
+                   "changed.").arg(disk));
+            return;
+        }
+        const mz_uint n = mz_zip_reader_get_num_files(&zip);
+        for (mz_uint i = 0; i < n; ++i) {
+            mz_zip_archive_file_stat st;
+            if (!mz_zip_reader_file_stat(&zip, i, &st) || st.m_is_directory)
+                continue;
+            const QString name = QString::fromUtf8(st.m_filename);
+            if (!name.startsWith(QStringLiteral("DATA"))
+                || !name.endsWith(QStringLiteral(".ARJ")))
+                continue;
+            size_t sz = 0;
+            void* data = mz_zip_reader_extract_to_heap(&zip, i, &sz, 0);
+            if (!data) {
+                mz_zip_reader_end(&zip);
+                QMessageBox::critical(this, tr("Download failed"),
+                    tr("Failed to extract %1 from disk %2.")
+                        .arg(name).arg(disk));
+                return;
+            }
+            arjVolumes.insert(name,
+                QByteArray(static_cast<const char*>(data), qsizetype(sz)));
+            mz_free(data);
+        }
+        mz_zip_reader_end(&zip);
+    }
+    progress.setValue(400);
+
+    // Decompress the six-volume ARJ set. Per INSTALL.NFO on disk 1:
+    // DATA1-4 → game root, DATA5 → SAVEGAME/, DATA6 → CHARGEN/.
+    std::vector<std::vector<uint8_t>> vols;
+    for (int i = 1; i <= 6; ++i) {
+        const QByteArray a =
+            arjVolumes.value(QStringLiteral("DATA%1.ARJ").arg(i));
+        if (a.isEmpty()) {
+            QMessageBox::critical(this, tr("Extraction failed"),
+                tr("DATA%1.ARJ was missing from the downloaded disks — the "
+                   "upload may have changed.").arg(i));
+            return;
+        }
+        vols.emplace_back(a.begin(), a.end());
+    }
+    std::vector<ArjEntry> entries;
+    std::string arjErr;
+    QApplication::setOverrideCursor(Qt::WaitCursor);
+    const bool ok = unarjExtract(vols, entries, arjErr);
+    QApplication::restoreOverrideCursor();
+    if (!ok) {
+        QMessageBox::critical(this, tr("Extraction failed"),
+            QString::fromStdString(arjErr));
+        return;
+    }
+
+    const QString destRoot =
+        QStandardPaths::writableLocation(QStandardPaths::AppDataLocation)
+        + QStringLiteral("/eob3");
+    for (const ArjEntry& e : entries) {
+        const QString name = QString::fromLatin1(e.name);
+        // Trust boundary: plain filenames only — no separators, no escapes.
+        if (name.isEmpty() || name.contains(QLatin1Char('/'))
+            || name.contains(QLatin1Char('\\'))
+            || name.contains(QStringLiteral("..")))
+            continue;
+        const QString sub = e.volume == 4 ? QStringLiteral("SAVEGAME/")
+                          : e.volume == 5 ? QStringLiteral("CHARGEN/")
+                                          : QString();
+        const QString outPath = destRoot + QLatin1Char('/') + sub + name;
+        QDir().mkpath(QFileInfo(outPath).path());
+        QFile out(outPath);
+        if (!out.open(QIODevice::WriteOnly)
+            || out.write(reinterpret_cast<const char*>(e.data.data()),
+                         qint64(e.data.size()))
+                   != qint64(e.data.size())) {
+            QMessageBox::critical(this, tr("Extraction failed"),
+                tr("Can't write %1:\n%2").arg(outPath, out.errorString()));
+            return;
+        }
+    }
+
+    m_pathEdit->setText(destRoot);
+    saveSettings();
+    QMessageBox::information(this, tr("Game data installed"),
+        tr("Downloaded and extracted %n file(s) to:\n%1\n\n"
+           "The launcher now points there — hit Play.", nullptr,
+           int(entries.size())).arg(destRoot));
+}
+
 void MainWindow::showGetGameDialog() {
     QDialog dlg(this);
     dlg.setWindowTitle(tr("Getting the game"));
@@ -258,7 +577,9 @@ void MainWindow::showGetGameDialog() {
 
     v->addSpacing(6);
     v->addWidget(new QLabel(tr(
-        "Once extracted, point the launcher at the folder containing EYE.RES."), &dlg));
+        "From GOG, download the <b>Linux offline installer</b> (the .sh file) — "
+        "whatever OS you're on — then use \"Extract game data from a GOG "
+        "installer…\" and the launcher does the rest."), &dlg));
 
     auto* buttonBox = new QDialogButtonBox(QDialogButtonBox::Close, &dlg);
     QObject::connect(buttonBox, &QDialogButtonBox::rejected, &dlg, &QDialog::reject);
