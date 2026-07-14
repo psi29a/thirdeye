@@ -564,8 +564,11 @@ Still open (nice-to-have): a file-picker UI instead of the env var.
 Enhancements not in the original — opt-in, kept separate from the SOP-driven core so they
 never change game behaviour.
 
-- 🚀 **Qt-based launcher (planned).** First-run UX so a fresh user doesn't have to fight DOS
-  install layouts. The launcher:
+- ✅ **Qt-based launcher** — landed in [`apps/launcher/`](../apps/launcher/) (Qt-based, macOS/Linux/Windows
+  packaging). Detects existing EOB3 installs, configures settings, and downloads +
+  installs the game from the archive.org mirror (in-tree ARJ decoder, no shell-out).
+  History: initial (518688e) → polish (7167ea3) → download+install (5323928).
+  Original plan below is kept for context of what "done" means:
   - **Detects an existing EOB3 install.** Looks in common spots (next to the binary, a few
     well-known paths) for `EYE.RES` + `CHARGEN/` + `SAVEGAME/`. If found, just launches
     thirdeye with the right `--game-data` pointing at it.
@@ -586,15 +589,12 @@ never change game behaviour.
   Phasing: (a) detection + settings UI on a known install (immediate value); (b) ARJ unpacker
   + install flow; (c) download/progress UI + checksums. Each phase ships independently.
 
-- 🗺️ **Automapper (planned).** Toggle with **M**. Parchment/beige overlay showing the current
-  dungeon level: cells the party has explored, party position + facing, discovered
-  walls/doors/stairs. EOB3 itself has no in-game map. Sketch: track a per-level visited-cells
-  bitset (mark each cell as the party enters it / as it falls in the view frustum — we already
-  compute `view_X/view_Y/visible`), persist alongside the save, draw a top-down grid from
-  `lvlmap` (walls/floor) + `lvlobj` (doors/stairs) clipped to visited cells, with the party
-  arrow from `party_x/y/fdir`. Drawn on its own overlay surface (like the compass snapshot),
-  gated so it never bleeds into the menu. Stretch: scrollable for large levels, level-to-level
-  switching, fog-of-war on unexplored cells, optional note-pinning.
+- ✅ **Automapper** — landed in [`apps/thirdeye/automap.{hpp,cpp}`](../apps/thirdeye/automap.hpp).
+  Toggle with **M**. Per-level 32×32 visited bitset + notable-cell bitmap, persisted as
+  `MAPS.TMP` / `MAPS_nn.BIN` alongside the save. Party FOV marks cells as walked;
+  interactables/monsters flag cells as notable. Rendered as an overlay that suspends
+  Graphics backdrop tracking so it doesn't corrupt the SOP's text-restore snapshot.
+  History: initial (b68f163) → review fixes (atomic MAPS load, sidecar gating, font probe once, 381371a).
 
 ## Phase 6 — Replace CHGEN.EXE with a C++20 chargen 🚧
 

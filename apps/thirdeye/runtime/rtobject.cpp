@@ -26,10 +26,12 @@ bool tryHandle(Context &ctx, const std::string &fn,
 		return true;
 	}
 	if (fn == "destroy_object" && args.size() >= 1) {
-		// RTOBJECT.C destroy_object: MSG_DESTROY, then cancel the object's
-		// outstanding notify requests (release_owned_windows is still a stub).
-		VM::Value rtn = ctx.objects.destroyObject(static_cast<int>(args[0]));
-		ctx.events.cancelEntityRequests(static_cast<int>(args[0]));
+		// RTOBJECT.C destroy_object: MSG_DESTROY, cancel the object's outstanding
+		// notify requests, release any subwindows it allocated.
+		int obj = static_cast<int>(args[0]);
+		VM::Value rtn = ctx.objects.destroyObject(obj);
+		ctx.events.cancelEntityRequests(obj);
+		ctx.events.releaseOwnedWindows(obj);
 		rt() << "  [destroyed]" << std::endl;
 		result = rtn;
 		return true;

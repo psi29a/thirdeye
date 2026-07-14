@@ -11,7 +11,12 @@ For the high-level phase plan see [roadmap.md](roadmap.md); for engine internals
 it `MSG_CREATE` — this is AESOP's program-chain bootstrap. Per-instance statics live in a
 `std::deque` so a running handler's static pointer stays valid when nested creates grow the
 list. Safety nets: an **instruction budget** (`setMaxSteps`) and a **SEND/PASS recursion-depth
-guard** (`kMaxDepth`).
+guard** (`kMaxDepth`). `destroy_object` calls MSG_DESTROY, cancels the object's outstanding
+notify requests, and (2026-07-14) releases its owned subwindows too — matches RTOBJECT.C's
+`release_owned_windows`. Was stubbed previously; the start-self-destroy `resetInstances()`
+sweep at the end of each menu cycle papered over the leak, but a destroy mid-play (a fresh
+menu opening + closing without a full relaunch) could still fill the 256-handle window table
+over long sessions.
 
 ✅ **Unified address model + effective-address opcodes.** Code/stack/static live in separate
 buffers, so an effective address is a tagged `Value`. See [architecture.md](architecture.md).
@@ -246,6 +251,21 @@ that PC's **equipment screen** — the paper-doll body + equipment slots + the c
 actual gear from the char-gen transfer (Bob: blue robe, dagger, sword, mace, a quiver of
 arrows). The screen registers clickable slot regions (handles 84-92) on open, so item
 **interaction** (move/equip/use) routes through the same proven region-click path.
+
+✅ **World item pool now populates (2026-07-14).** Player report: "no loot or potions or
+food to be had from any source." Root cause: `loadAreaInstances` only pre-created slots 1..14
+(area singletons) from `ITEMS_00.BIN`; the item pool at slots 15..999 (potions, scrolls,
+weapons, quest items — targets of `niche.W:contents`, `monster.W:carried`, container
+contents) was never instantiated, so every world-item reference resolved to an empty slot.
+The comment even flagged the TODO ("Larger slots restored elsewhere by our own ITEMS.TMP
+path -- the SOP equivalent would be `restore_items` over the full 0..999 range"). Fix:
+widened `loadAreaInstances` to take a slot range, and (a) `write_initial_tempfiles` now
+pre-instantiates slots 15..999 before serializing so fresh `ITEMS.TMP` contains the world
+pool going forward, (b) `resume_level` also gap-fills after the ITEMS.TMP §2.3 stream so
+existing saves get world items on load. Verified: 463 world objects gap-filled on the
+shipped QSP save; 4 monsters that carry items (undead beast → 104, chimera → 225, shambling
+mound → 406, groaning spirit → 426) now drop them on death. Grave mists stay barren —
+authentic to the original (all 37 ship with `W:carried = -1`, XP-only fodder).
 
 ---
 
