@@ -826,6 +826,29 @@ bool tryHandle(Context &ctx, const std::string &fn,
 			++pcsWritten;
 		}
 
+		// Step 3.5 -- pre-instantiate the world item pool (slots 15..999) from
+		// ITEMS_00.BIN's CDESC records. Without this, all niche.W:contents /
+		// monster.W:carried / chest-contents references point at empty object
+		// slots, and the player finds no loot from any source. Chargen-created
+		// PC gear already lives at some of these slots; skip those. The step-4
+		// walk below then serializes both PC and world items uniformly.
+		int worldItems = THIRDEYE::savegame::loadAreaInstances(
+		    saveDir,
+		    [&](int slot, uint16_t cls, const std::vector<uint8_t> &data) {
+			    if (ctx.objects.classOf(slot) != 0xFFFF)
+				    return; // chargen-owned; keep the live one
+			    try {
+				    ctx.objects.createProgram(slot, cls);
+				    if (!data.empty())
+					    if (uint8_t *sp = ctx.objects.staticsPtr(
+					            slot, 0, static_cast<uint32_t>(data.size())))
+						    std::memcpy(sp, data.data(), data.size());
+			    } catch (const std::exception &) {}
+		    },
+		    /*firstSlot=*/15, /*lastSlot=*/999);
+		rt() << "  [write_initial_tempfiles: pre-created " << worldItems
+		     << " world objects from ITEMS_00.BIN]" << std::endl;
+
 		// Step 4 -- truncate at kItemStreamOff and append a fresh item stream.
 		// Walk the entity range (indices below kNumEntities); every live entity
 		// whose class is a subclass of `items` (1371) gets a record.
@@ -1037,6 +1060,33 @@ bool tryHandle(Context &ctx, const std::string &fn,
 				     << " item objects from ITEMS.TMP §2.3"
 				     << (failed ? " (" + std::to_string(failed) + " failed)" : "")
 				     << "]" << std::endl;
+			}
+
+			// Fill any world-item slots (15..999) that ITEMS.TMP §2.3 didn't
+			// carry -- the initial pool of potions/scrolls/weapons that
+			// niches, monsters, and containers reference. Older ITEMS.TMP
+			// files (written before write_initial_tempfiles pre-created them)
+			// don't have any, so this loads them from the pristine ITEMS_00.BIN.
+			// Slots already live (chargen PCs, ITEMS.TMP items) win.
+			if (wantContinue) {
+				auto saveDir = ctx.res.resourcePath().parent_path() / "SAVEGAME";
+				int gapFilled = THIRDEYE::savegame::loadAreaInstances(
+				    saveDir,
+				    [&](int slot, uint16_t cls,
+				        const std::vector<uint8_t> &data) {
+					    if (ctx.objects.classOf(slot) != 0xFFFF) return;
+					    try {
+						    ctx.objects.createProgram(slot, cls);
+						    if (!data.empty())
+							    if (uint8_t *sp = ctx.objects.staticsPtr(
+							            slot, 0,
+							            static_cast<uint32_t>(data.size())))
+								    std::memcpy(sp, data.data(), data.size());
+					    } catch (const std::exception &) {}
+				    },
+				    /*firstSlot=*/15, /*lastSlot=*/999);
+				rt() << "  [resume_level: gap-filled " << gapFilled
+				     << " world objects from ITEMS_00.BIN]" << std::endl;
 			}
 
 			// (3) PC patching from ITEMS.TMP. PC class static offsets verified

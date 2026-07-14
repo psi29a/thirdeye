@@ -237,10 +237,18 @@ int  restoreLevels(const std::filesystem::path &saveDir, int slotIdx);
 // Returns the count of objects created. saveDir is the SAVEGAME/ directory.
 // The `create` callback receives (objIndex, classNumber, staticData) -- the
 // caller wires it to ObjectSystem::createProgram + classStaticPtr writes.
+//
+// The slot range is [firstSlot, lastSlot] inclusive. Defaults to (1, 14) --
+// just the area singletons. Widen to (1, 999) to also pre-create the world
+// item pool (potions, scrolls, weapons, quest items — the slots referenced by
+// niche.W:contents, monster.W:carried, chest contents, etc.). Callback should
+// skip slots that are already live; the raw record still gets scanned but no
+// object is replaced.
 using CdescCreate = std::function<void(int slot, uint16_t cls,
                                        const std::vector<uint8_t> &data)>;
 int loadAreaInstances(const std::filesystem::path &saveDir,
-                      const CdescCreate &create);
+                      const CdescCreate &create,
+                      int firstSlot = 1, int lastSlot = 14);
 
 } // namespace THIRDEYE::savegame
 
