@@ -162,10 +162,17 @@ uint16_t GRAPHICS::Bitmap::getHeight(uint16_t index) {
 //   odd  >= 3  string: amount = marker>>1, then `amount` literal pixels
 // There is exactly one end-of-line token per row, height rows in all.
 std::vector<uint8_t> GRAPHICS::Bitmap::decodeVFXShape(uint16_t index) {
+	std::vector<uint8_t> mask; // discarded: legacy callers colorkey index 0
+	return decodeVFXShapeMasked(index, mask);
+}
+
+std::vector<uint8_t> GRAPHICS::Bitmap::decodeVFXShapeMasked(
+		uint16_t index, std::vector<uint8_t> &mask) {
 	uint32_t base = mBitmapOffets.at(index);
 	uint16_t width = getWidth(index);
 	uint16_t height = getHeight(index);
 	std::vector<uint8_t> bitmap(static_cast<size_t>(width) * height, 0);
+	mask.assign(static_cast<size_t>(width) * height, 0);
 
 	uint32_t pos = base + 24; // skip the 24-byte subpicture header
 	const uint32_t end = static_cast<uint32_t>(mBitmapData.size());
@@ -185,15 +192,21 @@ std::vector<uint8_t> GRAPHICS::Bitmap::decodeVFXShape(uint16_t index) {
 			if (marker & 1) {           // string: literal pixels
 				for (uint32_t i = 0; i < amount && pos < end; i++, x++) {
 					uint8_t px = mBitmapData[pos++];
-					if (x < width)
-						bitmap[static_cast<size_t>(y) * width + x] = px;
+					if (x < width) {
+						size_t at = static_cast<size_t>(y) * width + x;
+						bitmap[at] = px;
+						mask[at] = 1;
+					}
 				}
 			} else {                    // run: one pixel repeated
 				if (pos >= end) break;
 				uint8_t px = mBitmapData[pos++];
 				for (uint32_t i = 0; i < amount; i++, x++)
-					if (x < width)
-						bitmap[static_cast<size_t>(y) * width + x] = px;
+					if (x < width) {
+						size_t at = static_cast<size_t>(y) * width + x;
+						bitmap[at] = px;
+						mask[at] = 1;
+					}
 			}
 		}
 	}

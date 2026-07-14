@@ -29,6 +29,9 @@ and the next silent-stall hunt will need the same toolkit.
 | `THIRDEYE_TEXTDBG=1` | Log every text draw's window rect + cursor + string. |
 | `THIRDEYE_MOUSE=1` | Log each mouse event → logical coord mapping. |
 | `THIRDEYE_ATTACK=1` | Enable + drive auto-attack and log wraith HP + PC hands. |
+| `THIRDEYE_SPELLMENU=<pc>[,<type>]` | Open the spell-book side menu the way `spellbook.use` does (`SEND magic.activate(pc, type)`; type 0 = mage book, 1 = cleric symbol) at pump 260, close it (`magic.deactivate`) at pump 900. Regression lever for the compass-restamp-over-menu bug. |
+| `THIRDEYE_COMPASSDBG=1` | Trace compass-rect cover events + underlay captures (`[compass] …`); dumps each captured underlay to `/tmp/underlay_N.bmp`. |
+| `THIRDEYE_NO_WORLDITEMS=1` | Skip the resume-time world-item gap-fill from `ITEMS_00.BIN` (bisect helper — niches/monster drops go dark). |
 | `THIRDEYE_QUIT_AFTER_FIRST=1` | Exit right after the first frame (for `time` measurement). |
 
 ## Perf gotcha — the runtime-call trace is gated behind `--debug`

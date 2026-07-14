@@ -206,6 +206,53 @@ re-snapshot is **gated on a `gCompassDirty` flag set by the 187 draw** so an inc
 page-104 refresh during inventory interaction can't snapshot a *partial* compass over the
 good one.
 
+✅ **Spell-book menu rendered, then vanished — the compass re-stamp was painting over it
+(2026-07-14).** Player report: clicking the spellbook showed "just the compass with some
+garbage at the bottom." `magic.create` (class 2377) builds its menu window at
+(0,120)-(116,175) — the compass rect plus 7 rows — and `magic.update` draws the beige
+"Auxiliary display" panel (bitmap 193:11) there. Two flattened-page bugs, fixed together:
+- **Re-stamp over the menu.** The compass re-stamp's cover-detection only watched
+  **fillRect**; a `draw_bitmap` covering the compass rect didn't suspend it, so every
+  present blitted the stale compass back over the spell menu, leaving only the panel's
+  bottom 7 rows visible. Fix in `Graphics::drawImage`: a bitmap blit whose clipped dest
+  rect covers the whole compass rect sets `mCompassCovered`, same rule as fillRect.
+- **Stale pixels through transparent panel pixels.** The panel + its scroll-arrow hash
+  overlays (192:13/14, checkerboard with arrow-shaped index-0 holes) rely on the page
+  model: on page 1 their transparent pixels reveal the pristine HUD Backdrop. Our
+  flattened screen revealed the LIVE compass instead (gold needle shrapnel in the arrow
+  glyphs — the "multicoloured mess" class of bug). Fix: `snapshotCompassUnderlay()`
+  captures the compass-area pixels right after a Backdrop (190) draw that actually
+  repaints the region (a clipped-elsewhere 190 draw must NOT recapture — that poisons
+  the underlay with the live compass), and `drawImage` restores that underlay under any
+  covering bitmap before it blits.
+  Ground truth established along the way: **the compass art incl. a north needle is baked
+  into Backdrop 190 itself** (187 is only the facing-needle overlay), and the DOS-faithful
+  composite (backdrop+panel+overlays) shows a bright up-glyph / dark down-glyph — our
+  post-fix render matches it pixel-class for pixel-class.
+Self-healing on close: `magic.deactivate` SENDs dungeon `"draw compass"` → bitmap 187 →
+`gCompassDirty` → `snapshotCompass()` re-arms the re-stamp. Verified headlessly both ways
+with the new `THIRDEYE_SPELLMENU=<pc>[,<type>]` probe (runtime/event.cpp; menu open ~1800
+presents, pristine compass after deactivate); `THIRDEYE_COMPASSDBG=1` traces cover/capture
+events and dumps the underlay. NB the spell list renders empty for a PC with no memorized
+spells of the requested type — that's data, not rendering.
+
+✅ **VFX transparency is the RLE skip token, NOT palette index 0 — decoder-level fix
+(2026-07-14, same session).** Player follow-up: the menu's ABORT SPELL text + scroll-arrow
+glyphs showed "something behind" them instead of DOSBox's solid black. Ground truth from
+`arun/vfx/VFX.INC` + the shape data: `VFX_shape_draw` does **no color keying** — the only
+transparent pixels in a "1.10" shape are `skip` tokens in the RLE; a shape can PAINT
+palette index 0 via run/string tokens and those render as real black. The spell panel's
+arrow glyphs are painted-black runs, and the disabled-scroll checker overlays (192:13/14)
+are fully opaque black+idx-20 checkerboards with a solid black arrow — zero transparency.
+Our decoder collapsed skip and painted-black both to 0 and `drawImage` colorkeyed 0
+unconditionally, deleting every painted-black pixel from every VFX shape.
+Fix: `Bitmap::decodeVFXShapeMasked` returns a per-pixel opacity mask alongside the
+indices; `DecodedShape` caches it; `drawImage` renders masked shapes through an ARGB
+surface with true per-pixel alpha (mirror flips the mask too). Non-VFX formats (GFF
+frames, CHARPICS) keep the legacy colorkey path. Verified: ABORT SPELL solid black,
+opaque checker + black glyphs matching the DOS composite; full-frame regression clean
+(3D view / party panels / HUD); ~82 fps vs ~85 pre-change.
+
 ✅ **Stair / feature draw artifacts when strafing — fixed (two distinct bugs).**
 (1) **Uninitialized `W:next` chain pointer.** `features.draw` (M:30, class 1994) ends with a
 per-cell chain walk: `LXW W:next; if W:next != -1 AND staticVar2 != 0: SEND W:next, "draw"`.
