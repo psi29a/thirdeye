@@ -107,6 +107,15 @@ public:
 	                     int32_t y2);
 	// release_window: free a window handle.
 	void releaseWindow(int32_t handle);
+	// release_owned_windows(owner): free every window whose assignWindow(owner,…)
+	// recorded it. Matches RTOBJECT.C/GRAPHICS.C release_owned_windows, which
+	// reaps subwindows a destroyed SOP object had allocated (menus create ~80
+	// per open, and the window table is 256 handles). NOT yet wired into
+	// destroy_object: a straight port broke the ALL ATTACK button (some
+	// transient object destroyed during "swap request" is recorded as the
+	// button subwindow's owner) -- see runtime/rtobject.cpp. The engine-level
+	// resetInstances() sweep bounds the leak until the mis-ownership is found.
+	void releaseOwnedWindows(int32_t owner);
 	// get_x1/get_y1/get_x2/get_y2: a window's rectangle (left/top/right/bottom).
 	// Returns false if the handle isn't a live window. The menu uses get_y1 of a
 	// hovered option's window to work out which option it is.

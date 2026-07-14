@@ -68,6 +68,15 @@ private:
 	// outtake/cutscene box fill covering the whole compass rect): suspend the
 	// per-present re-stamp until the compass is redrawn (snapshotCompass).
 	bool mCompassCovered = false;
+	// Pristine HUD-backdrop pixels under the compass rect, captured right after
+	// the Backdrop (190) draw and BEFORE any compass lands there. In the
+	// original page model, panels drawn over the compass area (the spell-book
+	// "Auxiliary display") sit on page 1, whose buffer holds the clean Backdrop
+	// -- their transparent (index 0) pixels reveal dark leather. Our flattened
+	// screen would reveal stale compass pixels instead (gold shrapnel in the
+	// scroll-arrow glyph holes), so bitmap draws covering the compass rect
+	// first restore this underlay. See drawImage.
+	SDL_Surface *mCompassUnderlay = nullptr;
 	// Copy of the last PRESENTED frame (refreshed at the end of update()).
 	// pixelFade() dissolves from this (what the player currently sees) to the
 	// current mScreen content -- the flattened-page stand-in for VFX_pixel_fade.
@@ -104,7 +113,13 @@ private:
 	// was dominated by re-decoding the same shapes (keypress->render latency).
 	struct DecodedShape {
 		int w, h;
-		std::vector<uint8_t> pixels; // indexed (w*h bytes, 0 = transparent)
+		std::vector<uint8_t> pixels; // indexed (w*h bytes)
+		// Per-pixel opacity from the VFX RLE: 1 = painted (opaque even when
+		// the value is 0 = black), 0 = skipped (transparent). VFX shapes have
+		// no color keying -- painted black is real black (the spell-book
+		// arrows/checker). Empty for non-VFX formats (GFF frames, CHARPICS),
+		// which keep the legacy 0-is-transparent colorkey path.
+		std::vector<uint8_t> mask;
 	};
 	struct ShapeKey {
 		uint32_t cacheId;
@@ -195,6 +210,13 @@ public:
 	// facing indicator isn't erased by other redraws.
 	void snapshotCompass();
 	void restoreCompass();
+	// Capture the pristine backdrop under the compass rect (call right after
+	// the HUD Backdrop bitmap draw, before the compass is stamped there).
+	void snapshotCompassUnderlay();
+	// Screen-space rect covered by the compass underlay (the spell-book menu
+	// window footprint). Shared source of truth for callers deciding whether
+	// a draw repaints the region (runtime's 190-draw capture gate).
+	static const SDL_Rect &menuUnderlayRect();
 	// fill_rectangle(x0,y0,x1,y1,color): flood an inclusive screen rectangle with a
 	// palette colour. The SOP screens use it to clear a panel before redrawing (e.g.
 	// the character-stats screen clears the equipment area first); also refreshes the

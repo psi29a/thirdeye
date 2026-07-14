@@ -378,6 +378,14 @@ void EventSystem::releaseWindow(int32_t handle) {
 		mWindows[handle].used = false;
 }
 
+void EventSystem::releaseOwnedWindows(int32_t owner) {
+	// Handles 0/1 (PAGE1/PAGE2) are the pre-created full-screen pages -- never
+	// owned by a SOP object, never reaped.
+	for (int32_t i = 2; i < MAX_WINDOWS; ++i)
+		if (mWindows[i].used && mWindows[i].owner == owner)
+			mWindows[i].used = false;
+}
+
 bool EventSystem::windowRect(int32_t handle, int32_t &x1, int32_t &y1,
                              int32_t &x2, int32_t &y2) const {
 	if (handle < 0 || handle >= MAX_WINDOWS || !mWindows[handle].used)

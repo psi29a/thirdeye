@@ -276,13 +276,14 @@ int restoreLevels(const std::filesystem::path &saveDir, int slotIdx) {
 }
 
 int loadAreaInstances(const std::filesystem::path &saveDir,
-                      const CdescCreate &create) {
-	// Read ITEMS_00.BIN (the slot-0 scaffold that ships with the install),
-	// parse the native CDESC stream, and hand off the first 15 slots
-	// (0..14: kernel + 14 area-class singletons). Larger slots (item objects,
-	// PCs) are restored elsewhere by our own ITEMS.TMP path -- the SOP
-	// equivalent would be `restore_items` over the full 0..999 range, but we
-	// only need the area instances to make the SOP "enter level" cascade fire.
+                      const CdescCreate &create,
+                      int firstSlot, int lastSlot) {
+	// Read ITEMS_00.BIN (the slot-0 scaffold that ships with the install) and
+	// parse the native CDESC stream. Slots 1..14 hold the 14 area-class
+	// singletons the SOP "enter level" cascade needs; slots 100..999 hold the
+	// world's initial item pool (potions/scrolls/weapons — targets of
+	// niche.W:contents, monster.W:carried, chest contents). Widen the range
+	// via `lastSlot` to pre-populate those too on a fresh party start.
 	auto path = saveDir / "ITEMS_00.BIN";
 	std::ifstream f(path, std::ios::binary);
 	if (!f) return 0;
@@ -291,7 +292,6 @@ int loadAreaInstances(const std::filesystem::path &saveDir,
 	if (d.empty() || d[0] != 0x1a) return 0; // not the native binary format
 	size_t off = 1;
 	int created = 0;
-	constexpr int kFirstAreaSlot = 1, kLastAreaSlot = 14;
 	while (off + 8 <= d.size()) {
 		uint16_t slot = d[off] | (uint16_t(d[off + 1]) << 8);
 		uint32_t cls  = d[off + 2] | (uint32_t(d[off + 3]) << 8) |
@@ -305,13 +305,14 @@ int loadAreaInstances(const std::filesystem::path &saveDir,
 		// table is keyed by uint16_t -- the on-disk u32 is just the AESOP
 		// container's natural width). Skip rather than silently truncate.
 		if (cls != 0xFFFFFFFFu && cls <= 0xFFFFu &&
-		    slot >= kFirstAreaSlot && slot <= kLastAreaSlot) {
+		    static_cast<int>(slot) >= firstSlot &&
+		    static_cast<int>(slot) <= lastSlot) {
 			std::vector<uint8_t> data(d.begin() + off, d.begin() + off + size);
 			create(static_cast<int>(slot), static_cast<uint16_t>(cls), data);
 			++created;
 		}
 		off += size;
-		if (slot >= kLastAreaSlot) break; // done -- no need to scan further
+		if (static_cast<int>(slot) >= lastSlot) break; // done
 	}
 	return created;
 }

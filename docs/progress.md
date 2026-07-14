@@ -11,7 +11,14 @@ For the high-level phase plan see [roadmap.md](roadmap.md); for engine internals
 it `MSG_CREATE` — this is AESOP's program-chain bootstrap. Per-instance statics live in a
 `std::deque` so a running handler's static pointer stays valid when nested creates grow the
 list. Safety nets: an **instruction budget** (`setMaxSteps`) and a **SEND/PASS recursion-depth
-guard** (`kMaxDepth`).
+guard** (`kMaxDepth`). `destroy_object` calls MSG_DESTROY and cancels the object's outstanding
+notify requests. `release_owned_windows` is implemented (`EventSystem::releaseOwnedWindows`
+matches RTOBJECT.C/GRAPHICS.C verbatim) but **not wired into destroy_object yet** — attempting
+that broke the ALL ATTACK button (kernel's "swap request" path destroys some transient object
+whose slot happens to have been recorded as the button subwindow's `owner`; reaping it killed
+the button on the second frame). The start-self-destroy `resetInstances()` sweep at each menu
+cycle boundary still bounds the leak in practice. Real fix pending: find the mis-owned
+subwindow assignment.
 
 ✅ **Unified address model + effective-address opcodes.** Code/stack/static live in separate
 buffers, so an effective address is a tagged `Value`. See [architecture.md](architecture.md).
@@ -199,6 +206,53 @@ re-snapshot is **gated on a `gCompassDirty` flag set by the 187 draw** so an inc
 page-104 refresh during inventory interaction can't snapshot a *partial* compass over the
 good one.
 
+✅ **Spell-book menu rendered, then vanished — the compass re-stamp was painting over it
+(2026-07-14).** Player report: clicking the spellbook showed "just the compass with some
+garbage at the bottom." `magic.create` (class 2377) builds its menu window at
+(0,120)-(116,175) — the compass rect plus 7 rows — and `magic.update` draws the beige
+"Auxiliary display" panel (bitmap 193:11) there. Two flattened-page bugs, fixed together:
+- **Re-stamp over the menu.** The compass re-stamp's cover-detection only watched
+  **fillRect**; a `draw_bitmap` covering the compass rect didn't suspend it, so every
+  present blitted the stale compass back over the spell menu, leaving only the panel's
+  bottom 7 rows visible. Fix in `Graphics::drawImage`: a bitmap blit whose clipped dest
+  rect covers the whole compass rect sets `mCompassCovered`, same rule as fillRect.
+- **Stale pixels through transparent panel pixels.** The panel + its scroll-arrow hash
+  overlays (192:13/14, checkerboard with arrow-shaped index-0 holes) rely on the page
+  model: on page 1 their transparent pixels reveal the pristine HUD Backdrop. Our
+  flattened screen revealed the LIVE compass instead (gold needle shrapnel in the arrow
+  glyphs — the "multicoloured mess" class of bug). Fix: `snapshotCompassUnderlay()`
+  captures the compass-area pixels right after a Backdrop (190) draw that actually
+  repaints the region (a clipped-elsewhere 190 draw must NOT recapture — that poisons
+  the underlay with the live compass), and `drawImage` restores that underlay under any
+  covering bitmap before it blits.
+  Ground truth established along the way: **the compass art incl. a north needle is baked
+  into Backdrop 190 itself** (187 is only the facing-needle overlay), and the DOS-faithful
+  composite (backdrop+panel+overlays) shows a bright up-glyph / dark down-glyph — our
+  post-fix render matches it pixel-class for pixel-class.
+Self-healing on close: `magic.deactivate` SENDs dungeon `"draw compass"` → bitmap 187 →
+`gCompassDirty` → `snapshotCompass()` re-arms the re-stamp. Verified headlessly both ways
+with the new `THIRDEYE_SPELLMENU=<pc>[,<type>]` probe (runtime/event.cpp; menu open ~1800
+presents, pristine compass after deactivate); `THIRDEYE_COMPASSDBG=1` traces cover/capture
+events and dumps the underlay. NB the spell list renders empty for a PC with no memorized
+spells of the requested type — that's data, not rendering.
+
+✅ **VFX transparency is the RLE skip token, NOT palette index 0 — decoder-level fix
+(2026-07-14, same session).** Player follow-up: the menu's ABORT SPELL text + scroll-arrow
+glyphs showed "something behind" them instead of DOSBox's solid black. Ground truth from
+`arun/vfx/VFX.INC` + the shape data: `VFX_shape_draw` does **no color keying** — the only
+transparent pixels in a "1.10" shape are `skip` tokens in the RLE; a shape can PAINT
+palette index 0 via run/string tokens and those render as real black. The spell panel's
+arrow glyphs are painted-black runs, and the disabled-scroll checker overlays (192:13/14)
+are fully opaque black+idx-20 checkerboards with a solid black arrow — zero transparency.
+Our decoder collapsed skip and painted-black both to 0 and `drawImage` colorkeyed 0
+unconditionally, deleting every painted-black pixel from every VFX shape.
+Fix: `Bitmap::decodeVFXShapeMasked` returns a per-pixel opacity mask alongside the
+indices; `DecodedShape` caches it; `drawImage` renders masked shapes through an ARGB
+surface with true per-pixel alpha (mirror flips the mask too). Non-VFX formats (GFF
+frames, CHARPICS) keep the legacy colorkey path. Verified: ABORT SPELL solid black,
+opaque checker + black glyphs matching the DOS composite; full-frame regression clean
+(3D view / party panels / HUD); ~82 fps vs ~85 pre-change.
+
 ✅ **Stair / feature draw artifacts when strafing — fixed (two distinct bugs).**
 (1) **Uninitialized `W:next` chain pointer.** `features.draw` (M:30, class 1994) ends with a
 per-cell chain walk: `LXW W:next; if W:next != -1 AND staticVar2 != 0: SEND W:next, "draw"`.
@@ -246,6 +300,21 @@ that PC's **equipment screen** — the paper-doll body + equipment slots + the c
 actual gear from the char-gen transfer (Bob: blue robe, dagger, sword, mace, a quiver of
 arrows). The screen registers clickable slot regions (handles 84-92) on open, so item
 **interaction** (move/equip/use) routes through the same proven region-click path.
+
+✅ **World item pool now populates (2026-07-14).** Player report: "no loot or potions or
+food to be had from any source." Root cause: `loadAreaInstances` only pre-created slots 1..14
+(area singletons) from `ITEMS_00.BIN`; the item pool at slots 15..999 (potions, scrolls,
+weapons, quest items — targets of `niche.W:contents`, `monster.W:carried`, container
+contents) was never instantiated, so every world-item reference resolved to an empty slot.
+The comment even flagged the TODO ("Larger slots restored elsewhere by our own ITEMS.TMP
+path -- the SOP equivalent would be `restore_items` over the full 0..999 range"). Fix:
+widened `loadAreaInstances` to take a slot range, and (a) `write_initial_tempfiles` now
+pre-instantiates slots 15..999 before serializing so fresh `ITEMS.TMP` contains the world
+pool going forward, (b) `resume_level` also gap-fills after the ITEMS.TMP §2.3 stream so
+existing saves get world items on load. Verified: 463 world objects gap-filled on the
+shipped QSP save; 4 monsters that carry items (undead beast → 104, chimera → 225, shambling
+mound → 406, groaning spirit → 426) now drop them on death. Grave mists stay barren —
+authentic to the original (all 37 ship with `W:carried = -1`, XP-only fodder).
 
 ---
 

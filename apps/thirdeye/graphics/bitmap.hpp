@@ -42,6 +42,18 @@ public:
 	uint16_t getNumberOfBitmaps();
 	bool isMoreBitmap();
 	uint32_t getNextBitmapPos();
+	// True for AESOP/16 "1.10" VFX shape tables -- the only format with a
+	// per-pixel opacity mask (see decodeVFXShape).
+	bool isVFXShape() const { return mIsVFXShape; }
+	// Decode one VFX sub-shape, separating TRANSPARENCY from PAINTED BLACK.
+	// In the VFX RLE the only transparent pixels are `skip` tokens; a shape
+	// can paint palette index 0 (black) via run/string tokens and the original
+	// VFX_shape_draw renders those as solid black (there is NO color keying).
+	// `mask` gets 1 byte per pixel: 1 = painted (opaque, even if value 0),
+	// 0 = skipped (transparent). Callers that colorkey index 0 instead lose
+	// every painted-black pixel -- the spell-book arrows/checker bug.
+	std::vector<uint8_t> decodeVFXShapeMasked(uint16_t index,
+	                                          std::vector<uint8_t> &mask);
 private:
 	// Decode one sub-shape of an AESOP/16 "1.10" VFX shape table (the format
 	// every EYE.RES bitmap uses). See bitmap.cpp for the token grammar.

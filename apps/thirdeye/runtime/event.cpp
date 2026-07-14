@@ -497,6 +497,46 @@ void runDebugHooks(VM::ObjectSystem &objects, RESOURCES::Resource &res) {
 			}
 		}
 	}
+	// THIRDEYE_SPELLMENU[=<pc>[,<type>]]: open the spell-book side menu the way
+	// spellbook.use / holy symbol.use do -- SEND magic.activate (M:29) with
+	// (user, type) where type 0 = mage book, 1 = cleric symbol. Regression
+	// lever for the compass-restamp-over-menu bug: the "Auxiliary display"
+	// panel must stay visible at (0,120)-(116,175) instead of being
+	// re-stamped by the compass snapshot on the next present.
+	if (const char *sm = std::getenv("THIRDEYE_SPELLMENU")) {
+		static int mtick = 0;
+		int magic = objects.firstObjectOfClass(2377);
+		++mtick;
+		if (mtick == 260 && magic >= 0) {
+			int pc = -1, type = 0;
+			if (*sm && std::strchr(sm, ',') != nullptr)
+				std::sscanf(sm, "%d,%d", &pc, &type);
+			else if (*sm && std::atoi(sm) > 0)
+				pc = std::atoi(sm);
+			if (pc < 0) {
+				auto pcs = objects.objectsOfClass(1369);
+				if (!pcs.empty()) pc = pcs.front();
+			}
+			if (pc >= 0) {
+				try { objects.send(magic, 29, {pc, type}); }
+				catch (const std::exception &e) {
+					std::cerr << "[spellmenu] activate threw: " << e.what() << "\n";
+				}
+				std::cerr << "[spellmenu] sent magic.activate(pc=" << pc
+				          << ", type=" << type << ")\n";
+			}
+		}
+		// Close after ~12 s: verifies the deactivate path repaints the HUD
+		// frame + compass and the per-present re-stamp re-arms (dungeon
+		// "draw compass" -> bitmap 187 -> snapshotCompass).
+		if (mtick == 900 && magic >= 0) {
+			try { objects.send(magic, 172, {}); }
+			catch (const std::exception &e) {
+				std::cerr << "[spellmenu] deactivate threw: " << e.what() << "\n";
+			}
+			std::cerr << "[spellmenu] sent magic.deactivate\n";
+		}
+	}
 	// THIRDEYE_SPELL[=<spell_class>]: end-to-end spell-cast verification.
 	// Spawns a target monster in front of the party, waits for the level to
 	// settle, then SENDs magic.cast_spell (M:54) with (spell_class, sp=0,

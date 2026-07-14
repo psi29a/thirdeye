@@ -242,6 +242,22 @@ bool tryHandle(Context &ctx, const std::string &fn,
 			}
 			ctx.gfx->drawImage(fetch(table), number, x, y, true, mirror,
 			                   static_cast<uint32_t>(table), scale);
+			// Right after the HUD Backdrop lands, the compass rect holds
+			// PRISTINE frame art (the compass 187 hasn't been stamped yet).
+			// Capture it as the underlay that panels drawn over the compass
+			// area (spell book) restore first, so their transparent pixels
+			// reveal clean leather instead of stale compass pixels.
+			// ONLY capture when this draw actually repainted the region: a
+			// 190 draw clipped to a window elsewhere (the boot flow draws it
+			// to several pages) leaves the already-stamped compass on screen,
+			// and a blind capture would poison the underlay with compass
+			// pixels -- exactly the gold-shrapnel-in-the-arrow-glyphs bug.
+			const SDL_Rect &ur = GRAPHICS::Graphics::menuUnderlayRect();
+			if (table == 190 &&
+			    (!clipped ||
+			     (px0 <= ur.x && py0 <= ur.y &&
+			      px1 >= ur.x + ur.w - 1 && py1 >= ur.y + ur.h - 1)))
+				ctx.gfx->snapshotCompassUnderlay();
 			// The compass snapshot rect (0, 120, 116, 49 in
 			// Graphics::kCompassRect) sits in the bottom-left HUD region. If
 			// the compass 187 was drawn just now, the snapshot needs to

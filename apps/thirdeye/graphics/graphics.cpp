@@ -83,6 +83,7 @@ GRAPHICS::Graphics::~Graphics() {
 	SDL_DestroySurface(mScreen);
 	SDL_DestroySurface(mBackdrop);     // lazily created in drawImage (nullptr-safe)
 	SDL_DestroySurface(mCompassSnap);  // lazily created in snapshotCompass
+	SDL_DestroySurface(mCompassUnderlay);
 	SDL_DestroySurface(mScreenSnap);   // lazily created in snapshotScreen
 	SDL_DestroySurface(mLastShown);    // lazily created in update
 	if (mPresentTex != nullptr) SDL_DestroyTexture(mPresentTex);
@@ -90,6 +91,19 @@ GRAPHICS::Graphics::~Graphics() {
 	SDL_DestroyRenderer(mRenderer);
 	SDL_DestroyWindow(mWindow);
 	SDL_Quit();
+}
+
+// The compass occupies the bottom-left of the HUD, left of the movement arrows
+// (which start at x=117); the disc spans y~120-168. Capture/restore that rect.
+static const SDL_Rect kCompassRect = { 0, 120, 116, 49 };
+// The compass ART (gold ornaments) bleeds below the disc rect, down to ~y174,
+// and the spell-book panel window spans (0,120)-(116,175). The pristine-
+// backdrop underlay covers the full panel footprint so transparent panel
+// pixels anywhere in it reveal clean frame art, not compass ornament.
+static const SDL_Rect kMenuUnderlayRect = { 0, 120, 117, 56 };
+
+const SDL_Rect &GRAPHICS::Graphics::menuUnderlayRect() {
+	return kMenuUnderlayRect;
 }
 
 void GRAPHICS::Graphics::drawImage(std::vector<uint8_t> &bmp, uint16_t index,
@@ -105,52 +119,93 @@ void GRAPHICS::Graphics::drawImage(std::vector<uint8_t> &bmp, uint16_t index,
 	// each other under any pointer-keyed scheme.
 	DecodedShape transient;
 	const DecodedShape *shape = nullptr;
+	auto decodeInto = [&](DecodedShape &s) {
+		Bitmap image(bmp);
+		s.w = image.getWidth(index);
+		s.h = image.getHeight(index);
+		// VFX shapes carry a per-pixel opacity mask (skip = transparent,
+		// painted = opaque even when black); other formats keep the legacy
+		// colorkey-0 convention and leave the mask empty.
+		if (image.isVFXShape())
+			s.pixels = image.decodeVFXShapeMasked(index, s.mask);
+		else
+			s.pixels = image[index];
+	};
 	if (cacheId != 0) {
 		ShapeKey key{cacheId, index};
 		auto it = mShapeCache.find(key);
 		if (it == mShapeCache.end()) {
-			Bitmap image(bmp);
 			DecodedShape s;
-			s.w = image.getWidth(index);
-			s.h = image.getHeight(index);
-			s.pixels = image[index];
+			decodeInto(s);
 			it = mShapeCache.emplace(key, std::move(s)).first;
 		}
 		shape = &it->second;
 	} else {
-		Bitmap image(bmp);
-		transient.w = image.getWidth(index);
-		transient.h = image.getHeight(index);
-		transient.pixels = image[index];
+		decodeInto(transient);
 		shape = &transient;
 	}
 	int iw = shape->w, ih = shape->h;
 	// Mirror operates on a per-draw copy (the cached buffer stays canonical).
 	// Most draws have mirror=0 and skip the copy entirely.
-	std::vector<uint8_t> imageData;
+	std::vector<uint8_t> imageData, maskData;
 	const std::vector<uint8_t> *src = &shape->pixels;
+	const std::vector<uint8_t> *msk = &shape->mask;
 	if (mirror) {
 		imageData = shape->pixels;
+		maskData = shape->mask;
 		src = &imageData;
+		msk = &maskData;
 	}
 
 	// Apply the AESOP draw_bitmap mirror flag by flipping the indexed pixels in
 	// place on the per-draw copy (the cached buffer stays canonical). 1=X flips
 	// each row left-to-right (right-hand dungeon walls), 2=Y flips the row order.
-	if ((mirror & 1) && iw > 0) {
+	auto flipX = [iw, ih](std::vector<uint8_t> &v) {
 		for (int row = 0; row < ih; ++row)
-			std::reverse(imageData.begin() + static_cast<ptrdiff_t>(row) * iw,
-			             imageData.begin() + static_cast<ptrdiff_t>(row + 1) * iw);
+			std::reverse(v.begin() + static_cast<ptrdiff_t>(row) * iw,
+			             v.begin() + static_cast<ptrdiff_t>(row + 1) * iw);
+	};
+	auto flipY = [iw, ih](std::vector<uint8_t> &v) {
+		for (int row = 0; row < ih / 2; ++row)
+			std::swap_ranges(v.begin() + static_cast<ptrdiff_t>(row) * iw,
+			                 v.begin() + static_cast<ptrdiff_t>(row + 1) * iw,
+			                 v.begin() + static_cast<ptrdiff_t>(ih - 1 - row) * iw);
+	};
+	if ((mirror & 1) && iw > 0) {
+		flipX(imageData);
+		if (!maskData.empty()) flipX(maskData);
 	}
 	if ((mirror & 2) && ih > 0) {
-		for (int row = 0; row < ih / 2; ++row)
-			std::swap_ranges(imageData.begin() + static_cast<ptrdiff_t>(row) * iw,
-			                 imageData.begin() + static_cast<ptrdiff_t>(row + 1) * iw,
-			                 imageData.begin() + static_cast<ptrdiff_t>(ih - 1 - row) * iw);
+		flipY(imageData);
+		if (!maskData.empty()) flipY(maskData);
 	}
 
-	SDL_Surface *surface = makeIndexedSurfaceFrom(
-			const_cast<uint8_t*>(src->data()), iw, ih, iw, mPalette);
+	// VFX shapes with a mask render through an ARGB surface with true
+	// per-pixel alpha (transparency == the RLE's skip pixels); this keeps
+	// painted-black pixels opaque, matching VFX_shape_draw. Non-VFX shapes
+	// (empty mask) keep the legacy indexed + colorkey-0 path below.
+	const bool masked = transparency && !msk->empty() &&
+	                    msk->size() == static_cast<size_t>(iw) * ih;
+	SDL_Surface *surface;
+	if (masked) {
+		surface = SDL_CreateSurface(iw, ih, SDL_PIXELFORMAT_ARGB8888);
+		auto *out = static_cast<uint32_t *>(surface->pixels);
+		int stride = surface->pitch / 4;
+		for (int y = 0; y < ih; ++y)
+			for (int x = 0; x < iw; ++x) {
+				size_t at = static_cast<size_t>(y) * iw + x;
+				if ((*msk)[at]) {
+					SDL_Color c = mPalette->colors[(*src)[at]];
+					out[y * stride + x] = 0xFF000000u | (c.r << 16) |
+					                      (c.g << 8) | c.b;
+				} else {
+					out[y * stride + x] = 0;
+				}
+			}
+	} else {
+		surface = makeIndexedSurfaceFrom(
+				const_cast<uint8_t*>(src->data()), iw, ih, iw, mPalette);
+	}
 
 	// Apply the AESOP depth-tier scale: shape shrinks to (scale/256) of native
 	// size (0 = native). Anchor stays at the sprite's origin, so the offset
@@ -165,7 +220,48 @@ void GRAPHICS::Graphics::drawImage(std::vector<uint8_t> &bmp, uint16_t index,
 	}
 	SDL_Rect dest = { ox, oy, dw, dh };
 
-	if (transparency) {
+	// A bitmap draw covering the whole compass rect means the SOP is painting
+	// a panel over the compass area (the spell-book "Auxiliary display", a
+	// full HUD Backdrop). Two consequences, both mirroring what the original's
+	// page compositor did for free:
+	//  1. Restore the pristine backdrop under the rect FIRST -- the panel's
+	//     transparent (index 0) pixels, e.g. the scroll-arrow glyph holes,
+	//     must reveal clean HUD leather, not stale compass pixels ("garbage").
+	//  2. Suspend the per-present compass re-stamp (same rule as fillRect) or
+	//     the re-stamp paints the old compass back over the panel each frame.
+	// Self-healing on close: the panel-close path redraws the compass (bitmap
+	// 187) -> gCompassDirty -> snapshotCompass() re-arms the re-stamp.
+	{
+		SDL_Rect clip0, eff = dest;
+		SDL_GetSurfaceClipRect(mScreen, &clip0);
+		static const bool kDbg = std::getenv("THIRDEYE_COMPASSDBG") != nullptr;
+		if (SDL_GetRectIntersection(&eff, &clip0, &eff) &&
+		    eff.x <= kCompassRect.x && eff.y <= kCompassRect.y &&
+		    eff.x + eff.w >= kCompassRect.x + kCompassRect.w &&
+		    eff.y + eff.h >= kCompassRect.y + kCompassRect.h) {
+			if (kDbg)
+				fprintf(stderr, "[compass] cover eff=(%d,%d,%d,%d) underlay=%p\n",
+				        eff.x, eff.y, eff.w, eff.h, (void*)mCompassUnderlay);
+			if (transparency && mCompassUnderlay != nullptr) {
+				// Restore only what THIS draw is about to cover (its rect
+				// clipped to the underlay's footprint) -- never repaint
+				// beyond the incoming shape.
+				SDL_Rect r;
+				if (SDL_GetRectIntersection(&eff, &kMenuUnderlayRect, &r)) {
+					SDL_Rect src = { r.x - kMenuUnderlayRect.x,
+					                 r.y - kMenuUnderlayRect.y, r.w, r.h };
+					SDL_SetSurfaceBlendMode(mCompassUnderlay,
+					                        SDL_BLENDMODE_NONE);
+					SDL_BlitSurface(mCompassUnderlay, &src, mScreen, &r);
+				}
+			}
+			mCompassCovered = true;
+		}
+	}
+
+	if (masked) {
+		SDL_SetSurfaceBlendMode(surface, SDL_BLENDMODE_BLEND);
+	} else if (transparency) {
 		SDL_SetSurfaceColorKey(surface, true, 0);
 	}
 	if (dw == iw && dh == ih)
@@ -278,10 +374,6 @@ void GRAPHICS::Graphics::drawIndexed(const std::vector<uint8_t> &pixels,
 	}
 }
 
-// The compass occupies the bottom-left of the HUD, left of the movement arrows
-// (which start at x=117); the disc spans y~120-168. Capture/restore that rect.
-static const SDL_Rect kCompassRect = { 0, 120, 116, 49 };
-
 void GRAPHICS::Graphics::snapshotCompass() {
 	// Skip while an overlay covers mScreen -- otherwise we'd snapshot the
 	// overlay pixels instead of the compass and restamp them on future frames.
@@ -292,6 +384,22 @@ void GRAPHICS::Graphics::snapshotCompass() {
 	SDL_SetSurfaceBlendMode(mScreen, SDL_BLENDMODE_NONE);
 	SDL_BlitSurface(mScreen, &kCompassRect, mCompassSnap, nullptr);
 	mCompassCovered = false; // freshly drawn: resume the per-present re-stamp
+}
+
+void GRAPHICS::Graphics::snapshotCompassUnderlay() {
+	if (mCompassUnderlay == nullptr)
+		mCompassUnderlay = SDL_CreateSurface(kMenuUnderlayRect.w,
+		                                     kMenuUnderlayRect.h,
+		                                     SDL_PIXELFORMAT_ARGB8888);
+	SDL_SetSurfaceBlendMode(mScreen, SDL_BLENDMODE_NONE);
+	SDL_BlitSurface(mScreen, &kMenuUnderlayRect, mCompassUnderlay, nullptr);
+	if (std::getenv("THIRDEYE_COMPASSDBG")) {
+		static int n = 0;
+		char p[64];
+		snprintf(p, sizeof(p), "/tmp/underlay_%d.bmp", n++);
+		SDL_SaveBMP(mCompassUnderlay, p);
+		fprintf(stderr, "[compass] underlay captured -> %s\n", p);
+	}
 }
 
 void GRAPHICS::Graphics::restoreBackdrop() {
