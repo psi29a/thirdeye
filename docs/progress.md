@@ -11,12 +11,14 @@ For the high-level phase plan see [roadmap.md](roadmap.md); for engine internals
 it `MSG_CREATE` — this is AESOP's program-chain bootstrap. Per-instance statics live in a
 `std::deque` so a running handler's static pointer stays valid when nested creates grow the
 list. Safety nets: an **instruction budget** (`setMaxSteps`) and a **SEND/PASS recursion-depth
-guard** (`kMaxDepth`). `destroy_object` calls MSG_DESTROY, cancels the object's outstanding
-notify requests, and (2026-07-14) releases its owned subwindows too — matches RTOBJECT.C's
-`release_owned_windows`. Was stubbed previously; the start-self-destroy `resetInstances()`
-sweep at the end of each menu cycle papered over the leak, but a destroy mid-play (a fresh
-menu opening + closing without a full relaunch) could still fill the 256-handle window table
-over long sessions.
+guard** (`kMaxDepth`). `destroy_object` calls MSG_DESTROY and cancels the object's outstanding
+notify requests. `release_owned_windows` is implemented (`EventSystem::releaseOwnedWindows`
+matches RTOBJECT.C/GRAPHICS.C verbatim) but **not wired into destroy_object yet** — attempting
+that broke the ALL ATTACK button (kernel's "swap request" path destroys some transient object
+whose slot happens to have been recorded as the button subwindow's `owner`; reaping it killed
+the button on the second frame). The start-self-destroy `resetInstances()` sweep at each menu
+cycle boundary still bounds the leak in practice. Real fix pending: find the mis-owned
+subwindow assignment.
 
 ✅ **Unified address model + effective-address opcodes.** Code/stack/static live in separate
 buffers, so an effective address is a tagged `Value`. See [architecture.md](architecture.md).

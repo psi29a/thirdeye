@@ -66,6 +66,25 @@ constexpr auto ARCHIVE_URL =
 constexpr auto ARCHIVE_DOWNLOAD_BASE =
     "https://archive.org/download/eye-of-the-beholder-3/";
 
+// Warn before extracting into a data dir that already holds a game install --
+// files present in both the archive and the target get overwritten (SAVEGAME's
+// _00/_01.BIN saves, SAVEGAME.DIR, the game's own .RES/.EXE/.DLL). Loose files
+// the archive doesn't touch (.TMP live state, custom saves) stay. Returns
+// true if the user consented (or the dir doesn't exist yet).
+bool confirmDestructiveInstall(QWidget* parent, const QString& destRoot) {
+    if (!QFileInfo::exists(destRoot + QStringLiteral("/") + GAME_FILE))
+        return true;
+    const QMessageBox::StandardButton pick = QMessageBox::warning(
+        parent, MainWindow::tr("Overwrite existing install?"),
+        MainWindow::tr(
+            "A game install is already present at:\n%1\n\n"
+            "Installing again will overwrite the shipped save slots "
+            "(SAVEGAME/_00.BIN / _01.BIN) with the pristine Quick Start Party.\n\n"
+            "Continue?").arg(destRoot),
+        QMessageBox::Yes | QMessageBox::Cancel, QMessageBox::Cancel);
+    return pick == QMessageBox::Yes;
+}
+
 // Offset of the actual ZIP inside a file that may have data prepended (GOG's
 // MojoSetup .sh stub): the delta between where the central directory really
 // sits and where the end-of-central-directory record claims it is. Zero for
@@ -284,6 +303,8 @@ void MainWindow::installFromInstaller() {
     const QString destRoot =
         QStandardPaths::writableLocation(QStandardPaths::AppDataLocation)
         + QStringLiteral("/eob3");
+    if (!confirmDestructiveInstall(this, destRoot))
+        return;
 
     // ~50 MB of small files; finishes in well under a second. No progress UI.
     QApplication::setOverrideCursor(Qt::WaitCursor);
@@ -417,6 +438,12 @@ void MainWindow::downloadFromInternetArchive() {
     if (consent.exec() != QDialog::Accepted)
         return;
 
+    const QString destRoot =
+        QStandardPaths::writableLocation(QStandardPaths::AppDataLocation)
+        + QStringLiteral("/eob3");
+    if (!confirmDestructiveInstall(this, destRoot))
+        return;
+
     // Fetch the four disk zips (≈4.5 MB total), sequentially with progress.
     QProgressDialog progress(tr("Downloading disk 1 of 4…"), tr("Cancel"),
                              0, 400, this);
@@ -517,9 +544,6 @@ void MainWindow::downloadFromInternetArchive() {
         return;
     }
 
-    const QString destRoot =
-        QStandardPaths::writableLocation(QStandardPaths::AppDataLocation)
-        + QStringLiteral("/eob3");
     for (const ArjEntry& e : entries) {
         const QString name = QString::fromLatin1(e.name);
         // Trust boundary: plain filenames only — no separators, no escapes.

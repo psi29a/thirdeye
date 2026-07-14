@@ -830,11 +830,16 @@ bool tryHandle(Context &ctx, const std::string &fn,
 		// ITEMS_00.BIN's CDESC records. Without this, all niche.W:contents /
 		// monster.W:carried / chest-contents references point at empty object
 		// slots, and the player finds no loot from any source. Chargen-created
-		// PC gear already lives at some of these slots; skip those. The step-4
-		// walk below then serializes both PC and world items uniformly.
+		// PC gear already lives at some of these slots; skip those. Only ITEM
+		// subclasses (class 1371) -- ITEMS_00.BIN also carries PC records
+		// (class 1369) at slots 32..41 that must not clobber the chargen party;
+		// slot 15 is reserved for our entities singleton.
+		constexpr uint16_t kItemsBaseCls = 1371;
 		int worldItems = THIRDEYE::savegame::loadAreaInstances(
 		    saveDir,
 		    [&](int slot, uint16_t cls, const std::vector<uint8_t> &data) {
+			    if (slot == 15) return;
+			    if (!ctx.objects.isSubclassOf(cls, kItemsBaseCls)) return;
 			    if (ctx.objects.classOf(slot) != 0xFFFF)
 				    return; // chargen-owned; keep the live one
 			    try {
@@ -847,7 +852,7 @@ bool tryHandle(Context &ctx, const std::string &fn,
 		    },
 		    /*firstSlot=*/15, /*lastSlot=*/999);
 		rt() << "  [write_initial_tempfiles: pre-created " << worldItems
-		     << " world objects from ITEMS_00.BIN]" << std::endl;
+		     << " world items from ITEMS_00.BIN]" << std::endl;
 
 		// Step 4 -- truncate at kItemStreamOff and append a fresh item stream.
 		// Walk the entity range (indices below kNumEntities); every live entity
@@ -1067,13 +1072,22 @@ bool tryHandle(Context &ctx, const std::string &fn,
 			// niches, monsters, and containers reference. Older ITEMS.TMP
 			// files (written before write_initial_tempfiles pre-created them)
 			// don't have any, so this loads them from the pristine ITEMS_00.BIN.
-			// Slots already live (chargen PCs, ITEMS.TMP items) win.
-			if (wantContinue) {
+			// Only pull entries whose class is a subclass of `items` (1371):
+			// ITEMS_00.BIN has PC records (class 1369) at slots 32..41 too,
+			// and re-creating those clobbers the user's ITEMS.TMP-restored
+			// party -- that's how the "2 NPC party members vanished" bug shipped.
+			// Slot 15 (bare-hands weapon) is also skipped: our runtime pins
+			// the entities singleton there, and bare-hands lives elsewhere.
+			// THIRDEYE_NO_WORLDITEMS=1 disables this entirely (bisect helper).
+			if (wantContinue && std::getenv("THIRDEYE_NO_WORLDITEMS") == nullptr) {
+				constexpr uint16_t kItemsBaseCls = 1371;
 				auto saveDir = ctx.res.resourcePath().parent_path() / "SAVEGAME";
 				int gapFilled = THIRDEYE::savegame::loadAreaInstances(
 				    saveDir,
 				    [&](int slot, uint16_t cls,
 				        const std::vector<uint8_t> &data) {
+					    if (slot == 15) return; // reserved for entities singleton
+					    if (!ctx.objects.isSubclassOf(cls, kItemsBaseCls)) return;
 					    if (ctx.objects.classOf(slot) != 0xFFFF) return;
 					    try {
 						    ctx.objects.createProgram(slot, cls);
@@ -1086,7 +1100,7 @@ bool tryHandle(Context &ctx, const std::string &fn,
 				    },
 				    /*firstSlot=*/15, /*lastSlot=*/999);
 				rt() << "  [resume_level: gap-filled " << gapFilled
-				     << " world objects from ITEMS_00.BIN]" << std::endl;
+				     << " world items from ITEMS_00.BIN]" << std::endl;
 			}
 
 			// (3) PC patching from ITEMS.TMP. PC class static offsets verified

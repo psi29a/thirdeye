@@ -26,12 +26,17 @@ bool tryHandle(Context &ctx, const std::string &fn,
 		return true;
 	}
 	if (fn == "destroy_object" && args.size() >= 1) {
-		// RTOBJECT.C destroy_object: MSG_DESTROY, cancel the object's outstanding
-		// notify requests, release any subwindows it allocated.
-		int obj = static_cast<int>(args[0]);
-		VM::Value rtn = ctx.objects.destroyObject(obj);
-		ctx.events.cancelEntityRequests(obj);
-		ctx.events.releaseOwnedWindows(obj);
+		// RTOBJECT.C destroy_object: MSG_DESTROY, then cancel the object's
+		// outstanding notify requests. release_owned_windows(index) is NOT
+		// wired here yet -- a straight port broke the ALL ATTACK button
+		// (kernel destroys some transient object during "swap request" whose
+		// owner slot the button's subwindow was assigned to; reaping it
+		// killed the button on the second frame). The start-self-destroy
+		// resetInstances() sweep already reaps leaked windows at each menu
+		// cycle boundary, so the mid-game leak is bounded in practice.
+		// TODO: find the mis-owned subwindow before re-enabling this.
+		VM::Value rtn = ctx.objects.destroyObject(static_cast<int>(args[0]));
+		ctx.events.cancelEntityRequests(static_cast<int>(args[0]));
 		rt() << "  [destroyed]" << std::endl;
 		result = rtn;
 		return true;
