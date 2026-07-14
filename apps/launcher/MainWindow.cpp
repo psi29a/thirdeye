@@ -70,9 +70,14 @@ constexpr auto ARCHIVE_DOWNLOAD_BASE =
 // files present in both the archive and the target get overwritten (SAVEGAME's
 // _00/_01.BIN saves, SAVEGAME.DIR, the game's own .RES/.EXE/.DLL). Loose files
 // the archive doesn't touch (.TMP live state, custom saves) stay. Returns
-// true if the user consented (or the dir doesn't exist yet).
+// true if the user consented (or no install exists yet). The search is
+// RECURSIVE to match extractGameData's own EYE.RES discovery -- a plain zip
+// with a top-level folder installs to destRoot/<folder>/, and a re-install
+// over that layout must still prompt.
 bool confirmDestructiveInstall(QWidget* parent, const QString& destRoot) {
-    if (!QFileInfo::exists(destRoot + QStringLiteral("/") + GAME_FILE))
+    QDirIterator it(destRoot, {QString::fromLatin1(GAME_FILE)}, QDir::Files,
+                    QDirIterator::Subdirectories);
+    if (!it.hasNext())
         return true;
     const QMessageBox::StandardButton pick = QMessageBox::warning(
         parent, MainWindow::tr("Overwrite existing install?"),

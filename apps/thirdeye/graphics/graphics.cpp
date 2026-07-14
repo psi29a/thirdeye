@@ -102,6 +102,10 @@ static const SDL_Rect kCompassRect = { 0, 120, 116, 49 };
 // pixels anywhere in it reveal clean frame art, not compass ornament.
 static const SDL_Rect kMenuUnderlayRect = { 0, 120, 117, 56 };
 
+const SDL_Rect &GRAPHICS::Graphics::menuUnderlayRect() {
+	return kMenuUnderlayRect;
+}
+
 void GRAPHICS::Graphics::drawImage(std::vector<uint8_t> &bmp, uint16_t index,
 		int posX, int posY, bool transparency, int mirror, uint32_t cacheId,
 		int scale) {

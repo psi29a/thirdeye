@@ -213,6 +213,10 @@ public:
 	// Capture the pristine backdrop under the compass rect (call right after
 	// the HUD Backdrop bitmap draw, before the compass is stamped there).
 	void snapshotCompassUnderlay();
+	// Screen-space rect covered by the compass underlay (the spell-book menu
+	// window footprint). Shared source of truth for callers deciding whether
+	// a draw repaints the region (runtime's 190-draw capture gate).
+	static const SDL_Rect &menuUnderlayRect();
 	// fill_rectangle(x0,y0,x1,y1,color): flood an inclusive screen rectangle with a
 	// palette colour. The SOP screens use it to clear a panel before redrawing (e.g.
 	// the character-stats screen clears the equipment area first); also refreshes the

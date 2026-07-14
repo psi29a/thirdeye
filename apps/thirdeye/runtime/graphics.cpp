@@ -252,9 +252,11 @@ bool tryHandle(Context &ctx, const std::string &fn,
 			// to several pages) leaves the already-stamped compass on screen,
 			// and a blind capture would poison the underlay with compass
 			// pixels -- exactly the gold-shrapnel-in-the-arrow-glyphs bug.
+			const SDL_Rect &ur = GRAPHICS::Graphics::menuUnderlayRect();
 			if (table == 190 &&
 			    (!clipped ||
-			     (px0 <= 0 && py0 <= 120 && px1 >= 116 && py1 >= 175)))
+			     (px0 <= ur.x && py0 <= ur.y &&
+			      px1 >= ur.x + ur.w - 1 && py1 >= ur.y + ur.h - 1)))
 				ctx.gfx->snapshotCompassUnderlay();
 			// The compass snapshot rect (0, 120, 116, 49 in
 			// Graphics::kCompassRect) sits in the bottom-left HUD region. If
