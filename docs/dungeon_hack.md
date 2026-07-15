@@ -247,4 +247,128 @@ If you want, next can:
 - Create a mountable .img with the CUE referencing the ISO
 - Run a quick DOSBox test script to verify the demo/installation runs
 
+---
+
+Boot Architecture (AESOP/Thirdeye Integration)
+==============================================
+
+## DOS Launcher (HACK.BAT)
+
+The DOS batch file `HACK.BAT` reveals the correct boot sequence:
+
+```batch
+@echo off
+set F=0
+
+checksys 56 640              # System check: CPU 386+, 640KB RAM minimum
+if ERRORLEVEL 1 goto EXIT
+
+if exist savegame\settings.dat goto CHECKDEMO
+md savegame                   # Create save directory if needed
+
+:CHECKDEMO
+if NOT exist OPEN.RES goto CONTINUE
+aesop open opening            # BOOT: Load OPEN.RES, run "opening" object
+
+:CONTINUE
+aesop hack phase-one          # Load HACK.RES, run "phase-one" handler
+set F=1
+if ERRORLEVEL 3 goto CONTINUE
+if ERRORLEVEL 2 goto CHECKDEMO
+if ERRORLEVEL 1 goto EXIT
+cd savegame
+..\maze %1 %2                 # Run MAZE.EXE (game loop) with args
+cd ..
+if ERRORLEVEL 1 goto EXIT
+
+aesop hack phase-two          # Load HACK.RES, run "phase-two" handler (cleanup)
+if ERRORLEVEL 1 goto EXIT
+goto CONTINUE
+```
+
+### Boot Sequence Summary
+
+1. **System check**: CHECKSYS.EXE verifies 386+ CPU and 640KB RAM
+2. **Create save directory**: mkdir savegame (if first run)
+3. **Load OPEN.RES** (if present):
+   - Command: `aesop open opening`
+   - This boots the "opening" object from OPEN.RES (the intro/menu handler)
+   - OPEN.RES is optional (if not present, skips to HACK.RES directly)
+4. **Load HACK.RES**:
+   - Command: `aesop hack phase-one`
+   - Runs the "phase-one" handler from HACK.RES (initializes game state)
+   - Returns error code to control flow:
+     - 0: continue
+     - 1: exit
+     - 2: restart from CHECKDEMO (menu)
+     - 3+: loop CONTINUE
+5. **Run game loop**: MAZE.EXE (the compiled game engine/interpreter)
+6. **Post-game cleanup**: `aesop hack phase-two`
+   - Runs the "phase-two" handler from HACK.RES for shutdown
+
+### AESOP Command Semantics
+
+The batch uses `aesop <res-basename> <object-name>` which implies:
+- `aesop` is a launcher that loads a RES file and instantiates an object
+- The RES file is found as `<res-basename>.RES` (e.g., `open` → `OPEN.RES`, `hack` → `HACK.RES`)
+- The `<object-name>` is the boot object to instantiate and run
+- The `AESOP.EXE` in the HACK directory is likely the launcher executable
+
+---
+
+## AESOP RES Structure for Dungeon Hack
+
+### OPEN.RES (1.5 MB)
+
+**Boot object**: `"opening"` (resource 154)
+
+**Export dictionary**:
+- Object name: "opening"
+- Exported variables: "L:tick", "L:_update"
+- Message handlers:
+  - M:0 "create" (offset 1002) — initialization
+  - M:1 "destroy" (offset 1112) — cleanup
+  - M:3 "timer tick" (offset 142)
+  - M:5 "draw current screen" (offset 362)
+  - M:6 "draw background" (offset 282)
+  - M:9 "shutdown" (offset 467)
+  - M:10 "next scene" (offset 508)
+  - M:11 "Run Scene 0" (offset 552)
+  - M:12 "Run Scene 1" (offset 771)
+
+**Purpose**: Displays opening cinematic, menu screens, and transitions. If OPEN.RES exists, it's the entry point before HACK.RES.
+
+### HACK.RES (6.8 MB)
+
+**Boot objects**: At minimum, "phase-one" and "phase-two" handlers must exist
+
+**Known objects**:
+- `kernel` (resource 1972) — core game logic, party management, message routing
+  - Creates 4 infrastructure objects during initialization:
+    - "bare hands" (2118)
+    - "bracers of archery" (2274)
+    - "floor pit" (2864)
+    - "current stairs up" (2867)
+    - "current stairs down" (2870)
+  - Message handlers: move, step, enter game, combat, spell management, etc.
+
+**Purpose**: Game content, levels, NPCs, items, gameplay state machine.
+
+---
+
+## Implications for Thirdeye
+
+1. **Boot order**: Load OPEN.RES first (if present), then HACK.RES
+2. **Boot object**: Look for "opening" in OPEN.RES (not "start")
+3. **Multi-RES support**: Engine must support loading multiple RES files and switching between them
+4. **Object instantiation**: Implement `aesop <res> <object>` semantics:
+   - Parse resource basename → locate `.RES` file
+   - Instantiate object by name from export dictionary
+   - Set up message loop and event dispatch
+5. **Exit codes**: The AESOP launcher returns error codes to control program flow:
+   - Game returns exit code that HACK.BAT checks to decide next action
+   - Thirdeye should support similar semantics (return code → continue/retry/exit)
+
+---
+
 Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>
