@@ -1115,18 +1115,16 @@ bool THIRDEYE::Engine::runExternalProgram(const std::string &program,
 
 // Play a GFF cinematic (INTRO.GFF/FINALE.GFF/...) that lives beside the game's
 // .RES, reusing thirdeye's existing GFF player. Returns when the cinematic ends,
-// is skipped (ESC/Enter), or --skip-intro is set; closing the window throws
+// or is skipped (ESC/Enter); closing the window throws
 // QuitRequested to unwind the whole session. The boot then re-enters start, which
 // draws the menu over the final frame.
 void THIRDEYE::Engine::playCinematic(GRAPHICS::Graphics *gfx,
                                      RESOURCES::Resource &resource,
                                      const std::string &gffName,
                                      MIXER::Mixer &mixer) {
-	if (mSkipIntro) {
-		std::cout << "  [program chain: --skip-intro set; skipping " << gffName
-		          << "]" << std::endl;
-		return;
-	}
+	// --skip-intro only suppresses the boot-time auto-intro (handled via
+	// bootMode = MODE_INTR above); reaching here means the SOP explicitly
+	// launched a cinematic (menu "Introduction", cutscene, finale) -- play it.
 	std::filesystem::path gffPath =
 		resource.resourcePath().parent_path() / gffName;
 	if (!gfx || !std::filesystem::exists(gffPath)) {
