@@ -125,10 +125,12 @@ uint8_t *staticBytePtr(Context &ctx, VM::Value addr, uint32_t size);
 void pumpHost(GRAPHICS::Graphics &gfx, VM::EventSystem &events,
               VM::ObjectSystem &objects, RESOURCES::Resource &res);
 
-// printf-style substitution shared by print()/sprint(): fill %d/%u/%i, %s
-// and %% in `fmt` from `args[start..]`. %s args are addresses (read via vm).
+// printf-style substitution shared by print()/sprint(): fill %d/%u/%i, %c,
+// %s and %% in `fmt` from `args[start..]`. Per GRAPHICS.C vsprint, %s args
+// are string-resource numbers ("S:"-tagged), %a args are byte pointers;
+// tagged VM addresses also read as strings for %s.
 std::string formatSop(const std::string &fmt, const std::vector<VM::Value> &args,
-                      size_t start, VM::Interpreter &vm);
+                      size_t start, Context &ctx);
 
 // --- Category dispatch entries -------------------------------------------
 //

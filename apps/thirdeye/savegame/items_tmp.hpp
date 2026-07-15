@@ -41,10 +41,17 @@ struct ItemsTmp {
 		int16_t  objectIndex = -1; // +0   live SOP object id (32..)
 		int16_t  classNumber = -1; // +2   1369 = "PC"
 
-		// Backpack ids @+96..+125 (14 slots × 2 bytes) -- see equip[] for the
-		// worn block. (Backpack ids correspond to PC.W:inventory[0..13];
+		// Spell-menu level state @+95..+98: B:sp_lvl[2] (PC+77) and
+		// B:mn_lvl[2] (PC+79), one byte per caster type (0=mage, 1=cleric).
+		// DOS saves carry 1s; without them the camp spell menu opens at
+		// "Level 0: 0 of 0 Available".
+		uint8_t  spLvl[2] = {1, 1};
+		uint8_t  mnLvl[2] = {1, 1};
+
+		// Backpack ids @+99..+126 (14 slots × 2 bytes, verbatim statics+18:
+		// PC.W:inventory[0..13] @81) -- see equip[] for the worn block.
 		// -1 = empty. Must be restored: a zero-filled slot reads as "item
-		// object 0" and the inventory click handler happily picks it up.)
+		// object 0" and the inventory click handler happily picks it up.
 		static constexpr int kBackpackSlots = 14;
 		int16_t  backpack[kBackpackSlots] = {-1,-1,-1,-1,-1,-1,-1,
 		                                     -1,-1,-1,-1,-1,-1,-1};

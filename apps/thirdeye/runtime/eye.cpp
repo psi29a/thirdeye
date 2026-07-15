@@ -14,6 +14,8 @@
 #include <cstdlib>
 #include <cstring>
 #include <filesystem>
+#include <algorithm>
+#include <array>
 #include <fstream>
 #include <iterator>
 #include <ostream> // for rt() << ... << std::endl (internal.hpp only fwd-decls)
@@ -52,6 +54,279 @@ void ensureSlotNameHook(VM::ObjectSystem &objects) {
 		return gSlotNameBuf + off;
 	});
 }
+// Serialize the live party + item objects into the fixed ITEMS layout that
+// parseItemsTmp/parseItemStream read back. This is the round-trippable writer
+// (unlike saveRange's CDESC dump, which does NOT round-trip and is why the
+// save/suspend item halves were quarantined). Kernel-state bytes 0..676 are
+// scaffolded from the pristine ITEMS_00.BIN; the party position is either kept
+// from that scaffold or overwritten from the live kernel.
+//
+//   preInstantiateWorld: bootstrap the world item pool (slots 15..999) from
+//     ITEMS_00.BIN into live objects BEFORE serializing. On only for the
+//     initial (chargen) party -- mid-game the world is already live, and
+//     re-creating it would resurrect items the player already consumed.
+//   writeLivePosition: overwrite file bytes 252..257 (party x/y/fdir/level +
+//     bar_graphs/sounds option bytes) with the live kernel statics @243..248.
+//     Off for the initial party (the scaffold's graveyard cell is correct);
+//     on for real mid-game saves.
+//
+// Returns true iff ITEMS bytes were written to dstPath. `outPcs`/`outItems`
+// receive the record counts for the caller's trace line.
+static bool writeItemsFixed(Context &ctx, const std::filesystem::path &dstPath,
+                            bool preInstantiateWorld, bool writeLivePosition,
+                            int &outPcs, int &outItems, int &outWorld) {
+	auto saveDir = ctx.res.resourcePath().parent_path() / "SAVEGAME";
+	outPcs = outItems = outWorld = 0;
+
+	// Never overwrite a save with an empty party: suspend_game fires before
+	// launching sub-programs, and if that ever happens with no live PCs (e.g.
+	// a new-game path before the party exists) we'd strand a 0-PC ITEMS.TMP
+	// that boots straight to the death screen. No party -> leave the file be.
+	{
+		int live = 0;
+		for (int pc : ctx.objects.objectsOfClass(1369)) { (void) pc; ++live; }
+		if (live == 0) return false;
+	}
+
+	// File-format offsets (verified against items_tmp.cpp's reader).
+	constexpr size_t kPcRecordBase = 677;
+	constexpr size_t kPcStride     = 627;
+	constexpr size_t kMaxRecords   = 10;
+	constexpr size_t kItemStreamOff = kPcRecordBase + kMaxRecords * kPcStride;
+
+	// PC class statics offsets (mirror items_tmp.cpp).
+	constexpr uint16_t kPcClass = 1369;
+	constexpr uint16_t kItemsBase = 1371; // every item subclasses 1371
+	constexpr uint32_t kPcSpLvlOff  = 77;
+	constexpr uint32_t kPcMnLvlOff  = 79;
+	constexpr uint32_t kPcInvOff    = 81;
+	constexpr uint32_t kPcQuiverOff = 133, kPcArrowsOff = 135;
+	constexpr uint32_t kPcNameOff = 137, kPcNameLen = 20;
+	constexpr uint32_t kPcRaceOff = 157, kPcClassesOff = 158;
+	constexpr uint32_t kPcPortraitOff = 159, kPcPCstatOff = 161;
+	constexpr uint32_t kPcAlignOff = 162, kPcLevelsOff = 163;
+	constexpr uint32_t kPcLostLvlsOff = 166, kPcLostHpOff = 169;
+	constexpr uint32_t kPcHpCurOff = 171, kPcHpMaxOff = 173, kPcHbonOff = 175;
+	constexpr uint32_t kPcFoodOff = 177, kPcXpOff = 179;
+	constexpr uint32_t kPcStrOff = 191, kPcExcStrOff = 192, kPcIntOff = 193;
+	constexpr uint32_t kPcWisOff = 194, kPcDexOff = 195, kPcConOff = 196;
+	constexpr uint32_t kPcChaOff = 197, kPcSparkleOff = 198;
+	constexpr uint32_t kPcMagicEffOff = 199, kPcTigerOff = 203, kPcLostStrOff = 204;
+	constexpr uint32_t kPcSpellCntOff = 209, kPcSpellStatOff = 409;
+	constexpr uint32_t kPcSpellLen = 200;
+
+	// File-record offsets within a 627-byte PC record.
+	constexpr size_t kFObjIndex = 0, kFClass = 2, kFConst619 = 6;
+	constexpr size_t kFSpLvl = 95, kFMnLvl = 97;
+	constexpr size_t kFBackpack = 99, kFEquip = 127;
+	constexpr size_t kFArrowsType = 151, kFArrowsQty = 153;
+	constexpr size_t kFName = 155, kFRace = 175, kFClasses = 176;
+	constexpr size_t kFPortrait = 177, kFPCstat = 179, kFAlign = 180;
+	constexpr size_t kFLevels = 181, kFLostLvls = 184, kFLostHp = 187;
+	constexpr size_t kFHpCur = 189, kFHpMax = 191, kFHbon = 193, kFFood = 195;
+	constexpr size_t kFXp = 197, kFStr = 209, kFStrPct = 210;
+	constexpr size_t kFInt = 211, kFWis = 212, kFDex = 213, kFCon = 214;
+	constexpr size_t kFCha = 215, kFSparkle = 216, kFMagicEff = 217;
+	constexpr size_t kFTiger = 221, kFLostStr = 222;
+	constexpr size_t kFSpellCnt = 227, kFSpellStat = 427;
+
+	auto putU16 = [](uint8_t *p, uint16_t v) {
+		p[0] = v & 0xFF; p[1] = (v >> 8) & 0xFF;
+	};
+	auto putI16 = [&](uint8_t *p, int16_t v) {
+		putU16(p, static_cast<uint16_t>(v));
+	};
+	auto putU32 = [](uint8_t *p, uint32_t v) {
+		p[0] = v & 0xFF; p[1] = (v >> 8) & 0xFF;
+		p[2] = (v >> 16) & 0xFF; p[3] = (v >> 24) & 0xFF;
+	};
+	auto readPcU8 = [&](int pc, uint32_t off) -> uint8_t {
+		uint8_t *p = ctx.objects.classStaticPtr(pc, kPcClass, off, 1);
+		return p ? *p : 0;
+	};
+	auto readPcU16 = [&](int pc, uint32_t off) -> uint16_t {
+		uint8_t *p = ctx.objects.classStaticPtr(pc, kPcClass, off, 2);
+		return p ? static_cast<uint16_t>(p[0] | (p[1] << 8)) : 0;
+	};
+	auto readPcU32 = [&](int pc, uint32_t off) -> uint32_t {
+		uint8_t *p = ctx.objects.classStaticPtr(pc, kPcClass, off, 4);
+		return p ? static_cast<uint32_t>(p[0]) | (p[1] << 8u)
+		           | (uint32_t(p[2]) << 16) | (uint32_t(p[3]) << 24) : 0;
+	};
+
+	// Step 1 -- seed scaffold from ITEMS_00.BIN (kernel-state bytes 0..676).
+	std::vector<uint8_t> buf;
+	bool scaffoldOk = false;
+	{
+		std::ifstream src(saveDir / "ITEMS_00.BIN", std::ios::binary);
+		if (src) {
+			buf.assign(std::istreambuf_iterator<char>(src),
+			           std::istreambuf_iterator<char>());
+			scaffoldOk = !buf.empty();
+		}
+	}
+	if (!scaffoldOk) buf.assign(kItemStreamOff, 0);
+	if (buf.size() < kItemStreamOff) buf.resize(kItemStreamOff, 0);
+
+	// Step 2 -- party position. Either keep the scaffold's cell (fresh party)
+	// or copy the live kernel's @243..248 into file @252..257 (mid-game save).
+	if (writeLivePosition) {
+		constexpr uint16_t kKernelClass = 1382;
+		constexpr uint32_t kPartyX = 243; // x,y,fdir,level,bar_graphs,sounds
+		constexpr size_t kPosOff = 252;
+		int kernel = ctx.objects.firstObjectOfClass(kKernelClass);
+		if (kernel >= 0)
+			for (uint32_t k = 0; k < 6; ++k)
+				if (uint8_t *p = ctx.objects.classStaticPtr(kernel, kKernelClass,
+				                                            kPartyX + k, 1))
+					buf[kPosOff + k] = *p;
+	}
+
+	// Step 3 -- write live PC records. The loader reads records sequentially
+	// and maps file slot -> party position (slots 0..5 register in the kernel's
+	// player[] array; 6..9 are reserve roster). So the FILE-SLOT ORDER must be
+	// the party order -- NOT PC.W:num, which is only set for party members and
+	// leaves roster PCs at a stale 0 (that collision put a roster PC in slot 0,
+	// displacing the party leader). Build the order from the kernel's player[]
+	// array, then append any live PC objects not in the party.
+	std::fill(buf.begin() + kPcRecordBase, buf.begin() + kItemStreamOff, 0u);
+	std::array<int, kMaxRecords> slotPc;
+	slotPc.fill(-1);
+	{
+		// 1. Party members take their kernel player[] index -- that is exactly
+		//    the party position the loader will re-register them into.
+		constexpr uint16_t kKernelClass = 1382;
+		constexpr uint32_t kPlayerOff = 229, kPlayerSlots = 6;
+		int kernel = ctx.objects.firstObjectOfClass(kKernelClass);
+		if (kernel >= 0)
+			for (uint32_t i = 0; i < kPlayerSlots && i < kMaxRecords; ++i)
+				if (uint8_t *p = ctx.objects.classStaticPtr(
+				        kernel, kKernelClass, kPlayerOff + i * 2, 2)) {
+					int16_t oi = static_cast<int16_t>(p[0] | (p[1] << 8));
+					if (oi > 0) slotPc[i] = oi;
+				}
+		// 2. Remaining live PCs (reserve roster; or, on the fresh-chargen path
+		//    where player[] isn't populated yet, the whole party) go to their
+		//    PC.W:num slot when free, else the next free slot. This keeps the
+		//    proven chargen layout (PC_num 0..5) and stops roster PCs whose
+		//    PC_num is a stale 0 from colliding into an occupied party slot.
+		auto place = [&](int pc, uint32_t want) {
+			if (want < kMaxRecords && slotPc[want] == -1) { slotPc[want] = pc; return; }
+			for (size_t s = 0; s < kMaxRecords; ++s)
+				if (slotPc[s] == -1) { slotPc[s] = pc; return; }
+		};
+		for (int pc : ctx.objects.objectsOfClass(kPcClass)) {
+			bool placed = false;
+			for (int s : slotPc) if (s == pc) { placed = true; break; }
+			if (!placed) place(pc, readPcU8(pc, /*PC_num*/ 0));
+		}
+	}
+	for (size_t slot = 0; slot < kMaxRecords; ++slot) {
+		int pc = slotPc[slot];
+		if (pc < 0) continue;
+		uint8_t *rec = &buf[kPcRecordBase + slot * kPcStride];
+		putU16(rec + kFObjIndex, static_cast<uint16_t>(pc));
+		putU16(rec + kFClass,    kPcClass);
+		putU16(rec + kFConst619, 619);
+		for (int s = 0; s < 12; ++s)
+			putU16(rec + kFEquip + s * 2,
+			       readPcU16(pc, kPcInvOff + (14 + s) * 2));
+		for (int k = 0; k < 2; ++k) {
+			rec[kFSpLvl + k] = readPcU8(pc, kPcSpLvlOff + k);
+			rec[kFMnLvl + k] = readPcU8(pc, kPcMnLvlOff + k);
+		}
+		for (int s = 0; s < 14; ++s)
+			putU16(rec + kFBackpack + s * 2,
+			       readPcU16(pc, kPcInvOff + s * 2));
+		putI16(rec + kFArrowsType, static_cast<int16_t>(readPcU16(pc, kPcQuiverOff)));
+		putI16(rec + kFArrowsQty,  static_cast<int16_t>(readPcU16(pc, kPcArrowsOff)));
+		if (uint8_t *np = ctx.objects.classStaticPtr(pc, kPcClass, kPcNameOff,
+		                                              kPcNameLen))
+			std::memcpy(rec + kFName, np, kPcNameLen);
+		rec[kFRace]    = readPcU8(pc, kPcRaceOff);
+		rec[kFClasses] = readPcU8(pc, kPcClassesOff);
+		putU16(rec + kFPortrait, readPcU16(pc, kPcPortraitOff));
+		rec[kFPCstat]  = readPcU8(pc, kPcPCstatOff);
+		rec[kFAlign]   = readPcU8(pc, kPcAlignOff);
+		for (int k = 0; k < 3; ++k) {
+			rec[kFLevels + k]   = readPcU8(pc, kPcLevelsOff + k);
+			rec[kFLostLvls + k] = readPcU8(pc, kPcLostLvlsOff + k);
+			putU32(rec + kFXp + k * 4, readPcU32(pc, kPcXpOff + k * 4));
+		}
+		putI16(rec + kFLostHp, static_cast<int16_t>(readPcU16(pc, kPcLostHpOff)));
+		putI16(rec + kFHpCur,  static_cast<int16_t>(readPcU16(pc, kPcHpCurOff)));
+		putI16(rec + kFHpMax,  static_cast<int16_t>(readPcU16(pc, kPcHpMaxOff)));
+		putI16(rec + kFHbon,   static_cast<int16_t>(readPcU16(pc, kPcHbonOff)));
+		putI16(rec + kFFood,   static_cast<int16_t>(readPcU16(pc, kPcFoodOff)));
+		rec[kFStr]    = readPcU8(pc, kPcStrOff);
+		rec[kFStrPct] = readPcU8(pc, kPcExcStrOff);
+		rec[kFInt]    = readPcU8(pc, kPcIntOff);
+		rec[kFWis]    = readPcU8(pc, kPcWisOff);
+		rec[kFDex]    = readPcU8(pc, kPcDexOff);
+		rec[kFCon]    = readPcU8(pc, kPcConOff);
+		rec[kFCha]    = readPcU8(pc, kPcChaOff);
+		rec[kFSparkle] = readPcU8(pc, kPcSparkleOff);
+		putU32(rec + kFMagicEff, readPcU32(pc, kPcMagicEffOff));
+		rec[kFTiger]   = readPcU8(pc, kPcTigerOff);
+		rec[kFLostStr] = readPcU8(pc, kPcLostStrOff);
+		if (uint8_t *sp = ctx.objects.classStaticPtr(pc, kPcClass,
+		                                              kPcSpellCntOff, kPcSpellLen))
+			std::memcpy(rec + kFSpellCnt, sp, kPcSpellLen);
+		if (uint8_t *sp = ctx.objects.classStaticPtr(pc, kPcClass,
+		                                              kPcSpellStatOff, kPcSpellLen))
+			std::memcpy(rec + kFSpellStat, sp, kPcSpellLen);
+		++outPcs;
+	}
+
+	// Step 3.5 -- initial party only: pre-instantiate the world item pool from
+	// ITEMS_00.BIN so niche/monster/chest references resolve (and get baked
+	// into the item stream below). NEVER during a mid-game save: the live-slot
+	// guard skips occupied slots, but a slot freed by a consumed item would be
+	// re-created here, resurrecting loot the player already used.
+	if (preInstantiateWorld) {
+		outWorld = THIRDEYE::savegame::loadAreaInstances(
+		    saveDir,
+		    [&](int slot, uint16_t cls, const std::vector<uint8_t> &data) {
+			    if (slot == 15) return; // entities singleton
+			    if (!ctx.objects.isSubclassOf(cls, kItemsBase)) return;
+			    if (ctx.objects.classOf(slot) != 0xFFFF) return; // keep live
+			    try {
+				    ctx.objects.createProgram(slot, cls);
+				    if (!data.empty())
+					    if (uint8_t *sp = ctx.objects.staticsPtr(
+					            slot, 0, static_cast<uint32_t>(data.size())))
+						    std::memcpy(sp, data.data(), data.size());
+			    } catch (const std::exception &) {}
+		    },
+		    /*firstSlot=*/15, /*lastSlot=*/999);
+	}
+
+	// Step 4 -- truncate at the stream offset and append every live item object
+	// (any entity-range slot whose class subclasses `items` 1371).
+	buf.resize(kItemStreamOff);
+	for (int i = 0; i < VM::ObjectSystem::kNumEntities; ++i) {
+		uint16_t cls = ctx.objects.classOf(i);
+		if (cls == 0xFFFF) continue;
+		if (!ctx.objects.isSubclassOf(cls, kItemsBase)) continue;
+		uint32_t blockSize = ctx.objects.instanceStaticSize(cls);
+		size_t recOff = buf.size();
+		buf.resize(recOff + 4 + blockSize + 4, 0);
+		putU16(&buf[recOff],     static_cast<uint16_t>(i));
+		putU16(&buf[recOff + 2], cls);
+		if (blockSize > 0)
+			if (uint8_t *sp = ctx.objects.staticsPtr(i, 0, blockSize))
+				std::memcpy(&buf[recOff + 4], sp, blockSize);
+		++outItems;
+	}
+
+	// Step 5 -- write.
+	std::ofstream out(dstPath, std::ios::binary | std::ios::trunc);
+	if (!out) return false;
+	out.write(reinterpret_cast<const char *>(buf.data()),
+	          static_cast<std::streamsize>(buf.size()));
+	return !!out;
+}
+
 } // namespace
 
 bool tryHandle(Context &ctx, const std::string &fn,
@@ -287,21 +562,18 @@ bool tryHandle(Context &ctx, const std::string &fn,
 		std::snprintf(nn, sizeof(nn), "%02d", idx);
 		std::snprintf(ll, sizeof(ll), "%02d", lvl);
 		auto dir = ctx.res.resourcePath().parent_path() / "SAVEGAME";
-		// QUARANTINED: saveRange's ITEMS output (raw CDESC statics dump) does
-		// NOT round-trip through parseItemsTmp (fixed-layout reader) -- a
-		// save_game wrote an unreadable ITEMS_01.BIN over the shipped Quick
-		// Start Party save (July 2026): next boot found 0 PCs and showed the
-		// party-death screen. Until the ITEMS serializer matches the format
-		// the loader reads (roadmap Phase 3), write the items half to a
-		// .thirdeye sidecar so a real save slot can never be destroyed.
-		// Best-effort sidecar: its failure must not gate the real LVL write.
-		THIRDEYE::savegame::saveRange(
-		    ctx.objects,
-		    dir / ("ITEMS_" + std::string(nn) + ".BIN.thirdeye"), 0, 999);
-		std::cerr << "[save_game: ITEMS_" << nn << ".BIN NOT written (items "
-		             "serializer doesn't round-trip yet; wrote .thirdeye "
-		             "sidecar) -- restore uses the existing slot file]\n";
-		bool ok = THIRDEYE::savegame::saveRange(
+		// ITEMS half: serialize live party + items into the fixed layout the
+		// loader reads (writeItemsFixed round-trips; the old saveRange CDESC
+		// dump did not, and once wrote an unreadable ITEMS_01.BIN -- see git
+		// history). writeLivePosition captures the party's current cell/facing;
+		// preInstantiateWorld is OFF (mid-game the world pool is already live,
+		// and re-seeding it from ITEMS_00.BIN would resurrect consumed items).
+		int spcs = 0, sitems = 0, sworld = 0;
+		bool itemsOk = writeItemsFixed(
+		    ctx, dir / ("ITEMS_" + std::string(nn) + ".BIN"),
+		    /*preInstantiateWorld=*/false, /*writeLivePosition=*/true,
+		    spcs, sitems, sworld);
+		bool ok = itemsOk && THIRDEYE::savegame::saveRange(
 		              ctx.objects,
 		              dir / ("LVL" + std::string(ll) + "_" + nn + ".BIN"),
 		              1000, 1999);
@@ -321,11 +593,10 @@ bool tryHandle(Context &ctx, const std::string &fn,
 			// written every level yet); a save with the current level +
 			// items intact is still restorable.
 		}
-		// Automap sidecar: write MAPS.TMP + clone to MAPS_nn.BIN. Ours to own
-		// (separate file, no CDESC involvement) so the ITEMS.TMP round-trip
-		// quarantine above doesn't affect it. Save loss here is cosmetic
-		// (worst case the map re-fogs on load), so failures don't gate ok --
-		// but they are logged so a full-disk doesn't silently strand old maps.
+		// Automap sidecar: write MAPS.TMP + clone to MAPS_nn.BIN. Separate
+		// file, no bearing on the game save. Loss here is cosmetic (worst case
+		// the map re-fogs on load), so failures don't gate ok -- but they are
+		// logged so a full-disk doesn't silently strand old maps.
 		bool mapsOk = THIRDEYE::automap::saveTo(dir / "MAPS.TMP");
 		mapsOk = THIRDEYE::automap::saveTo(
 		             dir / ("MAPS_" + std::string(nn) + ".BIN")) && mapsOk;
@@ -333,9 +604,9 @@ bool tryHandle(Context &ctx, const std::string &fn,
 			std::cerr << "[save_game: automap MAPS write failed (map may "
 			             "re-fog on restore); game save unaffected]\n";
 		rt() << "  [save_game slot " << idx << " lvl " << lvl
-		     << (ok ? " OK" : " FAILED") << " (+" << copied
-		     << " LVL??.TMP copies, maps " << (mapsOk ? "OK" : "FAILED")
-		     << ")]" << std::endl;
+		     << (ok ? " OK" : " FAILED") << " (" << spcs << " PCs, " << sitems
+		     << " items; +" << copied << " LVL??.TMP copies, maps "
+		     << (mapsOk ? "OK" : "FAILED") << ")]" << std::endl;
 		result = ok ? 1 : 0;
 		return true;
 	}
@@ -345,12 +616,15 @@ bool tryHandle(Context &ctx, const std::string &fn,
 	if (fn == "suspend_game" && args.size() >= 1) {
 		int lvl = static_cast<int>(args[0]);
 		auto dir = ctx.res.resourcePath().parent_path() / "SAVEGAME";
-		// Items half quarantined -- same round-trip gap as save_game above
-		// (this is what smeared an unreadable ITEMS.TMP over the live one on
-		// quit). LVLxx.TMP below round-trips fine (loadLevelObjects reads the
-		// CDESC stream saveRange writes) and keeps doors/kills persistent.
-		bool ok = THIRDEYE::savegame::saveRange(
-		    ctx.objects, dir / "ITEMS.TMP.thirdeye", 0, 999);
+		// Items half: flush live party + items to ITEMS.TMP in the fixed
+		// round-trippable layout (writeItemsFixed), so "Continue the Quest"
+		// resumes real progress -- position, HP, inventory, memorized spells.
+		// preInstantiateWorld OFF (world already live; re-seeding would revive
+		// consumed items). LVLxx.TMP round-trips via saveRange's CDESC stream.
+		int spcs = 0, sitems = 0, sworld = 0;
+		bool ok = writeItemsFixed(ctx, dir / "ITEMS.TMP",
+		                          /*preInstantiateWorld=*/false,
+		                          /*writeLivePosition=*/true, spcs, sitems, sworld);
 		if (lvl >= 1 && lvl <= 14) {
 			char ll[3];
 			std::snprintf(ll, sizeof(ll), "%02d", lvl);
@@ -360,7 +634,8 @@ bool tryHandle(Context &ctx, const std::string &fn,
 		}
 		bool mapsOk = THIRDEYE::automap::saveTo(dir / "MAPS.TMP");
 		rt() << "  [suspend_game lvl " << lvl << (ok ? " OK" : " FAILED")
-		     << " (maps " << (mapsOk ? "OK" : "FAILED") << ")]" << std::endl;
+		     << " (" << spcs << " PCs, " << sitems << " items; maps "
+		     << (mapsOk ? "OK" : "FAILED") << ")]" << std::endl;
 		result = 0;
 		return true;
 	}
@@ -668,234 +943,17 @@ bool tryHandle(Context &ctx, const std::string &fn,
 	if (fn == "write_initial_tempfiles") {
 		auto saveDir = ctx.res.resourcePath().parent_path() / "SAVEGAME";
 		int lvlCopied = THIRDEYE::savegame::restoreLevels(saveDir, 0);
-
-		// Step 1 -- seed scaffold from ITEMS_00.BIN (gives us bytes 0..676 of
-		// kernel statics so resume_level's eventual unknown reads land on
-		// reasonable defaults).
-		auto srcPath = saveDir / "ITEMS_00.BIN";
-		auto dstPath = saveDir / "ITEMS.TMP";
-		std::ifstream src(srcPath, std::ios::binary);
-		std::vector<uint8_t> buf;
-		bool scaffoldOk = false;
-		if (src) {
-			buf.assign(std::istreambuf_iterator<char>(src),
-			           std::istreambuf_iterator<char>());
-			scaffoldOk = !buf.empty();
-		}
-		if (!scaffoldOk) buf.assign(677 + 10 * 627, 0);
-
-		// File-format offsets verified against items_tmp.cpp's reader.
-		constexpr size_t kPosOff       = 252;
-		constexpr size_t kPcRecordBase = 677;
-		constexpr size_t kPcStride     = 627;
-		constexpr size_t kMaxRecords   = 10;
-		constexpr size_t kItemStreamOff = kPcRecordBase + kMaxRecords * kPcStride;
-
-		// PC class statics offsets (mirror items_tmp.cpp).
-		constexpr uint16_t kPcClass = 1369;
-		constexpr uint16_t kItemsBase = 1371; // every item subclasses 1371
-		constexpr uint32_t kPcNumOff    = 0;   // W:num (party slot)
-		constexpr uint32_t kPcInvOff    = 81;  // W:inventory[26]
-		constexpr uint32_t kPcQuiverOff = 133, kPcArrowsOff = 135;
-		constexpr uint32_t kPcNameOff = 137, kPcNameLen = 20;
-		constexpr uint32_t kPcRaceOff = 157, kPcClassesOff = 158;
-		constexpr uint32_t kPcPortraitOff = 159, kPcPCstatOff = 161;
-		constexpr uint32_t kPcAlignOff = 162, kPcLevelsOff = 163;
-		constexpr uint32_t kPcLostLvlsOff = 166, kPcLostHpOff = 169;
-		constexpr uint32_t kPcHpCurOff = 171, kPcHpMaxOff = 173, kPcHbonOff = 175;
-		constexpr uint32_t kPcFoodOff = 177, kPcXpOff = 179; // L[3]
-		constexpr uint32_t kPcStrOff = 191, kPcExcStrOff = 192, kPcIntOff = 193;
-		constexpr uint32_t kPcWisOff = 194, kPcDexOff = 195, kPcConOff = 196;
-		constexpr uint32_t kPcChaOff = 197, kPcSparkleOff = 198;
-		constexpr uint32_t kPcMagicEffOff = 199, kPcTigerOff = 203, kPcLostStrOff = 204;
-		constexpr uint32_t kPcSpellCntOff = 209, kPcSpellStatOff = 409;
-		constexpr uint32_t kPcSpellLen = 200;
-
-		// File-record offsets within a 627-byte PC record (also from the reader).
-		constexpr size_t kFObjIndex = 0, kFClass = 2, kFConst619 = 6;
-		constexpr size_t kFBackpack = 96, kFEquip = 127;
-		constexpr size_t kFArrowsType = 151, kFArrowsQty = 153;
-		constexpr size_t kFName = 155, kFRace = 175, kFClasses = 176;
-		constexpr size_t kFPortrait = 177, kFPCstat = 179, kFAlign = 180;
-		constexpr size_t kFLevels = 181, kFLostLvls = 184, kFLostHp = 187;
-		constexpr size_t kFHpCur = 189, kFHpMax = 191, kFHbon = 193, kFFood = 195;
-		constexpr size_t kFXp = 197, kFStr = 209, kFStrPct = 210;
-		constexpr size_t kFInt = 211, kFWis = 212, kFDex = 213, kFCon = 214;
-		constexpr size_t kFCha = 215, kFSparkle = 216, kFMagicEff = 217;
-		constexpr size_t kFTiger = 221, kFLostStr = 222;
-		constexpr size_t kFSpellCnt = 227, kFSpellStat = 427;
-
-		auto putU16 = [](uint8_t *p, uint16_t v) {
-			p[0] = v & 0xFF; p[1] = (v >> 8) & 0xFF;
-		};
-		auto putI16 = [&](uint8_t *p, int16_t v) {
-			putU16(p, static_cast<uint16_t>(v));
-		};
-		auto putU32 = [](uint8_t *p, uint32_t v) {
-			p[0] = v & 0xFF; p[1] = (v >> 8) & 0xFF;
-			p[2] = (v >> 16) & 0xFF; p[3] = (v >> 24) & 0xFF;
-		};
-		auto readPcU8 = [&](int pc, uint32_t off) -> uint8_t {
-			uint8_t *p = ctx.objects.classStaticPtr(pc, kPcClass, off, 1);
-			return p ? *p : 0;
-		};
-		auto readPcU16 = [&](int pc, uint32_t off) -> uint16_t {
-			uint8_t *p = ctx.objects.classStaticPtr(pc, kPcClass, off, 2);
-			return p ? static_cast<uint16_t>(p[0] | (p[1] << 8)) : 0;
-		};
-		auto readPcU32 = [&](int pc, uint32_t off) -> uint32_t {
-			uint8_t *p = ctx.objects.classStaticPtr(pc, kPcClass, off, 4);
-			return p ? static_cast<uint32_t>(p[0]) | (p[1] << 8u)
-			           | (uint32_t(p[2]) << 16) | (uint32_t(p[3]) << 24) : 0;
-		};
-
-		// Step 2 -- party position.
-		// The scaffold ITEMS_00.BIN we seeded buf from already contains the
-		// canonical starting cell -- file offsets 252..255 = (x=7, y=24,
-		// fdir=1, lvl=3) on a fresh EOB3 install. This is where the shipped
-		// Quick Start Party lives, and it's the same cell a freshly-rolled
-		// party should appear in: the graveyard entrance (LVL03's "graveyard
-		// to forest" area, the actual narrative start of the game). The
-		// mausoleum on LVL01 is NOT the beginning; it's a later location.
-		// We deliberately do NOT overwrite buf[252..255] -- the scaffold's
-		// position is the right answer. We also leave the live kernel alone
-		// because the kernel is created later in the boot (start.enter_game
-		// -> create_program(kernel)) and its statics start at 0; resume_level
-		// will seed them from this file in its own pass.
-		(void) kPosOff; // (intentionally unused now; the scaffold carries pos)
-
-		// Step 3 -- write live PC records. Zero-fill the 10-slot block first
-		// so empty slots are recognisably empty (classNumber == 0).
-		if (buf.size() < kItemStreamOff) buf.resize(kItemStreamOff, 0);
-		std::fill(buf.begin() + kPcRecordBase, buf.begin() + kItemStreamOff, 0u);
-		int pcsWritten = 0;
-		for (int pc : ctx.objects.objectsOfClass(kPcClass)) {
-			uint32_t slot = readPcU8(pc, kPcNumOff);
-			if (slot >= kMaxRecords) continue;
-			uint8_t *rec = &buf[kPcRecordBase + slot * kPcStride];
-			putU16(rec + kFObjIndex, static_cast<uint16_t>(pc));
-			putU16(rec + kFClass,    kPcClass);
-			putU16(rec + kFConst619, 619); // constant from the format doc
-			// equip[12] @+127: W:inventory[14..25].
-			for (int s = 0; s < 12; ++s)
-				putU16(rec + kFEquip + s * 2,
-				       readPcU16(pc, kPcInvOff + (14 + s) * 2));
-			// backpack: W:inventory[0..13] @ PC+81. The file places this block
-			// at file +96 (PC+81 == file+96 here -- the +18 reader-offset rule
-			// has a deliberate 3-byte shift in this region, NOT a doc error).
-			for (int s = 0; s < 14; ++s)
-				putU16(rec + kFBackpack + s * 2,
-				       readPcU16(pc, kPcInvOff + s * 2));
-			putI16(rec + kFArrowsType, static_cast<int16_t>(readPcU16(pc, kPcQuiverOff)));
-			putI16(rec + kFArrowsQty,  static_cast<int16_t>(readPcU16(pc, kPcArrowsOff)));
-			if (uint8_t *np = ctx.objects.classStaticPtr(pc, kPcClass, kPcNameOff,
-			                                              kPcNameLen))
-				std::memcpy(rec + kFName, np, kPcNameLen);
-			rec[kFRace]    = readPcU8(pc, kPcRaceOff);
-			rec[kFClasses] = readPcU8(pc, kPcClassesOff);
-			putU16(rec + kFPortrait, readPcU16(pc, kPcPortraitOff));
-			rec[kFPCstat]  = readPcU8(pc, kPcPCstatOff);
-			rec[kFAlign]   = readPcU8(pc, kPcAlignOff);
-			for (int k = 0; k < 3; ++k) {
-				rec[kFLevels + k]   = readPcU8(pc, kPcLevelsOff + k);
-				rec[kFLostLvls + k] = readPcU8(pc, kPcLostLvlsOff + k);
-				putU32(rec + kFXp + k * 4, readPcU32(pc, kPcXpOff + k * 4));
-			}
-			putI16(rec + kFLostHp, static_cast<int16_t>(readPcU16(pc, kPcLostHpOff)));
-			putI16(rec + kFHpCur,  static_cast<int16_t>(readPcU16(pc, kPcHpCurOff)));
-			putI16(rec + kFHpMax,  static_cast<int16_t>(readPcU16(pc, kPcHpMaxOff)));
-			putI16(rec + kFHbon,   static_cast<int16_t>(readPcU16(pc, kPcHbonOff)));
-			putI16(rec + kFFood,   static_cast<int16_t>(readPcU16(pc, kPcFoodOff)));
-			rec[kFStr]    = readPcU8(pc, kPcStrOff);
-			rec[kFStrPct] = readPcU8(pc, kPcExcStrOff);
-			rec[kFInt]    = readPcU8(pc, kPcIntOff);
-			rec[kFWis]    = readPcU8(pc, kPcWisOff);
-			rec[kFDex]    = readPcU8(pc, kPcDexOff);
-			rec[kFCon]    = readPcU8(pc, kPcConOff);
-			rec[kFCha]    = readPcU8(pc, kPcChaOff);
-			rec[kFSparkle] = readPcU8(pc, kPcSparkleOff);
-			putU32(rec + kFMagicEff, readPcU32(pc, kPcMagicEffOff));
-			rec[kFTiger]   = readPcU8(pc, kPcTigerOff);
-			rec[kFLostStr] = readPcU8(pc, kPcLostStrOff);
-			if (uint8_t *sp = ctx.objects.classStaticPtr(pc, kPcClass,
-			                                              kPcSpellCntOff, kPcSpellLen))
-				std::memcpy(rec + kFSpellCnt, sp, kPcSpellLen);
-			if (uint8_t *sp = ctx.objects.classStaticPtr(pc, kPcClass,
-			                                              kPcSpellStatOff, kPcSpellLen))
-				std::memcpy(rec + kFSpellStat, sp, kPcSpellLen);
-			++pcsWritten;
-		}
-
-		// Step 3.5 -- pre-instantiate the world item pool (slots 15..999) from
-		// ITEMS_00.BIN's CDESC records. Without this, all niche.W:contents /
-		// monster.W:carried / chest-contents references point at empty object
-		// slots, and the player finds no loot from any source. Chargen-created
-		// PC gear already lives at some of these slots; skip those. Only ITEM
-		// subclasses (class 1371) -- ITEMS_00.BIN also carries PC records
-		// (class 1369) at slots 32..41 that must not clobber the chargen party;
-		// slot 15 is reserved for our entities singleton.
-		constexpr uint16_t kItemsBaseCls = 1371;
-		int worldItems = THIRDEYE::savegame::loadAreaInstances(
-		    saveDir,
-		    [&](int slot, uint16_t cls, const std::vector<uint8_t> &data) {
-			    if (slot == 15) return;
-			    if (!ctx.objects.isSubclassOf(cls, kItemsBaseCls)) return;
-			    if (ctx.objects.classOf(slot) != 0xFFFF)
-				    return; // chargen-owned; keep the live one
-			    try {
-				    ctx.objects.createProgram(slot, cls);
-				    if (!data.empty())
-					    if (uint8_t *sp = ctx.objects.staticsPtr(
-					            slot, 0, static_cast<uint32_t>(data.size())))
-						    std::memcpy(sp, data.data(), data.size());
-			    } catch (const std::exception &) {}
-		    },
-		    /*firstSlot=*/15, /*lastSlot=*/999);
-		rt() << "  [write_initial_tempfiles: pre-created " << worldItems
-		     << " world items from ITEMS_00.BIN]" << std::endl;
-
-		// Step 4 -- truncate at kItemStreamOff and append a fresh item stream.
-		// Walk the entity range (indices below kNumEntities); every live entity
-		// whose class is a subclass of `items` (1371) gets a record.
-		buf.resize(kItemStreamOff);
-		int itemsWritten = 0;
-		for (int i = 0; i < VM::ObjectSystem::kNumEntities; ++i) {
-			uint16_t cls = ctx.objects.classOf(i);
-			if (cls == 0xFFFF) continue; // empty slot
-			if (!ctx.objects.isSubclassOf(cls, kItemsBase)) continue;
-			uint32_t blockSize = ctx.objects.instanceStaticSize(cls);
-			size_t recOff = buf.size();
-			buf.resize(recOff + 4 + blockSize + 4, 0);
-			putU16(&buf[recOff],     static_cast<uint16_t>(i));
-			putU16(&buf[recOff + 2], cls);
-			if (blockSize > 0) {
-				// staticsPtr(i, 0, blockSize) reads the full flat statics block
-				// from the start; classStaticPtr would add staticBase(cls) and
-				// land past the end for classes with parents.
-				if (uint8_t *sp = ctx.objects.staticsPtr(i, 0, blockSize))
-					std::memcpy(&buf[recOff + 4], sp, blockSize);
-			}
-			// Trailer: 0 (placement bytes unknowable post-chargen; resume_level
-			// doesn't consume the trailer anyway).
-			++itemsWritten;
-		}
-
-		// Step 5 -- write the buffer to ITEMS.TMP.
-		bool itemsOk = false;
-		{
-			std::ofstream out(dstPath, std::ios::binary | std::ios::trunc);
-			if (out) {
-				out.write(reinterpret_cast<const char*>(buf.data()),
-				          static_cast<std::streamsize>(buf.size()));
-				itemsOk = !!out;
-			}
-		}
+		// Initial (chargen) party: bootstrap the world item pool from
+		// ITEMS_00.BIN, and keep the scaffold's graveyard-entrance position.
+		int pcs = 0, items = 0, world = 0;
+		bool itemsOk = writeItemsFixed(ctx, saveDir / "ITEMS.TMP",
+		                               /*preInstantiateWorld=*/true,
+		                               /*writeLivePosition=*/false,
+		                               pcs, items, world);
 		rt() << "  [write_initial_tempfiles: ITEMS.TMP "
-		     << (itemsOk ? "written" : "FAILED")
-		     << " (" << pcsWritten << " PCs, " << itemsWritten
-		     << " items, scaffold=" << (scaffoldOk ? "ITEMS_00.BIN" : "zero-fill")
-		     << "), " << lvlCopied << " LVL??_00.BIN -> LVL??.TMP]"
-		     << std::endl;
+		     << (itemsOk ? "written" : "FAILED") << " (" << pcs << " PCs, "
+		     << items << " items, " << world << " world pre-created), "
+		     << lvlCopied << " LVL??_00.BIN -> LVL??.TMP]" << std::endl;
 		result = 0;
 		return true;
 	}
@@ -1229,7 +1287,16 @@ bool tryHandle(Context &ctx, const std::string &fn,
 							p[1] = static_cast<uint8_t>((v >> 8) & 0xFF);
 						}
 					}
-					// W:inventory[0..13] <- backpack @+96. Empty = -1: a
+					// B:sp_lvl[2] @77 / B:mn_lvl[2] @79 <- file +95..+98. The
+					// camp spell menu opens at mn_lvl; DOS saves carry 1s --
+					// left zero-filled it shows "Level 0: 0 of 0 Available".
+					for (int k = 0; k < 2; ++k) {
+						if (uint8_t *p = ctx.objects.classStaticPtr(idx, kPcClass, 77 + k, 1))
+							*p = c.spLvl[k];
+						if (uint8_t *p = ctx.objects.classStaticPtr(idx, kPcClass, 79 + k, 1))
+							*p = c.mnLvl[k];
+					}
+					// W:inventory[0..13] <- backpack @+99. Empty = -1: a
 					// zero-filled slot reads as "item object 0" and the
 					// inventory click handler picks the kernel up as an item.
 					for (int s = 0; s < THIRDEYE::savegame::ItemsTmp::Character::kBackpackSlots; ++s) {
