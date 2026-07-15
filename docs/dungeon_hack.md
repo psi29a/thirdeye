@@ -371,4 +371,130 @@ The batch uses `aesop <res-basename> <object-name>` which implies:
 
 ---
 
+## Comparison: EOB3 vs Dungeon Hack Architecture
+
+### EOB3 — Pure AESOP Bytecode Runtime
+
+**EYE.BAT** (2 lines):
+```batch
+@echo off
+aesop eye start
+```
+
+**Architecture**:
+- Single launcher: `AESOP.EXE` or `INTERP.EXE`
+- Single RES file: `EYE.RES` (7.1 MB)
+- All game logic in bytecode (SOP VM)
+- Boot object: "start"
+- Message handlers: M:0 (create) → M:3 (timer tick) → all rendering, input, combat in bytecode
+
+**How it works** (from INTERP.C source in `arun/src/`):
+```c
+// Parse command line
+strcpy(RES_name, argv[1]);        // e.g., "eye"
+strcpy(object_name, argv[2]);     // e.g., "start"
+strcat(RES_name, ".RES");         // "EYE.RES"
+
+// Load RES file
+RTR = RTR_construct(mem, heap, max_objs, RES_name);
+
+// Find object in export dictionary
+code = RTD_lookup(HROED, object_name);
+
+// Create and run the object
+rtn = create_program(1, bootstrap, code);
+rtn = destroy_object(1, rtn);
+
+// Return exit code
+exit(rtn);
+```
+
+The launcher simply loads a RES file, finds a named object in its export dictionary, creates it (calls M:0), runs its message loop, destroys it, and exits with a return code.
+
+### Dungeon Hack — Hybrid AESOP + Compiled Game Loop
+
+**HACK.BAT** (multi-phase):
+```batch
+aesop open opening           # Phase 1: Load OPEN.RES, run intro/menu
+aesop hack phase-one         # Phase 2: Load HACK.RES, initialize game state
+..\maze %1 %2                # Phase 3: Run compiled game loop
+aesop hack phase-two         # Phase 4: Load HACK.RES, cleanup/save
+```
+
+**Architecture**:
+- Multiple executables: `AESOP.EXE` (launcher) + `MAZE.EXE` (game loop)
+- Multiple RES files: `OPEN.RES` (1.5 MB intro/menu) + `HACK.RES` (6.8 MB gameplay)
+- Hybrid: AESOP for initialization/scripting, compiled `MAZE.EXE` for rendering/gameplay
+- Boot objects: "opening" (OPEN.RES), "phase-one" (HACK.RES), "phase-two" (HACK.RES)
+- Error code flow control: Exit codes (0/1/2/3+) control batch flow
+
+**Why the difference?**
+
+| Aspect | EOB3 | Dungeon Hack |
+|--------|------|------|
+| **Intro/Menu** | In "start" bytecode handlers | In "opening" (separate RES) |
+| **Game Init** | In "start" bytecode handlers | In "phase-one" bytecode handler |
+| **Game Loop** | "start" M:3 timer tick + Thirdeye renderer | MAZE.EXE (51 KB compiled) |
+| **Game Cleanup** | In "start" bytecode handlers | In "phase-two" bytecode handler |
+| **Optimization** | Pure bytecode (simpler) | Compiled game loop (faster) |
+| **Distribution** | Single RES file (7.1 MB) | Split RES files (8.3 MB) |
+
+### What Does MAZE.EXE Do?
+
+**MAZE.EXE** is a **compiled game loop** (51 KB) that:
+
+1. **Receives** pre-initialized game state from `aesop hack phase-one`:
+   - Party data, inventory, character stats
+   - Level maps and object data loaded into HACK.RES namespace
+   - Kernel object and all game state objects created
+
+2. **Runs** the main rendering and event loop:
+   - Input handling (keyboard, mouse)
+   - Real-time 3D dungeon view rendering
+   - HUD and UI rendering
+   - Party movement and pathfinding
+   - Combat simulation and monster AI
+   - Event dispatch (calls to kernel object handlers)
+
+3. **Interfaces** with HACK.RES:
+   - Calls kernel message handlers for high-level game logic
+   - Reads/modifies party data structures
+   - Coordinates with scripted events and timers
+   - Manages level transitions and saves
+
+4. **Returns** exit code to HACK.BAT:
+   - `0` = Normal completion (continue to phase-two)
+   - `1` = Error/Exit (quit game)
+   - `2` = Return to menu (restart loop)
+   - `3+` = Retry (loop CONTINUE)
+
+**Why compiled instead of pure bytecode?**
+
+- **Performance**: Real-time render loop requires tight, optimized code. Bytecode overhead (VM dispatch, stack manipulation) would hurt framerate. Compiled code runs faster.
+- **Direct hardware access**: Video buffers, sound card I/O, input devices benefit from direct access rather than VM abstraction layers.
+- **Code size**: 51 KB compiled vs multi-MB bytecode for equivalent functionality.
+- **Separation of concerns**: AESOP handles initialization, event scripting, and state management. MAZE.EXE handles real-time graphics and input. Better modularity and maintenance.
+
+This hybrid approach was likely a performance optimization for the demo/promotional release.
+
+### Implications for Thirdeye
+
+**Current state**: Thirdeye fully supports the EOB3 model (pure bytecode, single RES).
+
+**Dungeon Hack support requires**:
+1. Multi-RES loading: Support loading OPEN.RES and HACK.RES separately
+2. Flexible boot objects: Search for "opening", "phase-one", "phase-two" (not hardcoded "start")
+3. Exit code semantics: Capture return codes from object execution
+4. Optional intro: Support skipping OPEN.RES if not present
+
+**Thirdeye already IS the replacement for MAZE.EXE**:
+- The `phase-one` handler initializes game state
+- Thirdeye's event loop + renderer replaces MAZE.EXE
+- `phase-two` handler handles cleanup
+- No separate binary needed — Thirdeye is the compiled game loop
+
+The architecture is largely compatible. The main work is adding multi-RES support and making boot object discovery more flexible.
+
+---
+
 Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>
