@@ -5,6 +5,7 @@
 #define MAX_SOURCES 16
 #define MUSIC_ID	0
 
+#include <cstdlib>
 #include <iostream>
 #include <vector>
 
@@ -207,6 +208,14 @@ MIXER::Mixer::Mixer() {
 		std::cerr << "OpenAL: Failed to create the default context."
 				<< std::endl;
 		return;
+	}
+
+	// THIRDEYE_MUTE=1: zero the listener gain -- headless/e2e test runs stay
+	// silent without touching the audio pipeline (SDL_AUDIODRIVER=dummy only
+	// covers SDL; the mixer is OpenAL).
+	if (std::getenv("THIRDEYE_MUTE")) {
+		alListenerf(AL_GAIN, 0.0f);
+		std::cout << "  [mixer muted (THIRDEYE_MUTE)]" << std::endl;
 	}
 
 #ifdef ALC_SOFT_reopen_device

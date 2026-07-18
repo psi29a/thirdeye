@@ -283,25 +283,47 @@ void THIRDEYE::runtime::pumpHost(GRAPHICS::Graphics &gfx, VM::EventSystem &event
 			// bytecode has no M handler). Consumes the event. Esc while the
 			// map is open closes it before the SOP can see it, so Esc doesn't
 			// also fire the camp/quit menu underneath.
+			// M toggles the automap in gameplay, but has to fall through as
+			// ASCII 'm' while a UI screen is active (camp save-game name
+			// entry, etc.) or the map opens instead of typing an M. Same
+			// gate as the WASDQE block below; kept inline to short-circuit
+			// early like the original for the gameplay hot path.
 			if (ev.key.scancode == SDL_SCANCODE_M) {
-				THIRDEYE::automap::toggle();
-				break;
+				if (!THIRDEYE::runtime::uiScreenActive(objects)) {
+					THIRDEYE::automap::toggle();
+					break;
+				}
+				// UI screen up: fall through -- ASCII 'm' will be posted below.
 			}
 			if (THIRDEYE::automap::isOpen() && ev.key.key == SDLK_ESCAPE) {
 				THIRDEYE::automap::close();
 				break;
 			}
+			// Skip the WASDQE -> arrow-scancode translation while any UI screen
+			// is active -- inside camp's save-game name entry (or any text
+			// field the SOP presents on a UI screen) the movement mapping
+			// stole every letter of asdwqre and the save name came out empty.
+			// Two gates cover it: kernel W:current_screen@265 (spell book,
+			// character screen, ...) OR camp.B:active@8 (camp menu + all its
+			// sub-panels; camp doesn't touch current_screen). Camp itself is
+			// toggled by ASCII 'c', so C stays translated below.
+			bool uiScreen = THIRDEYE::runtime::uiScreenActive(objects);
+			if (std::getenv("THIRDEYE_KEYDBG"))
+				std::cerr << "[keydbg] scancode=" << (int)ev.key.scancode
+				          << " sdlk=" << (int)ev.key.key
+				          << " uiScreen=" << uiScreen << "\n";
 			int32_t key = 0;
-			switch (ev.key.scancode) {
+			if (!uiScreen) switch (ev.key.scancode) {
 			case SDL_SCANCODE_W: key = 0x4800; break; // move forward
 			case SDL_SCANCODE_S: key = 0x5000; break; // move backward
 			case SDL_SCANCODE_A: key = 0x4b00; break; // strafe left
 			case SDL_SCANCODE_D: key = 0x4d00; break; // strafe right
 			case SDL_SCANCODE_Q: key = 0x4700; break; // turn left
 			case SDL_SCANCODE_E: key = 0x4900; break; // turn right
-			case SDL_SCANCODE_C: key = 0x63;   break; // camp (kernel notifies 'c'->272)
 			default: break;
 			}
+			if (key == 0 && ev.key.scancode == SDL_SCANCODE_C)
+				key = 0x63; // camp toggle -- SOP notifies 'c'->272 in either mode
 			if (key == 0) { // not a movement scancode -> arrows + ASCII via keysym
 				SDL_Keycode k = ev.key.key;
 				switch (k) {
@@ -383,7 +405,7 @@ void THIRDEYE::runtime::pumpHost(GRAPHICS::Graphics &gfx, VM::EventSystem &event
 		// Cache the parsed sequence in statics: AUTOWALK is a process-launch
 		// env var (set once before exec), so re-parsing every event pump
 		// (~30 Hz) is wasted work.
-		enum class TokKind : uint8_t { Key, Lclick, Rclick, Wait };
+		enum class TokKind : uint8_t { Key, Lclick, Rclick, Wait, Map };
 		struct Tok { TokKind kind; int32_t scancode; int x; int y; };
 		static std::vector<Tok> toks;
 		static int tick = -1;
@@ -397,6 +419,11 @@ void THIRDEYE::runtime::pumpHost(GRAPHICS::Graphics &gfx, VM::EventSystem &event
 				Tok t{TokKind::Wait, 0, 0, 0};
 				if (one == "_") {
 					t.kind = TokKind::Wait;
+				} else if (one == "M") {
+					// Automap toggle. The map is host-side (real SDL 'M' key,
+					// never posted to the SOP), so a VM SYS_KEYDOWN can't reach
+					// it -- this token calls the overlay directly.
+					t.kind = TokKind::Map;
 				} else if ((one[0] == 'L' || one[0] == 'R') &&
 				           one.find(':') != std::string::npos) {
 					int x = 0, y = 0;
@@ -433,6 +460,12 @@ void THIRDEYE::runtime::pumpHost(GRAPHICS::Graphics &gfx, VM::EventSystem &event
 				break;
 			}
 			case TokKind::Wait: break;
+			case TokKind::Map:
+				THIRDEYE::automap::toggle();
+				std::cerr << "[autowalk] M token -> automap "
+				          << (THIRDEYE::automap::isOpen() ? "OPEN" : "CLOSED")
+				          << "\n";
+				break;
 			}
 		} else if (phase == 5 &&
 		           (tok.kind == TokKind::Lclick || tok.kind == TokKind::Rclick)) {
@@ -516,19 +549,54 @@ void THIRDEYE::runtime::pumpHost(GRAPHICS::Graphics &gfx, VM::EventSystem &event
 
 	// Automap: refresh visibility from the current party pose every pump
 	// (cheap; three static-ptr fetches + a 32x32 scan). The overlay itself
-	// renders inside gfx.update() via setPresentOverlay so it lands last on
-	// mScreen. Snapshot/restore mScreen at the open/close edges so text +
-	// one-shot draws (character names, HP labels, arrow pad, CAMP, status
-	// line) survive: mBackdrop is text-free and only holds panel art.
+	// renders inside gfx.update() via setPresentOverlay, which save-unders
+	// the frame: overlay pixels are wiped off mScreen right after each
+	// present, so the SOP's canvas (text windows, one-shot draws, backdrop)
+	// is never rolled back or overpainted -- SOP draws made while the map is
+	// open survive its close. (The old open/close snapshot/restore here
+	// rolled those draws back and garbled the message window.)
 	THIRDEYE::automap::tick(objects);
-	bool mapOpen = THIRDEYE::automap::isOpen();
-	static bool wasMapOpen = false;
-	if (!wasMapOpen && mapOpen)  gfx.snapshotScreen();
-	if (wasMapOpen && !mapOpen)  gfx.restoreScreenSnapshot();
-	wasMapOpen = mapOpen;
-	// Block SOP-driven compass snapshots while open: they'd capture overlay
-	// pixels covering the compass rect and re-stamp them on future frames.
-	gfx.suppressCompassSnapshot(mapOpen);
+	// Adventure-only chrome master switch: while any dialog/menu screen is
+	// up (SOP screen state -- see uiScreenActive), the compass restamp must
+	// stay off or it ghosts over the dialog art (mausoleum-entry decision
+	// box). Driven every pump so screen transitions can't strand it.
+	{
+		bool ui = THIRDEYE::runtime::uiScreenActive(objects);
+		static bool prevUi = false;
+		if (ui != prevUi && std::getenv("THIRDEYE_UIDBG")) {
+			prevUi = ui;
+			std::cerr << "[uidbg] uiScreenActive -> " << ui << "\n";
+		}
+		prevUi = ui;
+		gfx.setUiScreenActive(ui);
+	}
+	// Message-strip fallback: on the M-close edge, wipe the message-window
+	// region back to clean panel art. The tester saw fresh SOP prints under
+	// the M cycle land at wrong Y positions (interpreted as bold/thin or
+	// swapped white/green colour lines), even though headless dumps show
+	// byte-identical pixels across the cycle. We take the pragmatic hedge:
+	// after every M cycle the message log resets to empty on-screen, and
+	// the next SOP print reads its own text-window state and renders fresh.
+	// History across a map cycle is lost -- ponytail: better than a phantom.
+	static bool sMapWasOpen = false;
+	bool mapNowOpen = THIRDEYE::automap::isOpen();
+	if (sMapWasOpen && !mapNowOpen) {
+		// Wipe the message-window strip to clean panel art (see comment above).
+		gfx.wipeTextBox(0, 178, 259, 199);
+		// Also nudge the kernel to redraw the dungeon view (M:33 "draw view"):
+		// the tester saw stale wall/vine art from the previous level surviving
+		// a map cycle in the mausoleum interior, and mBackdrop wipes only cover
+		// text panels -- the 3D view has no equivalent. A single dispatched
+		// SEND is what the SOP itself uses everywhere else to refresh the
+		// scene (grep "draw view" in kernel.dasm).
+		constexpr uint16_t kKernelCls = 1382;
+		int kn = objects.firstObjectOfClass(kKernelCls);
+		if (kn >= 0) {
+			try { objects.send(kn, 33, {}); } // "draw view"
+			catch (const std::exception &) {}
+		}
+	}
+	sMapWasOpen = mapNowOpen;
 
 	gfx.update();                 // present whatever the bytecode has drawn
 	if (!events.peekEvent())
@@ -740,10 +808,9 @@ void THIRDEYE::Engine::bootObject(RESOURCES::Resource &resource,
 		// SOP draw + the compass restamp. The captured raw pointer is safe:
 		// the callback lives on the same Graphics we're pointing at.
 		GRAPHICS::Graphics *gp = gfx.get();
-		gfx->setPresentOverlay([gp, &resource]() {
-			if (THIRDEYE::automap::isOpen())
-				THIRDEYE::automap::render(*gp, resource);
-		});
+		gfx->setPresentOverlay(
+		    [gp, &resource]() { THIRDEYE::automap::render(*gp, resource); },
+		    []() { return THIRDEYE::automap::isOpen(); });
 	} catch (const std::exception &e) {
 		std::cout << "Graphics unavailable (" << e.what()
 		          << "); booting headless." << std::endl;

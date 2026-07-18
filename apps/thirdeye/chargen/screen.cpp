@@ -1206,6 +1206,9 @@ bool writeCreateSav(const std::filesystem::path &chargenDir,
 	struct ItemTpl { uint8_t unid, idn, pic; int8_t value; };
 	auto itemTpl = [](int type, int chargenClass) -> ItemTpl {
 		switch (type) {
+		case  0: return { 18, 18,  7, 0 }; // Axe (unid verified vs ITEM.DAT
+		                                   // name table; icon from the dev
+		                                   // sample party's axe record)
 		case  1: return { 30, 30,  1, 0 }; // Long Sword
 		case  2: return {  6,  6,  2, 0 }; // Short sword
 		case  5: return {  5,  5, 15, 0 }; // Dagger
@@ -1291,6 +1294,21 @@ bool writeCreateSav(const std::filesystem::path &chargenDir,
 			// we somehow overflow (shouldn't, kits are <= 6 items).
 			if (targetRaw < 0 || targetRaw >= 26) targetRaw = 2;
 			patchU16(invOff + targetRaw * 2, id);
+		}
+		// Dwarves carry an axe (backpack). Gameplay-load-bearing: the forest
+		// trees on the starter level need an axe to cut, and the tester's
+		// dwarf fighter couldn't progress without one. Precedent: the dev
+		// sample party (Ted/Alice) carries axes, and Isharn -- a dwarf --
+		// pledges his axe. Mundane (+0), matching the "equipment has been
+		// stolen" fresh-start framing.
+		if ((c.race == 6 || c.race == 7) && kitN < kMaxKitItems) {
+			uint16_t id = static_cast<uint16_t>(idBase + kitN);
+			ItemTpl t = itemTpl(0, c.klass);
+			patchItemRec(kItemArrayBase + (id - 434) * kItemBytes,
+			             t.unid, t.idn, /*bits=*/0, t.pic, /*type=*/0,
+			             t.value);
+			patchU16(invOff + nextBackpack * 2, id);
+			++nextBackpack;
 		}
 	}
 	std::ofstream f(path, std::ios::binary | std::ios::trunc);

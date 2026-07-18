@@ -205,8 +205,19 @@ bool tryHandle(Context &ctx, const std::string &fn,
 		// `prepare outtake box`'s `wipe_window(96, 20)`) and every subsequent
 		// present's `restoreCompass()` blitted the brown box back onto the
 		// bottom-left HUD region.
-		if (table == 187)
+		if (table == 187) {
+			// The kernel's timer keeps redrawing the compass even while a
+			// dialog/menu screen is up. The original drew it to page 104,
+			// which the dialog screens never composite -- our page
+			// flattening would paint it straight onto the visible frame
+			// (compass ghosting over the mausoleum-entry decision box).
+			// Skip the draw entirely outside the adventure screen.
+			if (uiScreenActive(ctx.objects)) {
+				result = 0;
+				return true;
+			}
 			gCompassDirty = true;
+		}
 		try {
 			auto t0 = gPerf ? std::chrono::steady_clock::now()
 			                : std::chrono::steady_clock::time_point{};

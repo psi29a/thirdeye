@@ -37,6 +37,23 @@ uint8_t *staticBytePtr(Context &ctx, VM::Value addr, uint32_t size) {
 	}
 }
 
+bool uiScreenActive(VM::ObjectSystem &objects) {
+	constexpr uint16_t kKernelCls = 1382;
+	constexpr uint16_t kCampCls   = 1385;
+	int kn = objects.firstObjectOfClass(kKernelCls);
+	if (kn >= 0)
+		if (uint8_t *p = objects.classStaticPtr(kn, kKernelCls, 265, 2))
+			if ((p[0] | (p[1] << 8)) != 0) return true;
+	int camp = objects.firstObjectOfClass(kCampCls);
+	if (camp >= 0) {
+		// camp class-local statics: B:active@0, B:outtake@1, B:selecting@5
+		for (uint32_t off : {0u, 1u, 5u})
+			if (uint8_t *p = objects.classStaticPtr(camp, kCampCls, off, 1))
+				if (*p != 0) return true;
+	}
+	return false;
+}
+
 std::string formatSop(const std::string &fmt, const std::vector<VM::Value> &args,
                       size_t start, Context &ctx) {
 	VM::Interpreter &vm = ctx.vm;

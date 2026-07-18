@@ -12,6 +12,7 @@
 #include <cstdlib> // std::getenv (debug traces)
 #include <iostream>
 #include <map>
+#include <set>
 #include <utility>
 #include <vector>
 
@@ -443,8 +444,24 @@ Value ObjectSystem::runHandler(uint16_t defClass, uint32_t offset, int objIndex,
 	vm.setExternResolve([this, defClass](uint32_t xr) {
 		return resolveExtern(defClass, xr);
 	});
-	vm.setExternStatics([this](int obj, uint32_t off, uint32_t size) {
-		return staticsPtr(obj, off, size);
+	vm.setExternStatics([this](int obj, uint32_t off, uint32_t size)
+	                        -> uint8_t * {
+		// SOP-driven extern access: catch dead-object throws here so the
+		// bytecode can hold a stale reference (an item destroyed since the
+		// save was written, a slot the loader didn't recreate because the
+		// old ITEMS.TMP writer wasn't round-trippable) without stopping boot.
+		// The Interpreter's extern-read/write paths null-check and route to
+		// their zero/sinkhole. Once-per-index log to keep the underlying
+		// data-drift visible without flooding the trace.
+		try {
+			return staticsPtr(obj, off, size);
+		} catch (const VmError &e) {
+			static std::set<int> logged;
+			if (logged.insert(obj).second)
+				std::cerr << "[vm] " << e.what()
+				          << " -- ignoring (likely stale save reference)\n";
+			return nullptr;
+		}
 	});
 	vm.setObjectLookup([this](int idx) { return objectLookup(idx); });
 	if (mTrace) {

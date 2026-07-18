@@ -55,9 +55,17 @@ private:
 	bool mTextRestoreBg = false;
 	bool mSuspendBackdrop = false;
 	bool mSuppressCompassSnap = false;
-	// Lazily-allocated full-screen snapshot (see snapshotScreen()).
-	SDL_Surface *mScreenSnap = nullptr;
+	// SOP screen state, set by the pump each tick (see uiScreenActive):
+	// true while a dialog/menu screen is up instead of the adventure view.
+	// Gates the compass restamp AND switches text-box erases to flat-fill
+	// (the HUD backdrop must not leak into dialog panels).
+	bool mUiScreen = false;
+	// Save-under buffer for the present-time overlay (see update()): the
+	// overlay paints into mScreen for one present, then this restores the
+	// SOP-pure pixels so the canvas and SOP state never drift apart.
+	SDL_Surface *mOverlaySave = nullptr;
 	std::function<void()> mPresentOverlay;
+	std::function<bool()> mOverlayActive; // gates the save-under + paint
 	// The compass widget lives on its own AESOP page (104) that the original
 	// re-composites every frame, so it survives HUD redraws. We flatten pages onto
 	// one surface, so we instead snapshot the compass region when it refreshes and
@@ -242,6 +250,7 @@ public:
 	// compass snapshot from capturing overlay pixels drawn on top of the
 	// compass rect (would then get re-stamped as "compass" on future frames).
 	void suppressCompassSnapshot(bool s) { mSuppressCompassSnap = s; }
+	void setUiScreenActive(bool u) { mUiScreen = u; }
 	// Raw single-pixel access for the particle effects (do_dots/do_ice port):
 	// peek returns the mapped ARGB value (0 on OOB) so a particle can save and
 	// restore the exact background it covers; poke writes one back. mapColor
@@ -296,18 +305,16 @@ public:
 	// draws and the compass restamp, immediately before SDL_UpdateTexture and
 	// present. The automap uses this so its overlay lands ON TOP of anything
 	// the SOP drew during a recursive dispatch inside our pump.
-	void setPresentOverlay(std::function<void()> cb) { mPresentOverlay = std::move(cb); }
+	// `active` gates painting per present (e.g. automap::isOpen) so the
+	// save-under copy is only taken while the overlay is actually up.
+	void setPresentOverlay(std::function<void()> cb, std::function<bool()> active) {
+		mPresentOverlay = std::move(cb);
+		mOverlayActive = std::move(active);
+	}
 	// Blit the text-restore snapshot back onto mScreen. The automap calls this
 	// on close so residual overlay pixels (legend column, title) that landed in
 	// gaps the SOP doesn't redraw get erased in one shot.
 	void restoreBackdrop();
-	// Full-screen mScreen snapshot/restore. Used by the automap around
-	// open/close so text + one-shot draws (character names, HP labels, arrow
-	// pad, CAMP button, status line) survive the overlay -- mBackdrop is
-	// text-free and can't restore those.
-	void snapshotScreen();
-	void restoreScreenSnapshot();
-
 	// Save the current screen surface to a BMP (debug / headless verification).
 	void saveScreenshot(const std::string &path);
 

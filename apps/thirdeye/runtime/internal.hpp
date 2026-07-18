@@ -125,6 +125,14 @@ uint8_t *staticBytePtr(Context &ctx, VM::Value addr, uint32_t size);
 void pumpHost(GRAPHICS::Graphics &gfx, VM::EventSystem &events,
               VM::ObjectSystem &objects, RESOURCES::Resource &res);
 
+// True while any UI screen is up instead of the 3D adventure view: the
+// kernel's W:current_screen@265 (spell book, character sheet, ...) or the
+// camp object's active/outtake/selecting flags (camp menu, cutscene outtake
+// boxes, level-transition decision dialogs). Mirrors the gate the SOP's own
+// auto-attack handler uses. Drives host-side suppression of adventure-only
+// chrome (compass restamp/draw, WASDQE movement translation, automap M key).
+bool uiScreenActive(VM::ObjectSystem &objects);
+
 // printf-style substitution shared by print()/sprint(): fill %d/%u/%i, %c,
 // %s and %% in `fmt` from `args[start..]`. Per GRAPHICS.C vsprint, %s args
 // are string-resource numbers ("S:"-tagged), %a args are byte pointers;

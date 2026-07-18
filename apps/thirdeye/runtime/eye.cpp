@@ -316,6 +316,16 @@ static bool writeItemsFixed(Context &ctx, const std::filesystem::path &dstPath,
 		if (blockSize > 0)
 			if (uint8_t *sp = ctx.objects.staticsPtr(i, 0, blockSize))
 				std::memcpy(&buf[recOff + 4], sp, blockSize);
+		// Trailer byte 3 carries the weapon's magical bonus in the DOS format
+		// (the static block stores B:bonus as the -1 sentinel there). Our
+		// block copy above carries the LIVE B:bonus, but the loader applies
+		// trailer byte 3 for DOS-save compatibility -- so mirror the live
+		// bonus into the trailer or a save+load cycle strips every +N weapon
+		// to mundane (= the "all swings miss the mists" report, round 2).
+		constexpr uint16_t kArmsCls = 1373;
+		if (ctx.objects.isSubclassOf(cls, kArmsCls))
+			if (uint8_t *b = ctx.objects.classStaticPtr(i, kArmsCls, 0, 1))
+				buf[recOff + 4 + blockSize + 3] = *b;
 		++outItems;
 	}
 
@@ -1058,12 +1068,31 @@ bool tryHandle(Context &ctx, const std::string &fn,
 			for (uint32_t s = 0; s < kPlayerSlots; ++s)
 				setSlot(s, -1); // empty all slots first
 			int placed = 0;
-			for (int pc : ctx.objects.objectsOfClass(kPcClass)) {
-				uint8_t *num = ctx.objects.classStaticPtr(pc, kPcClass, kPcNumOff, 1);
-				int slot = num ? *num : -1;
-				if (slot >= 0 && static_cast<uint32_t>(slot) < kPlayerSlots) {
-					setSlot(static_cast<uint32_t>(slot), static_cast<int16_t>(pc));
+			// Prefer ITEMS.TMP's slot order for player[]: each file record's
+			// index IS the party slot (0..5 = party, 6..9 = reserve roster).
+			// Fall back to PC.W:num only when there's no save file (chargen).
+			// Reading PC.W:num of already-live objects during an in-game
+			// restore was the "Rex ended up in slot 0" bug: existing PCs kept
+			// stale W:num from prior state (Rex's obj-41 record had never had
+			// its W:num rewritten since it was created for the reserve slot).
+			if (wantContinue && !items.characters.empty()) {
+				for (size_t slotIdx = 0; slotIdx < items.characters.size() &&
+				     slotIdx < kPlayerSlots; ++slotIdx) {
+					const auto &c = items.characters[slotIdx];
+					if (c.classNumber != 1369) continue;
+					if (c.objectIndex <= 0) continue;
+					setSlot(static_cast<uint32_t>(slotIdx),
+					        static_cast<int16_t>(c.objectIndex));
 					++placed;
+				}
+			} else {
+				for (int pc : ctx.objects.objectsOfClass(kPcClass)) {
+					uint8_t *num = ctx.objects.classStaticPtr(pc, kPcClass, kPcNumOff, 1);
+					int slot = num ? *num : -1;
+					if (slot >= 0 && static_cast<uint32_t>(slot) < kPlayerSlots) {
+						setSlot(static_cast<uint32_t>(slot), static_cast<int16_t>(pc));
+						++placed;
+					}
 				}
 			}
 
@@ -1112,9 +1141,23 @@ bool tryHandle(Context &ctx, const std::string &fn,
 							}
 						} catch (const std::exception &) {}
 						if (ctx.objects.isSubclassOf(rec.cls, kArmsClass)) {
+							// B:bonus source, in priority order:
+							//  - block value 0xFF = the DOS -1 sentinel ->
+							//    the real bonus lives in trailer byte 3
+							//    (shipped QSP saves, real DOS saves);
+							//  - otherwise the block carries the LIVE bonus
+							//    (saves from our writer). Only take the
+							//    trailer when it says something (> 0) --
+							//    older thirdeye saves wrote trailer 0, and
+							//    stomping the block's +1 with that 0 made
+							//    every weapon mundane after one save+load
+							//    (nothing could hit the graveyard mists).
 							if (uint8_t *b = ctx.objects.classStaticPtr(
-							        rec.id, kArmsClass, 0, 1))
-								*b = static_cast<uint8_t>(rec.magicalBonus());
+							        rec.id, kArmsClass, 0, 1)) {
+								uint8_t t = static_cast<uint8_t>(rec.magicalBonus());
+								if (*b == 0xFF || t > 0)
+									*b = t;
+							}
 						}
 						++created;
 					} catch (const std::exception &) { ++failed; }
@@ -1200,14 +1243,17 @@ bool tryHandle(Context &ctx, const std::string &fn,
 							freshlyCreated = true;
 						} catch (const std::exception &) { continue; }
 					}
-					if (freshlyCreated && slotIdx < kPlayerSlots) {
-						// W:num is the PC's own copy of its party slot.
-						if (uint8_t *np = ctx.objects.classStaticPtr(
-						        idx, kPcClass, kPcNumOff, 1))
-							*np = static_cast<uint8_t>(slotIdx);
-						setSlot(static_cast<uint32_t>(slotIdx), static_cast<int16_t>(idx));
+					// PC.W:num is the PC's own copy of its party slot. Refresh
+					// it from the file's slotIdx on EVERY restore, not only on
+					// fresh-create -- otherwise existing PCs keep stale slot
+					// numbers across sessions (the "Rex in slot 0" bug). The
+					// player[] registration happens in the pre-load pass above,
+					// which also uses slotIdx as the party position.
+					if (uint8_t *np = ctx.objects.classStaticPtr(
+					        idx, kPcClass, kPcNumOff, 1))
+						*np = static_cast<uint8_t>(slotIdx);
+					if (freshlyCreated && slotIdx < kPlayerSlots)
 						++placed;
-					}
 					// L:timer[0..15] (16 longs @ offset 1) = -1 "inactive". createProgram
 					// zero-fills; the heartbeat treats timer == 0 as "fire now" and runs the
 					// slot handler (slot 5 = poison damage, 8 = disease, 10 = lvl drain,
@@ -1345,8 +1391,18 @@ bool tryHandle(Context &ctx, const std::string &fn,
 				if (uint8_t *p = ctx.objects.classStaticPtr(kernel, kKernelClass, off, 1))
 					*p = val;
 			};
+			// Reseed party position when a save file exists. The old
+			// "don't clobber if party_lvl != 0" guard was meant to skip the
+			// fallback default on a fresh chargen boot, but it also skipped
+			// the *ITEMS.TMP* seed on the in-game restore-game flow: the
+			// kernel already had a party_lvl from the pre-restore session,
+			// so the newly-copied ITEMS.TMP's position was ignored and the
+			// party stayed at wherever they were before clicking Restore.
+			// New rule: if wantContinue is true (ITEMS.TMP exists) we always
+			// apply its position; otherwise fall through and keep whatever
+			// the SOP has already set (chargen path, if any).
 			uint8_t *lvlP = ctx.objects.classStaticPtr(kernel, kKernelClass, kPartyLvl, 1);
-			if (lvlP && *lvlP == 0) { // don't clobber a level a real save provided
+			if (lvlP && (wantContinue || *lvlP == 0)) {
 				// Priority: ITEMS.TMP > default (lvl 1 (15,15)). Drive level
 				// changes via the normal SOP path (menu / AUTOWALK) rather than
 				// a debug override -- THIRDEYE_GOTO bypassed program/window

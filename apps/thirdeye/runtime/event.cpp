@@ -154,6 +154,48 @@ void runDebugHooks(VM::ObjectSystem &objects, RESOURCES::Resource &res) {
 			}
 		}
 	}
+	// THIRDEYE_INVWATCH=1: log any change to any PC's W:inventory[26] --
+	// (slot, old item id, new item id) with a tick stamp. Pinpoints exactly
+	// when equipment vanishes (the mausoleum-switch unequip report).
+	if (std::getenv("THIRDEYE_INVWATCH")) {
+		static std::map<int, std::array<int16_t, 26>> last;
+		static long tick = 0;
+		++tick;
+		for (int pc : objects.objectsOfClass(1369)) {
+			uint8_t *p = nullptr;
+			try { p = objects.classStaticPtr(pc, 1369, 81, 52); }
+			catch (const std::exception &) { continue; }
+			if (!p) continue;
+			std::array<int16_t, 26> cur;
+			for (int s2 = 0; s2 < 26; ++s2)
+				cur[s2] = static_cast<int16_t>(p[s2*2] | (p[s2*2+1] << 8));
+			auto it = last.find(pc);
+			if (it != last.end()) {
+				for (int s2 = 0; s2 < 26; ++s2)
+					if (it->second[s2] != cur[s2])
+						std::cerr << "[inv] tick " << tick << " pc " << pc
+						          << " inventory[" << s2 << "] "
+						          << it->second[s2] << " -> " << cur[s2]
+						          << std::endl;
+			}
+			last[pc] = cur;
+		}
+	}
+	// THIRDEYE_DISABLE_OBJ=N: one-shot SEND "disable" (M:8) to object N at
+	// tick 250 -- simulates a chopped tree / dispelled feature so map+view
+	// behavior after a disable can be tested without driving real combat.
+	if (const char *e = std::getenv("THIRDEYE_DISABLE_OBJ")) {
+		static int dt = 0;
+		if (++dt == 250) {
+			int obj = std::atoi(e);
+			try {
+				objects.send(obj, 8, {});
+				std::cerr << "[disable] sent M:8 to obj " << obj << "\n";
+			} catch (const std::exception &ex) {
+				std::cerr << "[disable] obj " << obj << ": " << ex.what() << "\n";
+			}
+		}
+	}
 	// THIRDEYE_STARVE=N: set every PC's W:food@177 to N% at tick 230 --
 	// exercises the food-icon consume path (a full PC refuses to eat).
 	if (const char *e = std::getenv("THIRDEYE_STARVE")) {
