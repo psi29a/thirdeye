@@ -365,10 +365,37 @@ void runDebugHooks(VM::ObjectSystem &objects, RESOURCES::Resource &res) {
 				try {
 					uint8_t *r = objects.classStaticPtr(pc, 1369, 81 + 16 * 2, 2);
 					uint8_t *l = objects.classStaticPtr(pc, 1369, 81 + 20 * 2, 2);
-					if (r && l)
-						std::cerr << "[hand] pc " << pc << " R="
-						          << static_cast<int16_t>(r[0] | (r[1] << 8)) << " L="
-						          << static_cast<int16_t>(l[0] | (l[1] << 8)) << "\n";
+					// Per hand item: class + B:bonus (arms@1373:0) -- the byte
+					// "roll to hit" reads against the target's magic-weapon
+					// requirement flags (report(1003) & 0x400 = needs +1,
+					// & 0x2000 = needs +2). -1 = not an arms descendant.
+					auto bonus = [&](int obj) -> int {
+						if (obj < 0) return -1;
+						try {
+							if (uint8_t *b = objects.classStaticPtr(obj, 1373, 0, 1))
+								return *b;
+						} catch (const std::exception &) {}
+						return -1;
+					};
+					if (r && l) {
+						int ri = static_cast<int16_t>(r[0] | (r[1] << 8));
+						int li = static_cast<int16_t>(l[0] | (l[1] << 8));
+						// THIRDEYE_HANDBONUS=N: force every held weapon's
+						// B:bonus to N. Isolates the magic-weapon-requirement
+						// gate in "roll to hit" (e.g. sword wraiths need >= +2).
+						static const char *hb = std::getenv("THIRDEYE_HANDBONUS");
+						if (hb) {
+							for (int obj : {ri, li})
+								if (obj >= 0) try {
+									if (uint8_t *b =
+									        objects.classStaticPtr(obj, 1373, 0, 1))
+										*b = static_cast<uint8_t>(std::atoi(hb));
+								} catch (const std::exception &) {}
+						}
+						std::cerr << "[hand] pc " << pc << " R=" << ri
+						          << " (+" << bonus(ri) << ") L=" << li
+						          << " (+" << bonus(li) << ")\n";
+					}
 					// THIRDEYE_XPTRACE: log a line whenever a PC's L:experience[0]
 					// changes. Verifies the XP-award + level-up chain end-to-end.
 					static const bool kXpTrace = std::getenv("THIRDEYE_XPTRACE") != nullptr;

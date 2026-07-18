@@ -185,7 +185,7 @@ void MIXER::Mixer::playSound(std::vector<uint8_t> snd) {
 	 */
 }
 
-MIXER::Mixer::Mixer() {
+MIXER::Mixer::Mixer(bool muted) {
 	enumerate(); // informational listing only
 	mt32 = true;
 
@@ -210,12 +210,13 @@ MIXER::Mixer::Mixer() {
 		return;
 	}
 
-	// THIRDEYE_MUTE=1: zero the listener gain -- headless/e2e test runs stay
-	// silent without touching the audio pipeline (SDL_AUDIODRIVER=dummy only
-	// covers SDL; the mixer is OpenAL).
-	if (std::getenv("THIRDEYE_MUTE")) {
+	// --nosound / THIRDEYE_MUTE=1: zero the listener gain -- headless/e2e test
+	// runs stay silent without touching the audio pipeline (SDL_AUDIODRIVER=dummy
+	// only covers SDL; the mixer is OpenAL).
+	if (muted || std::getenv("THIRDEYE_MUTE")) {
 		alListenerf(AL_GAIN, 0.0f);
-		std::cout << "  [mixer muted (THIRDEYE_MUTE)]" << std::endl;
+		std::cout << "  [mixer muted ("
+		          << (muted ? "--nosound" : "THIRDEYE_MUTE") << ")]" << std::endl;
 	}
 
 #ifdef ALC_SOFT_reopen_device

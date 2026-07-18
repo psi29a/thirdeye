@@ -8,6 +8,7 @@
 #include "vm/objects.hpp"
 #include "vm/events.hpp"
 #include "savegame/transfer.hpp"
+#include "savegame/items_tmp.hpp"
 #include "savegame/lvl_tmp.hpp"
 #include "chargen/screen.hpp"
 #include "runtime/internal.hpp"
@@ -73,6 +74,9 @@ void THIRDEYE::Engine::setChargen(bool chargen) {
 }
 void THIRDEYE::Engine::setChargenTest(bool chargenTest) {
 	mChargenTest = chargenTest;
+}
+void THIRDEYE::Engine::setLoadSave(int slot) {
+	mLoadSave = slot;
 }
 
 // The game-data path may be either a directory (in which case we append the
@@ -819,7 +823,7 @@ void THIRDEYE::Engine::bootObject(RESOURCES::Resource &resource,
 	// In-game sound mixer (OpenAL). Only useful with graphics; when headless we
 	// still construct it so the sound runtime calls have a target, but they no-op
 	// if the device failed to open. Lives for the whole game session.
-	MIXER::Mixer mixer;
+	MIXER::Mixer mixer(!mUseSound);
 
 	VM::ObjectSystem objects;
 	VM::EventSystem events(objects);
@@ -873,8 +877,42 @@ void THIRDEYE::Engine::bootObject(RESOURCES::Resource &resource,
 	// experience: pokemem(1264,'INTR') + launch("cine.exe") -- intro first,
 	// then the title menu when cine chains back (start.dasm LBL_79). Seeding
 	// a mode here is only for the shortcut flags.
+	// --load-save=N: restore slot N's backups into the live TMP files (exactly
+	// what the SOP's save picker does via restore_items/restore_level_objects),
+	// then boot CINE so resume_level builds the party from them. On any failure
+	// (empty/missing slot) fall through to the normal flag logic with the live
+	// TMPs untouched.
+	bool slotRestored = false;
+	if (mLoadSave >= 0) {
+		auto dir = resource.resourcePath().parent_path() / "SAVEGAME";
+		bool itemsOk = savegame::restoreItems(dir, mLoadSave);
+		int lvls = itemsOk ? savegame::restoreLevels(dir, mLoadSave) : 0;
+		slotRestored = itemsOk && lvls > 0;
+		if (slotRestored) {
+			// Automap sidecar, mirroring restore_items: slot MAPS -> live, or
+			// fresh fog when the slot has none / the parse fails.
+			char nn[16];
+			std::snprintf(nn, sizeof(nn), "%02d", mLoadSave);
+			auto src = dir / ("MAPS_" + std::string(nn) + ".BIN");
+			auto live = dir / "MAPS.TMP";
+			std::error_code ec;
+			bool mapRestored = false;
+			if (std::filesystem::exists(src, ec))
+				mapRestored = std::filesystem::copy_file(src, live,
+				    std::filesystem::copy_options::overwrite_existing, ec) &&
+				    automap::loadFrom(live);
+			if (!mapRestored)
+				automap::reset();
+		}
+		std::cout << "  [--load-save: slot " << mLoadSave
+		          << (slotRestored ? " restored (" + std::to_string(lvls)
+		                                 + " level files)"
+		                           : " empty or unreadable; ignoring")
+		          << "]" << std::endl;
+	}
 	int32_t bootMode = 0;
-	if (mChargen)        bootMode = MODE_CHGN;
+	if (slotRestored)    bootMode = MODE_CINE;
+	else if (mChargen)   bootMode = MODE_CHGN;
 	else if (mSkipMenu)  bootMode = saveExists() ? MODE_CINE : MODE_CHGN;
 	else if (mSkipIntro) bootMode = MODE_INTR;
 	mem.insert_or_assign(1264, bootMode);
@@ -974,8 +1012,13 @@ void THIRDEYE::Engine::bootObject(RESOURCES::Resource &resource,
 		return it != mem.end() ? it->second : MODE_INTR;
 	};
 	bool quit = false;
+	bool firstBoot = true; // first start instance of the session (real cold boot)
 	while (!quit) {
 		const int32_t mode = readMode();
+		// Latch-and-clear up top: the self-destroy path `continue`s past the
+		// loop tail, so clearing there would leave firstBoot stuck true.
+		const bool wasFirstBoot = firstBoot;
+		firstBoot = false;
 		// Text-box clear style depends on the screen we're booting into: the title
 		// menu (INTR) bakes its options into the backdrop bitmap, so its text boxes
 		// flat-fill to erase them; the in-game HUD draws text over detailed panel
@@ -1022,7 +1065,9 @@ void THIRDEYE::Engine::bootObject(RESOURCES::Resource &resource,
 				          << events.liveWindowCount() << " win leaked; "
 				             "resetting + relaunching with mode "
 				          << (nextMode == MODE_CINE ? "CINE"
-				            : nextMode == MODE_CHGN ? "CHGN" : "INTR")
+				            : nextMode == MODE_CHGN ? "CHGN"
+				            : nextMode == MODE_INTR ? "INTR"
+				            : "cold-boot (" + std::to_string(nextMode) + ")")
 				          << "]" << std::endl;
 				objects.resetInstances();
 				events.reset();
@@ -1049,8 +1094,17 @@ void THIRDEYE::Engine::bootObject(RESOURCES::Resource &resource,
 		// the next start lands on the title menu rather than the chargen-transfer.
 		if (!relaunch.empty()) {
 			try {
+				// The argless-cine intro is legitimate from exactly two places:
+				// the session's real cold boot (first start instance, mode 0)
+				// and the title menu's "Introduction" choice (mode INTR). The
+				// in-game quit instead pokes mode 0 and lets the NEXT start
+				// re-run the whole DOS attract chain (init_sound + launch
+				// "cine.exe") -- same launch, but it's a relaunch, not the
+				// first boot, so it gets the intro suppressed (QoL).
 				if (!runExternalProgram(relaunch, gfx.get(), resource, mixer,
-			                        relaunchExtras)) {
+			                        relaunchExtras,
+			                        /*suppressArglessIntro=*/
+			                        !wasFirstBoot && mode != MODE_INTR)) {
 					mem.insert_or_assign(1264, MODE_INTR);
 					std::cout << "  [sub-program cancelled -- next start: INTR]"
 					          << std::endl;
@@ -1081,7 +1135,8 @@ bool THIRDEYE::Engine::runExternalProgram(const std::string &program,
                                           GRAPHICS::Graphics *gfx,
                                           RESOURCES::Resource &resource,
                                           MIXER::Mixer &mixer,
-                                          const std::vector<std::string> &extras) {
+                                          const std::vector<std::string> &extras,
+                                          bool suppressArglessIntro) {
 	std::string p = program;
 	std::transform(p.begin(), p.end(), p.begin(),
 	               [](unsigned char c) { return std::tolower(c); });
@@ -1091,7 +1146,7 @@ bool THIRDEYE::Engine::runExternalProgram(const std::string &program,
 		// LICH.GFF for the mid-game cutscenes. Pick the first extra that
 		// looks like a .gff filename; fall back to INTRO for the original
 		// argless "Introduction" behaviour.
-		std::string gff = "INTRO.GFF";
+		std::string gff;
 		for (const std::string &e : extras) {
 			std::string el = e;
 			std::transform(el.begin(), el.end(), el.begin(),
@@ -1102,6 +1157,21 @@ bool THIRDEYE::Engine::runExternalProgram(const std::string &program,
 				break;
 			}
 		}
+		// QoL: the in-game quit pokes mode 0, making the next start re-run
+		// the DOS attract chain -- the same argless launch("cine.exe") as a
+		// real cold boot -- which would replay the intro before landing on
+		// the title menu. The caller passes suppressArglessIntro=true for
+		// every argless cine launch that is neither the session's first boot
+		// nor the menu's explicit "Introduction" choice. Cutscenes and the
+		// finale name their .GFF and are untouched by this gate.
+		if (gff.empty() && suppressArglessIntro) {
+			std::cout << "  [program chain: CINE (argless) on quit-to-menu"
+			             " -- skipping intro replay, straight to menu]"
+			          << std::endl;
+			return true;
+		}
+		if (gff.empty())
+			gff = "INTRO.GFF";
 		std::cout << "  [program chain: CINE -> " << gff << "]" << std::endl;
 		playCinematic(gfx, resource, gff, mixer);
 		return true;

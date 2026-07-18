@@ -93,7 +93,7 @@ private:
 	std::string mOpenedName;
 	std::chrono::steady_clock::time_point mLastDevCheck{};
 public:
-	Mixer();
+	explicit Mixer(bool muted = false);
 	virtual ~Mixer();
 	void update();
 	void playMusic(std::vector<uint8_t> xmidi);
