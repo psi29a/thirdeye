@@ -138,7 +138,13 @@ int loadLevelObjects(int level, VM::ObjectSystem &objects,
 				// (prev.next = my.next / next.prev = my.prev) corrupts the chain the
 				// first time a mid-chain monster moves. (Doors/features in plane 0
 				// stay single per cell.)
-				if (isMonster) {
+				// Chain for BOTH planes. Plane 0 features can co-locate too:
+				// the mausoleum's skull door + its door button share one cell
+				// ((26,2) on LVL02) -- the old "features stay single per cell"
+				// head-overwrite dropped the door from the chain, so "draw
+				// objects" never rendered it and its button floated over the
+				// dark doorway.
+				{
 					int head = cellp[0] | (cellp[1] << 8); // current head (0xFFFF = none)
 					setS(kEntities, 6, head == 0xFFFF ? -1 : head, 2);
 					if (head != 0xFFFF) {
