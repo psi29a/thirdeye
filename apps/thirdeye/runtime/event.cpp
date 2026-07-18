@@ -178,7 +178,7 @@ void runDebugHooks(VM::ObjectSystem &objects, RESOURCES::Resource &res) {
 						          << it->second[s2] << " -> " << cur[s2]
 						          << std::endl;
 			}
-			last[pc] = cur;
+			last.insert_or_assign(pc, cur);
 		}
 	}
 	// THIRDEYE_DISABLE_OBJ=N: one-shot SEND "disable" (M:8) to object N at

@@ -189,7 +189,8 @@ ItemsTmp loadItemsTmp(const std::filesystem::path &path) {
 
 std::vector<ItemRecord> parseItemStream(const std::vector<uint8_t> &data,
                                         size_t streamOff,
-                                        const ClassStaticSize &lookup) {
+                                        const ClassStaticSize &lookup,
+                                        std::vector<uint16_t> *coveredSlots) {
 	std::vector<ItemRecord> out;
 	// ponytail: env-var-gated trailer probe. Set THIRDEYE_DUMP_TRAILERS=1 to
 	// print every parsed record's (id, cls, trailer) for RE; off by default
@@ -213,6 +214,7 @@ std::vector<ItemRecord> parseItemStream(const std::vector<uint8_t> &data,
 		uint16_t id  = static_cast<uint16_t>(data[o]     | (data[o + 1] << 8));
 		uint16_t cls = static_cast<uint16_t>(data[o + 2] | (data[o + 3] << 8));
 		if (cls == kEmptyCls) {
+			if (coveredSlots) coveredSlots->push_back(id);
 			o += 4 + kTrailerSize;
 			continue;
 		}
@@ -238,6 +240,7 @@ std::vector<ItemRecord> parseItemStream(const std::vector<uint8_t> &data,
 			    " (%u %u %u %u)\n",
 			    o, id, cls, blockSize, r.trailer,
 			    data[t], data[t + 1], data[t + 2], data[t + 3]);
+		if (coveredSlots) coveredSlots->push_back(id);
 		out.push_back(std::move(r));
 		o += 4 + blockSize + kTrailerSize;
 	}

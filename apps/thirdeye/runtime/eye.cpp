@@ -112,6 +112,7 @@ static bool writeItemsFixed(Context &ctx, const std::filesystem::path &dstPath,
 	constexpr uint32_t kPcWisOff = 194, kPcDexOff = 195, kPcConOff = 196;
 	constexpr uint32_t kPcChaOff = 197, kPcSparkleOff = 198;
 	constexpr uint32_t kPcMagicEffOff = 199, kPcTigerOff = 203, kPcLostStrOff = 204;
+	constexpr uint32_t kPcUnknownGapOff = 205; // 4 bytes, semantics unknown
 	constexpr uint32_t kPcSpellCntOff = 209, kPcSpellStatOff = 409;
 	constexpr uint32_t kPcSpellLen = 200;
 
@@ -127,7 +128,7 @@ static bool writeItemsFixed(Context &ctx, const std::filesystem::path &dstPath,
 	constexpr size_t kFXp = 197, kFStr = 209, kFStrPct = 210;
 	constexpr size_t kFInt = 211, kFWis = 212, kFDex = 213, kFCon = 214;
 	constexpr size_t kFCha = 215, kFSparkle = 216, kFMagicEff = 217;
-	constexpr size_t kFTiger = 221, kFLostStr = 222;
+	constexpr size_t kFTiger = 221, kFLostStr = 222, kFUnknownGap = 223;
 	constexpr size_t kFSpellCnt = 227, kFSpellStat = 427;
 
 	auto putU16 = [](uint8_t *p, uint16_t v) {
@@ -269,6 +270,10 @@ static bool writeItemsFixed(Context &ctx, const std::filesystem::path &dstPath,
 		putU32(rec + kFMagicEff, readPcU32(pc, kPcMagicEffOff));
 		rec[kFTiger]   = readPcU8(pc, kPcTigerOff);
 		rec[kFLostStr] = readPcU8(pc, kPcLostStrOff);
+		// +223..+226: the 4 unknown bytes (PC 205..208). parseItemsTmp and
+		// resume_level round-trip them; zeroing here silently wiped whatever
+		// they hold on every save (CodeRabbit).
+		putU32(rec + kFUnknownGap, readPcU32(pc, kPcUnknownGapOff));
 		if (uint8_t *sp = ctx.objects.classStaticPtr(pc, kPcClass,
 		                                              kPcSpellCntOff, kPcSpellLen))
 			std::memcpy(rec + kFSpellCnt, sp, kPcSpellLen);
@@ -301,13 +306,29 @@ static bool writeItemsFixed(Context &ctx, const std::filesystem::path &dstPath,
 		    /*firstSlot=*/15, /*lastSlot=*/999);
 	}
 
-	// Step 4 -- truncate at the stream offset and append every live item object
-	// (any entity-range slot whose class subclasses `items` 1371).
+	// Step 4 -- truncate at the stream offset and append the item-object
+	// array: a full record for every live item, and an EXPLICIT empty-slot
+	// record ({id, 0xFFFF, 4-byte trailer} -- the DOS format's own encoding)
+	// for every world-pool slot (15..999) without one. The explicit empties
+	// are what lets the loader distinguish "consumed item" from "old save
+	// that never serialized this slot": without them the gap-fill resurrected
+	// every used-up potion/scroll from ITEMS_00.BIN on each restore
+	// (CodeRabbit).
 	buf.resize(kItemStreamOff);
+	constexpr int kWorldFirst = 15, kWorldLast = 999;
 	for (int i = 0; i < VM::ObjectSystem::kNumEntities; ++i) {
 		uint16_t cls = ctx.objects.classOf(i);
-		if (cls == 0xFFFF) continue;
-		if (!ctx.objects.isSubclassOf(cls, kItemsBase)) continue;
+		bool liveItem = cls != 0xFFFF &&
+		                ctx.objects.isSubclassOf(cls, kItemsBase);
+		if (!liveItem) {
+			if (i >= kWorldFirst && i <= kWorldLast) {
+				size_t recOff = buf.size();
+				buf.resize(recOff + 8, 0);
+				putU16(&buf[recOff],     static_cast<uint16_t>(i));
+				putU16(&buf[recOff + 2], 0xFFFF);
+			}
+			continue;
+		}
 		uint32_t blockSize = ctx.objects.instanceStaticSize(cls);
 		size_t recOff = buf.size();
 		buf.resize(recOff + 4 + blockSize + 4, 0);
@@ -329,12 +350,30 @@ static bool writeItemsFixed(Context &ctx, const std::filesystem::path &dstPath,
 		++outItems;
 	}
 
-	// Step 5 -- write.
-	std::ofstream out(dstPath, std::ios::binary | std::ios::trunc);
-	if (!out) return false;
-	out.write(reinterpret_cast<const char *>(buf.data()),
-	          static_cast<std::streamsize>(buf.size()));
-	return !!out;
+	// Step 5 -- write atomically: stage to a same-directory temp file, then
+	// rename over the destination. A crash/full disk mid-write leaves the
+	// old save intact instead of a truncated file (CodeRabbit).
+	auto tmpPath = dstPath;
+	tmpPath += ".tmpwrite";
+	{
+		std::ofstream out(tmpPath, std::ios::binary | std::ios::trunc);
+		if (!out) return false;
+		out.write(reinterpret_cast<const char *>(buf.data()),
+		          static_cast<std::streamsize>(buf.size()));
+		if (!out) {
+			std::error_code ec;
+			std::filesystem::remove(tmpPath, ec);
+			return false;
+		}
+	}
+	std::error_code ec;
+	std::filesystem::rename(tmpPath, dstPath, ec);
+	if (ec) {
+		std::error_code ec2;
+		std::filesystem::remove(tmpPath, ec2);
+		return false;
+	}
+	return true;
 }
 
 } // namespace
@@ -1096,6 +1135,10 @@ bool tryHandle(Context &ctx, const std::string &fn,
 				}
 			}
 
+			// Slots the §2.3 stream explicitly mentions (live OR empty). An
+			// explicit empty means "the player consumed this item" -- the
+			// gap-fill below must NOT resurrect it from ITEMS_00.BIN.
+			std::vector<uint16_t> coveredSlots;
 			// (2.5) Recreate the live item objects from ITEMS.TMP §2.3 so the
 			// PCs' equip[] pointers below resolve to real SOP objects (chain mail,
 			// sword, holy symbol, etc.). createProgram allocates the SOP instance
@@ -1111,8 +1154,8 @@ bool tryHandle(Context &ctx, const std::string &fn,
 				std::ifstream f(path, std::ios::binary);
 				std::vector<uint8_t> raw((std::istreambuf_iterator<char>(f)),
 				                          std::istreambuf_iterator<char>());
-				auto stream = THIRDEYE::savegame::parseItemStream(
-				    raw, items.itemStreamOff, staticSize);
+	auto stream = THIRDEYE::savegame::parseItemStream(
+				    raw, items.itemStreamOff, staticSize, &coveredSlots);
 				int created = 0, failed = 0;
 				constexpr uint16_t kArmsClass = 1373;
 				for (const auto &rec : stream) {
@@ -1163,7 +1206,8 @@ bool tryHandle(Context &ctx, const std::string &fn,
 					} catch (const std::exception &) { ++failed; }
 				}
 				rt() << "  [resume_level: recreated " << created
-				     << " item objects from ITEMS.TMP §2.3"
+				     << " item objects (" << coveredSlots.size()
+				     << " slots covered) from ITEMS.TMP §2.3"
 				     << (failed ? " (" + std::to_string(failed) + " failed)" : "")
 				     << "]" << std::endl;
 			}
@@ -1183,11 +1227,26 @@ bool tryHandle(Context &ctx, const std::string &fn,
 			if (wantContinue && std::getenv("THIRDEYE_NO_WORLDITEMS") == nullptr) {
 				constexpr uint16_t kItemsBaseCls = 1371;
 				auto saveDir = ctx.res.resourcePath().parent_path() / "SAVEGAME";
-				int gapFilled = THIRDEYE::savegame::loadAreaInstances(
+				// O(1) membership for the stream-covered slots (see above).
+				std::vector<bool> covered(1000, false);
+				for (uint16_t cs2 : coveredSlots)
+					if (cs2 < covered.size()) covered[cs2] = true;
+				// Count actual creations ourselves: loadAreaInstances' return
+				// counts callback VISITS, so the covered-slot early-returns
+				// (and the other guards) would still tally and the trace
+				// would claim resurrections that never happened.
+				int gapFilled = 0;
+				THIRDEYE::savegame::loadAreaInstances(
 				    saveDir,
 				    [&](int slot, uint16_t cls,
 				        const std::vector<uint8_t> &data) {
 					    if (slot == 15) return; // reserved for entities singleton
+					    // Explicitly-covered slot (live record already
+					    // recreated, or explicit empty = consumed item):
+					    // never refill from the pristine pool.
+					    if (slot >= 0 &&
+					        static_cast<size_t>(slot) < covered.size() &&
+					        covered[slot]) return;
 					    if (!ctx.objects.isSubclassOf(cls, kItemsBaseCls)) return;
 					    if (ctx.objects.classOf(slot) != 0xFFFF) return;
 					    try {
@@ -1197,6 +1256,7 @@ bool tryHandle(Context &ctx, const std::string &fn,
 							            slot, 0,
 							            static_cast<uint32_t>(data.size())))
 								    std::memcpy(sp, data.data(), data.size());
+						    ++gapFilled;
 					    } catch (const std::exception &) {}
 				    },
 				    /*firstSlot=*/15, /*lastSlot=*/999);

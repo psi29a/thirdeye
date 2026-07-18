@@ -213,6 +213,11 @@ bool tryHandle(Context &ctx, const std::string &fn,
 			// (compass ghosting over the mausoleum-entry decision box).
 			// Skip the draw entirely outside the adventure screen.
 			if (uiScreenActive(ctx.objects)) {
+				// Drop the pane clip set above -- the normal path clears it
+				// after the draw, and leaving it armed here clipped every
+				// later dialog/menu draw to the compass pane (CodeRabbit).
+				if (clipped)
+					ctx.gfx->clearClip();
 				result = 0;
 				return true;
 			}

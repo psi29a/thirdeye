@@ -195,11 +195,18 @@ using ClassStaticSize = std::function<uint32_t(uint16_t cls)>;
 
 // Walk the item-object stream starting at `streamOff`. Returns one entry per
 // non-empty slot (cls != 0xFFFF), in file order. Empty slots are skipped (we
-// don't need to recreate them). The caller is responsible for `streamOff`;
-// for the Quick Start Party save it is 6947 (0x1b23) = 677 + 10 * 627.
+// don't need to recreate them) but ARE reported through `coveredSlots` when
+// provided: every slot id the stream explicitly mentions -- live or empty --
+// is appended. The caller uses that to distinguish "this slot is empty
+// because the player consumed the item" (explicit empty record; do NOT
+// gap-fill it from ITEMS_00.BIN) from "this save predates full-array
+// serialization" (slot absent from the stream entirely; gap-fill is the
+// right recovery). The caller is responsible for `streamOff`; for the Quick
+// Start Party save it is 6947 (0x1b23) = 677 + 10 * 627.
 std::vector<ItemRecord> parseItemStream(const std::vector<uint8_t> &data,
                                         size_t streamOff,
-                                        const ClassStaticSize &lookup);
+                                        const ClassStaticSize &lookup,
+                                        std::vector<uint16_t> *coveredSlots = nullptr);
 
 // --- Slot-backup restoration -----------------------------------------
 //

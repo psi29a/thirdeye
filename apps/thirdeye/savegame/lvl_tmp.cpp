@@ -131,13 +131,13 @@ int loadLevelObjects(int level, VM::ObjectSystem &objects,
 			                     dn, kDungeonClass,
 			                     1024 + plane + (y * 64 + x * 2), 2);
 			if (cellp) {
-				// Monsters: prepend to the cell's link-chain so up to 4-per-cell all
-				// render -- the new monster's W:next@6 points at the previous head, then
-				// it becomes the head. Keep the list properly DOUBLY linked: the old
-				// head's W:prev must point back at us, or the SOP's unlink
-				// (prev.next = my.next / next.prev = my.prev) corrupts the chain the
-				// first time a mid-chain monster moves. (Doors/features in plane 0
-				// stay single per cell.)
+				// Prepend to the cell's link-chain so co-located objects all
+				// render -- the new object's W:next@6 points at the previous
+				// head, then it becomes the head. Keep the list properly
+				// DOUBLY linked: the old head's W:prev must point back at us,
+				// or the SOP's unlink (prev.next = my.next / next.prev =
+				// my.prev) corrupts the chain the first time a mid-chain
+				// object moves.
 				// Chain for BOTH planes. Plane 0 features can co-locate too:
 				// the mausoleum's skull door + its door button share one cell
 				// ((26,2) on LVL02) -- the old "features stay single per cell"
@@ -196,7 +196,12 @@ int loadLevelObjects(int level, VM::ObjectSystem &objects,
 
 bool saveRange(VM::ObjectSystem &objects, const std::filesystem::path &path,
                int first, int last) {
-	std::ofstream out(path, std::ios::binary | std::ios::trunc);
+	// Stage to a same-directory temp and rename at the end -- a crash or
+	// full disk mid-write must not truncate an existing LVLxx.TMP/BIN
+	// (CodeRabbit: transactional save artifacts).
+	std::filesystem::path tmpPath = path;
+	tmpPath += ".tmpwrite";
+	std::ofstream out(tmpPath, std::ios::binary | std::ios::trunc);
 	if (!out)
 		return false;
 	out.put('\x1a'); // save_range's typetest byte
@@ -232,7 +237,16 @@ bool saveRange(VM::ObjectSystem &objects, const std::filesystem::path &path,
 		out.write(reinterpret_cast<const char *>(rec.data()),
 		          static_cast<std::streamsize>(rec.size()));
 	}
-	return !!out;
+	bool ok = !!out;
+	out.close();
+	std::error_code ec;
+	if (ok) {
+		std::filesystem::rename(tmpPath, path, ec);
+		ok = !ec;
+	}
+	if (!ok)
+		std::filesystem::remove(tmpPath, ec);
+	return ok;
 }
 
 } // namespace THIRDEYE::savegame
