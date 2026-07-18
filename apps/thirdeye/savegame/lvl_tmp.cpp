@@ -131,34 +131,35 @@ int loadLevelObjects(int level, VM::ObjectSystem &objects,
 			                     dn, kDungeonClass,
 			                     1024 + plane + (y * 64 + x * 2), 2);
 			if (cellp) {
-				// Prepend to the cell's link-chain so co-located objects all
-				// render -- the new object's W:next@6 points at the previous
-				// head, then it becomes the head. Keep the list properly
-				// DOUBLY linked: the old head's W:prev must point back at us,
-				// or the SOP's unlink (prev.next = my.next / next.prev =
-				// my.prev) corrupts the chain the first time a mid-chain
-				// object moves.
-				// Chain for BOTH planes. Plane 0 features can co-locate too:
-				// the mausoleum's skull door + its door button share one cell
-				// ((26,2) on LVL02) -- the old "features stay single per cell"
-				// head-overwrite dropped the door from the chain, so "draw
-				// objects" never rendered it and its button floated over the
-				// dark doorway.
-				{
-					int head = cellp[0] | (cellp[1] << 8); // current head (0xFFFF = none)
-					setS(kEntities, 6, head == 0xFFFF ? -1 : head, 2);
-					if (head != 0xFFFF) {
-						try {
-							if (uint8_t *hp = objects.classStaticPtr(
-							        head, kEntities, 8, 2)) {
-								hp[0] = id & 0xFF;
-								hp[1] = (id >> 8) & 0xFF;
-							}
-						} catch (const std::exception &) {}
+				// APPEND to the tail of the cell's link-chain -- matches
+				// dungeon.init_level (M:232, LBL_2738 in the disassembly):
+				// walk W:next until -1, insert there. features.draw paints
+				// head-first and recurses down W:next, so tail wins the
+				// overpaint. Prepending gave chain [button, door] at LVL01
+				// (14,10) and LVL02 (26,2) -- the door drew LAST and hid the
+				// button. Appending gives file order [door, button] so the
+				// button paints on top of the door frame.
+				int head = cellp[0] | (cellp[1] << 8);
+				if (head == 0xFFFF) {
+					cellp[0] = id & 0xFF;
+					cellp[1] = (id >> 8) & 0xFF;
+				} else {
+					int tail = head;
+					for (int guard = 0; guard < 1000; ++guard) {
+						uint8_t *np = objects.classStaticPtr(
+						    tail, kEntities, 6, 2);
+						if (!np) break;
+						int nxt = static_cast<int16_t>(np[0] | (np[1] << 8));
+						if (nxt < 0) break;
+						tail = nxt;
 					}
+					if (uint8_t *tp = objects.classStaticPtr(
+					        tail, kEntities, 6, 2)) {
+						tp[0] = id & 0xFF;
+						tp[1] = (id >> 8) & 0xFF;
+					}
+					setS(kEntities, 8, tail, 2); // W:prev = tail
 				}
-				cellp[0] = id & 0xFF;
-				cellp[1] = (id >> 8) & 0xFF;
 			}
 			// W:NPCstat comes VERBATIM from the save file (the memcpy above),
 			// exactly like the original restore_range -- the 0x0001 the shipped
@@ -189,8 +190,61 @@ int loadLevelObjects(int level, VM::ObjectSystem &objects,
 			}
 		}
 	}
+	// Chain floor items (slots 1..999) into lvlobj plane 1 for the current
+	// level. dungeon.init_level (M:232) does this itself in DOS, but our
+	// post-hook re-runs loadLevelObjects which clears the grid -- so any item
+	// with W:place == -1 and B:lvl == level needs to be re-linked here or a
+	// scroll dropped in the dungeon renders nowhere. Append to match features
+	// (draw is head-first so tail wins the overpaint; irrelevant for items in
+	// separate cells but consistent with the plane-0 pass above).
+	int itemsPlaced = 0;
+	for (int id = 1; id <= 999; ++id) {
+		if (objects.classOf(id) == 0xFFFF) continue;
+		uint8_t *sp = nullptr;
+		try { sp = objects.classStaticPtr(id, kEntities, 0, 10); }
+		catch (const std::exception &) { continue; }
+		if (!sp) continue;
+		int place = static_cast<int16_t>(sp[0] | (sp[1] << 8));
+		int ix = sp[2], iy = sp[3], ilvl = sp[4];
+		if (place != -1) continue;                    // not on the floor
+		if (ilvl != level) continue;                  // different dungeon
+		if (ix > 31 || iy > 31) continue;             // guard bad coords
+		// Reset chain links -- init_level clears the whole grid, so W:next
+		// and W:prev inherited from a prior chain are stale.
+		sp[6] = 0xFF; sp[7] = 0xFF; sp[8] = 0xFF; sp[9] = 0xFF;
+		uint8_t *cellp = nullptr;
+		try {
+			cellp = objects.classStaticPtr(
+			    dn, kDungeonClass,
+			    1024 + 2048 + (iy * 64 + ix * 2), 2);
+		} catch (const std::exception &) {}
+		if (!cellp) continue;
+		int head = cellp[0] | (cellp[1] << 8);
+		if (head == 0xFFFF) {
+			cellp[0] = id & 0xFF;
+			cellp[1] = (id >> 8) & 0xFF;
+		} else {
+			int tail = head;
+			for (int guard = 0; guard < 1000; ++guard) {
+				uint8_t *np = objects.classStaticPtr(
+				    tail, kEntities, 6, 2);
+				if (!np) break;
+				int nxt = static_cast<int16_t>(np[0] | (np[1] << 8));
+				if (nxt < 0) break;
+				tail = nxt;
+			}
+			if (uint8_t *tp = objects.classStaticPtr(
+			        tail, kEntities, 6, 2)) {
+				tp[0] = id & 0xFF;
+				tp[1] = (id >> 8) & 0xFF;
+			}
+			sp[8] = tail & 0xFF; sp[9] = (tail >> 8) & 0xFF;
+		}
+		++itemsPlaced;
+	}
 	std::cout << "  [loadLevelObjects: placed " << placed << " objects from " << fn
-	          << "]" << std::endl;
+	          << ", linked " << itemsPlaced << " floor items into plane 1]"
+	          << std::endl;
 	return placed;
 }
 
