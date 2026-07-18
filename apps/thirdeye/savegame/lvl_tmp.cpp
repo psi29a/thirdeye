@@ -245,6 +245,105 @@ int loadLevelObjects(int level, VM::ObjectSystem &objects,
 	std::cout << "  [loadLevelObjects: placed " << placed << " objects from " << fn
 	          << ", linked " << itemsPlaced << " floor items into plane 1]"
 	          << std::endl;
+
+	// Chain sanity check. Every lvlobj chain we just built should match what
+	// dungeon.init_level (M:232, LBL_2517..LBL_2787) would produce:
+	//   - Strictly slot-order from head to tail. init_level walks slots 1..1999
+	//     ascending and appends; a smaller slot after a bigger one means the
+	//     linker prepended (invisible-button bug) or restored stale next/prev.
+	//   - Doubly linked: prev(cur) == the previous slot in the chain (-1 at head).
+	//   - Cell coherence: each object's B:x/B:y/B:lvl matches the cell.
+	// Cheap; only runs when THIRDEYE_CHECK_CHAINS is set (or in Debug builds --
+	// unconditional would spam every level-load and every post-hook re-run).
+	// Prints to std::cerr instead of aborting so a single stale chain doesn't
+	// mask other diagnostics in a headless CI run.
+#ifndef NDEBUG
+	const bool check = true;
+#else
+	const bool check = std::getenv("THIRDEYE_CHECK_CHAINS") != nullptr;
+#endif
+	if (check) {
+		int problems = 0;
+		auto readW = [&](int obj, uint32_t off) -> int {
+			try {
+				if (uint8_t *p = objects.classStaticPtr(obj, kEntities, off, 2))
+					return static_cast<int16_t>(p[0] | (p[1] << 8));
+			} catch (const std::exception &) {}
+			return -1;
+		};
+		for (uint32_t plane = 0; plane < 3; ++plane) {
+			for (int cy = 0; cy < 32; ++cy) {
+				for (int cx = 0; cx < 32; ++cx) {
+					uint8_t *cp = nullptr;
+					try {
+						cp = objects.classStaticPtr(
+						    dn, kDungeonClass,
+						    1024u + plane * 2048u + (cy * 64 + cx * 2), 2);
+					} catch (const std::exception &) {}
+					if (!cp) continue;
+					int head = static_cast<int16_t>(cp[0] | (cp[1] << 8));
+					if (head < 0) continue;
+					int prevSlot = -1, cur = head, walked = 0;
+					while (cur >= 0 && walked < 2000) {
+						uint8_t *ep = nullptr;
+						try {
+							ep = objects.classStaticPtr(cur, kEntities, 0, 10);
+						} catch (const std::exception &) {}
+						if (!ep) {
+							std::cerr << "[chain] p" << plane << " (" << cx << ","
+							          << cy << ") slot " << cur
+							          << ": can't read statics\n";
+							++problems;
+							break;
+						}
+						int bx = ep[2], by = ep[3], blvl = ep[4];
+						int pr = static_cast<int16_t>(ep[8] | (ep[9] << 8));
+						// Cell coherence -- features encode place = x+y*32, items
+						// use place = -1 (floor). Skip the coherence check for
+						// monsters (plane 2) that are mid-step: they briefly hold
+						// stale x/y while moving between cells.
+						if (plane != 4096u && (bx != cx || by != cy)) {
+							std::cerr << "[chain] p" << plane << " (" << cx << ","
+							          << cy << ") slot " << cur << ": B:x/y=("
+							          << bx << "," << by << ") mismatches cell\n";
+							++problems;
+						}
+						if (blvl != level) {
+							std::cerr << "[chain] p" << plane << " (" << cx << ","
+							          << cy << ") slot " << cur << ": B:lvl="
+							          << blvl << " != level " << level << "\n";
+							++problems;
+						}
+						if (pr != prevSlot) {
+							std::cerr << "[chain] p" << plane << " (" << cx << ","
+							          << cy << ") slot " << cur << ": W:prev=" << pr
+							          << " expected " << prevSlot
+							          << " (doubly-linked broken)\n";
+							++problems;
+						}
+						if (prevSlot >= 0 && cur <= prevSlot) {
+							std::cerr << "[chain] p" << plane << " (" << cx << ","
+							          << cy << ") slot " << cur
+							          << " after slot " << prevSlot
+							          << " (not slot-order -- prepend bug?)\n";
+							++problems;
+						}
+						prevSlot = cur;
+						cur = readW(cur, 6); // W:next
+						++walked;
+					}
+					if (walked >= 2000) {
+						std::cerr << "[chain] p" << plane << " (" << cx << ","
+						          << cy << ") walk exceeded 2000 (cycle?)\n";
+						++problems;
+					}
+				}
+			}
+		}
+		if (problems > 0)
+			std::cerr << "[chain] " << problems
+			          << " invariant problem(s) on level " << level << std::endl;
+	}
 	return placed;
 }
 
