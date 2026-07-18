@@ -564,6 +564,7 @@ void THIRDEYE::runtime::pumpHost(GRAPHICS::Graphics &gfx, VM::EventSystem &event
 	// up (SOP screen state -- see uiScreenActive), the compass restamp must
 	// stay off or it ghosts over the dialog art (mausoleum-entry decision
 	// box). Driven every pump so screen transitions can't strand it.
+	bool uiActive;
 	{
 		bool ui = THIRDEYE::runtime::uiScreenActive(objects);
 		static bool prevUi = false;
@@ -573,6 +574,15 @@ void THIRDEYE::runtime::pumpHost(GRAPHICS::Graphics &gfx, VM::EventSystem &event
 		}
 		prevUi = ui;
 		gfx.setUiScreenActive(ui);
+		uiActive = ui;
+		// QoL: a dialog/decision screen taking over while the map overlay is
+		// open (mausoleum-entry outtake box, NPC encounters) would leave the
+		// user choosing blind under the map. Auto-close the overlay -- and
+		// skip the M-close repaint below for this edge (uiActive gates it):
+		// the dialog owns the frame, and the SOP redraws the scene itself
+		// when the dialog ends.
+		if (ui && THIRDEYE::automap::isOpen())
+			THIRDEYE::automap::close();
 	}
 	// Message-strip fallback: on the M-close edge, wipe the message-window
 	// region back to clean panel art. The tester saw fresh SOP prints under
@@ -584,7 +594,7 @@ void THIRDEYE::runtime::pumpHost(GRAPHICS::Graphics &gfx, VM::EventSystem &event
 	// History across a map cycle is lost -- ponytail: better than a phantom.
 	static bool sMapWasOpen = false;
 	bool mapNowOpen = THIRDEYE::automap::isOpen();
-	if (sMapWasOpen && !mapNowOpen) {
+	if (sMapWasOpen && !mapNowOpen && !uiActive) {
 		// Wipe the message-window strip to clean panel art (see comment above).
 		gfx.wipeTextBox(0, 178, 259, 199);
 		// Also nudge the kernel to redraw the dungeon view (M:33 "draw view"):
@@ -885,17 +895,32 @@ void THIRDEYE::Engine::bootObject(RESOURCES::Resource &resource,
 	bool slotRestored = false;
 	if (mLoadSave >= 0) {
 		auto dir = resource.resourcePath().parent_path() / "SAVEGAME";
-		bool itemsOk = savegame::restoreItems(dir, mLoadSave);
-		int lvls = itemsOk ? savegame::restoreLevels(dir, mLoadSave) : 0;
-		slotRestored = itemsOk && lvls > 0;
+		char nn[16];
+		std::snprintf(nn, sizeof(nn), "%02d", mLoadSave);
+		// Validate BOTH halves of the slot before replacing any live TMP file:
+		// restoring items first and only then discovering the slot has no
+		// level backups would pair this slot's ITEMS.TMP with the previous
+		// session's LVL??.TMP (CodeRabbit).
+		std::error_code ec;
+		bool haveItems =
+		    std::filesystem::exists(dir / ("ITEMS_" + std::string(nn) + ".BIN"), ec);
+		bool haveLevels = false;
+		for (int lvl = 1; lvl <= 14 && !haveLevels; ++lvl) {
+			char src[32];
+			std::snprintf(src, sizeof(src), "LVL%02d_%s.BIN", lvl, nn);
+			haveLevels = std::filesystem::exists(dir / src, ec);
+		}
+		int lvls = 0;
+		if (haveItems && haveLevels) {
+			bool itemsOk = savegame::restoreItems(dir, mLoadSave);
+			lvls = itemsOk ? savegame::restoreLevels(dir, mLoadSave) : 0;
+			slotRestored = itemsOk && lvls > 0;
+		}
 		if (slotRestored) {
 			// Automap sidecar, mirroring restore_items: slot MAPS -> live, or
 			// fresh fog when the slot has none / the parse fails.
-			char nn[16];
-			std::snprintf(nn, sizeof(nn), "%02d", mLoadSave);
 			auto src = dir / ("MAPS_" + std::string(nn) + ".BIN");
 			auto live = dir / "MAPS.TMP";
-			std::error_code ec;
 			bool mapRestored = false;
 			if (std::filesystem::exists(src, ec))
 				mapRestored = std::filesystem::copy_file(src, live,

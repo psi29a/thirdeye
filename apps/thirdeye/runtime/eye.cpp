@@ -360,7 +360,10 @@ static bool writeItemsFixed(Context &ctx, const std::filesystem::path &dstPath,
 		if (!out) return false;
 		out.write(reinterpret_cast<const char *>(buf.data()),
 		          static_cast<std::streamsize>(buf.size()));
-		if (!out) {
+		// close() flushes the tail of the buffer and sets failbit on error;
+		// checking before it would miss a failed close-time flush (CodeRabbit).
+		out.close();
+		if (out.fail()) {
 			std::error_code ec;
 			std::filesystem::remove(tmpPath, ec);
 			return false;
@@ -375,6 +378,39 @@ static bool writeItemsFixed(Context &ctx, const std::filesystem::path &dstPath,
 	}
 	return true;
 }
+
+// Multi-file save transaction: the ITEMS and LVL halves of a save are only
+// meaningful as a pair, so each output is first written to a staged
+// "<final>.stage" path, then every stage is renamed over its final in one
+// commit pass once ALL writes succeeded. On any write failure the stages are
+// discarded and the previously committed ITEMS/LVL pair stays intact
+// (CodeRabbit: no mixed-generation slots). Individual writers remain
+// internally atomic (temp+rename onto the stage), so a crash mid-anything
+// leaves only ignorable *.stage litter, never a truncated live file.
+struct StagedCommit {
+	std::vector<std::pair<std::filesystem::path, std::filesystem::path>> files;
+	std::filesystem::path stage(const std::filesystem::path &final) {
+		auto s = final;
+		s += ".stage";
+		files.emplace_back(s, final);
+		return s;
+	}
+	bool commit() {
+		bool all = true;
+		for (const auto &[s, f] : files) {
+			std::error_code ec;
+			std::filesystem::rename(s, f, ec);
+			if (ec) all = false; // same-dir rename; failure here is exotic
+		}
+		return all;
+	}
+	void discard() {
+		for (const auto &[s, f] : files) {
+			std::error_code ec;
+			std::filesystem::remove(s, ec);
+		}
+	}
+};
 
 } // namespace
 
@@ -617,15 +653,20 @@ bool tryHandle(Context &ctx, const std::string &fn,
 		// history). writeLivePosition captures the party's current cell/facing;
 		// preInstantiateWorld is OFF (mid-game the world pool is already live,
 		// and re-seeding it from ITEMS_00.BIN would resurrect consumed items).
+		// All slot outputs go through a StagedCommit: nothing under the final
+		// ITEMS_nn/LVL??_nn names is replaced until every write landed, so a
+		// mid-save failure can't pair this generation's items with a previous
+		// generation's levels (CodeRabbit).
+		StagedCommit txn;
 		int spcs = 0, sitems = 0, sworld = 0;
-		bool itemsOk = writeItemsFixed(
-		    ctx, dir / ("ITEMS_" + std::string(nn) + ".BIN"),
+		bool ok = writeItemsFixed(
+		    ctx, txn.stage(dir / ("ITEMS_" + std::string(nn) + ".BIN")),
 		    /*preInstantiateWorld=*/false, /*writeLivePosition=*/true,
 		    spcs, sitems, sworld);
-		bool ok = itemsOk && THIRDEYE::savegame::saveRange(
-		              ctx.objects,
-		              dir / ("LVL" + std::string(ll) + "_" + nn + ".BIN"),
-		              1000, 1999);
+		ok = ok && THIRDEYE::savegame::saveRange(
+		         ctx.objects,
+		         txn.stage(dir / ("LVL" + std::string(ll) + "_" + nn + ".BIN")),
+		         1000, 1999);
 		int copied = 0;
 		for (int l = 1; ok && l <= 14; ++l) {
 			if (l == lvl) continue;
@@ -634,14 +675,25 @@ bool tryHandle(Context &ctx, const std::string &fn,
 			auto tmp = dir / ("LVL" + std::string(cc) + ".TMP");
 			auto bin = dir / ("LVL" + std::string(cc) + "_" + nn + ".BIN");
 			std::error_code ec;
-			if (std::filesystem::copy_file(
-			        tmp, bin, std::filesystem::copy_options::overwrite_existing,
-			        ec))
-				++copied;
 			// A missing TMP is tolerated (fresh boot paths may not have
 			// written every level yet); a save with the current level +
-			// items intact is still restorable.
+			// items intact is still restorable. A failed copy of an
+			// EXISTING TMP aborts the transaction instead -- committing it
+			// would silently leave that level's backup a generation stale.
+			if (!std::filesystem::exists(tmp, ec))
+				continue;
+			if (std::filesystem::copy_file(
+			        tmp, txn.stage(bin),
+			        std::filesystem::copy_options::overwrite_existing, ec) &&
+			    !ec)
+				++copied;
+			else
+				ok = false;
 		}
+		if (ok)
+			ok = txn.commit();
+		else
+			txn.discard();
 		// Automap sidecar: write MAPS.TMP + clone to MAPS_nn.BIN. Separate
 		// file, no bearing on the game save. Loss here is cosmetic (worst case
 		// the map re-fogs on load), so failures don't gate ok -- but they are
@@ -670,17 +722,25 @@ bool tryHandle(Context &ctx, const std::string &fn,
 		// resumes real progress -- position, HP, inventory, memorized spells.
 		// preInstantiateWorld OFF (world already live; re-seeding would revive
 		// consumed items). LVLxx.TMP round-trips via saveRange's CDESC stream.
+		// Stage ITEMS.TMP + LVLxx.TMP together and commit only when both
+		// landed -- a failed level flush must not leave ITEMS.TMP a
+		// generation ahead of the levels (CodeRabbit).
+		StagedCommit txn;
 		int spcs = 0, sitems = 0, sworld = 0;
-		bool ok = writeItemsFixed(ctx, dir / "ITEMS.TMP",
+		bool ok = writeItemsFixed(ctx, txn.stage(dir / "ITEMS.TMP"),
 		                          /*preInstantiateWorld=*/false,
 		                          /*writeLivePosition=*/true, spcs, sitems, sworld);
 		if (lvl >= 1 && lvl <= 14) {
 			char ll[3];
 			std::snprintf(ll, sizeof(ll), "%02d", lvl);
 			ok = THIRDEYE::savegame::saveRange(
-			         ctx.objects, dir / ("LVL" + std::string(ll) + ".TMP"),
+			         ctx.objects, txn.stage(dir / ("LVL" + std::string(ll) + ".TMP")),
 			         1000, 1999) && ok;
 		}
+		if (ok)
+			ok = txn.commit();
+		else
+			txn.discard();
 		bool mapsOk = THIRDEYE::automap::saveTo(dir / "MAPS.TMP");
 		rt() << "  [suspend_game lvl " << lvl << (ok ? " OK" : " FAILED")
 		     << " (" << spcs << " PCs, " << sitems << " items; maps "

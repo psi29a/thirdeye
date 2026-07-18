@@ -237,8 +237,10 @@ bool saveRange(VM::ObjectSystem &objects, const std::filesystem::path &path,
 		out.write(reinterpret_cast<const char *>(rec.data()),
 		          static_cast<std::streamsize>(rec.size()));
 	}
-	bool ok = !!out;
+	// close() flushes the tail of the buffer and sets failbit on error; the
+	// state is only meaningful after it completes (CodeRabbit).
 	out.close();
+	bool ok = !out.fail();
 	std::error_code ec;
 	if (ok) {
 		std::filesystem::rename(tmpPath, path, ec);
