@@ -189,60 +189,32 @@ ItemsTmp loadItemsTmp(const std::filesystem::path &path) {
 
 std::vector<ItemRecord> parseItemStream(const std::vector<uint8_t> &data,
                                         size_t streamOff,
-                                        const ClassStaticSize &lookup,
                                         std::vector<uint16_t> *coveredSlots) {
 	std::vector<ItemRecord> out;
-	// ponytail: env-var-gated trailer probe. Set THIRDEYE_DUMP_TRAILERS=1 to
-	// print every parsed record's (id, cls, trailer) for RE; off by default
-	// so the normal trace stays clean.
-	const bool dumpTrailers =
-	    std::getenv("THIRDEYE_DUMP_TRAILERS") != nullptr;
-	constexpr uint16_t kEmptyCls = 0xFFFF;
-	// Per-record layout (RE'd against the Quick Start Party save):
-	//   +0  u16  id
-	//   +2  u16  class (0xFFFF = empty/dead slot)
-	//   +4  N    static block (= instanceStaticSize(class); 0 for empty slots)
-	//   +4+N  4  trailer (always present, even on empty slots). Captured into
-	//           ItemRecord::trailer for round-trip; partial RE in
-	//           items_tmp.hpp. Common values: 0x0000FFFF = not placed,
-	//           0x010000FF = equipped on a PC, others = container/dungeon
-	//           placement metadata not yet decoded.
-	// Empty slots therefore total 8 bytes; real items total 8 + N.
-	constexpr uint32_t kTrailerSize = 4;
+	// Native CDESC records (RTOBJECT.H): {u16 slot, u32 name, u16 size} +
+	// `size` bytes of statics. Same walk as loadAreaInstances below; the file
+	// tells us every record's size, no class table needed.
 	size_t o = streamOff;
-	while (o + 4 + kTrailerSize <= data.size()) {
-		uint16_t id  = static_cast<uint16_t>(data[o]     | (data[o + 1] << 8));
-		uint16_t cls = static_cast<uint16_t>(data[o + 2] | (data[o + 3] << 8));
-		if (cls == kEmptyCls) {
+	while (o + 8 <= data.size()) {
+		uint16_t id   = static_cast<uint16_t>(data[o] | (data[o + 1] << 8));
+		uint32_t name = readU32(data, o + 2);
+		uint32_t size = static_cast<uint32_t>(data[o + 6] | (data[o + 7] << 8));
+		if (name == 0xFFFFFFFFu) {
 			if (coveredSlots) coveredSlots->push_back(id);
-			o += 4 + kTrailerSize;
+			o += 8 + size; // size is 0 for empties, but trust the field
 			continue;
 		}
-		// A non-empty record we can't size means desync (unknown class, or
-		// we wandered past the live item region into the level/object trailer).
-		// Stop rather than mis-stride and corrupt downstream parses.
-		uint32_t blockSize = lookup(cls);
-		if (blockSize == 0) break;
-		if (o + 4 + blockSize + kTrailerSize > data.size()) break;
+		// Class numbers are u16 in the VM; a larger value means we've
+		// desynced from the record stream. Stop rather than mis-stride.
+		if (name > 0xFFFFu) break;
+		if (o + 8 + size > data.size()) break;
 		ItemRecord r;
 		r.id = id;
-		r.cls = cls;
-		r.staticBlock.assign(data.begin() + o + 4,
-		                     data.begin() + o + 4 + blockSize);
-		size_t t = o + 4 + blockSize;
-		r.trailer =  static_cast<uint32_t>(data[t])
-		          | (static_cast<uint32_t>(data[t + 1]) << 8)
-		          | (static_cast<uint32_t>(data[t + 2]) << 16)
-		          | (static_cast<uint32_t>(data[t + 3]) << 24);
-		if (dumpTrailers)
-			std::fprintf(stderr,
-			    "[trailer] off=0x%05zx id=%u cls=%u block=%u trailer=0x%08x"
-			    " (%u %u %u %u)\n",
-			    o, id, cls, blockSize, r.trailer,
-			    data[t], data[t + 1], data[t + 2], data[t + 3]);
+		r.cls = static_cast<uint16_t>(name);
+		r.staticBlock.assign(data.begin() + o + 8, data.begin() + o + 8 + size);
 		if (coveredSlots) coveredSlots->push_back(id);
 		out.push_back(std::move(r));
-		o += 4 + blockSize + kTrailerSize;
+		o += 8 + size;
 	}
 	return out;
 }

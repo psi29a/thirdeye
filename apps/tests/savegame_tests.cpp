@@ -212,10 +212,10 @@ TEST(ItemsTmp_Test, ParsesQuickStartParty) {
 	EXPECT_EQ(0xFF, mikeal.sparkle);
 }
 
-// Item chain pointers live in the STATIC BLOCK (last 4 bytes = next_u16,
-// prev_u16 LE), not in the trailer. Pin this against the 14-arrow stack in
-// the bundled save: each arrow's next-link points at the next arrow's id,
-// the head has prev=0xFFFF, the tail has next=0xFFFF.
+// Item chain pointers live in the entity block of each item's statics:
+// W:next @6..7 (u16 LE, 0xFFFF = tail), W:prev @8..9 (u16 LE, 0xFFFF = head)
+// -- the class-1370 entities layout, same as monsters/features. Pin this
+// against the 14-arrow stack in the bundled save.
 TEST(ItemStream_Test, StaticBlockChainPointersInBundledSave) {
 	const char *dataDir = std::getenv("THIRDEYE_TEST_DATA_DIR");
 	if (!dataDir) GTEST_SKIP() << "set THIRDEYE_TEST_DATA_DIR=/path/to/eob3 data dir";
@@ -225,89 +225,65 @@ TEST(ItemStream_Test, StaticBlockChainPointersInBundledSave) {
 	std::ifstream f(path.string(), std::ios::binary);
 	std::vector<uint8_t> bytes((std::istreambuf_iterator<char>(f)),
 	                            std::istreambuf_iterator<char>());
-	// Use a real static-size lookup: cls 1335 (arrow) has a 13-byte block per
-	// the trailer dump. Hardcode just what we need to walk this fixed chain.
 	auto p = THIRDEYE::savegame::loadItemsTmp(path);
-	auto stream = THIRDEYE::savegame::parseItemStream(
-	    bytes, p.itemStreamOff, [](uint16_t cls) -> uint32_t {
-	        // Complete class -> static-block-size table for every class
-	        // observed in the bundled Quick Start save (extracted from the
-	        // THIRDEYE_DUMP_TRAILERS=1 run). Three distinct sizes: 12, 13, 15.
-	        static const uint32_t k13[] = {
-	            1323,1324,1325,1326,1327,1328,1329,1330,1332,1333,1334,1335,
-	            1336,1338,1339,1340,1341,1342,1343,1349,1350,1351,1353,1355,
-	            1682,1696,1709,1714,1723,1726,1751,1754,1761,1764,1770,1786,
-	            1791,1797,1818,1839,1879,1891};
-	        static const uint32_t k12[] = {
-	            1344,1345,1346,1347,1352,1357,1358,1359,1360,1362,1363,1366,
-	            1367,1368,1375,1397,1400,1403,1408,1411,1414,1417,1420,1425,
-	            1434,1451,1456,1459,1462,1465,1468,1471,1474,1477,1480,1483,
-	            1486,1492,1495,1498,1501,1504,1524,1527,1530,1533,1536,1539,
-	            1542,1545,1548,1551,1554,1557,1560,1566,1569,1572,1575,1578};
-	        static const uint32_t k15[] = {1376,1377,1602};
-	        for (uint32_t c : k13) if (c == cls) return 13;
-	        for (uint32_t c : k12) if (c == cls) return 12;
-	        for (uint32_t c : k15) if (c == cls) return 15;
-	        return 0;
-	    });
-	// Locate the 14-arrow stack head (id 612, cls 1335) -- the parser may have
-	// stopped earlier on an unknown class. Verify if present.
+	auto stream = THIRDEYE::savegame::parseItemStream(bytes, p.itemStreamOff);
 	auto it = std::find_if(stream.begin(), stream.end(),
 	                       [](const auto &r){ return r.id == 612; });
-	if (it == stream.end())
-		GTEST_SKIP() << "parser stopped before id 612 (need more class sizes)";
+	ASSERT_NE(it, stream.end()) << "CDESC walk must reach id 612";
 	const auto &r = *it;
-	ASSERT_EQ(13u, r.staticBlock.size());
-	// Block layout for cls 1335 (arrow, block size 13):
-	//   bytes 10..11 = next u16 LE  (0xFFFF = chain tail)
-	//   byte  12     = prev u8      (0xFF = chain head; only the low byte of
-	//                                the prev item id is stored, since chained
-	//                                items live in the same id locality)
-	uint16_t next = r.staticBlock[10] | (r.staticBlock[11] << 8);
-	uint8_t  prev = r.staticBlock[12];
+	ASSERT_EQ(13u, r.staticBlock.size()); // arrow cls 1335 instance = 13 bytes
+	uint16_t next = r.staticBlock[6] | (r.staticBlock[7] << 8);
+	uint16_t prev = r.staticBlock[8] | (r.staticBlock[9] << 8);
 	EXPECT_EQ(613u, next) << "id 612 should chain to id 613 (next arrow)";
-	EXPECT_EQ(0x63, prev) << "id 612 prev byte = low(611) = 0x63";
+	EXPECT_EQ(611u, prev) << "id 612 chains back to id 611 (quiver head)";
 	// Tail (id 625): next = 0xFFFF
 	auto tailIt = std::find_if(stream.begin(), stream.end(),
 	                           [](const auto &r){ return r.id == 625; });
 	if (tailIt != stream.end()) {
-		ASSERT_GE(tailIt->staticBlock.size(), 12u)
-		    << "id 625 static block too short for next-pointer read";
-		uint16_t tailNext = tailIt->staticBlock[10] | (tailIt->staticBlock[11] << 8);
+		ASSERT_GE(tailIt->staticBlock.size(), 8u);
+		uint16_t tailNext = tailIt->staticBlock[6] | (tailIt->staticBlock[7] << 8);
 		EXPECT_EQ(0xFFFFu, tailNext) << "id 625 is chain tail";
 	}
-	// Head (id 611, Delmair's quiver): prev = 0xFF (no previous)
+	// Head (id 611, Delmair's quiver): prev = 0xFFFF (no previous)
 	auto headIt = std::find_if(stream.begin(), stream.end(),
 	                           [](const auto &r){ return r.id == 611; });
 	if (headIt != stream.end()) {
-		ASSERT_GE(headIt->staticBlock.size(), 13u)
-		    << "id 611 static block too short for prev-byte read";
-		EXPECT_EQ(0xFF, headIt->staticBlock[12])
-		    << "id 611 is chain head (prev=0xFF)";
+		ASSERT_GE(headIt->staticBlock.size(), 10u);
+		uint16_t headPrev = headIt->staticBlock[8] | (headIt->staticBlock[9] << 8);
+		EXPECT_EQ(0xFFFFu, headPrev) << "id 611 is chain head";
 	}
 }
 
-// Trailer byte 3 (magical bonus) decode. The literal trailer values used
-// here are the actual byte patterns observed in the bundled Quick Start
-// Party save (Father Jon's ring of protection +3, Sir Mikeal's +1 plate/
-// short sword/shield, etc.) -- but the test itself is synthetic and runs
-// without bundled data, so it stays useful in CI environments without
-// THIRDEYE_TEST_DATA_DIR. See `../../eob3_research/SAVEGAME/README.md`
-// for the cross-reference table that motivated these literals.
-TEST(ItemStream_Test, MagicalBonusDecodedFromTrailerLiterals) {
-	THIRDEYE::savegame::ItemRecord r;
-	r.trailer = 0x80000007u;       // byte 3 = 0x80 = -128 signed (synthetic boundary)
-	EXPECT_EQ(static_cast<int8_t>(-128), r.magicalBonus());
-	r.trailer = 0x010000FFu;       // observed "+1" pattern (Sir Mikeal's plate)
-	EXPECT_EQ(1, r.magicalBonus());
-	r.trailer = 0xFD0000FFu;       // observed "-3" pattern (cursed cls-1350 ring)
-	EXPECT_EQ(-3, r.magicalBonus());
+// Synthetic CDESC walk: one live record, one empty, then a desync guard.
+// Runs without bundled data (CI-safe).
+TEST(ItemStream_Test, ParsesSyntheticCdescStream) {
+	std::vector<uint8_t> buf;
+	auto put16 = [&](uint16_t v) { buf.push_back(v & 0xFF); buf.push_back(v >> 8); };
+	// live record: slot 20, cls 1335, 4 statics bytes
+	put16(20); put16(1335); put16(0); put16(4);
+	buf.insert(buf.end(), {0xAA, 0xBB, 0xCC, 0xDD});
+	// explicit empty: slot 21, name = 0xFFFFFFFF, size 0
+	put16(21); put16(0xFFFF); put16(0xFFFF); put16(0);
+	// desync: name high half nonzero and != 0xFFFF -> parser must stop
+	put16(22); put16(1); put16(2); put16(0);
+
+	std::vector<uint16_t> covered;
+	auto stream = THIRDEYE::savegame::parseItemStream(buf, 0, &covered);
+	ASSERT_EQ(1u, stream.size());
+	EXPECT_EQ(20, stream[0].id);
+	EXPECT_EQ(1335, stream[0].cls);
+	EXPECT_EQ((std::vector<uint8_t>{0xAA, 0xBB, 0xCC, 0xDD}),
+	          stream[0].staticBlock);
+	// covered = the live slot AND the explicit empty, not the desync record
+	ASSERT_EQ(2u, covered.size());
+	EXPECT_EQ(20, covered[0]);
+	EXPECT_EQ(21, covered[1]);
 }
 
-// Empty-slot trailers in the bundled save are uniformly 0x0000FFFF (bytes
-// FF FF 00 00). Pins that part of the RE so future writers can emit the
-// correct sentinel on initial-tempfile creation.
-TEST(ItemStream_Test, EmptySlotTrailerIsFFFFinBundledSave) {
+// Empty CDESC slots in the bundled save are {slot, name=0xFFFFFFFF, size=0}
+// (RTOBJECT.C save_range's dead-objlist encoding). Pins the sentinel so
+// writers emit it correctly on initial-tempfile creation.
+TEST(ItemStream_Test, EmptySlotIsCdescMinusOneInBundledSave) {
 	const char *dataDir = std::getenv("THIRDEYE_TEST_DATA_DIR");
 	if (!dataDir) GTEST_SKIP() << "set THIRDEYE_TEST_DATA_DIR=/path/to/eob3 data dir";
 	auto path = std::filesystem::path(dataDir) / "SAVEGAME" / "ITEMS.TMP";
@@ -318,18 +294,19 @@ TEST(ItemStream_Test, EmptySlotTrailerIsFFFFinBundledSave) {
 	                            std::istreambuf_iterator<char>());
 	auto p = THIRDEYE::savegame::loadItemsTmp(path);
 
-	// Walk consecutive empty slots from streamOff (cls == 0xFFFF), read each
-	// trailer raw. The first non-empty record terminates the run.
+	// Walk consecutive empty slots from streamOff (name == 0xFFFFFFFF).
+	// The first non-empty record terminates the run.
 	size_t o = p.itemStreamOff;
 	int emptyCount = 0;
 	while (o + 8 <= bytes.size()) {
-		uint16_t cls = bytes[o + 2] | (bytes[o + 3] << 8);
-		if (cls != 0xFFFF) break;
-		uint32_t t = bytes[o + 4] | (bytes[o + 5] << 8) |
-		             (bytes[o + 6] << 16) | (bytes[o + 7] << 24);
-		EXPECT_EQ(0x0000FFFFu, t)
-		    << "empty slot @0x" << std::hex << o << std::dec
-		    << " has unexpected trailer";
+		uint32_t name = bytes[o + 2] | (bytes[o + 3] << 8) |
+		                (bytes[o + 4] << 16) |
+		                (static_cast<uint32_t>(bytes[o + 5]) << 24);
+		if (name != 0xFFFFFFFFu) break;
+		uint16_t size = bytes[o + 6] | (bytes[o + 7] << 8);
+		EXPECT_EQ(0u, size)
+		    << "empty CDESC slot @0x" << std::hex << o << std::dec
+		    << " should have size 0";
 		++emptyCount;
 		o += 8;
 	}
@@ -427,36 +404,31 @@ TEST(Transfer_Test, EmptyDataReturnsSafeDefaults) {
 
 // Empty buffer / empty stream offset out of range -> empty result.
 TEST(ItemStream_Test, EmptyBuffer) {
-	auto r = THIRDEYE::savegame::parseItemStream({}, 0,
-	    [](uint16_t){ return 0u; });
+	auto r = THIRDEYE::savegame::parseItemStream({}, 0);
 	EXPECT_TRUE(r.empty());
 }
 
-// 8-byte empty-slot placeholder (cls = 0xFFFF) is skipped, no entry emitted.
+// 8-byte empty CDESC records (name = 0xFFFFFFFF) are skipped, no entry emitted.
 TEST(ItemStream_Test, EmptySlotsSkipped) {
 	std::vector<uint8_t> b = {
-		// id=42, cls=0xFFFF, 4 placeholder bytes
-		0x2a, 0x00,  0xff, 0xff,  0xff, 0xff, 0x00, 0x00,
-		// id=43, cls=0xFFFF, 4 placeholder bytes
-		0x2b, 0x00,  0xff, 0xff,  0xff, 0xff, 0x00, 0x00,
+		// {slot=42, name=0xFFFFFFFF, size=0}
+		0x2a, 0x00,  0xff, 0xff, 0xff, 0xff,  0x00, 0x00,
+		// {slot=43, name=0xFFFFFFFF, size=0}
+		0x2b, 0x00,  0xff, 0xff, 0xff, 0xff,  0x00, 0x00,
 	};
-	auto r = THIRDEYE::savegame::parseItemStream(b, 0,
-	    [](uint16_t){ return 16u; }); // would be wrong if used; placeholders use 4
+	auto r = THIRDEYE::savegame::parseItemStream(b, 0);
 	EXPECT_TRUE(r.empty());
 }
 
-// One real item with a known class+static-size yields one record carrying the
-// exact static-block bytes. Record layout: 4 header + N statics + 4 trailer.
+// One real CDESC record carries the exact static-block bytes.
 TEST(ItemStream_Test, OneItem) {
 	// Class 1326 (dagger) with a 16-byte static block.
 	std::vector<uint8_t> b = {
-		0x64, 0x00,  0x2e, 0x05,    // id=100, cls=1326
+		0x64, 0x00,  0x2e, 0x05, 0x00, 0x00,  0x10, 0x00, // slot=100 name=1326 size=16
 		0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08,
 		0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f, 0x10,
-		0xaa, 0xbb, 0xcc, 0xdd,     // 4-byte trailer (skipped by parser)
 	};
-	auto r = THIRDEYE::savegame::parseItemStream(b, 0,
-	    [](uint16_t cls) { return cls == 1326 ? 16u : 0u; });
+	auto r = THIRDEYE::savegame::parseItemStream(b, 0);
 	ASSERT_EQ(1u, r.size());
 	EXPECT_EQ(100u,  r[0].id);
 	EXPECT_EQ(1326u, r[0].cls);
@@ -467,42 +439,29 @@ TEST(ItemStream_Test, OneItem) {
 
 // Empties interleaved with real items: parser walks both, returns only reals.
 TEST(ItemStream_Test, MixedEmptyAndRealItems) {
-	// empty(42, 8 bytes) + dagger(100, 4 + 8 statics + 4 trailer = 16 bytes)
-	// + empty(43) + short_sword(101, 4 + 10 + 4 = 18 bytes)
 	std::vector<uint8_t> b = {
-		0x2a, 0x00, 0xff, 0xff, 0xff, 0xff, 0x00, 0x00, // empty id=42
-		0x64, 0x00, 0x2e, 0x05,                         // id=100 cls=1326 dagger
-		0,0,0,0, 0,0,0,0,                               // 8 bytes static block
-		0,0,0,0,                                        // 4 bytes trailer
-		0x2b, 0x00, 0xff, 0xff, 0xff, 0xff, 0x00, 0x00, // empty id=43
-		0x65, 0x00, 0x2d, 0x05,                         // id=101 cls=1325 short sword
-		0,0,0,0, 0,0,0,0, 0,0,                          // 10 bytes static block
-		0,0,0,0,                                        // 4 bytes trailer
+		0x2a, 0x00, 0xff, 0xff, 0xff, 0xff, 0x00, 0x00, // empty slot=42
+		0x64, 0x00, 0x2e, 0x05, 0x00, 0x00, 0x08, 0x00, // slot=100 cls=1326 size=8
+		0,0,0,0, 0,0,0,0,
+		0x2b, 0x00, 0xff, 0xff, 0xff, 0xff, 0x00, 0x00, // empty slot=43
+		0x65, 0x00, 0x2d, 0x05, 0x00, 0x00, 0x0a, 0x00, // slot=101 cls=1325 size=10
+		0,0,0,0, 0,0,0,0, 0,0,
 	};
-	auto r = THIRDEYE::savegame::parseItemStream(b, 0, [](uint16_t cls) {
-		if (cls == 1326) return 8u;
-		if (cls == 1325) return 10u;
-		return 0u;
-	});
+	auto r = THIRDEYE::savegame::parseItemStream(b, 0);
 	ASSERT_EQ(2u, r.size());
 	EXPECT_EQ(100u,  r[0].id); EXPECT_EQ(1326u, r[0].cls);
 	EXPECT_EQ(101u,  r[1].id); EXPECT_EQ(1325u, r[1].cls);
 }
 
-// A truncated last record (missing static block AND/OR trailer) bails cleanly.
+// A truncated last record (statics run past EOF) bails cleanly.
 TEST(ItemStream_Test, TruncatedRecordStopsParse) {
 	std::vector<uint8_t> b = {
-		0x64, 0x00, 0x2e, 0x05,  // id=100 cls=1326
-		0,0,0,0, 0,0,0,0,        // 8 bytes statics
-		0,0,0,0,                 // 4 bytes trailer
-		0x65, 0x00, 0x2d, 0x05,  // id=101 cls=1325
-		0,0,0,                   // only 3 of 10+4 bytes
+		0x64, 0x00, 0x2e, 0x05, 0x00, 0x00, 0x08, 0x00, // slot=100 cls=1326 size=8
+		0,0,0,0, 0,0,0,0,
+		0x65, 0x00, 0x2d, 0x05, 0x00, 0x00, 0x0a, 0x00, // slot=101 cls=1325 size=10
+		0,0,0,                                          // only 3 of 10 bytes
 	};
-	auto r = THIRDEYE::savegame::parseItemStream(b, 0, [](uint16_t cls) {
-		if (cls == 1326) return 8u;
-		if (cls == 1325) return 10u;
-		return 0u;
-	});
+	auto r = THIRDEYE::savegame::parseItemStream(b, 0);
 	ASSERT_EQ(1u, r.size());
 	EXPECT_EQ(100u, r[0].id);
 }

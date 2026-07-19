@@ -1,10 +1,11 @@
 # Live control channel — agent-driven play & debugging
 
-Status: **design** (nothing implemented yet). This doc is the hand-off spec:
-any agent (or human) should be able to implement a phase from it without
-re-deriving context. Target: an interactive protocol for driving a running
-thirdeye — inject input, query game state, snapshot the screen — culminating
-in an agent playing the Burial Glen end-to-end and saving.
+Status: **phases 1+2 implemented** ([control.cpp](../apps/thirdeye/control.cpp),
+2026-07-19); phase 3 (Burial Glen POC) and phase 4 (skill) pending. This doc is
+the hand-off spec: any agent (or human) should be able to implement a phase
+from it without re-deriving context. Target: an interactive protocol for
+driving a running thirdeye — inject input, query game state, snapshot the
+screen — culminating in an agent playing the Burial Glen end-to-end and saving.
 
 ## Motivation
 
@@ -84,6 +85,9 @@ party                    party pose + members
 cell <x> <y>             lvlobj chain heads at that cell, all 3 planes
 items                    floor items (W:place == -1) on the party's level
 monsters                 live NPCs on the party's level
+obj <id>                 class + entity fields of one object (cls/place/x/y/
+                         lvl/region/next/prev) — the per-object complement to
+                         the list commands; lets a client scan slots
 peek <obj> <off> <n>     hex dump of an object's statics (debug)
 send <obj> <msg> [args]  SEND a message to an object (debug, dangerous — it
                          runs SOP bytecode; document as "you can corrupt state")
@@ -139,7 +143,16 @@ All class numbers / offsets verified in this codebase — grep for them in
 | monster? | `objects.isSubclassOf(cls, 1622)` (NPC) |
 | item? | `objects.isSubclassOf(cls, 1371)` (items) |
 | feature disabled (tree cut, door open) | features class-1994 @0 bit 0x8000 (`featureDisabled`, automap.cpp) |
-| NPC hitpts offset | not pinned here — read it from `daesop -k EYE.RES 1622` EXPT before implementing `monsters` hp field |
+| NPC hitpts | class-1622 block @3, u16 (verified via `daesop -k EYE.RES 1622`: `W:hitpts` = PUBLIC_STATIC_VARIABLE 3) |
+
+**Phase-3 trophy:** `items` returning empty at QSP boot was not a spawn
+mechanism mystery — it exposed a real savegame bug: `parseItemStream` misread
+the 8-byte CDESC record header as 4 bytes, shifting every item's statics and
+discarding the placement fields. Fixed 2026-07-19 (see
+[eob3_savegame_format.md](eob3_savegame_format.md) §2.3); all 26 Burial Glen
+floor items (wands @ (27,30), arrows/bow/mail @ (2,10), the axe pile @ (12,2))
+now exist, link into lvlobj plane 1, render in the 3D view, and list via
+`items` — matching GameBanshee's legend annotation-for-annotation.
 
 Chain walks must carry a guard (≤ 2000 hops) — see the invariant checker in
 lvl_tmp.cpp for the pattern; a corrupt chain must produce `err`, not a hang.
@@ -154,7 +167,8 @@ lvl_tmp.cpp for the pattern; a corrupt chain must produce `err`, not a hang.
 - Hook: one call in `pumpHost` next to the AUTOWALK block, gated on the env
   var having been set. The deferred click-release is a tick counter inside
   control.cpp, mirroring AUTOWALK's phase-5 logic.
-- CLI: also accept `--ctl=<path>` in main.cpp (sets the same config).
+- CLI: env var only for now (`--ctl=<path>` skipped until someone asks —
+  every driver script sets env vars anyway for MUTE/DUMP).
 
 ## Phases
 
@@ -171,7 +185,21 @@ chain (cf. the chain-order work in lvl_tmp.cpp); `items` on LVL03 lists the
 wands the GameBanshee legend places at its annotation #2
 (`../eob3_research/gamebanshee/legends/burialglen.json`).
 
-**Phase 3 — the Burial Glen POC.** An agent drives, via the channel only:
+**Phase 3 — the Burial Glen POC.** In progress (2026-07-19);
+[scripts/glen_drive.py](../scripts/glen_drive.py) +
+[scripts/ctl.py](../scripts/ctl.py) are the driver. Coordinates harvested so
+far (logical 320x200, right-click to attack): PC0 weapon (229,20), PC1
+(296,18), PC3 (297,70); CAMP button ≈(296,183). Note the engine.cpp AUTOWALK
+example's "R126:133 = PC0's right hand" lands inside the movement arrow pad,
+NOT a weapon icon — use the panel coordinates above. Facing: fdir 0=N 1=E
+2=S 3=W; dead monsters read x=255 y=255 hp<=0 (filter them client-side).
+**ALL ATTACK** (the big combat lever, per GameBanshee gameplaynotes.html):
+left-click each PC's name plate to toggle it yellow — plates at (216,6),
+(286,6), (216,57), (286,57), (216,110), (286,110) — and with ≥1 selected an
+ALL ATTACK button appears under the arrow pad at ≈(146,165); one left-click
+there swings every selected PC. ~2× the kill rate of clicking weapon icons,
+and the selection persists. The plain space bar (`key 20`) does nothing.
+An agent drives, via the channel only:
 QSP start on LVL03 → kill the grave mists (query `monsters`, face, attack
 via weapon-icon clicks, re-query until dead) → pick up loot at the legend's
 annotations #2–#4 → find the axe, equip it, chop trees toward the gate
@@ -190,14 +218,49 @@ sense→decide→act loop pattern with the "one command may take a pump" caveat.
 Trigger phrases: "drive the game", "play the glen", "live debug", "control
 channel".
 
+## Driving scripts (the "sweeper")
+
+[scripts/ctl.py](../scripts/ctl.py) is the one-shot client;
+[scripts/glen_drive.py](../scripts/glen_drive.py) layers level-agnostic
+primitives on it. Everything reads live state (lvlmap, cell chains, party
+pose), so **any save on any level works** — play to wherever, save, quit,
+then re-drive that save headless:
+
+```bash
+# 1. boot the save you want to explore (slot N), with the channel armed
+THIRDEYE_CTL=/tmp/te_ctl.sock THIRDEYE_MUTE=1 \
+SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy \
+  build/thirdeye.app/Contents/MacOS/thirdeye ../data/EYE.RES \
+  --skip-intro --skip-menu --load-save N --nosound --scale=1 &
+
+# 2. drive it
+python3 scripts/ctl.py /tmp/te_ctl.sock party items monsters  # look around
+python3 scripts/glen_drive.py /tmp/te_ctl.sock scan           # walkability map
+python3 scripts/glen_drive.py /tmp/te_ctl.sock goto 14 10     # BFS-walk (fights,
+                                                              # chops, cutscenes)
+python3 scripts/glen_drive.py /tmp/te_ctl.sock loot 14 10     # pick up a cell's
+                                                              # floor items
+python3 scripts/glen_drive.py /tmp/te_ctl.sock kill-adjacent  # ALL-ATTACK front
+```
+
+Caveats for non-Glen levels: the walkable/hackable plane-0 class sets at the
+top of glen_drive.py are graveyard classes (graves 2054 walkable, trees 2060
+choppable) — indoor levels' doors/levers/pits need their own entries; `loot`
+requires standing ON the item cell (ahead-cell clicks lose to feature click
+regions — fruit trees ate ours); and `heal_party` is a debug poke, remove it
+for honest runs. The per-run orchestration (which cells to visit) is a
+5-line script over `goto`/`loot` — see the phase-3 sweep scripts for the
+pattern.
+
 ## Testing
 
-- Protocol unit tests (apps/tests): feed the line parser fragmented/joined
-  input, assert command splits; no socket needed if the parser is a pure
-  function over a buffer — write it that way.
-- One headless e2e in CI: boot with `THIRDEYE_CTL` + `--load-save`, script
-  `ping`→`party`→`key`→`party`, assert the pose changed. Keep it under the
-  existing ctest umbrella.
+- Protocol unit tests (apps/tests): `control_tests.cpp` covers the pure
+  `tokenize()` (fragmented/joined lines are the socket layer's job — it
+  splits on `\n` before tokenize sees anything).
+- Headless e2e: `scripts/ctl_e2e.py`, registered as ctest `control_e2e` —
+  boots with `THIRDEYE_CTL` + `--load-save 1`, scripts
+  `ping`→`party`→`key 4900`→`party`, asserts the pose changed. Skips
+  (exit 77) unless `THIRDEYE_TEST_DATA_DIR` points at an EOB3 install.
 - The valgrind walk (`scripts/ci-valgrind.sh`) must stay green with the
   channel compiled in but env-var-off (zero-cost path).
 
@@ -209,11 +272,13 @@ channel".
 - A general RPC layer — this is a debug/drive channel, not an API contract;
   the format may change between versions without ceremony.
 
-## Open questions (decide during phase 1, document the answer here)
+## Open questions (answered during phases 1–2)
 
-1. Second client: reject with `err busy`, or drop the first? (Lean: reject.)
-2. `save <slot>`: reuse the SOP camp flow via clicks (honest, slower) or
-   call the save cluster directly (faster, risks divergence)? (Lean: clicks
-   in phase 3; direct call only if the click route proves flaky.)
-3. Should `dump` reply with image dimensions/palette info for the agent, or
-   stay path-only? (Lean: path-only; the agent reads the BMP itself.)
+1. Second client: **rejected with `err busy`** and dropped. Implementation
+   note: the pump drains the existing client's recv (detecting EOF) *before*
+   accepting — otherwise a fast connect/close/connect (a scripted
+   one-command-per-connection client) sees the stale fd and wrongly gets
+   `err busy`.
+2. `save <slot>`: **stubbed as `err unimplemented`**; phase 3 drives the camp
+   flow via clicks first, per the lean.
+3. `dump`: **path-only**; the agent reads the BMP itself.

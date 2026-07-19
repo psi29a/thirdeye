@@ -149,59 +149,43 @@ the smaller named fields go to named parser outputs.
 ### 2.3 Item objects — the live-item stream
 
 After the 10 PC-class records, `ITEMS.TMP` stores the **live item objects** that
-the equipment/backpack slots point at. Each slot is a flat record:
+the equipment/backpack slots point at. The records are native `save_range`
+**CDESC** records (`arun/src/RTOBJECT.C`/`.H`) — in fact the whole file is one
+CDESC stream (byte 0 = `0x1A` magic, then slot 0 = kernel, 32..41 = PCs,
+the rest = items); §2.1/§2.2 offsets above simply bake in the header:
 
 ```
-+0  u16  id
-+2  u16  class    (0xFFFF = empty/dead slot)
-+4  N    static block       — N = SOP class's total `instanceStaticSize`
-+4+N 4   trailer             — 4 bytes (purpose unknown; likely a free-list /
-                               link pointer the writer keeps outside the SOP
-                               static block). For empty slots N=0 and this is
-                               the entire 4-byte payload (always 0xFFFFFFFF).
++0  u16  slot
++2  u32  name     — SOP class number (0xFFFFFFFF = empty/dead slot)
++6  u16  size     — static-block byte count (0 for empty slots)
++8  size bytes    — instance statics, whole parent chain, VERBATIM
 ```
 
-So empty slots are 8 bytes total, real items 8 + N. Verified against the Quick
-Start Party save (445 real items + ~58 empties; class strides match
-`instanceStaticSize`: dagger 1326 → 13 (+8 = 21-byte total), holy key 1530 →
-12 (+8 = 20), spellbook 1377 → 15 (+8 = 23), and so on).
+Empty slots are 8 bytes total, real items 8 + size. The statics carry the
+standard `entities` (1370) layout at the front: `W:place@0, B:x@2, B:y@3,
+B:lvl@4, B:region@5, W:next@6, W:prev@8`, then the item-class fields
+(`items.W:itmflags`, `arms.B:bonus`, …) at their normal static offsets.
+Ownership/placement:
 
-The 4-byte trailer's **closed-form decode is still pending** — across the
-445 items in the Quick Start save we see 81 distinct trailer patterns. The
-two largest buckets:
-
-| trailer | count | example items |
-|---------|-------|---------------|
-| `ff ff 00 00` | 167 | "free" / unattached items (no owner, not on a floor)  |
-| `ff 00 xx yy` | 164 | various, including most PC-equipped items (`ff 00 00 01`)|
-
-Where the **actual carried-by-PC information lives is NOT the trailer** —
-it's in the static block at byte +4 (the `B:lvl` field from `entities`, which
-items repurpose as an owner reference):
-
-| static[+4] | meaning |
+| W:place@0 | meaning |
 |-----------|---------|
-| 32–35     | PC object index (Sir Mikeal / Stonebeard / Salina / Lady Reeya) |
-| 1–14      | dungeon level number (item is on the floor or in a container) |
-| 0xFF      | "no location" — orphan / pool |
+| 32–41     | held by that PC object (equipment/backpack) |
+| -1        | **on a dungeon floor** — B:x/B:y/B:lvl give the cell; `init_level` / our `loadLevelObjects` chains it into lvlobj plane 1 |
+| other     | container/holder object reference |
 
-This is what should drive a save's "is this item on PC X" vs "is it on
-floor / in container" determination, not the trailer. The trailer carries
-something else (free-list/link pointer? per-item flags?), and we currently
-parse it as an opaque 4 bytes — enough for byte-perfect round-trip via
-`write_initial_tempfiles`, but the *semantic* needs another RE pass. A
-sample of equipped items:
-
-| id | cls | owner | trailer | statics[0..5] |
-|----|-----|-------|---------|---------------|
-| 994 | 1338 chain mail | 32 (Mikeal) | `ff 00 00 01` | `00 00 0d 00 20 00` |
-| 985 | 1343 shield     | 33 (Stonebeard) | `ff 00 00 01` | `00 00 0d 00 21 00` |
-| 977 | 1345 spellbook  | 34 (Salina) | `ff ff 00 00` | `00 00 0c 00 22 00` |
-| 969 | 1343 shield     | 35 (Lady Reeya) | `ff 00 00 00` | `00 00 0d 00 23 00` |
+> **History (fixed 2026-07-19):** this section previously documented a
+> `{u16 id, u16 class, N statics, 4-byte trailer}` frame with elaborate
+> trailer semantics (magical bonus in byte 3, owner at `B:lvl@4`, itmflags
+> arriving as 0xFFFF). All of that was an artifact of misreading the CDESC
+> header as 4 bytes: every static block was parsed 4 bytes early, and the
+> "trailer" was the real last-4 statics bytes. The misframe hid **every
+> initial floor item in the game** (the Burial Glen wands/axe/loot piles) —
+> found while driving phase 3 of [control_channel.md](control_channel.md).
 
 ✅ **Implemented** in [savegame/items_tmp.cpp](../apps/thirdeye/savegame/items_tmp.cpp)
-(`parseItemStream`). `resume_level` recreates each item via
-`createProgram(id, cls)` + writes the saved static block, then patches the
+(`parseItemStream`, CDESC framing shared with `loadAreaInstances`).
+`resume_level` recreates each item via `createProgram(id, cls)` + restores the
+saved statics verbatim (no bonus/itmflags patch-ups needed), then patches the
 PCs' `W:inventory[14..25]` from the parsed `equip[]`.
 
 `write_initial_tempfiles` serializes these; `resume_items`/`restore_items` are

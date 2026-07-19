@@ -1,5 +1,6 @@
 #include "engine.hpp"
 #include "automap.hpp"
+#include "control.hpp"
 #include "resources/res.hpp"
 #include "resources/gffi.hpp"
 #include "sound/sound.hpp"
@@ -40,7 +41,7 @@ THIRDEYE::Engine::Engine(Files::ConfigurationManager& configurationManager) :
 }
 
 THIRDEYE::Engine::~Engine() {
-
+	THIRDEYE::control::shutdown();
 }
 
 // Setup engine via parameters
@@ -476,6 +477,9 @@ void THIRDEYE::runtime::pumpHost(GRAPHICS::Graphics &gfx, VM::EventSystem &event
 			events.mouseButton(false, false);
 		}
 	}
+	// Live control channel: polled here so a client's inject/dump lands in
+	// the same pump slot AUTOWALK would use. No-op when THIRDEYE_CTL unset.
+	THIRDEYE::control::pump(&gfx, events, objects);
 	// Debug: THIRDEYE_AUTOKEY=<decimal SDL scancode> pushes a synthetic key-down
 	// with that physical scancode every ~40 pumps, so the real key handler (WASD/QE/
 	// I/C scancode mapping) can be exercised headless (e.g. 26=W, 4=A, 22=S, 7=D,
@@ -1372,6 +1376,10 @@ void THIRDEYE::Engine::handleBootWall(const VM::VmError &e,
 // Initialise and enter main loop.
 void THIRDEYE::Engine::go() {
 	gBootStart = std::chrono::steady_clock::now();
+	// Live control channel (docs/control_channel.md). Env var only for now;
+	// no CLI flag until someone asks. Zero cost when unset.
+	if (const char *p = std::getenv("THIRDEYE_CTL"))
+		THIRDEYE::control::init(p);
 	std::filesystem::path resFile = resolveResourceFile();
 
 	if (!std::filesystem::exists(resFile)) {

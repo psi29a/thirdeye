@@ -9,6 +9,9 @@ set(UNITTEST
     savegame_tests.cpp
     chargen_tests.cpp
     clip_tests.cpp
+    control_tests.cpp
+    ../thirdeye/control.cpp
+    ../thirdeye/automap.cpp  # control.cpp calls automap::toggle()
 )
 
 set(UNITTEST_HEADER
@@ -61,6 +64,19 @@ endif()
 # time, not during the build -- this avoids needing the SDL3/OpenAL/WildMIDI
 # runtime DLLs on PATH at build time (notably on Windows/vcpkg).
 add_test(NAME runtests COMMAND runtests)
+
+# Control-channel e2e (docs/control_channel.md): boots the real binary with
+# THIRDEYE_CTL, drives ping/party/key over the socket, asserts pose changed.
+# Skips (exit 77) unless THIRDEYE_TEST_DATA_DIR points at an EOB3 install.
+find_package(Python3 COMPONENTS Interpreter QUIET)
+if (Python3_FOUND AND NOT WIN32)  # AF_UNIX channel is POSIX-only for now
+    add_test(NAME control_e2e
+        COMMAND ${Python3_EXECUTABLE}
+                ${CMAKE_SOURCE_DIR}/scripts/ctl_e2e.py
+                $<TARGET_FILE:thirdeye>)
+    set_tests_properties(control_e2e PROPERTIES SKIP_RETURN_CODE 77
+                         TIMEOUT 120)
+endif()
 
 # daesop converter tests -- a separate executable: daesop is its own app (no
 # SDL, C-style globals), so we compile its non-main sources here rather than

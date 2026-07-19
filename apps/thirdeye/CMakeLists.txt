@@ -7,12 +7,14 @@ set(GAME
     main.cpp
     engine.cpp
     automap.cpp
+    control.cpp
 )
 
 set(GAME_HEADER
     engine.hpp
     config.hpp
     automap.hpp
+    control.hpp
 )
 source_group(game FILES ${GAME} ${GAME_HEADER})
 
