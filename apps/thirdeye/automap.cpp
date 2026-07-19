@@ -165,12 +165,23 @@ constexpr uint16_t kTrapClasses[] = {
 	2328, // invisible pit
 };
 
+// A feature that features.M:8 "disable" has switched off (chopped tree,
+// dispelled tree, opened door) sets W:decflags bit 0x8000 (features@0) and
+// stops blocking -- the 3D view draws open space, so the map must too.
+bool featureDisabled(VM::ObjectSystem &objects, int obj) {
+	constexpr uint16_t kFeaturesCls = 1994;
+	if (uint8_t *p = objects.classStaticPtr(obj, kFeaturesCls, 0, 2))
+		return ((p[0] | (p[1] << 8)) & 0x8000) != 0;
+	return false;
+}
+
 bool plane0BlocksAt(VM::ObjectSystem &objects, int dn, int x, int y) {
 	int head = lvlobjHead(objects, dn, 0, x, y);
 	if (head < 0) return false;
 	uint16_t cls = objects.classOf(head);
 	for (uint16_t base : kBlockerBases)
-		if (objects.isSubclassOf(cls, base)) return true;
+		if (objects.isSubclassOf(cls, base))
+			return !featureDisabled(objects, head);
 	return false;
 }
 
@@ -186,7 +197,11 @@ Feature plane0FeatureAt(VM::ObjectSystem &objects, int dn, int x, int y) {
 	for (uint16_t t : kTrapClasses)
 		if (objects.isSubclassOf(cls, t)) return Feature::Trap;
 	for (uint16_t base : kBlockerBases)
-		if (objects.isSubclassOf(cls, base)) return Feature::None;
+		if (objects.isSubclassOf(cls, base))
+			// Live blockers render as walls (no dot). A disabled one (chopped
+			// tree) is open floor now -- fall through to Generic so the stump
+			// leaves the "MARK" breadcrumb the sticky categories promise.
+			if (!featureDisabled(objects, head)) return Feature::None;
 	if (objects.isSubclassOf(cls, kStairsBase)) return Feature::Stairs;
 	for (uint16_t base : kActivatorBases)
 		if (objects.isSubclassOf(cls, base)) return Feature::Activator;
@@ -338,6 +353,15 @@ void render(GRAPHICS::Graphics &gfx, RESOURCES::Resource &res) {
 	// overlay can paint the full 320x200 -- next SOP redraw re-sets its own.
 	gfx.suspendBackdrop(true);
 	gfx.clearClip();
+
+	// 0. Wipe the message-window rect (x < 260, y >= 180). The map's darken
+	// step below is a 50% checkerboard, which lets underlying pixels bleed
+	// through at reduced brightness -- pre-map "You can't go that way" then
+	// stays half-visible under the map, and the tester's build reads it as
+	// "text looks thinner". Text isn't part of the map surface anyway, so
+	// paint that strip solid black before darkening. The SOP redraws its
+	// panel + text on close via mBackdrop; nothing to restore here.
+	gfx.fillRect(0, 180, 259, 199, 0);
 
 	// 1. Darken the whole frame (50% via checkerboard black -- palette index 0
 	// is stably black across every dungeon palette).

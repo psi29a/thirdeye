@@ -8,6 +8,7 @@
 #include "vm/objects.hpp"
 #include "vm/events.hpp"
 #include "savegame/transfer.hpp"
+#include "savegame/items_tmp.hpp"
 #include "savegame/lvl_tmp.hpp"
 #include "chargen/screen.hpp"
 #include "runtime/internal.hpp"
@@ -73,6 +74,9 @@ void THIRDEYE::Engine::setChargen(bool chargen) {
 }
 void THIRDEYE::Engine::setChargenTest(bool chargenTest) {
 	mChargenTest = chargenTest;
+}
+void THIRDEYE::Engine::setLoadSave(int slot) {
+	mLoadSave = slot;
 }
 
 // The game-data path may be either a directory (in which case we append the
@@ -283,25 +287,47 @@ void THIRDEYE::runtime::pumpHost(GRAPHICS::Graphics &gfx, VM::EventSystem &event
 			// bytecode has no M handler). Consumes the event. Esc while the
 			// map is open closes it before the SOP can see it, so Esc doesn't
 			// also fire the camp/quit menu underneath.
+			// M toggles the automap in gameplay, but has to fall through as
+			// ASCII 'm' while a UI screen is active (camp save-game name
+			// entry, etc.) or the map opens instead of typing an M. Same
+			// gate as the WASDQE block below; kept inline to short-circuit
+			// early like the original for the gameplay hot path.
 			if (ev.key.scancode == SDL_SCANCODE_M) {
-				THIRDEYE::automap::toggle();
-				break;
+				if (!THIRDEYE::runtime::uiScreenActive(objects)) {
+					THIRDEYE::automap::toggle();
+					break;
+				}
+				// UI screen up: fall through -- ASCII 'm' will be posted below.
 			}
 			if (THIRDEYE::automap::isOpen() && ev.key.key == SDLK_ESCAPE) {
 				THIRDEYE::automap::close();
 				break;
 			}
+			// Skip the WASDQE -> arrow-scancode translation while any UI screen
+			// is active -- inside camp's save-game name entry (or any text
+			// field the SOP presents on a UI screen) the movement mapping
+			// stole every letter of asdwqre and the save name came out empty.
+			// Two gates cover it: kernel W:current_screen@265 (spell book,
+			// character screen, ...) OR camp.B:active@8 (camp menu + all its
+			// sub-panels; camp doesn't touch current_screen). Camp itself is
+			// toggled by ASCII 'c', so C stays translated below.
+			bool uiScreen = THIRDEYE::runtime::uiScreenActive(objects);
+			if (std::getenv("THIRDEYE_KEYDBG"))
+				std::cerr << "[keydbg] scancode=" << (int)ev.key.scancode
+				          << " sdlk=" << (int)ev.key.key
+				          << " uiScreen=" << uiScreen << "\n";
 			int32_t key = 0;
-			switch (ev.key.scancode) {
+			if (!uiScreen) switch (ev.key.scancode) {
 			case SDL_SCANCODE_W: key = 0x4800; break; // move forward
 			case SDL_SCANCODE_S: key = 0x5000; break; // move backward
 			case SDL_SCANCODE_A: key = 0x4b00; break; // strafe left
 			case SDL_SCANCODE_D: key = 0x4d00; break; // strafe right
 			case SDL_SCANCODE_Q: key = 0x4700; break; // turn left
 			case SDL_SCANCODE_E: key = 0x4900; break; // turn right
-			case SDL_SCANCODE_C: key = 0x63;   break; // camp (kernel notifies 'c'->272)
 			default: break;
 			}
+			if (key == 0 && ev.key.scancode == SDL_SCANCODE_C)
+				key = 0x63; // camp toggle -- SOP notifies 'c'->272 in either mode
 			if (key == 0) { // not a movement scancode -> arrows + ASCII via keysym
 				SDL_Keycode k = ev.key.key;
 				switch (k) {
@@ -383,7 +409,7 @@ void THIRDEYE::runtime::pumpHost(GRAPHICS::Graphics &gfx, VM::EventSystem &event
 		// Cache the parsed sequence in statics: AUTOWALK is a process-launch
 		// env var (set once before exec), so re-parsing every event pump
 		// (~30 Hz) is wasted work.
-		enum class TokKind : uint8_t { Key, Lclick, Rclick, Wait };
+		enum class TokKind : uint8_t { Key, Lclick, Rclick, Wait, Map };
 		struct Tok { TokKind kind; int32_t scancode; int x; int y; };
 		static std::vector<Tok> toks;
 		static int tick = -1;
@@ -397,6 +423,11 @@ void THIRDEYE::runtime::pumpHost(GRAPHICS::Graphics &gfx, VM::EventSystem &event
 				Tok t{TokKind::Wait, 0, 0, 0};
 				if (one == "_") {
 					t.kind = TokKind::Wait;
+				} else if (one == "M") {
+					// Automap toggle. The map is host-side (real SDL 'M' key,
+					// never posted to the SOP), so a VM SYS_KEYDOWN can't reach
+					// it -- this token calls the overlay directly.
+					t.kind = TokKind::Map;
 				} else if ((one[0] == 'L' || one[0] == 'R') &&
 				           one.find(':') != std::string::npos) {
 					int x = 0, y = 0;
@@ -433,6 +464,12 @@ void THIRDEYE::runtime::pumpHost(GRAPHICS::Graphics &gfx, VM::EventSystem &event
 				break;
 			}
 			case TokKind::Wait: break;
+			case TokKind::Map:
+				THIRDEYE::automap::toggle();
+				std::cerr << "[autowalk] M token -> automap "
+				          << (THIRDEYE::automap::isOpen() ? "OPEN" : "CLOSED")
+				          << "\n";
+				break;
 			}
 		} else if (phase == 5 &&
 		           (tok.kind == TokKind::Lclick || tok.kind == TokKind::Rclick)) {
@@ -516,19 +553,64 @@ void THIRDEYE::runtime::pumpHost(GRAPHICS::Graphics &gfx, VM::EventSystem &event
 
 	// Automap: refresh visibility from the current party pose every pump
 	// (cheap; three static-ptr fetches + a 32x32 scan). The overlay itself
-	// renders inside gfx.update() via setPresentOverlay so it lands last on
-	// mScreen. Snapshot/restore mScreen at the open/close edges so text +
-	// one-shot draws (character names, HP labels, arrow pad, CAMP, status
-	// line) survive: mBackdrop is text-free and only holds panel art.
+	// renders inside gfx.update() via setPresentOverlay, which save-unders
+	// the frame: overlay pixels are wiped off mScreen right after each
+	// present, so the SOP's canvas (text windows, one-shot draws, backdrop)
+	// is never rolled back or overpainted -- SOP draws made while the map is
+	// open survive its close. (The old open/close snapshot/restore here
+	// rolled those draws back and garbled the message window.)
 	THIRDEYE::automap::tick(objects);
-	bool mapOpen = THIRDEYE::automap::isOpen();
-	static bool wasMapOpen = false;
-	if (!wasMapOpen && mapOpen)  gfx.snapshotScreen();
-	if (wasMapOpen && !mapOpen)  gfx.restoreScreenSnapshot();
-	wasMapOpen = mapOpen;
-	// Block SOP-driven compass snapshots while open: they'd capture overlay
-	// pixels covering the compass rect and re-stamp them on future frames.
-	gfx.suppressCompassSnapshot(mapOpen);
+	// Adventure-only chrome master switch: while any dialog/menu screen is
+	// up (SOP screen state -- see uiScreenActive), the compass restamp must
+	// stay off or it ghosts over the dialog art (mausoleum-entry decision
+	// box). Driven every pump so screen transitions can't strand it.
+	bool uiActive;
+	{
+		bool ui = THIRDEYE::runtime::uiScreenActive(objects);
+		static bool prevUi = false;
+		if (ui != prevUi && std::getenv("THIRDEYE_UIDBG")) {
+			prevUi = ui;
+			std::cerr << "[uidbg] uiScreenActive -> " << ui << "\n";
+		}
+		prevUi = ui;
+		gfx.setUiScreenActive(ui);
+		uiActive = ui;
+		// QoL: a dialog/decision screen taking over while the map overlay is
+		// open (mausoleum-entry outtake box, NPC encounters) would leave the
+		// user choosing blind under the map. Auto-close the overlay -- and
+		// skip the M-close repaint below for this edge (uiActive gates it):
+		// the dialog owns the frame, and the SOP redraws the scene itself
+		// when the dialog ends.
+		if (ui && THIRDEYE::automap::isOpen())
+			THIRDEYE::automap::close();
+	}
+	// Message-strip fallback: on the M-close edge, wipe the message-window
+	// region back to clean panel art. The tester saw fresh SOP prints under
+	// the M cycle land at wrong Y positions (interpreted as bold/thin or
+	// swapped white/green colour lines), even though headless dumps show
+	// byte-identical pixels across the cycle. We take the pragmatic hedge:
+	// after every M cycle the message log resets to empty on-screen, and
+	// the next SOP print reads its own text-window state and renders fresh.
+	// History across a map cycle is lost -- ponytail: better than a phantom.
+	static bool sMapWasOpen = false;
+	bool mapNowOpen = THIRDEYE::automap::isOpen();
+	if (sMapWasOpen && !mapNowOpen && !uiActive) {
+		// Wipe the message-window strip to clean panel art (see comment above).
+		gfx.wipeTextBox(0, 178, 259, 199);
+		// Also nudge the kernel to redraw the dungeon view (M:33 "draw view"):
+		// the tester saw stale wall/vine art from the previous level surviving
+		// a map cycle in the mausoleum interior, and mBackdrop wipes only cover
+		// text panels -- the 3D view has no equivalent. A single dispatched
+		// SEND is what the SOP itself uses everywhere else to refresh the
+		// scene (grep "draw view" in kernel.dasm).
+		constexpr uint16_t kKernelCls = 1382;
+		int kn = objects.firstObjectOfClass(kKernelCls);
+		if (kn >= 0) {
+			try { objects.send(kn, 33, {}); } // "draw view"
+			catch (const std::exception &) {}
+		}
+	}
+	sMapWasOpen = mapNowOpen;
 
 	gfx.update();                 // present whatever the bytecode has drawn
 	if (!events.peekEvent())
@@ -740,10 +822,9 @@ void THIRDEYE::Engine::bootObject(RESOURCES::Resource &resource,
 		// SOP draw + the compass restamp. The captured raw pointer is safe:
 		// the callback lives on the same Graphics we're pointing at.
 		GRAPHICS::Graphics *gp = gfx.get();
-		gfx->setPresentOverlay([gp, &resource]() {
-			if (THIRDEYE::automap::isOpen())
-				THIRDEYE::automap::render(*gp, resource);
-		});
+		gfx->setPresentOverlay(
+		    [gp, &resource]() { THIRDEYE::automap::render(*gp, resource); },
+		    []() { return THIRDEYE::automap::isOpen(); });
 	} catch (const std::exception &e) {
 		std::cout << "Graphics unavailable (" << e.what()
 		          << "); booting headless." << std::endl;
@@ -752,7 +833,7 @@ void THIRDEYE::Engine::bootObject(RESOURCES::Resource &resource,
 	// In-game sound mixer (OpenAL). Only useful with graphics; when headless we
 	// still construct it so the sound runtime calls have a target, but they no-op
 	// if the device failed to open. Lives for the whole game session.
-	MIXER::Mixer mixer;
+	MIXER::Mixer mixer(!mUseSound);
 
 	VM::ObjectSystem objects;
 	VM::EventSystem events(objects);
@@ -806,8 +887,57 @@ void THIRDEYE::Engine::bootObject(RESOURCES::Resource &resource,
 	// experience: pokemem(1264,'INTR') + launch("cine.exe") -- intro first,
 	// then the title menu when cine chains back (start.dasm LBL_79). Seeding
 	// a mode here is only for the shortcut flags.
+	// --load-save=N: restore slot N's backups into the live TMP files (exactly
+	// what the SOP's save picker does via restore_items/restore_level_objects),
+	// then boot CINE so resume_level builds the party from them. On any failure
+	// (empty/missing slot) fall through to the normal flag logic with the live
+	// TMPs untouched.
+	bool slotRestored = false;
+	if (mLoadSave >= 0) {
+		auto dir = resource.resourcePath().parent_path() / "SAVEGAME";
+		char nn[16];
+		std::snprintf(nn, sizeof(nn), "%02d", mLoadSave);
+		// Validate BOTH halves of the slot before replacing any live TMP file:
+		// restoring items first and only then discovering the slot has no
+		// level backups would pair this slot's ITEMS.TMP with the previous
+		// session's LVL??.TMP (CodeRabbit).
+		std::error_code ec;
+		bool haveItems =
+		    std::filesystem::exists(dir / ("ITEMS_" + std::string(nn) + ".BIN"), ec);
+		bool haveLevels = false;
+		for (int lvl = 1; lvl <= 14 && !haveLevels; ++lvl) {
+			char src[32];
+			std::snprintf(src, sizeof(src), "LVL%02d_%s.BIN", lvl, nn);
+			haveLevels = std::filesystem::exists(dir / src, ec);
+		}
+		int lvls = 0;
+		if (haveItems && haveLevels) {
+			bool itemsOk = savegame::restoreItems(dir, mLoadSave);
+			lvls = itemsOk ? savegame::restoreLevels(dir, mLoadSave) : 0;
+			slotRestored = itemsOk && lvls > 0;
+		}
+		if (slotRestored) {
+			// Automap sidecar, mirroring restore_items: slot MAPS -> live, or
+			// fresh fog when the slot has none / the parse fails.
+			auto src = dir / ("MAPS_" + std::string(nn) + ".BIN");
+			auto live = dir / "MAPS.TMP";
+			bool mapRestored = false;
+			if (std::filesystem::exists(src, ec))
+				mapRestored = std::filesystem::copy_file(src, live,
+				    std::filesystem::copy_options::overwrite_existing, ec) &&
+				    automap::loadFrom(live);
+			if (!mapRestored)
+				automap::reset();
+		}
+		std::cout << "  [--load-save: slot " << mLoadSave
+		          << (slotRestored ? " restored (" + std::to_string(lvls)
+		                                 + " level files)"
+		                           : " empty or unreadable; ignoring")
+		          << "]" << std::endl;
+	}
 	int32_t bootMode = 0;
-	if (mChargen)        bootMode = MODE_CHGN;
+	if (slotRestored)    bootMode = MODE_CINE;
+	else if (mChargen)   bootMode = MODE_CHGN;
 	else if (mSkipMenu)  bootMode = saveExists() ? MODE_CINE : MODE_CHGN;
 	else if (mSkipIntro) bootMode = MODE_INTR;
 	mem.insert_or_assign(1264, bootMode);
@@ -907,8 +1037,13 @@ void THIRDEYE::Engine::bootObject(RESOURCES::Resource &resource,
 		return it != mem.end() ? it->second : MODE_INTR;
 	};
 	bool quit = false;
+	bool firstBoot = true; // first start instance of the session (real cold boot)
 	while (!quit) {
 		const int32_t mode = readMode();
+		// Latch-and-clear up top: the self-destroy path `continue`s past the
+		// loop tail, so clearing there would leave firstBoot stuck true.
+		const bool wasFirstBoot = firstBoot;
+		firstBoot = false;
 		// Text-box clear style depends on the screen we're booting into: the title
 		// menu (INTR) bakes its options into the backdrop bitmap, so its text boxes
 		// flat-fill to erase them; the in-game HUD draws text over detailed panel
@@ -955,7 +1090,9 @@ void THIRDEYE::Engine::bootObject(RESOURCES::Resource &resource,
 				          << events.liveWindowCount() << " win leaked; "
 				             "resetting + relaunching with mode "
 				          << (nextMode == MODE_CINE ? "CINE"
-				            : nextMode == MODE_CHGN ? "CHGN" : "INTR")
+				            : nextMode == MODE_CHGN ? "CHGN"
+				            : nextMode == MODE_INTR ? "INTR"
+				            : "cold-boot (" + std::to_string(nextMode) + ")")
 				          << "]" << std::endl;
 				objects.resetInstances();
 				events.reset();
@@ -982,8 +1119,17 @@ void THIRDEYE::Engine::bootObject(RESOURCES::Resource &resource,
 		// the next start lands on the title menu rather than the chargen-transfer.
 		if (!relaunch.empty()) {
 			try {
+				// The argless-cine intro is legitimate from exactly two places:
+				// the session's real cold boot (first start instance, mode 0)
+				// and the title menu's "Introduction" choice (mode INTR). The
+				// in-game quit instead pokes mode 0 and lets the NEXT start
+				// re-run the whole DOS attract chain (init_sound + launch
+				// "cine.exe") -- same launch, but it's a relaunch, not the
+				// first boot, so it gets the intro suppressed (QoL).
 				if (!runExternalProgram(relaunch, gfx.get(), resource, mixer,
-			                        relaunchExtras)) {
+			                        relaunchExtras,
+			                        /*suppressArglessIntro=*/
+			                        !wasFirstBoot && mode != MODE_INTR)) {
 					mem.insert_or_assign(1264, MODE_INTR);
 					std::cout << "  [sub-program cancelled -- next start: INTR]"
 					          << std::endl;
@@ -1014,7 +1160,8 @@ bool THIRDEYE::Engine::runExternalProgram(const std::string &program,
                                           GRAPHICS::Graphics *gfx,
                                           RESOURCES::Resource &resource,
                                           MIXER::Mixer &mixer,
-                                          const std::vector<std::string> &extras) {
+                                          const std::vector<std::string> &extras,
+                                          bool suppressArglessIntro) {
 	std::string p = program;
 	std::transform(p.begin(), p.end(), p.begin(),
 	               [](unsigned char c) { return std::tolower(c); });
@@ -1024,7 +1171,7 @@ bool THIRDEYE::Engine::runExternalProgram(const std::string &program,
 		// LICH.GFF for the mid-game cutscenes. Pick the first extra that
 		// looks like a .gff filename; fall back to INTRO for the original
 		// argless "Introduction" behaviour.
-		std::string gff = "INTRO.GFF";
+		std::string gff;
 		for (const std::string &e : extras) {
 			std::string el = e;
 			std::transform(el.begin(), el.end(), el.begin(),
@@ -1035,6 +1182,21 @@ bool THIRDEYE::Engine::runExternalProgram(const std::string &program,
 				break;
 			}
 		}
+		// QoL: the in-game quit pokes mode 0, making the next start re-run
+		// the DOS attract chain -- the same argless launch("cine.exe") as a
+		// real cold boot -- which would replay the intro before landing on
+		// the title menu. The caller passes suppressArglessIntro=true for
+		// every argless cine launch that is neither the session's first boot
+		// nor the menu's explicit "Introduction" choice. Cutscenes and the
+		// finale name their .GFF and are untouched by this gate.
+		if (gff.empty() && suppressArglessIntro) {
+			std::cout << "  [program chain: CINE (argless) on quit-to-menu"
+			             " -- skipping intro replay, straight to menu]"
+			          << std::endl;
+			return true;
+		}
+		if (gff.empty())
+			gff = "INTRO.GFF";
 		std::cout << "  [program chain: CINE -> " << gff << "]" << std::endl;
 		playCinematic(gfx, resource, gff, mixer);
 		return true;
@@ -1115,18 +1277,16 @@ bool THIRDEYE::Engine::runExternalProgram(const std::string &program,
 
 // Play a GFF cinematic (INTRO.GFF/FINALE.GFF/...) that lives beside the game's
 // .RES, reusing thirdeye's existing GFF player. Returns when the cinematic ends,
-// is skipped (ESC/Enter), or --skip-intro is set; closing the window throws
+// or is skipped (ESC/Enter); closing the window throws
 // QuitRequested to unwind the whole session. The boot then re-enters start, which
 // draws the menu over the final frame.
 void THIRDEYE::Engine::playCinematic(GRAPHICS::Graphics *gfx,
                                      RESOURCES::Resource &resource,
                                      const std::string &gffName,
                                      MIXER::Mixer &mixer) {
-	if (mSkipIntro) {
-		std::cout << "  [program chain: --skip-intro set; skipping " << gffName
-		          << "]" << std::endl;
-		return;
-	}
+	// --skip-intro only suppresses the boot-time auto-intro (handled via
+	// bootMode = MODE_INTR above); reaching here means the SOP explicitly
+	// launched a cinematic (menu "Introduction", cutscene, finale) -- play it.
 	std::filesystem::path gffPath =
 		resource.resourcePath().parent_path() / gffName;
 	if (!gfx || !std::filesystem::exists(gffPath)) {

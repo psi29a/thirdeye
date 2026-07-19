@@ -75,6 +75,12 @@ int main(int argc, char** argv) {
                      "Force the chargen-transfer flow (load whatever's in "
                      "CHARGEN/CREATE.SAV) even when a saved party exists in "
                      "SAVEGAME/ITEMS.TMP. Implies --skip-menu.");
+        int loadSave = -1;
+        app.add_option("--load-save", loadSave,
+                       "Boot straight into save slot N (restores SAVEGAME/"
+                       "ITEMS_NN.BIN + LVL??_NN.BIN into the live TMP files, "
+                       "then continues the game from them). Implies "
+                       "--skip-intro/--skip-menu. For debugging.");
         bool chargenTest = false;
         app.add_flag("--chargen-test", chargenTest,
                      "Run the chargen entry screen directly (no SOP/menu) "
@@ -111,6 +117,7 @@ int main(int argc, char** argv) {
             {"skip-intro", skipIntro ? "true" : "false"},
             {"chargen",    chargen   ? "true" : "false"},
             {"chargen-test", chargenTest ? "true" : "false"},
+            {"load-save",  std::to_string(loadSave)},
         };
         cfgMgr.readConfiguration(variables);
 
@@ -125,6 +132,7 @@ int main(int argc, char** argv) {
         engine.setSkipIntro(toBool(variables["skip-intro"]));
         engine.setChargen(toBool(variables["chargen"]));
         engine.setChargenTest(toBool(variables["chargen-test"]));
+        engine.setLoadSave(std::stoi(variables["load-save"]));
         engine.setDebugMode(toBool(variables["debug"]));
         engine.setSoundUsage(toBool(variables["nosound"]));
         engine.setScale(static_cast<uint16_t>(std::stoi(variables["scale"])));

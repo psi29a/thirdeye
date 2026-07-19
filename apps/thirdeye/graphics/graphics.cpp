@@ -84,7 +84,7 @@ GRAPHICS::Graphics::~Graphics() {
 	SDL_DestroySurface(mBackdrop);     // lazily created in drawImage (nullptr-safe)
 	SDL_DestroySurface(mCompassSnap);  // lazily created in snapshotCompass
 	SDL_DestroySurface(mCompassUnderlay);
-	SDL_DestroySurface(mScreenSnap);   // lazily created in snapshotScreen
+	SDL_DestroySurface(mOverlaySave);  // lazily created in update (save-under)
 	SDL_DestroySurface(mLastShown);    // lazily created in update
 	if (mPresentTex != nullptr) SDL_DestroyTexture(mPresentTex);
 	SDL_DestroyPalette(mPalette);
@@ -242,7 +242,16 @@ void GRAPHICS::Graphics::drawImage(std::vector<uint8_t> &bmp, uint16_t index,
 			if (kDbg)
 				fprintf(stderr, "[compass] cover eff=(%d,%d,%d,%d) underlay=%p\n",
 				        eff.x, eff.y, eff.w, eff.h, (void*)mCompassUnderlay);
-			if (transparency && mCompassUnderlay != nullptr) {
+			// Full-screen frame art (HUD Backdrop 190, Mausoleum letterbox
+			// 178) is drawn over an explicit BLACK underlay by the runtime --
+			// restoring the compass underlay here would repaint HUD pixels
+			// (possibly compass-poisoned on a --skip-menu boot, where 190
+			// lands after the compass stamp) over that black, leaking the
+			// compass arch into the transition dialog. Those resources paint
+			// their own world; skip the underlay restore for them.
+			bool fullScreenFrame = (cacheId == 190 || cacheId == 178);
+			if (transparency && mCompassUnderlay != nullptr &&
+			    !fullScreenFrame) {
 				// Restore only what THIS draw is about to cover (its rect
 				// clipped to the underlay's footprint) -- never repaint
 				// beyond the incoming shape.
@@ -256,6 +265,16 @@ void GRAPHICS::Graphics::drawImage(std::vector<uint8_t> &bmp, uint16_t index,
 				}
 			}
 			mCompassCovered = true;
+		} else {
+			// Loose match (see fillRect): the mausoleum-entry cutscene draws
+			// its dialog panel as pieces that individually don't 100% cover
+			// the compass but together clearly do. Any single bitmap that
+			// takes >= half the compass area is treated as a cover, so the
+			// compass restamp stops until the SOP explicitly redraws it.
+			SDL_Rect ov;
+			if (SDL_GetRectIntersection(&eff, &kCompassRect, &ov) &&
+			    ov.w * ov.h * 2 >= kCompassRect.w * kCompassRect.h)
+				mCompassCovered = true;
 		}
 	}
 
@@ -280,14 +299,22 @@ void GRAPHICS::Graphics::drawImage(std::vector<uint8_t> &bmp, uint16_t index,
 	// does dozens of draws per frame (~10 MB/frame of needless memcpy, the main
 	// cause of slow keypress->render latency). The blit rect is intersected with
 	// SDL's current clip rect on mScreen so the backdrop matches what's visible.
-	if (mBackdrop == nullptr)
-		mBackdrop = SDL_CreateSurface(WIDTH, HEIGHT, SDL_PIXELFORMAT_ARGB8888);
-	SDL_Rect clip;
-	SDL_GetSurfaceClipRect(mScreen, &clip);
-	SDL_Rect mirror_rect = dest;
-	if (SDL_GetRectIntersection(&mirror_rect, &clip, &mirror_rect)) {
-		SDL_SetSurfaceBlendMode(mScreen, SDL_BLENDMODE_NONE);
-		SDL_BlitSurface(mScreen, &mirror_rect, mBackdrop, &mirror_rect);
+	// Skip the backdrop mirror while mSuspendBackdrop is set (automap overlay
+	// or similar): the SOP's text-erase source must never capture overlay
+	// pixels, else the next scroll/print restores those overlay pixels
+	// underneath fresh text and the same "You can't go" line, redrawn on
+	// top of a subtly different backdrop, reads as bolder or thinner across
+	// the M cycle.
+	if (!mSuspendBackdrop) {
+		if (mBackdrop == nullptr)
+			mBackdrop = SDL_CreateSurface(WIDTH, HEIGHT, SDL_PIXELFORMAT_ARGB8888);
+		SDL_Rect clip;
+		SDL_GetSurfaceClipRect(mScreen, &clip);
+		SDL_Rect mirror_rect = dest;
+		if (SDL_GetRectIntersection(&mirror_rect, &clip, &mirror_rect)) {
+			SDL_SetSurfaceBlendMode(mScreen, SDL_BLENDMODE_NONE);
+			SDL_BlitSurface(mScreen, &mirror_rect, mBackdrop, &mirror_rect);
+		}
 	}
 }
 
@@ -363,14 +390,22 @@ void GRAPHICS::Graphics::drawIndexed(const std::vector<uint8_t> &pixels,
 
 	// Keep mBackdrop in sync with the visible art so later text-window restores
 	// don't ghost over the CPS. Matches drawImage's mirror-rect logic.
-	if (mBackdrop == nullptr)
-		mBackdrop = SDL_CreateSurface(WIDTH, HEIGHT, SDL_PIXELFORMAT_ARGB8888);
-	SDL_Rect clip;
-	SDL_GetSurfaceClipRect(mScreen, &clip);
-	SDL_Rect mirror_rect = dest;
-	if (SDL_GetRectIntersection(&mirror_rect, &clip, &mirror_rect)) {
-		SDL_SetSurfaceBlendMode(mScreen, SDL_BLENDMODE_NONE);
-		SDL_BlitSurface(mScreen, &mirror_rect, mBackdrop, &mirror_rect);
+	// Skip the backdrop mirror while mSuspendBackdrop is set (automap overlay
+	// or similar): the SOP's text-erase source must never capture overlay
+	// pixels, else the next scroll/print restores those overlay pixels
+	// underneath fresh text and the same "You can't go" line, redrawn on
+	// top of a subtly different backdrop, reads as bolder or thinner across
+	// the M cycle.
+	if (!mSuspendBackdrop) {
+		if (mBackdrop == nullptr)
+			mBackdrop = SDL_CreateSurface(WIDTH, HEIGHT, SDL_PIXELFORMAT_ARGB8888);
+		SDL_Rect clip;
+		SDL_GetSurfaceClipRect(mScreen, &clip);
+		SDL_Rect mirror_rect = dest;
+		if (SDL_GetRectIntersection(&mirror_rect, &clip, &mirror_rect)) {
+			SDL_SetSurfaceBlendMode(mScreen, SDL_BLENDMODE_NONE);
+			SDL_BlitSurface(mScreen, &mirror_rect, mBackdrop, &mirror_rect);
+		}
 	}
 }
 
@@ -408,23 +443,14 @@ void GRAPHICS::Graphics::restoreBackdrop() {
 	SDL_BlitSurface(mBackdrop, nullptr, mScreen, nullptr);
 }
 
-void GRAPHICS::Graphics::snapshotScreen() {
-	if (mScreenSnap == nullptr)
-		mScreenSnap = SDL_CreateSurface(WIDTH, HEIGHT, SDL_PIXELFORMAT_ARGB8888);
-	SDL_SetSurfaceBlendMode(mScreen, SDL_BLENDMODE_NONE);
-	SDL_BlitSurface(mScreen, nullptr, mScreenSnap, nullptr);
-}
-
-void GRAPHICS::Graphics::restoreScreenSnapshot() {
-	if (mScreenSnap == nullptr) return;
-	SDL_SetSurfaceBlendMode(mScreenSnap, SDL_BLENDMODE_NONE);
-	SDL_BlitSurface(mScreenSnap, nullptr, mScreen, nullptr);
-}
-
 void GRAPHICS::Graphics::restoreCompass() {
-	// Only in-game (mTextRestoreBg marks the HUD; the title menu uses flat-fill and
-	// has no compass), and only once a snapshot exists.
-	if (mCompassSnap == nullptr || !mTextRestoreBg || mCompassCovered)
+	// Only in-game (mTextRestoreBg marks the HUD; the title menu uses flat-fill
+	// and has no compass), only once a snapshot exists, and only while the
+	// adventure screen is up (mUiScreen -- the pump sets it from the SOP's
+	// own screen state each tick; dialogs/menus must not get the adventure
+	// compass stamped over them).
+	if (mCompassSnap == nullptr || !mTextRestoreBg || mCompassCovered ||
+	    mUiScreen)
 		return;
 	SDL_Rect dst = kCompassRect;
 	SDL_SetSurfaceBlendMode(mCompassSnap, SDL_BLENDMODE_NONE);
@@ -435,13 +461,20 @@ void GRAPHICS::Graphics::fillRect(int x0, int y0, int x1, int y1, uint8_t color)
 	if (x1 < x0) std::swap(x0, x1);
 	if (y1 < y0) std::swap(y0, y1);
 	SDL_Rect r = { x0, y0, x1 - x0 + 1, y1 - y0 + 1 };
-	// A fill covering the whole compass rect (an outtake/cutscene box) means
-	// the SOP intends to paint over the compass -- stop re-stamping the
-	// snapshot on present until the compass is redrawn (see restoreCompass).
-	if (r.x <= kCompassRect.x && r.y <= kCompassRect.y &&
-	    r.x + r.w >= kCompassRect.x + kCompassRect.w &&
-	    r.y + r.h >= kCompassRect.y + kCompassRect.h)
-		mCompassCovered = true;
+	// A fill that touches most of the compass rect (a full cover, or the top
+	// half of a cutscene dialog panel drawn in pieces) means the SOP intends
+	// to paint over the compass -- stop re-stamping the snapshot on present
+	// until the compass is redrawn (see restoreCompass). We use "any overlap
+	// >= half of the compass rect area" instead of full-cover, because the
+	// mausoleum-entry dialog draws its panel as several partial fills that
+	// individually don't 100% cover the compass; the old strict rule left
+	// each fill un-detected and the compass re-stamped over the dialog.
+	{
+		SDL_Rect ov;
+		if (SDL_GetRectIntersection(&r, &kCompassRect, &ov) &&
+		    ov.w * ov.h * 2 >= kCompassRect.w * kCompassRect.h)
+			mCompassCovered = true;
+	}
 	SDL_Color c = mPalette->colors[color];
 	Uint32 px = SDL_MapSurfaceRGB(mScreen, c.r, c.g, c.b);
 	SDL_FillSurfaceRect(mScreen, &r, px);
@@ -991,7 +1024,41 @@ void GRAPHICS::Graphics::update() {
 	// Present-time overlay: runs after every SOP draw + compass restamp so
 	// the overlay (automap) lands on top of anything drawn during a recursive
 	// dispatch inside our pump. Set once from engine.cpp.
-	if (mPresentOverlay) mPresentOverlay();
+	//
+	// Save-under: the overlay paints into mScreen, but mScreen is the SOP's
+	// persistent canvas -- overlay pixels must never survive past this
+	// present, or SOP state (text-window cursor, backdrop) and pixels drift
+	// apart. We save the frame before painting and restore it after the
+	// upload + THIRDEYE_DUMP below, so mScreen stays SOP-pure while the
+	// player still sees (and dumps still capture) the overlay. This replaces
+	// the old open/close snapshotScreen()/restoreScreenSnapshot() pair, which
+	// rolled back every legitimate SOP draw made while the map was open
+	// (garbling the message window on the next print/scroll).
+	bool overlayPainted = false;
+	SDL_Rect savedClip{};
+	bool     savedClipValid = false;
+	if (mPresentOverlay && (!mOverlayActive || mOverlayActive())) {
+		if (mOverlaySave == nullptr)
+			mOverlaySave = SDL_CreateSurface(WIDTH, HEIGHT,
+			                                 SDL_PIXELFORMAT_ARGB8888);
+		// SDL_BlitSurface honours the SOURCE surface's clip rect. If the
+		// SOP had set a partial clip on mScreen (dungeon view, text-window
+		// draw), our save would capture only that region -- and on restore
+		// the un-captured pixels came from mOverlaySave's PREVIOUS frame,
+		// leaving stale message-window text ghosted underneath fresh SOP
+		// prints (two prints, two colours, overlapping across the M cycle).
+		// Save the SOP's clip, drop it for a full-screen save, then hand
+		// the clip back at the tail after restore.
+		SDL_GetSurfaceClipRect(mScreen, &savedClip);
+		savedClipValid = savedClip.w > 0 && savedClip.h > 0 &&
+		                 !(savedClip.x == 0 && savedClip.y == 0 &&
+		                   savedClip.w == WIDTH && savedClip.h == HEIGHT);
+		SDL_SetSurfaceClipRect(mScreen, nullptr);
+		SDL_SetSurfaceBlendMode(mScreen, SDL_BLENDMODE_NONE);
+		SDL_BlitSurface(mScreen, nullptr, mOverlaySave, nullptr);
+		mPresentOverlay();
+		overlayPainted = true;
+	}
 
 	// Persistent streaming texture. The previous loop did
 	// SDL_CreateTextureFromSurface + SDL_DestroyTexture every present, which
@@ -1029,6 +1096,19 @@ void GRAPHICS::Graphics::update() {
 		if (pos != std::string::npos)
 			path.replace(pos, 2, std::to_string(frameNo++));
 		saveScreenshot(path.c_str());
+	}
+
+	// Save-under restore (see the overlay block above): wipe the overlay's
+	// pixels off the SOP canvas now that they've been shown and dumped, and
+	// hand the SOP's clip back. The dest blit runs with mScreen's clip open
+	// (the overlay's clearClip() left it that way) so full-screen restore.
+	if (overlayPainted) {
+		SDL_SetSurfaceBlendMode(mOverlaySave, SDL_BLENDMODE_NONE);
+		SDL_BlitSurface(mOverlaySave, nullptr, mScreen, nullptr);
+		if (savedClipValid)
+			SDL_SetSurfaceClipRect(mScreen, &savedClip);
+		else
+			SDL_SetSurfaceClipRect(mScreen, nullptr);
 	}
 }
 
@@ -1267,7 +1347,7 @@ void GRAPHICS::Graphics::wipeTextBox(int x0, int y0, int x1, int y1) {
 	if (x0 < 0 || y0 < 0 || x1 >= WIDTH || y1 >= HEIGHT || x1 < x0 || y1 < y0)
 		return;
 	SDL_Rect r = { x0, y0, x1 - x0 + 1, y1 - y0 + 1 };
-	if (mTextRestoreBg && mBackdrop != nullptr) {
+	if (mTextRestoreBg && mBackdrop != nullptr && !mUiScreen) {
 		// In-game: restore the real bitmap backdrop (panel art) for this box so
 		// the text overlays it -- no flat rectangle.
 		SDL_SetSurfaceBlendMode(mBackdrop, SDL_BLENDMODE_NONE);

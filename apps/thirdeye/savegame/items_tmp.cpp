@@ -23,7 +23,9 @@ constexpr size_t kMaxRecords   = 10;
 // Within a PC record:
 constexpr size_t kObjIndexOff  = 0;
 constexpr size_t kClassOff     = 2;
-constexpr size_t kBackpackOff  = 96;  // 14 words -> W:inventory[0..13]
+constexpr size_t kSpLvlOff     = 95;  // 2 bytes -> B:sp_lvl[2] (PC+77)
+constexpr size_t kMnLvlOff     = 97;  // 2 bytes -> B:mn_lvl[2] (PC+79)
+constexpr size_t kBackpackOff  = 99;  // 14 words -> W:inventory[0..13] (PC+81)
 constexpr size_t kEquipOff     = 127; // 12 words: body, bracers, rhand, lring,
                                       //           rring, boots, lhand, pouchA,
                                       //           pouchB, pouchC, necklace, helmet
@@ -145,6 +147,10 @@ ItemsTmp parseItemsTmp(const std::vector<uint8_t> &data) {
 		c.con         = data[base + kConOff];
 		c.cha         = data[base + kChaOff];
 
+		for (int k = 0; k < 2; ++k) {
+			c.spLvl[k] = data[base + kSpLvlOff + k];
+			c.mnLvl[k] = data[base + kMnLvlOff + k];
+		}
 		for (int s = 0; s < ItemsTmp::Character::kBackpackSlots; ++s)
 			c.backpack[s] = readEquipSlot(data, base + kBackpackOff + s * 2);
 		for (int s = 0; s < ItemsTmp::Character::kEquipSlots; ++s)
@@ -183,7 +189,8 @@ ItemsTmp loadItemsTmp(const std::filesystem::path &path) {
 
 std::vector<ItemRecord> parseItemStream(const std::vector<uint8_t> &data,
                                         size_t streamOff,
-                                        const ClassStaticSize &lookup) {
+                                        const ClassStaticSize &lookup,
+                                        std::vector<uint16_t> *coveredSlots) {
 	std::vector<ItemRecord> out;
 	// ponytail: env-var-gated trailer probe. Set THIRDEYE_DUMP_TRAILERS=1 to
 	// print every parsed record's (id, cls, trailer) for RE; off by default
@@ -207,6 +214,7 @@ std::vector<ItemRecord> parseItemStream(const std::vector<uint8_t> &data,
 		uint16_t id  = static_cast<uint16_t>(data[o]     | (data[o + 1] << 8));
 		uint16_t cls = static_cast<uint16_t>(data[o + 2] | (data[o + 3] << 8));
 		if (cls == kEmptyCls) {
+			if (coveredSlots) coveredSlots->push_back(id);
 			o += 4 + kTrailerSize;
 			continue;
 		}
@@ -232,6 +240,7 @@ std::vector<ItemRecord> parseItemStream(const std::vector<uint8_t> &data,
 			    " (%u %u %u %u)\n",
 			    o, id, cls, blockSize, r.trailer,
 			    data[t], data[t + 1], data[t + 2], data[t + 3]);
+		if (coveredSlots) coveredSlots->push_back(id);
 		out.push_back(std::move(r));
 		o += 4 + blockSize + kTrailerSize;
 	}

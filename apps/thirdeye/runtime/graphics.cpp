@@ -205,8 +205,24 @@ bool tryHandle(Context &ctx, const std::string &fn,
 		// `prepare outtake box`'s `wipe_window(96, 20)`) and every subsequent
 		// present's `restoreCompass()` blitted the brown box back onto the
 		// bottom-left HUD region.
-		if (table == 187)
+		if (table == 187) {
+			// The kernel's timer keeps redrawing the compass even while a
+			// dialog/menu screen is up. The original drew it to page 104,
+			// which the dialog screens never composite -- our page
+			// flattening would paint it straight onto the visible frame
+			// (compass ghosting over the mausoleum-entry decision box).
+			// Skip the draw entirely outside the adventure screen.
+			if (uiScreenActive(ctx.objects)) {
+				// Drop the pane clip set above -- the normal path clears it
+				// after the draw, and leaving it armed here clipped every
+				// later dialog/menu draw to the compass pane (CodeRabbit).
+				if (clipped)
+					ctx.gfx->clearClip();
+				result = 0;
+				return true;
+			}
 			gCompassDirty = true;
+		}
 		try {
 			auto t0 = gPerf ? std::chrono::steady_clock::now()
 			                : std::chrono::steady_clock::time_point{};
@@ -448,7 +464,7 @@ bool tryHandle(Context &ctx, const std::string &fn,
 	}
 	// dprint(format, ...): diagnostic print into the main text window (0).
 	if (fn == "dprint" && args.size() >= 1) {
-		std::string out = formatSop(ctx.vm.readString(args[0]), args, 1, ctx.vm);
+		std::string out = formatSop(ctx.vm.readString(args[0]), args, 1, ctx);
 		ctx.gfx->printText(0, out);
 		rt() << "  [dprint \"" << out << "\"]" << std::endl;
 		result = 0;
@@ -557,7 +573,7 @@ bool tryHandle(Context &ctx, const std::string &fn,
 	// in static space, or an inline code string like "%d of %d"); %d/%s are
 	// filled from the trailing args. Used for character names + HP readouts.
 	if (fn == "sprint" && args.size() >= 2) {
-		std::string out = formatSop(ctx.vm.readString(args[1]), args, 2, ctx.vm);
+		std::string out = formatSop(ctx.vm.readString(args[1]), args, 2, ctx);
 		ctx.gfx->printText(static_cast<int>(args[0]), out);
 		rt() << "  [sprint \"" << out << "\"]" << std::endl;
 		result = 0;
@@ -588,7 +604,7 @@ bool tryHandle(Context &ctx, const std::string &fn,
 				for (size_t i = off; i < s.size() && s[i] != 0; ++i)
 					fmt.push_back(static_cast<char>(s[i]));
 			}
-			std::string text = formatSop(fmt, args, 2, ctx.vm);
+			std::string text = formatSop(fmt, args, 2, ctx);
 			ctx.gfx->printText(static_cast<int>(args[0]), text);
 			rt() << "  [text \"" << text << "\"]" << std::endl;
 		} catch (const std::exception &) {}

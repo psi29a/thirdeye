@@ -85,6 +85,11 @@ The original sources & docs John Miles released as public domain (engine/tools/d
   (params + guessed behaviour).
 - **`Docs/*.html`** — saved forum threads (VOGONS, EAB, rpgcodex, GOG) + ReWiki research on
   the AESOP/16, `.RES`, and `EYE.RES` formats.
+- **`gamebanshee/`** — mirrored GameBanshee walkthrough (per-level 32x32 map images +
+  extracted `legends/*.json` annotations/exits) plus plain-text GameFAQs walkthroughs.
+  Its README holds the **`LVLnn` ↔ area-class ↔ location-name table** — note the game
+  *starts* on LVL03 (Burial Glen); LVL01/02 are the optional Warriors' Tomb (mausoleum),
+  which walkthroughs confusingly call "Level 1/2" (tomb floors, not internal numbers).
 
 ## daesop cheatsheet (for inspecting game data)
 

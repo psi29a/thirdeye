@@ -41,10 +41,17 @@ struct ItemsTmp {
 		int16_t  objectIndex = -1; // +0   live SOP object id (32..)
 		int16_t  classNumber = -1; // +2   1369 = "PC"
 
-		// Backpack ids @+96..+125 (14 slots × 2 bytes) -- see equip[] for the
-		// worn block. (Backpack ids correspond to PC.W:inventory[0..13];
+		// Spell-menu level state @+95..+98: B:sp_lvl[2] (PC+77) and
+		// B:mn_lvl[2] (PC+79), one byte per caster type (0=mage, 1=cleric).
+		// DOS saves carry 1s; without them the camp spell menu opens at
+		// "Level 0: 0 of 0 Available".
+		uint8_t  spLvl[2] = {1, 1};
+		uint8_t  mnLvl[2] = {1, 1};
+
+		// Backpack ids @+99..+126 (14 slots × 2 bytes, verbatim statics+18:
+		// PC.W:inventory[0..13] @81) -- see equip[] for the worn block.
 		// -1 = empty. Must be restored: a zero-filled slot reads as "item
-		// object 0" and the inventory click handler happily picks it up.)
+		// object 0" and the inventory click handler happily picks it up.
 		static constexpr int kBackpackSlots = 14;
 		int16_t  backpack[kBackpackSlots] = {-1,-1,-1,-1,-1,-1,-1,
 		                                     -1,-1,-1,-1,-1,-1,-1};
@@ -188,11 +195,18 @@ using ClassStaticSize = std::function<uint32_t(uint16_t cls)>;
 
 // Walk the item-object stream starting at `streamOff`. Returns one entry per
 // non-empty slot (cls != 0xFFFF), in file order. Empty slots are skipped (we
-// don't need to recreate them). The caller is responsible for `streamOff`;
-// for the Quick Start Party save it is 6947 (0x1b23) = 677 + 10 * 627.
+// don't need to recreate them) but ARE reported through `coveredSlots` when
+// provided: every slot id the stream explicitly mentions -- live or empty --
+// is appended. The caller uses that to distinguish "this slot is empty
+// because the player consumed the item" (explicit empty record; do NOT
+// gap-fill it from ITEMS_00.BIN) from "this save predates full-array
+// serialization" (slot absent from the stream entirely; gap-fill is the
+// right recovery). The caller is responsible for `streamOff`; for the Quick
+// Start Party save it is 6947 (0x1b23) = 677 + 10 * 627.
 std::vector<ItemRecord> parseItemStream(const std::vector<uint8_t> &data,
                                         size_t streamOff,
-                                        const ClassStaticSize &lookup);
+                                        const ClassStaticSize &lookup,
+                                        std::vector<uint16_t> *coveredSlots = nullptr);
 
 // --- Slot-backup restoration -----------------------------------------
 //

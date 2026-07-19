@@ -48,6 +48,7 @@ class Engine
 	bool mSkipIntro = false; // skip the intro cinematic
 	bool mChargen   = false; // --chargen: force the chargen path even if a save exists
 	bool mChargenTest = false; // --chargen-test: run chargen entry screen in isolation
+	int  mLoadSave = -1;     // --load-save=N: restore slot N at boot, enter the game
 	bool mRenderer;
 	uint8_t mGame;
 	uint16_t mScale;
@@ -80,6 +81,7 @@ public:
 	void setSkipIntro(bool skipIntro);
 	void setChargen(bool chargen);
 	void setChargenTest(bool chargenTest);
+	void setLoadSave(int slot);
 	void setDebugMode(bool debug);
 	void setSoundUsage(bool nosound);
 	void setRenderer(bool renderer);
@@ -108,9 +110,15 @@ private:
 	/// Returns true normally; false if the sub-program cancelled (e.g. user
 	/// hit Esc out of the chargen entry screen) -- caller then resets
 	/// mem[1264] to MODE_INTR so the next start lands on the title menu.
+	/// `suppressArglessIntro` = this argless-cine launch is a relaunch that is
+	/// neither the session's first boot nor the title menu's "Introduction"
+	/// choice -- i.e. the in-game quit's attract-chain replay. The intro
+	/// playback is skipped (QoL) and the chain proceeds straight to the title
+	/// menu; explicit .GFF launches (cutscenes, finale) always play.
 	bool runExternalProgram(const std::string &program, GRAPHICS::Graphics *gfx,
 	                        RESOURCES::Resource &resource, MIXER::Mixer &mixer,
-	                        const std::vector<std::string> &extras = {});
+	                        const std::vector<std::string> &extras = {},
+	                        bool suppressArglessIntro = false);
 
 	/// Play a GFF cinematic (e.g. INTRO.GFF) that sits beside the game's .RES,
 	/// reusing thirdeye's GFF player. Honors --skip-intro; ESC/Enter skips;

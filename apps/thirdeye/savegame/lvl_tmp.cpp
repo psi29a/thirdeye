@@ -131,28 +131,48 @@ int loadLevelObjects(int level, VM::ObjectSystem &objects,
 			                     dn, kDungeonClass,
 			                     1024 + plane + (y * 64 + x * 2), 2);
 			if (cellp) {
-				// Monsters: prepend to the cell's link-chain so up to 4-per-cell all
-				// render -- the new monster's W:next@6 points at the previous head, then
-				// it becomes the head. Keep the list properly DOUBLY linked: the old
-				// head's W:prev must point back at us, or the SOP's unlink
-				// (prev.next = my.next / next.prev = my.prev) corrupts the chain the
-				// first time a mid-chain monster moves. (Doors/features in plane 0
-				// stay single per cell.)
-				if (isMonster) {
-					int head = cellp[0] | (cellp[1] << 8); // current head (0xFFFF = none)
-					setS(kEntities, 6, head == 0xFFFF ? -1 : head, 2);
-					if (head != 0xFFFF) {
-						try {
-							if (uint8_t *hp = objects.classStaticPtr(
-							        head, kEntities, 8, 2)) {
-								hp[0] = id & 0xFF;
-								hp[1] = (id >> 8) & 0xFF;
-							}
-						} catch (const std::exception &) {}
+				// APPEND to the tail of the cell's link-chain -- matches
+				// dungeon.init_level (M:232, LBL_2738 in the disassembly):
+				// walk W:next until -1, insert there. features.draw paints
+				// head-first and recurses down W:next, so tail wins the
+				// overpaint. Prepending gave chain [button, door] at LVL01
+				// (14,10) and LVL02 (26,2) -- the door drew LAST and hid the
+				// button. Appending gives file order [door, button] so the
+				// button paints on top of the door frame.
+				int head = cellp[0] | (cellp[1] << 8);
+				if (head == 0xFFFF) {
+					cellp[0] = id & 0xFF;
+					cellp[1] = (id >> 8) & 0xFF;
+				} else {
+					// Localized try: classStaticPtr THROWS on a dead object
+					// index, and a corrupt chain (stale W:next from a
+					// duplicated slot record) would otherwise unwind into
+					// this record's rollback catch and destroy the valid
+					// object we just created. On a bad chain, leave the new
+					// object unlinked (alive but undrawn) instead.
+					try {
+						int tail = head;
+						for (int guard = 0; guard < 1000; ++guard) {
+							uint8_t *np = objects.classStaticPtr(
+							    tail, kEntities, 6, 2);
+							if (!np) break;
+							int nxt = static_cast<int16_t>(np[0] | (np[1] << 8));
+							if (nxt < 0) break;
+							tail = nxt;
+						}
+						if (uint8_t *tp = objects.classStaticPtr(
+						        tail, kEntities, 6, 2)) {
+							tp[0] = id & 0xFF;
+							tp[1] = (id >> 8) & 0xFF;
+						}
+						setS(kEntities, 8, tail, 2); // W:prev = tail
+					} catch (const std::exception &e) {
+						std::cerr << "[lvl_tmp] chain walk failed at ("
+						          << x << "," << y << ") linking slot " << id
+						          << ": " << e.what()
+						          << " -- left unlinked" << std::endl;
 					}
 				}
-				cellp[0] = id & 0xFF;
-				cellp[1] = (id >> 8) & 0xFF;
 			}
 			// W:NPCstat comes VERBATIM from the save file (the memcpy above),
 			// exactly like the original restore_range -- the 0x0001 the shipped
@@ -183,14 +203,183 @@ int loadLevelObjects(int level, VM::ObjectSystem &objects,
 			}
 		}
 	}
+	// Chain floor items (slots 1..999) into lvlobj plane 1 for the current
+	// level. dungeon.init_level (M:232) does this itself in DOS, but our
+	// post-hook re-runs loadLevelObjects which clears the grid -- so any item
+	// with W:place == -1 and B:lvl == level needs to be re-linked here or a
+	// scroll dropped in the dungeon renders nowhere. Append to match features
+	// (draw is head-first so tail wins the overpaint; irrelevant for items in
+	// separate cells but consistent with the plane-0 pass above).
+	int itemsPlaced = 0;
+	for (int id = 1; id <= 999; ++id) {
+		if (objects.classOf(id) == 0xFFFF) continue;
+		uint8_t *sp = nullptr;
+		try { sp = objects.classStaticPtr(id, kEntities, 0, 10); }
+		catch (const std::exception &) { continue; }
+		if (!sp) continue;
+		int place = static_cast<int16_t>(sp[0] | (sp[1] << 8));
+		int ix = sp[2], iy = sp[3], ilvl = sp[4];
+		if (place != -1) continue;                    // not on the floor
+		if (ilvl != level) continue;                  // different dungeon
+		if (ix > 31 || iy > 31) continue;             // guard bad coords
+		// Reset chain links -- init_level clears the whole grid, so W:next
+		// and W:prev inherited from a prior chain are stale.
+		sp[6] = 0xFF; sp[7] = 0xFF; sp[8] = 0xFF; sp[9] = 0xFF;
+		uint8_t *cellp = nullptr;
+		try {
+			cellp = objects.classStaticPtr(
+			    dn, kDungeonClass,
+			    1024 + 2048 + (iy * 64 + ix * 2), 2);
+		} catch (const std::exception &) {}
+		if (!cellp) continue;
+		int head = cellp[0] | (cellp[1] << 8);
+		if (head == 0xFFFF) {
+			cellp[0] = id & 0xFF;
+			cellp[1] = (id >> 8) & 0xFF;
+		} else {
+			// classStaticPtr throws on a dead object index; this walk runs
+			// outside any record-level try, so an unprotected throw would
+			// propagate out of loadLevelObjects and crash the runtime. On a
+			// bad chain, skip linking this item and move on (its links were
+			// already reset to -1 above, so state stays consistent).
+			try {
+				int tail = head;
+				for (int guard = 0; guard < 1000; ++guard) {
+					uint8_t *np = objects.classStaticPtr(
+					    tail, kEntities, 6, 2);
+					if (!np) break;
+					int nxt = static_cast<int16_t>(np[0] | (np[1] << 8));
+					if (nxt < 0) break;
+					tail = nxt;
+				}
+				if (uint8_t *tp = objects.classStaticPtr(
+				        tail, kEntities, 6, 2)) {
+					tp[0] = id & 0xFF;
+					tp[1] = (id >> 8) & 0xFF;
+				}
+				sp[8] = tail & 0xFF; sp[9] = (tail >> 8) & 0xFF;
+			} catch (const std::exception &e) {
+				std::cerr << "[lvl_tmp] plane-1 chain walk failed at ("
+				          << ix << "," << iy << ") linking item " << id
+				          << ": " << e.what() << " -- skipped" << std::endl;
+				continue;
+			}
+		}
+		++itemsPlaced;
+	}
 	std::cout << "  [loadLevelObjects: placed " << placed << " objects from " << fn
-	          << "]" << std::endl;
+	          << ", linked " << itemsPlaced << " floor items into plane 1]"
+	          << std::endl;
+
+	// Chain sanity check. Every lvlobj chain we just built should match what
+	// dungeon.init_level (M:232, LBL_2517..LBL_2787) would produce:
+	//   - Strictly slot-order from head to tail. init_level walks slots 1..1999
+	//     ascending and appends; a smaller slot after a bigger one means the
+	//     linker prepended (invisible-button bug) or restored stale next/prev.
+	//   - Doubly linked: prev(cur) == the previous slot in the chain (-1 at head).
+	//   - Cell coherence: each object's B:x/B:y/B:lvl matches the cell.
+	// Cheap; only runs when THIRDEYE_CHECK_CHAINS is set (or in Debug builds --
+	// unconditional would spam every level-load and every post-hook re-run).
+	// Prints to std::cerr instead of aborting so a single stale chain doesn't
+	// mask other diagnostics in a headless CI run.
+#ifndef NDEBUG
+	const bool check = true;
+#else
+	const bool check = std::getenv("THIRDEYE_CHECK_CHAINS") != nullptr;
+#endif
+	if (check) {
+		int problems = 0;
+		auto readW = [&](int obj, uint32_t off) -> int {
+			try {
+				if (uint8_t *p = objects.classStaticPtr(obj, kEntities, off, 2))
+					return static_cast<int16_t>(p[0] | (p[1] << 8));
+			} catch (const std::exception &) {}
+			return -1;
+		};
+		for (uint32_t plane = 0; plane < 3; ++plane) {
+			for (int cy = 0; cy < 32; ++cy) {
+				for (int cx = 0; cx < 32; ++cx) {
+					uint8_t *cp = nullptr;
+					try {
+						cp = objects.classStaticPtr(
+						    dn, kDungeonClass,
+						    1024u + plane * 2048u + (cy * 64 + cx * 2), 2);
+					} catch (const std::exception &) {}
+					if (!cp) continue;
+					int head = static_cast<int16_t>(cp[0] | (cp[1] << 8));
+					if (head < 0) continue;
+					int prevSlot = -1, cur = head, walked = 0;
+					while (cur >= 0 && walked < 2000) {
+						uint8_t *ep = nullptr;
+						try {
+							ep = objects.classStaticPtr(cur, kEntities, 0, 10);
+						} catch (const std::exception &) {}
+						if (!ep) {
+							std::cerr << "[chain] p" << plane << " (" << cx << ","
+							          << cy << ") slot " << cur
+							          << ": can't read statics\n";
+							++problems;
+							break;
+						}
+						int bx = ep[2], by = ep[3], blvl = ep[4];
+						int pr = static_cast<int16_t>(ep[8] | (ep[9] << 8));
+						// Cell coherence -- features encode place = x+y*32, items
+						// use place = -1 (floor). Skip the coherence check for
+						// monsters (plane 2) that are mid-step: they briefly hold
+						// stale x/y while moving between cells.
+						if (plane != 4096u && (bx != cx || by != cy)) {
+							std::cerr << "[chain] p" << plane << " (" << cx << ","
+							          << cy << ") slot " << cur << ": B:x/y=("
+							          << bx << "," << by << ") mismatches cell\n";
+							++problems;
+						}
+						if (blvl != level) {
+							std::cerr << "[chain] p" << plane << " (" << cx << ","
+							          << cy << ") slot " << cur << ": B:lvl="
+							          << blvl << " != level " << level << "\n";
+							++problems;
+						}
+						if (pr != prevSlot) {
+							std::cerr << "[chain] p" << plane << " (" << cx << ","
+							          << cy << ") slot " << cur << ": W:prev=" << pr
+							          << " expected " << prevSlot
+							          << " (doubly-linked broken)\n";
+							++problems;
+						}
+						if (prevSlot >= 0 && cur <= prevSlot) {
+							std::cerr << "[chain] p" << plane << " (" << cx << ","
+							          << cy << ") slot " << cur
+							          << " after slot " << prevSlot
+							          << " (not slot-order -- prepend bug?)\n";
+							++problems;
+						}
+						prevSlot = cur;
+						cur = readW(cur, 6); // W:next
+						++walked;
+					}
+					if (walked >= 2000) {
+						std::cerr << "[chain] p" << plane << " (" << cx << ","
+						          << cy << ") walk exceeded 2000 (cycle?)\n";
+						++problems;
+					}
+				}
+			}
+		}
+		if (problems > 0)
+			std::cerr << "[chain] " << problems
+			          << " invariant problem(s) on level " << level << std::endl;
+	}
 	return placed;
 }
 
 bool saveRange(VM::ObjectSystem &objects, const std::filesystem::path &path,
                int first, int last) {
-	std::ofstream out(path, std::ios::binary | std::ios::trunc);
+	// Stage to a same-directory temp and rename at the end -- a crash or
+	// full disk mid-write must not truncate an existing LVLxx.TMP/BIN
+	// (CodeRabbit: transactional save artifacts).
+	std::filesystem::path tmpPath = path;
+	tmpPath += ".tmpwrite";
+	std::ofstream out(tmpPath, std::ios::binary | std::ios::trunc);
 	if (!out)
 		return false;
 	out.put('\x1a'); // save_range's typetest byte
@@ -226,7 +415,18 @@ bool saveRange(VM::ObjectSystem &objects, const std::filesystem::path &path,
 		out.write(reinterpret_cast<const char *>(rec.data()),
 		          static_cast<std::streamsize>(rec.size()));
 	}
-	return !!out;
+	// close() flushes the tail of the buffer and sets failbit on error; the
+	// state is only meaningful after it completes (CodeRabbit).
+	out.close();
+	bool ok = !out.fail();
+	std::error_code ec;
+	if (ok) {
+		std::filesystem::rename(tmpPath, path, ec);
+		ok = !ec;
+	}
+	if (!ok)
+		std::filesystem::remove(tmpPath, ec);
+	return ok;
 }
 
 } // namespace THIRDEYE::savegame

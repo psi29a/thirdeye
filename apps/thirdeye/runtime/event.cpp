@@ -154,6 +154,48 @@ void runDebugHooks(VM::ObjectSystem &objects, RESOURCES::Resource &res) {
 			}
 		}
 	}
+	// THIRDEYE_INVWATCH=1: log any change to any PC's W:inventory[26] --
+	// (slot, old item id, new item id) with a tick stamp. Pinpoints exactly
+	// when equipment vanishes (the mausoleum-switch unequip report).
+	if (std::getenv("THIRDEYE_INVWATCH")) {
+		static std::map<int, std::array<int16_t, 26>> last;
+		static long tick = 0;
+		++tick;
+		for (int pc : objects.objectsOfClass(1369)) {
+			uint8_t *p = nullptr;
+			try { p = objects.classStaticPtr(pc, 1369, 81, 52); }
+			catch (const std::exception &) { continue; }
+			if (!p) continue;
+			std::array<int16_t, 26> cur;
+			for (int s2 = 0; s2 < 26; ++s2)
+				cur[s2] = static_cast<int16_t>(p[s2*2] | (p[s2*2+1] << 8));
+			auto it = last.find(pc);
+			if (it != last.end()) {
+				for (int s2 = 0; s2 < 26; ++s2)
+					if (it->second[s2] != cur[s2])
+						std::cerr << "[inv] tick " << tick << " pc " << pc
+						          << " inventory[" << s2 << "] "
+						          << it->second[s2] << " -> " << cur[s2]
+						          << std::endl;
+			}
+			last.insert_or_assign(pc, cur);
+		}
+	}
+	// THIRDEYE_DISABLE_OBJ=N: one-shot SEND "disable" (M:8) to object N at
+	// tick 250 -- simulates a chopped tree / dispelled feature so map+view
+	// behavior after a disable can be tested without driving real combat.
+	if (const char *e = std::getenv("THIRDEYE_DISABLE_OBJ")) {
+		static int dt = 0;
+		if (++dt == 250) {
+			int obj = std::atoi(e);
+			try {
+				objects.send(obj, 8, {});
+				std::cerr << "[disable] sent M:8 to obj " << obj << "\n";
+			} catch (const std::exception &ex) {
+				std::cerr << "[disable] obj " << obj << ": " << ex.what() << "\n";
+			}
+		}
+	}
 	// THIRDEYE_STARVE=N: set every PC's W:food@177 to N% at tick 230 --
 	// exercises the food-icon consume path (a full PC refuses to eat).
 	if (const char *e = std::getenv("THIRDEYE_STARVE")) {
@@ -323,10 +365,37 @@ void runDebugHooks(VM::ObjectSystem &objects, RESOURCES::Resource &res) {
 				try {
 					uint8_t *r = objects.classStaticPtr(pc, 1369, 81 + 16 * 2, 2);
 					uint8_t *l = objects.classStaticPtr(pc, 1369, 81 + 20 * 2, 2);
-					if (r && l)
-						std::cerr << "[hand] pc " << pc << " R="
-						          << static_cast<int16_t>(r[0] | (r[1] << 8)) << " L="
-						          << static_cast<int16_t>(l[0] | (l[1] << 8)) << "\n";
+					// Per hand item: class + B:bonus (arms@1373:0) -- the byte
+					// "roll to hit" reads against the target's magic-weapon
+					// requirement flags (report(1003) & 0x400 = needs +1,
+					// & 0x2000 = needs +2). -1 = not an arms descendant.
+					auto bonus = [&](int obj) -> int {
+						if (obj < 0) return -1;
+						try {
+							if (uint8_t *b = objects.classStaticPtr(obj, 1373, 0, 1))
+								return *b;
+						} catch (const std::exception &) {}
+						return -1;
+					};
+					if (r && l) {
+						int ri = static_cast<int16_t>(r[0] | (r[1] << 8));
+						int li = static_cast<int16_t>(l[0] | (l[1] << 8));
+						// THIRDEYE_HANDBONUS=N: force every held weapon's
+						// B:bonus to N. Isolates the magic-weapon-requirement
+						// gate in "roll to hit" (e.g. sword wraiths need >= +2).
+						static const char *hb = std::getenv("THIRDEYE_HANDBONUS");
+						if (hb) {
+							for (int obj : {ri, li})
+								if (obj >= 0) try {
+									if (uint8_t *b =
+									        objects.classStaticPtr(obj, 1373, 0, 1))
+										*b = static_cast<uint8_t>(std::atoi(hb));
+								} catch (const std::exception &) {}
+						}
+						std::cerr << "[hand] pc " << pc << " R=" << ri
+						          << " (+" << bonus(ri) << ") L=" << li
+						          << " (+" << bonus(li) << ")\n";
+					}
 					// THIRDEYE_XPTRACE: log a line whenever a PC's L:experience[0]
 					// changes. Verifies the XP-award + level-up chain end-to-end.
 					static const bool kXpTrace = std::getenv("THIRDEYE_XPTRACE") != nullptr;
