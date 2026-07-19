@@ -144,21 +144,34 @@ int loadLevelObjects(int level, VM::ObjectSystem &objects,
 					cellp[0] = id & 0xFF;
 					cellp[1] = (id >> 8) & 0xFF;
 				} else {
-					int tail = head;
-					for (int guard = 0; guard < 1000; ++guard) {
-						uint8_t *np = objects.classStaticPtr(
-						    tail, kEntities, 6, 2);
-						if (!np) break;
-						int nxt = static_cast<int16_t>(np[0] | (np[1] << 8));
-						if (nxt < 0) break;
-						tail = nxt;
+					// Localized try: classStaticPtr THROWS on a dead object
+					// index, and a corrupt chain (stale W:next from a
+					// duplicated slot record) would otherwise unwind into
+					// this record's rollback catch and destroy the valid
+					// object we just created. On a bad chain, leave the new
+					// object unlinked (alive but undrawn) instead.
+					try {
+						int tail = head;
+						for (int guard = 0; guard < 1000; ++guard) {
+							uint8_t *np = objects.classStaticPtr(
+							    tail, kEntities, 6, 2);
+							if (!np) break;
+							int nxt = static_cast<int16_t>(np[0] | (np[1] << 8));
+							if (nxt < 0) break;
+							tail = nxt;
+						}
+						if (uint8_t *tp = objects.classStaticPtr(
+						        tail, kEntities, 6, 2)) {
+							tp[0] = id & 0xFF;
+							tp[1] = (id >> 8) & 0xFF;
+						}
+						setS(kEntities, 8, tail, 2); // W:prev = tail
+					} catch (const std::exception &e) {
+						std::cerr << "[lvl_tmp] chain walk failed at ("
+						          << x << "," << y << ") linking slot " << id
+						          << ": " << e.what()
+						          << " -- left unlinked" << std::endl;
 					}
-					if (uint8_t *tp = objects.classStaticPtr(
-					        tail, kEntities, 6, 2)) {
-						tp[0] = id & 0xFF;
-						tp[1] = (id >> 8) & 0xFF;
-					}
-					setS(kEntities, 8, tail, 2); // W:prev = tail
 				}
 			}
 			// W:NPCstat comes VERBATIM from the save file (the memcpy above),
@@ -224,21 +237,33 @@ int loadLevelObjects(int level, VM::ObjectSystem &objects,
 			cellp[0] = id & 0xFF;
 			cellp[1] = (id >> 8) & 0xFF;
 		} else {
-			int tail = head;
-			for (int guard = 0; guard < 1000; ++guard) {
-				uint8_t *np = objects.classStaticPtr(
-				    tail, kEntities, 6, 2);
-				if (!np) break;
-				int nxt = static_cast<int16_t>(np[0] | (np[1] << 8));
-				if (nxt < 0) break;
-				tail = nxt;
+			// classStaticPtr throws on a dead object index; this walk runs
+			// outside any record-level try, so an unprotected throw would
+			// propagate out of loadLevelObjects and crash the runtime. On a
+			// bad chain, skip linking this item and move on (its links were
+			// already reset to -1 above, so state stays consistent).
+			try {
+				int tail = head;
+				for (int guard = 0; guard < 1000; ++guard) {
+					uint8_t *np = objects.classStaticPtr(
+					    tail, kEntities, 6, 2);
+					if (!np) break;
+					int nxt = static_cast<int16_t>(np[0] | (np[1] << 8));
+					if (nxt < 0) break;
+					tail = nxt;
+				}
+				if (uint8_t *tp = objects.classStaticPtr(
+				        tail, kEntities, 6, 2)) {
+					tp[0] = id & 0xFF;
+					tp[1] = (id >> 8) & 0xFF;
+				}
+				sp[8] = tail & 0xFF; sp[9] = (tail >> 8) & 0xFF;
+			} catch (const std::exception &e) {
+				std::cerr << "[lvl_tmp] plane-1 chain walk failed at ("
+				          << ix << "," << iy << ") linking item " << id
+				          << ": " << e.what() << " -- skipped" << std::endl;
+				continue;
 			}
-			if (uint8_t *tp = objects.classStaticPtr(
-			        tail, kEntities, 6, 2)) {
-				tp[0] = id & 0xFF;
-				tp[1] = (id >> 8) & 0xFF;
-			}
-			sp[8] = tail & 0xFF; sp[9] = (tail >> 8) & 0xFF;
 		}
 		++itemsPlaced;
 	}

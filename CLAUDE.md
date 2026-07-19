@@ -27,6 +27,8 @@ Version 0.89.0 · GPLv3 · SDL3 (Linux/macOS/Windows), C++20.
 - [docs/create_sav_and_item_format.md](docs/create_sav_and_item_format.md) — char-gen save +
   EOB1 14-byte item format.
 - [docs/upgrade_to_cpp20.md](docs/upgrade_to_cpp20.md) — build notes.
+- [docs/control_channel.md](docs/control_channel.md) — design for the live control
+  socket (agent-driven play + interactive debugging); phased hand-off spec.
 
 ## Build + test
 
