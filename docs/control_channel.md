@@ -1,10 +1,11 @@
 # Live control channel — agent-driven play & debugging
 
-Status: **design** (nothing implemented yet). This doc is the hand-off spec:
-any agent (or human) should be able to implement a phase from it without
-re-deriving context. Target: an interactive protocol for driving a running
-thirdeye — inject input, query game state, snapshot the screen — culminating
-in an agent playing the Burial Glen end-to-end and saving.
+Status: **phases 1+2 implemented** ([control.cpp](../apps/thirdeye/control.cpp),
+2026-07-19); phase 3 (Burial Glen POC) and phase 4 (skill) pending. This doc is
+the hand-off spec: any agent (or human) should be able to implement a phase
+from it without re-deriving context. Target: an interactive protocol for
+driving a running thirdeye — inject input, query game state, snapshot the
+screen — culminating in an agent playing the Burial Glen end-to-end and saving.
 
 ## Motivation
 
@@ -84,6 +85,9 @@ party                    party pose + members
 cell <x> <y>             lvlobj chain heads at that cell, all 3 planes
 items                    floor items (W:place == -1) on the party's level
 monsters                 live NPCs on the party's level
+obj <id>                 class + entity fields of one object (cls/place/x/y/
+                         lvl/region/next/prev) — the per-object complement to
+                         the list commands; lets a client scan slots
 peek <obj> <off> <n>     hex dump of an object's statics (debug)
 send <obj> <msg> [args]  SEND a message to an object (debug, dangerous — it
                          runs SOP bytecode; document as "you can corrupt state")
@@ -139,7 +143,16 @@ All class numbers / offsets verified in this codebase — grep for them in
 | monster? | `objects.isSubclassOf(cls, 1622)` (NPC) |
 | item? | `objects.isSubclassOf(cls, 1371)` (items) |
 | feature disabled (tree cut, door open) | features class-1994 @0 bit 0x8000 (`featureDisabled`, automap.cpp) |
-| NPC hitpts offset | not pinned here — read it from `daesop -k EYE.RES 1622` EXPT before implementing `monsters` hp field |
+| NPC hitpts | class-1622 block @3, u16 (verified via `daesop -k EYE.RES 1622`: `W:hitpts` = PUBLIC_STATIC_VARIABLE 3) |
+
+**Caveat found during phase 2:** on the QSP save, `items` is empty at boot —
+ITEMS.TMP holds no `place == -1, lvl == 3` records; the Burial Glen ground
+loot (GameBanshee annotations #2–#4) is not pre-placed in the save. Items
+repurpose `B:lvl@4` as an owner byte (32..37 = held by PC, 0xFF = orphan
+pool — see [eob3_savegame_format.md](eob3_savegame_format.md) §2), and the
+QSP wands (cls 1376) are all held/orphaned. Whatever places loot on the
+ground (region trigger? first-visit init?) hasn't fired at boot — pin that
+down during phase 3.
 
 Chain walks must carry a guard (≤ 2000 hops) — see the invariant checker in
 lvl_tmp.cpp for the pattern; a corrupt chain must produce `err`, not a hang.
@@ -154,7 +167,8 @@ lvl_tmp.cpp for the pattern; a corrupt chain must produce `err`, not a hang.
 - Hook: one call in `pumpHost` next to the AUTOWALK block, gated on the env
   var having been set. The deferred click-release is a tick counter inside
   control.cpp, mirroring AUTOWALK's phase-5 logic.
-- CLI: also accept `--ctl=<path>` in main.cpp (sets the same config).
+- CLI: env var only for now (`--ctl=<path>` skipped until someone asks —
+  every driver script sets env vars anyway for MUTE/DUMP).
 
 ## Phases
 
@@ -192,12 +206,13 @@ channel".
 
 ## Testing
 
-- Protocol unit tests (apps/tests): feed the line parser fragmented/joined
-  input, assert command splits; no socket needed if the parser is a pure
-  function over a buffer — write it that way.
-- One headless e2e in CI: boot with `THIRDEYE_CTL` + `--load-save`, script
-  `ping`→`party`→`key`→`party`, assert the pose changed. Keep it under the
-  existing ctest umbrella.
+- Protocol unit tests (apps/tests): `control_tests.cpp` covers the pure
+  `tokenize()` (fragmented/joined lines are the socket layer's job — it
+  splits on `\n` before tokenize sees anything).
+- Headless e2e: `scripts/ctl_e2e.py`, registered as ctest `control_e2e` —
+  boots with `THIRDEYE_CTL` + `--load-save 1`, scripts
+  `ping`→`party`→`key 4900`→`party`, asserts the pose changed. Skips
+  (exit 77) unless `THIRDEYE_TEST_DATA_DIR` points at an EOB3 install.
 - The valgrind walk (`scripts/ci-valgrind.sh`) must stay green with the
   channel compiled in but env-var-off (zero-cost path).
 
@@ -209,11 +224,13 @@ channel".
 - A general RPC layer — this is a debug/drive channel, not an API contract;
   the format may change between versions without ceremony.
 
-## Open questions (decide during phase 1, document the answer here)
+## Open questions (answered during phases 1–2)
 
-1. Second client: reject with `err busy`, or drop the first? (Lean: reject.)
-2. `save <slot>`: reuse the SOP camp flow via clicks (honest, slower) or
-   call the save cluster directly (faster, risks divergence)? (Lean: clicks
-   in phase 3; direct call only if the click route proves flaky.)
-3. Should `dump` reply with image dimensions/palette info for the agent, or
-   stay path-only? (Lean: path-only; the agent reads the BMP itself.)
+1. Second client: **rejected with `err busy`** and dropped. Implementation
+   note: the pump drains the existing client's recv (detecting EOF) *before*
+   accepting — otherwise a fast connect/close/connect (a scripted
+   one-command-per-connection client) sees the stale fd and wrongly gets
+   `err busy`.
+2. `save <slot>`: **stubbed as `err unimplemented`**; phase 3 drives the camp
+   flow via clicks first, per the lean.
+3. `dump`: **path-only**; the agent reads the BMP itself.
