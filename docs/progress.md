@@ -426,3 +426,53 @@ ignores the return so char-gen never noticed, M:14 branches on it ("run CHARCOPY
 EOB1 saves are rejected by design, matching the original CHARCOPY ("Eye of the Beholder
 III won't work with Eye I save games"): EOB1's record layout differs (243-byte records at
 0x02) and the intended path is EOB1 → EOB2's importer → EOB3.
+
+## Savegame item stream — the CDESC-framing fix (2026-07-19)
+
+✅ **Every initial floor item in the game now spawns.** `ITEMS.TMP`'s §2.3 item stream is
+one native `save_range` **CDESC** stream (RTOBJECT.C/.H): `{u16 slot, u32 name, u16 size}`
++ `size` bytes of verbatim instance statics per record, `name == 0xFFFFFFFF` for a dead
+slot. `parseItemStream` had been reading it as a **4-byte** `{u16 id, u16 class}` header +
+a class-size lookup + a "4-byte trailer" — which shifted every static block 4 bytes early
+and read the block's real last 4 bytes as a standalone trailer. The load-bearing casualty:
+the shifted read discarded the entity block's placement fields, so **no item with
+`W:place == -1` (on a dungeon floor) ever materialized** — the Burial Glen wands, the axe
+cache, every "on the ground here, you'll find…" in the walkthroughs was silently absent
+from a fresh QSP boot. The fix reads the true 8-byte CDESC header and copies the whole
+`size`-byte block verbatim; floor items now spawn, `loadLevelObjects` links them into
+lvlobj plane 1, and they render in the 3D view. See §2.3 in
+[eob3_savegame_format.md](eob3_savegame_format.md).
+
+**Three workarounds fell out with the misframe** (all were compensating for the 4-byte
+shift, none were real): the "magical bonus in trailer byte 3" reader (`arms.B:bonus` is in
+the block at its true offset), the `items.W:itmflags` re-seed via `report(1)` (itmflags is
+in the block too — the shifted read produced 0xFFFF, whose bit 0x400 read as CURSED and
+made every restored item refuse to unequip), and the "owner lives at `B:lvl@4`" misread
+(ownership is `items.W:place@0`: a holder object id, or -1 for a floor item). The writer now
+emits CDESC too (with a u16-size overflow guard, CodeRabbit), so our saves are
+byte-compatible with the DOS record layout. Found while driving phase 3 of the control
+channel below — the "why is `items` empty on the QSP save?" question.
+
+## Live control channel + agent-driven play (2026-07-19)
+
+✅ **A running thirdeye can be driven and inspected over a socket.**
+`THIRDEYE_CTL=<path>` opens a Unix domain socket (macOS/Linux; a no-op stub on Windows,
+per the design's non-goals) polled once per host-loop pump — no threads, zero cost when
+unset. Line protocol ([control_channel.md](control_channel.md)): `key`/`click`/`map`/`dump`
+inject input and snapshot the screen exactly as `THIRDEYE_AUTOWALK` does internally;
+`party`/`monsters`/`items`/`cell`/`lvlmap`/`obj`/`peek` read the object system directly
+(the same statics the SOP reads — strictly better than OCR'ing screenshots); `poke`/`send`
+mutate live state for debugging. The parser is a pure function (unit-tested on all
+platforms); a headless ctest (`control_e2e`) boots the real binary, drives
+`ping→party→key→party`, and asserts the pose changed.
+
+**Proof of concept — an agent played Burial Glen end-to-end** via
+[scripts/glen_drive.py](../scripts/glen_drive.py): BFS pathfinding on the live wall map
+(`lvlmap`), ALL-ATTACK combat (select PC name-plates → the button appears under the arrow
+pad), chopping hackable trees to open the tree maze, auto-dismissing the Florn Falconhand
+cutscene, and picking floor items into backpacks — all 26 pieces of the item-stream fix's
+newly-spawned treasure, into the party's packs. Bugs it surfaced are fixed or documented:
+the "engine crash" that was really a total-party-kill death screen; floor-item pickup
+requires standing ON the cell (a feature click region — the fruit trees — occludes
+ahead-cell items); stowing into an occupied backpack slot swaps the occupant onto the
+cursor; and the wall map (not lvlobj plane 0) is the real source of maze walls.

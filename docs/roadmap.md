@@ -78,12 +78,11 @@ narrative on completed work.
     are clickable at the quadrant where the SOP draws them.
   - **Equip/move** — portrait click opens the equipment screen (M:240); clicking the
     right-hand slot takes the sword to hand (`in_hand -1 → 993`), clicking again places
-    it back (`993 → -1`). Two more stored-as-sentinel fixes made this possible: the §2.3
-    item stream stores `items.W:itmflags` as **0xFFFF** — and bit 0x400 is the CURSED
-    gate (`utils` r1386 @3646), so every restored item refused to unequip ("cannot
-    release the item!  It is cursed!"); itmflags is now re-seeded from the class's
-    `report(1)` low word. Likewise `arms.B:bonus` is stored as -1 with the REAL magical
-    bonus in trailer byte 3 — now applied on restore (a -1 bonus also reads as cursed).
+    it back (`993 → -1`). (Historical note: this originally needed two "stored-as-sentinel"
+    workarounds — re-seeding `items.W:itmflags` and applying `arms.B:bonus` from a
+    "trailer byte" — because the §2.3 parser was reading each item's static block 4 bytes
+    early. The 2026-07-19 CDESC-framing fix reads the block correctly, so itmflags and
+    bonus arrive in-frame and both workarounds are gone.)
     Backpack slots `W:inventory[0..13]` are now parsed from ITEMS.TMP @+96 and restored
     (they were left zero-filled = "item object 0", so clicking an empty backpack slot
     picked up the kernel).
@@ -407,10 +406,14 @@ originals define exactly:
   (chargen's). Strength bonuses + real weapons together drop a troll 30→18 HP
   in 8 seconds.
 - **Live item-object stream (§2.3)** RE'd + parsed
-  ([`parseItemStream`](../apps/thirdeye/savegame/items_tmp.hpp)): variable-
-  stride records `(u16 id, u16 class, N statics, 4 trailer)`, where N comes
-  from the SOP class's total `instanceStaticSize` via a caller-supplied lookup.
-  Unit-tested + verified against the Quick Start save.
+  ([`parseItemStream`](../apps/thirdeye/savegame/items_tmp.hpp)): native CDESC
+  records `(u16 slot, u32 name, u16 size, size statics)` — the same
+  `save_range` format as the rest of the file. **(Corrected 2026-07-19:** the
+  original reading here was a 4-byte `(u16 id, u16 class, N statics, 4
+  trailer)` frame, which read every static block 4 bytes early and dropped the
+  placement fields — hiding every initial floor item in the game. See §2.3 in
+  [eob3_savegame_format.md](eob3_savegame_format.md).) Unit-tested + verified
+  against the Quick Start save.
 - **Title-menu → Restore-Game picker → in-game flow** wired end-to-end. The
   SOP's `savegame_title`/`string_compare`/`restore_items`/`restore_level_objects`
   runtime functions now do the real work (read `SAVEGAME.DIR`, expose slot
@@ -477,14 +480,16 @@ originals define exactly:
   entity, and copies `LVLnn_00.BIN → LVLnn.TMP` for all 14 levels via
   `restoreLevels(dir, 0)`. Chargen-transfer's new-game save now round-trips
   through `resume_level`.
-- ~~The 4-byte trailer in each §2.3 record is currently skipped~~ ✅ RE'd:
-  - **byte 3 = magical bonus (signed int8)** -- verified end-to-end
-    against named items (Father Jon's ring of protection +3, Sir Mikeal's
-    +1 plate/sword/shield, etc.). Accessor: `ItemRecord::magicalBonus()`.
-  - bytes 0..2 = placement word + flags, partially decoded; see
-    [`../eob3_research/SAVEGAME/README.md`](../eob3_research/SAVEGAME/README.md)
-    for the per-pattern breakdown and trailer log artifact.
-  - Probe behind `THIRDEYE_DUMP_TRAILERS=1` for further RE.
+- ~~The 4-byte trailer in each §2.3 record~~ ❌ **there is no trailer**
+  (corrected 2026-07-19). The "trailer" was an artifact of misreading the
+  8-byte CDESC header as 4 bytes: the last 4 bytes of each item's real static
+  block were being read as a standalone trailer, and "byte 3 = magical bonus"
+  was just the block's final byte. The static block carries `arms.B:bonus` and
+  `items.W:itmflags` at their true offsets, so the bonus/itmflags side-channel
+  patch-ups are gone; `ItemRecord::magicalBonus()` and `THIRDEYE_DUMP_TRAILERS`
+  were removed with the fix. Placement lives in the entity block:
+  `items.W:place@0` (holder object id, or -1 for a dungeon floor with
+  B:x/B:y/B:lvl set).
 - ~~Per-PC unmapped fields~~ ✅ done: race/classes/portrait/PCstat/alignment/
   levels[3]/lost_levels[3]/lost_hp/hbon/xp[1..2] now all parsed and patched.
   Remaining unmapped: memorized/known spells (the big B:spell_cnt/spell_stat

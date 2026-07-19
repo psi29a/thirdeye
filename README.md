@@ -114,14 +114,22 @@ To configure without tests (also avoids the GoogleTest download):
 
 CHANGELOG
 
-0.89.0 (unreleased):
-Save/load lands for real -- save at camp, quit, continue -- plus an automap
-and a launcher that can install the game for you.
+0.89.0:
+Save/load lands for real -- save at camp, quit, continue -- plus an automap,
+a launcher that can install the game for you, and a live control channel that
+lets a script (or an AI agent) play the game.
 
 * Save/load: position, HP, inventory, memorized spells and consumed items all
   survive a save+load cycle. Save slots work from the camp menu; --load-save=N
   boots straight into a slot. Saves are staged and committed atomically, so a
   mid-save crash or an empty slot can't corrupt an existing save.
+* Floor items now spawn: ITEMS.TMP's item stream is parsed with the correct
+  native CDESC record framing. The old off-by-4 framing dropped the placement
+  fields, so no on-the-ground loot had ever appeared; now it spawns, renders
+  and can be picked up. Saves stay DOS-byte-compatible.
+* Live control channel (macOS/Linux): THIRDEYE_CTL=<socket> exposes a line
+  protocol to inject input and query game state, for scripted play and
+  debugging. Zero cost when unset. See docs/control_channel.md.
 * Automap (new): press M for a top-down map of what the party has seen (fog of
   war; secrets count as walls until found). Persisted per save slot; original
   EOB3 save files stay DOS-compatible.
