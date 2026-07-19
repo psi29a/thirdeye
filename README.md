@@ -10,6 +10,28 @@ Version: 0.89.0
 License: GPL (see GPL3.txt for more information)  
 Website:  http://www.mindwerks.net/projects/thirdeye/  
 
+QUALITY-OF-LIFE ADDITIONS
+
+Thirdeye runs the game's original bytecode unchanged, but the runtime around it
+adds a few conveniences the DOS release never had. Saves stay DOS-compatible
+on disk throughout.
+
+* Automap: press M in-game for a top-down map of everything the party has seen
+  (fog of war; secrets count as walls until found). Exploration persists per
+  save slot. The original shipped without any map.
+* Modern movement: WASD/QE alongside the original arrow keys and mouse, bound
+  by physical key position so they land right on QWERTY/AZERTY/QWERTZ alike.
+* Windowed play at any integer scale (--scale=N) instead of fullscreen VGA.
+* Skip the wait: --skip-intro / --skip-menu / --load-save=N jump straight into
+  the game, and the intro cinematic auto-plays only on first boot (still
+  available from the menu any time).
+* Launcher: picks the game folder, sets options, checks for updates -- and can
+  download and install the game data for you.
+* Music out of the box: a built-in OPL3 synth (authentic AdLib/SB16 timbres)
+  -- no soundfont or patch setup required.
+* Crash-safe saving: save files are staged and committed atomically as a set,
+  so a crash or full disk mid-save can't corrupt an existing slot.
+
 BUILDING
 
 Thirdeye is built with CMake and a C++20 toolchain.
@@ -93,12 +115,27 @@ To configure without tests (also avoids the GoogleTest download):
 CHANGELOG
 
 0.89.0 (unreleased):
+Save/load lands for real -- save at camp, quit, continue -- plus an automap
+and a launcher that can install the game for you.
 
-* Automap (new): press M in-game to overlay a top-down map of what the party has
-  actually seen (fog of war; hidden doors and hackable trees count as walls until
-  removed). Legend for party/walls/stairs/traps/items/switches/marks; exploration
-  is staged live in a MAPS.TMP sidecar and persisted per save slot as
-  MAPS_nn.BIN -- original EOB3 save files stay DOS-compatible.
+* Save/load: position, HP, inventory, memorized spells and consumed items all
+  survive a save+load cycle. Save slots work from the camp menu; --load-save=N
+  boots straight into a slot. Saves are staged and committed atomically, so a
+  mid-save crash or an empty slot can't corrupt an existing save.
+* Automap (new): press M for a top-down map of what the party has seen (fog of
+  war; secrets count as walls until found). Persisted per save slot; original
+  EOB3 save files stay DOS-compatible.
+* World items: niches, monster inventories, chests and containers now hold
+  their contents; consumed items stay consumed across save+load.
+* EOB2 party transfer (initial): TRANSFER.SAV staging + format validation.
+* Launcher: can download and install the EOB3 game data (GOG or Internet
+  Archive), with overwrite warnings; archive readers hardened.
+* Rendering fixes: co-located doors + wall buttons both render (chain order
+  now matches the original's init_level, guarded by a chain-invariant
+  checker); VFX transparency uses the RLE skip token so spell-book text
+  renders solid; transition dialogs no longer repaint the compass.
+* Runtime: destroy_object releases its subwindows; --skip-intro only skips the
+  boot auto-intro; the intro plays on first boot only.
 
 0.88.0:
 Thirdeye grows from "walks a populated dungeon" into a game you can actually fight,
