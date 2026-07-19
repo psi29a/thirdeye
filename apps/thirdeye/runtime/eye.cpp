@@ -307,13 +307,15 @@ static bool writeItemsFixed(Context &ctx, const std::filesystem::path &dstPath,
 	}
 
 	// Step 4 -- truncate at the stream offset and append the item-object
-	// array: a full record for every live item, and an EXPLICIT empty-slot
-	// record ({id, 0xFFFF, 4-byte trailer} -- the DOS format's own encoding)
-	// for every world-pool slot (15..999) without one. The explicit empties
-	// are what lets the loader distinguish "consumed item" from "old save
-	// that never serialized this slot": without them the gap-fill resurrected
-	// every used-up potion/scroll from ITEMS_00.BIN on each restore
-	// (CodeRabbit).
+	// array as native CDESC records ({u16 slot, u32 name, u16 size} + statics,
+	// RTOBJECT.H save_range): a full record for every live item, and an
+	// EXPLICIT empty-slot record ({id, name=0xFFFFFFFF, size=0} -- save_range's
+	// own encoding for a dead objlist entry) for every world-pool slot
+	// (15..999) without one. The explicit empties are what lets the loader
+	// distinguish "consumed item" from "old save that never serialized this
+	// slot": without them the gap-fill resurrected every used-up potion/scroll
+	// from ITEMS_00.BIN on each restore (CodeRabbit). Statics go verbatim --
+	// B:bonus/itmflags live inside them at their true offsets, no side-channel.
 	buf.resize(kItemStreamOff);
 	constexpr int kWorldFirst = 15, kWorldLast = 999;
 	for (int i = 0; i < VM::ObjectSystem::kNumEntities; ++i) {
@@ -326,27 +328,20 @@ static bool writeItemsFixed(Context &ctx, const std::filesystem::path &dstPath,
 				buf.resize(recOff + 8, 0);
 				putU16(&buf[recOff],     static_cast<uint16_t>(i));
 				putU16(&buf[recOff + 2], 0xFFFF);
+				putU16(&buf[recOff + 4], 0xFFFF); // name high half: u32 -1
+				// size u16 @+6 stays 0
 			}
 			continue;
 		}
 		uint32_t blockSize = ctx.objects.instanceStaticSize(cls);
 		size_t recOff = buf.size();
-		buf.resize(recOff + 4 + blockSize + 4, 0);
+		buf.resize(recOff + 8 + blockSize, 0);
 		putU16(&buf[recOff],     static_cast<uint16_t>(i));
-		putU16(&buf[recOff + 2], cls);
+		putU16(&buf[recOff + 2], cls); // name low half; high half stays 0
+		putU16(&buf[recOff + 6], static_cast<uint16_t>(blockSize));
 		if (blockSize > 0)
 			if (uint8_t *sp = ctx.objects.staticsPtr(i, 0, blockSize))
-				std::memcpy(&buf[recOff + 4], sp, blockSize);
-		// Trailer byte 3 carries the weapon's magical bonus in the DOS format
-		// (the static block stores B:bonus as the -1 sentinel there). Our
-		// block copy above carries the LIVE B:bonus, but the loader applies
-		// trailer byte 3 for DOS-save compatibility -- so mirror the live
-		// bonus into the trailer or a save+load cycle strips every +N weapon
-		// to mundane (= the "all swings miss the mists" report, round 2).
-		constexpr uint16_t kArmsCls = 1373;
-		if (ctx.objects.isSubclassOf(cls, kArmsCls))
-			if (uint8_t *b = ctx.objects.classStaticPtr(i, kArmsCls, 0, 1))
-				buf[recOff + 4 + blockSize + 3] = *b;
+				std::memcpy(&buf[recOff + 8], sp, blockSize);
 		++outItems;
 	}
 
@@ -1205,63 +1200,27 @@ bool tryHandle(Context &ctx, const std::string &fn,
 			// (sending MSG_CREATE for first-time init); the saved static block is
 			// then memcpy'd in to restore the item's persistent state.
 			if (wantContinue && items.itemStreamOff > 0) {
-				auto staticSize = [&](uint16_t cls) -> uint32_t {
-					try { return ctx.objects.instanceStaticSize(cls); }
-					catch (const std::exception &) { return 0; }
-				};
 				// Load the raw bytes once -- parseItemStream needs the buffer.
 				auto path = ctx.res.resourcePath().parent_path() / "SAVEGAME" / "ITEMS.TMP";
 				std::ifstream f(path, std::ios::binary);
 				std::vector<uint8_t> raw((std::istreambuf_iterator<char>(f)),
 				                          std::istreambuf_iterator<char>());
-	auto stream = THIRDEYE::savegame::parseItemStream(
-				    raw, items.itemStreamOff, staticSize, &coveredSlots);
+				auto stream = THIRDEYE::savegame::parseItemStream(
+				    raw, items.itemStreamOff, &coveredSlots);
 				int created = 0, failed = 0;
-				constexpr uint16_t kArmsClass = 1373;
 				for (const auto &rec : stream) {
 					try {
 						ctx.objects.createProgram(rec.id, rec.cls);
+						// CDESC statics restore verbatim, matching the native
+						// restore_range -- itmflags, arms.B:bonus, and the
+						// entity place/x/y/lvl fields all arrive in-frame.
+						// (The old 4-byte-shifted parse needed itmflags and
+						// bonus patch-ups here; see items_tmp.hpp history.)
 						if (uint8_t *p = ctx.objects.staticsPtr(
 						        rec.id, 0,
 						        static_cast<uint32_t>(rec.staticBlock.size())))
 							std::memcpy(p, rec.staticBlock.data(),
 							            rec.staticBlock.size());
-						// Stored-as-sentinel fields (same convention as monster
-						// hitpts = -1): the block stores arms.B:bonus as -1 (real
-						// bonus = trailer byte 3) and items.W:itmflags as 0xFFFF.
-						// itmflags bit 0x400 is the CURSED gate (utils r1386
-						// @3646) -- verbatim 0xFFFF made every item unremovable
-						// ("cannot release the item!  It is cursed!"). Re-seed
-						// itmflags from the class's report(1) low word, as the
-						// original loader does when the item is built.
-						constexpr uint16_t kItemsClass = 1371;
-						try {
-							int32_t rep1 = ctx.objects.send(rec.id, 18, {1});
-							if (uint8_t *fp = ctx.objects.classStaticPtr(
-							        rec.id, kItemsClass, 0, 2)) {
-								fp[0] = rep1 & 0xFF;
-								fp[1] = (rep1 >> 8) & 0xFF;
-							}
-						} catch (const std::exception &) {}
-						if (ctx.objects.isSubclassOf(rec.cls, kArmsClass)) {
-							// B:bonus source, in priority order:
-							//  - block value 0xFF = the DOS -1 sentinel ->
-							//    the real bonus lives in trailer byte 3
-							//    (shipped QSP saves, real DOS saves);
-							//  - otherwise the block carries the LIVE bonus
-							//    (saves from our writer). Only take the
-							//    trailer when it says something (> 0) --
-							//    older thirdeye saves wrote trailer 0, and
-							//    stomping the block's +1 with that 0 made
-							//    every weapon mundane after one save+load
-							//    (nothing could hit the graveyard mists).
-							if (uint8_t *b = ctx.objects.classStaticPtr(
-							        rec.id, kArmsClass, 0, 1)) {
-								uint8_t t = static_cast<uint8_t>(rec.magicalBonus());
-								if (*b == 0xFF || t > 0)
-									*b = t;
-							}
-						}
 						++created;
 					} catch (const std::exception &) { ++failed; }
 				}

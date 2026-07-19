@@ -145,14 +145,14 @@ All class numbers / offsets verified in this codebase — grep for them in
 | feature disabled (tree cut, door open) | features class-1994 @0 bit 0x8000 (`featureDisabled`, automap.cpp) |
 | NPC hitpts | class-1622 block @3, u16 (verified via `daesop -k EYE.RES 1622`: `W:hitpts` = PUBLIC_STATIC_VARIABLE 3) |
 
-**Caveat found during phase 2:** on the QSP save, `items` is empty at boot —
-ITEMS.TMP holds no `place == -1, lvl == 3` records; the Burial Glen ground
-loot (GameBanshee annotations #2–#4) is not pre-placed in the save. Items
-repurpose `B:lvl@4` as an owner byte (32..37 = held by PC, 0xFF = orphan
-pool — see [eob3_savegame_format.md](eob3_savegame_format.md) §2), and the
-QSP wands (cls 1376) are all held/orphaned. Whatever places loot on the
-ground (region trigger? first-visit init?) hasn't fired at boot — pin that
-down during phase 3.
+**Phase-3 trophy:** `items` returning empty at QSP boot was not a spawn
+mechanism mystery — it exposed a real savegame bug: `parseItemStream` misread
+the 8-byte CDESC record header as 4 bytes, shifting every item's statics and
+discarding the placement fields. Fixed 2026-07-19 (see
+[eob3_savegame_format.md](eob3_savegame_format.md) §2.3); all 26 Burial Glen
+floor items (wands @ (27,30), arrows/bow/mail @ (2,10), the axe pile @ (12,2))
+now exist, link into lvlobj plane 1, render in the 3D view, and list via
+`items` — matching GameBanshee's legend annotation-for-annotation.
 
 Chain walks must carry a guard (≤ 2000 hops) — see the invariant checker in
 lvl_tmp.cpp for the pattern; a corrupt chain must produce `err`, not a hang.
@@ -185,7 +185,21 @@ chain (cf. the chain-order work in lvl_tmp.cpp); `items` on LVL03 lists the
 wands the GameBanshee legend places at its annotation #2
 (`../eob3_research/gamebanshee/legends/burialglen.json`).
 
-**Phase 3 — the Burial Glen POC.** An agent drives, via the channel only:
+**Phase 3 — the Burial Glen POC.** In progress (2026-07-19);
+[scripts/glen_drive.py](../scripts/glen_drive.py) +
+[scripts/ctl.py](../scripts/ctl.py) are the driver. Coordinates harvested so
+far (logical 320x200, right-click to attack): PC0 weapon (229,20), PC1
+(296,18), PC3 (297,70); CAMP button ≈(296,183). Note the engine.cpp AUTOWALK
+example's "R126:133 = PC0's right hand" lands inside the movement arrow pad,
+NOT a weapon icon — use the panel coordinates above. Facing: fdir 0=N 1=E
+2=S 3=W; dead monsters read x=255 y=255 hp<=0 (filter them client-side).
+**ALL ATTACK** (the big combat lever, per GameBanshee gameplaynotes.html):
+left-click each PC's name plate to toggle it yellow — plates at (216,6),
+(286,6), (216,57), (286,57), (216,110), (286,110) — and with ≥1 selected an
+ALL ATTACK button appears under the arrow pad at ≈(146,165); one left-click
+there swings every selected PC. ~2× the kill rate of clicking weapon icons,
+and the selection persists. The plain space bar (`key 20`) does nothing.
+An agent drives, via the channel only:
 QSP start on LVL03 → kill the grave mists (query `monsters`, face, attack
 via weapon-icon clicks, re-query until dead) → pick up loot at the legend's
 annotations #2–#4 → find the axe, equip it, chop trees toward the gate

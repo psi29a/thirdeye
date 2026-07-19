@@ -250,6 +250,21 @@ std::string handle(const std::vector<std::string> &tok,
         return out + "ok\n";
     }
 
+    if (verb == "lvlmap") {
+        int dn = objects.firstObjectOfClass(kDungeonCls);
+        if (dn < 0) return "err no dungeon\n";
+        // B:lvlmap@0..1023 (32x32): 0xFF = floor, else wall byte (automap.cpp).
+        std::string out;
+        for (int y = 0; y < 32; ++y) {
+            for (int x = 0; x < 32; ++x) {
+                int b = readS(objects, dn, kDungeonCls, y * 32u + x, 1, 0);
+                out += (b == 0xFF) ? '.' : '#';
+            }
+            out += '\n';
+        }
+        return out + "ok\n";
+    }
+
     if (verb == "obj") {
         int id = 0;
         if (tok.size() != 2 || !parseInt(tok[1], id))
@@ -293,6 +308,31 @@ std::string handle(const std::vector<std::string> &tok,
             out += ((i % 16 == 15) || i == n - 1) ? '\n' : ' ';
         }
         return out + "ok\n";
+    }
+
+    if (verb == "poke") {
+        int obj = 0, off = 0;
+        if (tok.size() < 4 || !parseInt(tok[1], obj) || !parseInt(tok[2], off))
+            return "err poke <obj> <off> <hexbyte>...\n";
+        if (off < 0) return "err off >= 0\n";
+        std::vector<uint8_t> bytes;
+        for (size_t i = 3; i < tok.size(); ++i) {
+            long b = 0;
+            if (!parseHex(tok[i], b) || b < 0 || b > 0xFF)
+                return "err byte not hex 00..ff\n";
+            bytes.push_back(static_cast<uint8_t>(b));
+        }
+        // Debug write into live statics -- as dangerous as `send`.
+        uint8_t *p = nullptr;
+        try {
+            p = objects.staticsPtr(obj, static_cast<uint32_t>(off),
+                                   static_cast<uint32_t>(bytes.size()));
+        } catch (const std::exception &e) {
+            return std::string("err ") + e.what() + "\n";
+        }
+        if (!p) return "err out of range\n";
+        std::memcpy(p, bytes.data(), bytes.size());
+        return "ok\n";
     }
 
     if (verb == "send") {

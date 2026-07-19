@@ -26,3 +26,5 @@ apps/*/config.hpp
 .settings/
 build*/
 
+# Python
+__pycache__/

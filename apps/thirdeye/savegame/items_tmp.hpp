@@ -138,74 +138,43 @@ ItemsTmp loadItemsTmp(const std::filesystem::path &path);
 
 // --- §2.3 item-object stream ---
 //
-// After the character-records block, ITEMS.TMP holds a flat array of "object
-// slots" indexed by SOP object id. Each slot is:
-//   +0 u16 id
-//   +2 u16 class    (0xFFFF means an empty/dead slot)
-//   +4 N bytes      (the instance's static block; N depends on class)
-// For empty slots N is 4 (a minimum-size placeholder). For real items N is
-// the class's total `instanceStaticSize` (sum across the parent chain).
+// ITEMS.TMP is one native `save_range` CDESC stream end-to-end (see
+// RTOBJECT.C/RTOBJECT.H): byte 0 = 0x1A magic, then one record per object
+// slot 0..999, each
+//   +0 u16 slot
+//   +2 u32 name     (SOP class number; 0xFFFFFFFF = empty/dead slot)
+//   +6 u16 size     (static-block byte count; 0 for empty slots)
+//   +8 `size` bytes (the instance's statics, whole parent chain, verbatim)
+// The §2.1 kernel record (slot 0), §2.2 PC records (slots 32..41) and the
+// §2.3 item pool are all just records in this one stream; the §2.2 field
+// offsets in parseItemsTmp already bake in the 8-byte header.
 //
-// The size lookup is provided by the caller: it returns the static-block
-// length for a given class number. Implementations in production use the live
-// `ObjectSystem`; tests pass a small table.
+// HISTORICAL NOTE (fixed 2026-07-19): this parser used to assume a 4-byte
+// {id, cls} header + class-size lookup + "4-byte trailer", which read every
+// static block 4 bytes early and dropped the real last 4 bytes (the tail of
+// the entity/arms fields). All the "trailer semantics" RE (magical bonus in
+// byte 3, itmflags arriving as 0xFFFF, "owner lives at B:lvl@4") were
+// artifacts of that shift. True frame: items.W:place@0 = holder object id,
+// or -1 with B:x/B:y/B:lvl set for items lying on a dungeon floor.
 
 struct ItemRecord {
 	uint16_t id = 0;
 	uint16_t cls = 0xFFFF;
-	std::vector<uint8_t> staticBlock; // exactly `lookup(cls)` bytes
-	// 4-byte trailer that follows each record's static block. RE'd by
-	// correlating trailers against ItemsTmp::Character::equip[]/backpack/quiver
-	// across the bundled Quick Start Party save (445 items). Decoded layout:
-	//
-	//   byte 0..1   placement words (paired interpretation):
-	//                 (0xFF, 0x00)  -> equipped on (or carried by) a PC
-	//                 (0xFF, 0xFF)  -> inert: in a backpack/pouch, or an
-	//                                  empty slot the engine isn't using
-	//                 (0x00, 0x00)  -> placed in dungeon / container (subtype
-	//                                  in byte 2)
-	//                 (0x00, 0x01)  -> placed in dungeon, addressed variant
-	//                 (lvl,  0x00)  -> rare: at the named dungeon level
-	//                                  (saw byte 0 = 2 for a 14-arrow stack)
-	//   byte 2      flags / subtype:
-	//                 - For ordinary weapons/armor: 0 or {8, 12, 32} bit flags
-	//                   (likely cursed/identified/etc; not pinned).
-	//                 - For special items (cls 1376 = scrolls?, 1377 = potions):
-	//                   byte 2 is a 0..83 subtype id (potion/scroll variant).
-	//   byte 3      magical bonus (SIGNED int8): -N for cursed, +N for
-	//               enhanced. VERIFIED: cls 1350 (ring of protection) carries
-	//               values {-3, -2, -1, 0, 1, 2, 3, 4} matching D&D enchant
-	//               + curse range; Father Jon's "ring of protection +3" has
-	//               byte 3 = 3; Sir Mikeal's +1 plate/sword/shield all have
-	//               byte 3 = 1.
-	//
-	// Captured byte-for-byte; writers should round-trip the raw u32. Probe
-	// the dump via THIRDEYE_DUMP_TRAILERS=1.
-	uint32_t trailer = 0;
-
-	// Accessor for the verified field. Other fields (bytes 0..2) are
-	// documented above but not promoted to typed accessors until we pin the
-	// flag semantics.
-	int8_t magicalBonus() const {
-		return static_cast<int8_t>((trailer >> 24) & 0xFF);
-	}
+	std::vector<uint8_t> staticBlock; // CDESC `size` bytes, verbatim
 };
 
-using ClassStaticSize = std::function<uint32_t(uint16_t cls)>;
-
-// Walk the item-object stream starting at `streamOff`. Returns one entry per
-// non-empty slot (cls != 0xFFFF), in file order. Empty slots are skipped (we
-// don't need to recreate them) but ARE reported through `coveredSlots` when
-// provided: every slot id the stream explicitly mentions -- live or empty --
-// is appended. The caller uses that to distinguish "this slot is empty
-// because the player consumed the item" (explicit empty record; do NOT
+// Walk the CDESC stream starting at `streamOff`. Returns one entry per
+// non-empty slot (name != 0xFFFFFFFF), in file order. Empty slots are skipped
+// (we don't need to recreate them) but ARE reported through `coveredSlots`
+// when provided: every slot id the stream explicitly mentions -- live or
+// empty -- is appended. The caller uses that to distinguish "this slot is
+// empty because the player consumed the item" (explicit empty record; do NOT
 // gap-fill it from ITEMS_00.BIN) from "this save predates full-array
 // serialization" (slot absent from the stream entirely; gap-fill is the
 // right recovery). The caller is responsible for `streamOff`; for the Quick
 // Start Party save it is 6947 (0x1b23) = 677 + 10 * 627.
 std::vector<ItemRecord> parseItemStream(const std::vector<uint8_t> &data,
                                         size_t streamOff,
-                                        const ClassStaticSize &lookup,
                                         std::vector<uint16_t> *coveredSlots = nullptr);
 
 // --- Slot-backup restoration -----------------------------------------
