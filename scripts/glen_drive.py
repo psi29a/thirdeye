@@ -300,12 +300,55 @@ BACKPACK_SLOTS = [(cx, cy) for cy in (144, 128, 112, 96, 80, 64, 48)
                   for cx in (210, 192)]
 NEXT_PC = (300, 47)
 CLOSE_INV = (303, 158)
-# Candidate sprite points: floor of the cell ahead / own cell. HARD CAP at
-# y=118: the movement arrow pad starts at ~(117,123) and clicking it walks
-# the party around mid-loot (that mistake killed half the QSP party once).
-# 7px pitch: item sprites (daggers, wands) are ~10px at ahead-cell scale and
-# a coarser grid walked right past them.
-SPRITE_GRID = [(x, y) for y in range(76, 119, 7) for x in range(12, 169, 7)]
+# Candidate sprite points: OWN-CELL band only (stand ON the loot to pick it
+# up) -- ahead-cell pickup is unreliable because a clickable feature behind
+# the items (fruit trees at the #3 site) owns the click region and eats
+# every click ("The tree is barren of fruit"). Own-cell sprites render in
+# the bottom band below the horizon, unobstructed. HARD CAP at y=118: the
+# movement arrow pad starts at ~(117,123) and clicking it walks the party
+# around mid-loot (that mistake killed half the QSP party once).
+SPRITE_GRID = [(x, y) for y in range(102, 119, 4) for x in range(12, 169, 7)]
+
+
+_TAKEN_IDS = []  # module-level: every item id this process has ever stowed
+
+
+def _stow_on_cursor(sock, pid, slot_cursor, pc_cursor):
+    """Click backpack slots until `pid` (already on the cursor) lands with
+    place>=0. QSP PCs start with occupied slots -- clicking one SWAPS its
+    contents onto the cursor instead of failing, silently bumping whatever
+    we'd already stowed there. Guard against that: after each click, check
+    every previously-taken item is still place>=0; if one regressed, the
+    click just swapped it out -- click the SAME slot again to swap it back
+    in, then permanently skip that slot and keep looking for `pid`."""
+    talk(sock, f"click L {PORTRAIT[0]} {PORTRAIT[1]}")
+    time.sleep(0.8)
+    ok = False
+    guard = 0
+    while slot_cursor[0] < 10_000 and guard < len(BACKPACK_SLOTS) * 8:
+        guard += 1
+        if slot_cursor[0] % len(BACKPACK_SLOTS) == 0 and slot_cursor[0] > 0:
+            talk(sock, f"click L {NEXT_PC[0]} {NEXT_PC[1]}")
+            time.sleep(0.7)
+            pc_cursor[0] += 1
+        sx, sy = BACKPACK_SLOTS[slot_cursor[0] % len(BACKPACK_SLOTS)]
+        talk(sock, f"click L {sx} {sy}")
+        time.sleep(0.7)
+        regressed = [t for t in _TAKEN_IDS
+                     if t != pid and (obj_place(sock, t) or -1) < 0]
+        if regressed:
+            talk(sock, f"click L {sx} {sy}")  # undo the swap
+            time.sleep(0.7)
+            slot_cursor[0] += 1  # this slot is occupied; never revisit it
+            continue
+        p = obj_place(sock, pid)
+        slot_cursor[0] += 1
+        if p is not None and p >= 0:
+            ok = True
+            break
+    talk(sock, f"click L {PORTRAIT[0]} {PORTRAIT[1]}")
+    time.sleep(0.8)
+    return ok
 
 
 def loot_cell(sock, ix, iy, slot_cursor=[0], pc_cursor=[0]):
@@ -336,27 +379,9 @@ def loot_cell(sock, ix, iy, slot_cursor=[0], pc_cursor=[0]):
         picked = floor - now
         if picked:
             pid = picked.pop()
-            # item on cursor -> open inventory, stow, close again. An
-            # occupied slot SWAPS with the cursor, so verify via obj place
-            # and walk forward until the item actually lands (place >= 0).
-            talk(sock, f"click L {PORTRAIT[0]} {PORTRAIT[1]}")
-            time.sleep(0.8)
-            for _ in range(len(BACKPACK_SLOTS) * 6):
-                if slot_cursor[0] >= len(BACKPACK_SLOTS):
-                    talk(sock, f"click L {NEXT_PC[0]} {NEXT_PC[1]}")
-                    time.sleep(0.7)
-                    slot_cursor[0] = 0
-                    pc_cursor[0] += 1
-                sx, sy = BACKPACK_SLOTS[slot_cursor[0]]
-                talk(sock, f"click L {sx} {sy}")
-                time.sleep(0.7)
-                slot_cursor[0] += 1
-                p = obj_place(sock, pid)
-                if p is not None and p >= 0:
-                    break  # stowed (place = holder PC object id)
-            talk(sock, f"click L {PORTRAIT[0]} {PORTRAIT[1]}")
-            time.sleep(0.8)
-            taken += 1
+            if _stow_on_cursor(sock, pid, slot_cursor, pc_cursor):
+                _TAKEN_IDS.append(pid)
+                taken += 1
             floor = now
             misses = 0
             grid_i -= 1  # same spot may hold more items (stacked)

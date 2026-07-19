@@ -334,6 +334,21 @@ static bool writeItemsFixed(Context &ctx, const std::filesystem::path &dstPath,
 			continue;
 		}
 		uint32_t blockSize = ctx.objects.instanceStaticSize(cls);
+		if (blockSize > 0xFFFF) {
+			// CDESC size is u16; a silent wrap here would desync every
+			// following record on the next load (CodeRabbit). No real EOB3
+			// class comes near this, so treat it as data corruption: emit an
+			// explicit empty record for the slot instead.
+			std::cerr << "[save] item slot " << i << " class " << cls
+			          << " statics " << blockSize
+			          << " B exceed CDESC u16 -- writing empty record\n";
+			size_t recOff = buf.size();
+			buf.resize(recOff + 8, 0);
+			putU16(&buf[recOff],     static_cast<uint16_t>(i));
+			putU16(&buf[recOff + 2], 0xFFFF);
+			putU16(&buf[recOff + 4], 0xFFFF);
+			continue;
+		}
 		size_t recOff = buf.size();
 		buf.resize(recOff + 8 + blockSize, 0);
 		putU16(&buf[recOff],     static_cast<uint16_t>(i));

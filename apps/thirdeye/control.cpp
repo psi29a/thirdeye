@@ -1,5 +1,48 @@
 #include "control.hpp"
 
+#include <string>
+#include <vector>
+
+namespace THIRDEYE::control {
+
+// tokenize() is pure and platform-neutral (unit-tested on all platforms);
+// the socket implementation below is POSIX-only.
+std::vector<std::string> tokenize(std::string_view line) {
+	std::vector<std::string> out;
+	size_t i = 0;
+	while (i < line.size()) {
+		while (i < line.size() && (line[i] == ' ' || line[i] == '\t' ||
+		                            line[i] == '\r' || line[i] == '\n'))
+			++i;
+		size_t start = i;
+		while (i < line.size() && line[i] != ' ' && line[i] != '\t' &&
+		       line[i] != '\r' && line[i] != '\n')
+			++i;
+		if (start < i) out.emplace_back(line.substr(start, i - start));
+	}
+	return out;
+}
+
+} // namespace THIRDEYE::control
+
+#ifdef _WIN32
+
+// Windows: no control channel (docs/control_channel.md non-goals — AF_UNIX
+// transport is explicitly out of scope for v1). Stubs keep the call sites in
+// engine.cpp portable.
+#include <iostream>
+
+namespace THIRDEYE::control {
+void init(const std::string &path) {
+	if (!path.empty())
+		std::cerr << "[ctl] control channel not supported on Windows\n";
+}
+void pump(GRAPHICS::Graphics *, VM::EventSystem &, VM::ObjectSystem &) {}
+void shutdown() {}
+} // namespace THIRDEYE::control
+
+#else // POSIX implementation
+
 #include "automap.hpp"
 #include "graphics/graphics.hpp"
 #include "vm/events.hpp"
@@ -12,7 +55,6 @@
 #include <cstring>
 #include <fcntl.h>
 #include <iostream>
-#include <string>
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <unistd.h>
@@ -363,22 +405,6 @@ std::string handle(const std::vector<std::string> &tok,
 
 } // namespace
 
-std::vector<std::string> tokenize(std::string_view line) {
-    std::vector<std::string> out;
-    size_t i = 0;
-    while (i < line.size()) {
-        while (i < line.size() && (line[i] == ' ' || line[i] == '\t' ||
-                                    line[i] == '\r' || line[i] == '\n'))
-            ++i;
-        size_t start = i;
-        while (i < line.size() && line[i] != ' ' && line[i] != '\t' &&
-               line[i] != '\r' && line[i] != '\n')
-            ++i;
-        if (start < i) out.emplace_back(line.substr(start, i - start));
-    }
-    return out;
-}
-
 void init(const std::string &path) {
     if (path.empty()) return;
     if (gListenFd >= 0) shutdown();
@@ -495,3 +521,5 @@ void shutdown() {
 }
 
 } // namespace THIRDEYE::control
+
+#endif // _WIN32

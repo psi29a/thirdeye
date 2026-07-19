@@ -218,6 +218,40 @@ sense→decide→act loop pattern with the "one command may take a pump" caveat.
 Trigger phrases: "drive the game", "play the glen", "live debug", "control
 channel".
 
+## Driving scripts (the "sweeper")
+
+[scripts/ctl.py](../scripts/ctl.py) is the one-shot client;
+[scripts/glen_drive.py](../scripts/glen_drive.py) layers level-agnostic
+primitives on it. Everything reads live state (lvlmap, cell chains, party
+pose), so **any save on any level works** — play to wherever, save, quit,
+then re-drive that save headless:
+
+```bash
+# 1. boot the save you want to explore (slot N), with the channel armed
+THIRDEYE_CTL=/tmp/te_ctl.sock THIRDEYE_MUTE=1 \
+SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy \
+  build/thirdeye.app/Contents/MacOS/thirdeye ../data/EYE.RES \
+  --skip-intro --skip-menu --load-save N --nosound --scale=1 &
+
+# 2. drive it
+python3 scripts/ctl.py /tmp/te_ctl.sock party items monsters  # look around
+python3 scripts/glen_drive.py /tmp/te_ctl.sock scan           # walkability map
+python3 scripts/glen_drive.py /tmp/te_ctl.sock goto 14 10     # BFS-walk (fights,
+                                                              # chops, cutscenes)
+python3 scripts/glen_drive.py /tmp/te_ctl.sock loot 14 10     # pick up a cell's
+                                                              # floor items
+python3 scripts/glen_drive.py /tmp/te_ctl.sock kill-adjacent  # ALL-ATTACK front
+```
+
+Caveats for non-Glen levels: the walkable/hackable plane-0 class sets at the
+top of glen_drive.py are graveyard classes (graves 2054 walkable, trees 2060
+choppable) — indoor levels' doors/levers/pits need their own entries; `loot`
+requires standing ON the item cell (ahead-cell clicks lose to feature click
+regions — fruit trees ate ours); and `heal_party` is a debug poke, remove it
+for honest runs. The per-run orchestration (which cells to visit) is a
+5-line script over `goto`/`loot` — see the phase-3 sweep scripts for the
+pattern.
+
 ## Testing
 
 - Protocol unit tests (apps/tests): `control_tests.cpp` covers the pure
