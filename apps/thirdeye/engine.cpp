@@ -679,6 +679,7 @@ VM::Value defaultRuntimeCall(VM::ObjectSystem &objects, VM::EventSystem &events,
 	if (THIRDEYE::runtime::eye::tryHandle(ctx, fn, args, result))      return result;
 	if (THIRDEYE::runtime::graphics::tryHandle(ctx, fn, args, result)) return result;
 	if (THIRDEYE::runtime::sound::tryHandle(ctx, fn, args, result))    return result;
+	if (THIRDEYE::runtime::dh::tryHandle(ctx, fn, args, result))       return result;
 
 	THIRDEYE::runtime::rt() << "  [stub -> 0]" << std::endl;
 	// Always log the first hit on each unimplemented runtime function (max a few
@@ -1411,10 +1412,16 @@ void THIRDEYE::Engine::go() {
 	}
 
 	// --vm (or the --skip-* flags, which only make sense here): boot the SOP
-	// bytecode VM (the 'start' object). This is the real, data-driven game path:
-	// start.MSG_CREATE shows the title menu (or, with --skip-menu, the game).
+	// bytecode VM. EOB3 boots the "start" object; Dungeon Hack's HACK.BAT
+	// wires it as `aesop open opening` (intro) / `aesop hack phase-one` (game).
 	if (mForceVM || mSkipMenu || mSkipIntro) {
-		bootObject(resource, "start");
+		std::string bootName = "start";
+		std::string resName = resFile.filename().string();
+		std::transform(resName.begin(), resName.end(), resName.begin(),
+		    [](unsigned char c) { return std::tolower(c); });
+		if (resName == "open.res") bootName = "opening";
+		else if (resName == "hack.res") bootName = "phase-one";
+		bootObject(resource, bootName);
 		return;
 	}
 

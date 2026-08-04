@@ -163,6 +163,9 @@ namespace graphics { bool tryHandle(Context&, const std::string &fn,
 namespace sound    { bool tryHandle(Context&, const std::string &fn,
                                     const std::vector<VM::Value>&,
                                     VM::Value &result); }
+namespace dh       { bool tryHandle(Context&, const std::string &fn,
+                                    const std::vector<VM::Value>&,
+                                    VM::Value &result); }
 
 } // namespace THIRDEYE::runtime
 

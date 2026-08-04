@@ -67,6 +67,13 @@ GRAPHICS::Graphics::Graphics(uint16_t scale, bool /*renderer*/) {
 	                                 SDL_LOGICAL_PRESENTATION_LETTERBOX);
 
 	mPalette = SDL_CreatePalette(256);
+	// SDL3 seeds palette entries to WHITE; any bitmap using a palette index
+	// the SOP hasn't loaded yet then renders as pure white. EOB3 hides this
+	// by loading the full palette on boot, but DH's opening cinematic starts
+	// with only a partial set_palette(0, 28) load -- silhouette pixels using
+	// higher indices came out as white blobs on top of the throne-room art.
+	for (int i = 0; i < 256; ++i)
+		mPalette->colors[i] = SDL_Color{0, 0, 0, 255};
 	mCursor = nullptr;
 	mFrames = 0;
 	mCounter = 0;
