@@ -1027,6 +1027,18 @@ void THIRDEYE::Engine::bootObject(RESOURCES::Resource &resource,
 
 	std::cout << "\nBooting object \"" << objectName
 	          << "\" (sending MSG_CREATE)..." << std::endl;
+	// Dungeon Hack ships as a chain of AESOP programs launched by HACK.BAT
+	// (opening / phase-one / phase-two), each returning an errorlevel that
+	// the batch script switches on -- 3=re-run same phase, 2=re-run intro
+	// then phase-one, 1=quit, 0=fall through. We honor the intra-.RES half
+	// of that (phase-one <-> phase-two) here; cross-.RES chaining to OPEN
+	// isn't wired yet (see runtime/dh.cpp header for the DH TODO list).
+	// ponytail: phase-two on rc=0 will crash without MAZE.EXE-generated
+	// dungeon data; that's the honest signal, upgrade when MAZE is stubbed.
+	std::string currentBoot = objectName;
+	auto isDHPhase = [](const std::string &n) {
+		return n == "phase-one" || n == "phase-two";
+	};
 	// Program-chain loop: start.MSG_CREATE runs the whole session and normally
 	// returns only at quit (Abandon, or window-close via QuitRequested). A menu
 	// choice that hands off to a sub-program (Introduction->cine, Gather->chgen)
@@ -1103,9 +1115,41 @@ void THIRDEYE::Engine::bootObject(RESOURCES::Resource &resource,
 				events.reset();
 				continue; // loop to re-create start in the cleared environment
 			}
-			std::cout << "Boot handler returned " << result << " -- quitting."
-			          << std::endl;
-			quit = true; // start returned normally (e.g. "Abandon the Quest")
+			if (isDHPhase(currentBoot)) {
+				// HACK.BAT flow control by errorlevel. 2/3 loop the title;
+				// 0 advances phase-one -> phase-two (MAZE.EXE step is not
+				// implemented). Anything else is a normal exit.
+				const int32_t rc = result;
+				std::string nextBoot;
+				if (rc == 2 || rc == 3) nextBoot = "phase-one";
+				else if (rc == 0 && currentBoot == "phase-one") nextBoot = "phase-two";
+				if (!nextBoot.empty()) {
+					uint16_t nextClass = 0;
+					if (!objects.findClassByName(nextBoot, nextClass)) {
+						std::cout << "DH phase \"" << nextBoot
+						          << "\" not found in this .RES -- quitting."
+						          << std::endl;
+						quit = true;
+					} else {
+						std::cout << "  [DH " << currentBoot << " returned "
+						          << rc << " -- resetting + booting "
+						          << nextBoot << "]" << std::endl;
+						objects.resetInstances();
+						events.reset();
+						currentBoot = nextBoot;
+						classNumber = nextClass;
+						continue;
+					}
+				} else {
+					std::cout << "DH " << currentBoot << " returned " << rc
+					          << " -- quitting." << std::endl;
+					quit = true;
+				}
+			} else {
+				std::cout << "Boot handler returned " << result << " -- quitting."
+				          << std::endl;
+				quit = true; // start returned normally (e.g. "Abandon the Quest")
+			}
 		} catch (const QuitRequested &q) {
 			std::cout << "\n" << (q.reason.empty() ? "Window closed" : q.reason)
 			          << " -- quitting." << std::endl;
