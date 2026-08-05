@@ -19,6 +19,7 @@
 
 #include <chrono>
 #include <cstdint>
+#include <filesystem>
 #include <iosfwd>
 #include <map>
 #include <string>
@@ -165,7 +166,15 @@ namespace sound    { bool tryHandle(Context&, const std::string &fn,
                                     VM::Value &result); }
 namespace dh       { bool tryHandle(Context&, const std::string &fn,
                                     const std::vector<VM::Value>&,
-                                    VM::Value &result); }
+                                    VM::Value &result);
+                     // Called once per DH boot (from engine.cpp when
+                     // HACK.RES is being loaded). Writes structurally
+                     // valid empty savegame/LEVELS.DAT / FEA*.DAT /
+                     // ITEMS.DAT if they don't exist, so phase-two
+                     // consumes zero-content dungeons instead of
+                     // tripping on missing files. Idempotent.
+                     void ensureSavegameFiles(
+                         const std::filesystem::path &dhRoot); }
 
 } // namespace THIRDEYE::runtime
 

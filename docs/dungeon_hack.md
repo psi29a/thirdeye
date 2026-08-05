@@ -441,57 +441,41 @@ aesop hack phase-two         # Phase 4: Load HACK.RES, cleanup/save
 
 ### What Does MAZE.EXE Do?
 
-**MAZE.EXE** is a **compiled game loop** (51 KB) that:
+**Corrected (2026-08-05):** MAZE.EXE is *not* the game loop — that was
+speculation. It is the **random dungeon generator**: a small Borland C++
+utility ("Random Dungeon Generator v1.0/386  Event Horizon Software Inc.")
+that reads `savegame/SETTINGS.DAT`, generates a fresh dungeon, and writes
+`LEVELS.DAT` + `FEA%02d.DAT` (per-level) + `ITEMS.DAT` + `SEED.TXT` into
+`savegame/`. `phase-two` (a HACK.RES SOP object) is the game loop; it
+consumes MAZE's output via `load_level_map` / `open_feature_file` /
+`get_feature_record` runtime calls.
 
-1. **Receives** pre-initialized game state from `aesop hack phase-one`:
-   - Party data, inventory, character stats
-   - Level maps and object data loaded into HACK.RES namespace
-   - Kernel object and all game state objects created
+Full RE writeup — file formats, feature tables, `dungeon` object's load
+sequence, and paths to reimplementation — lives in
+[dungeon_hack_maze.md](dungeon_hack_maze.md).
 
-2. **Runs** the main rendering and event loop:
-   - Input handling (keyboard, mouse)
-   - Real-time 3D dungeon view rendering
-   - HUD and UI rendering
-   - Party movement and pathfinding
-   - Combat simulation and monster AI
-   - Event dispatch (calls to kernel object handlers)
-
-3. **Interfaces** with HACK.RES:
-   - Calls kernel message handlers for high-level game logic
-   - Reads/modifies party data structures
-   - Coordinates with scripted events and timers
-   - Manages level transitions and saves
-
-4. **Returns** exit code to HACK.BAT:
-   - `0` = Normal completion (continue to phase-two)
-   - `1` = Error/Exit (quit game)
-   - `2` = Return to menu (restart loop)
-   - `3+` = Retry (loop CONTINUE)
-
-**Why compiled instead of pure bytecode?**
-
-- **Performance**: Real-time render loop requires tight, optimized code. Bytecode overhead (VM dispatch, stack manipulation) would hurt framerate. Compiled code runs faster.
-- **Direct hardware access**: Video buffers, sound card I/O, input devices benefit from direct access rather than VM abstraction layers.
-- **Code size**: 51 KB compiled vs multi-MB bytecode for equivalent functionality.
-- **Separation of concerns**: AESOP handles initialization, event scripting, and state management. MAZE.EXE handles real-time graphics and input. Better modularity and maintenance.
-
-This hybrid approach was likely a performance optimization for the demo/promotional release.
+Errorlevel semantics (from HACK.BAT, confirmed against `phase-one`'s
+observed return values):
+- `0` → fall through: run MAZE, then phase-two
+- `1` → EXIT (quit game)
+- `2` → back to `:CHECKDEMO` (re-run intro + phase-one)
+- `3` → back to `:CONTINUE` (re-run phase-one)
 
 ### Implications for Thirdeye
 
-**Current state**: Thirdeye fully supports the EOB3 model (pure bytecode, single RES).
+**Current state**: Thirdeye plays EOB3 (pure bytecode, single RES). For DH
+we have OPEN.RES/HACK.RES loading, the phase-one/phase-two boot chain
+(`bootObject` interprets HACK.BAT errorlevels), and phase-two boots cleanly
+into its tick loop. What's blocked is dungeon rendering — the DH runtime
+functions that back `load_level_map`, `get_feature_record`, `draw_walls`,
+etc. are still stubs returning 0.
 
-**Dungeon Hack support requires**:
-1. Multi-RES loading: Support loading OPEN.RES and HACK.RES separately
-2. Flexible boot objects: Search for "opening", "phase-one", "phase-two" (not hardcoded "start")
-3. Exit code semantics: Capture return codes from object execution
-4. Optional intro: Support skipping OPEN.RES if not present
-
-**Thirdeye already IS the replacement for MAZE.EXE**:
-- The `phase-one` handler initializes game state
-- Thirdeye's event loop + renderer replaces MAZE.EXE
-- `phase-two` handler handles cleanup
-- No separate binary needed — Thirdeye is the compiled game loop
+**Two paths forward** (detail in [dungeon_hack_maze.md](dungeon_hack_maze.md)):
+1. Bootstrap by running MAZE.EXE once under DOSBox, capture its output,
+   feed our stubs against real files. Proves format and unblocks
+   phase-two without reimplementing MAZE.
+2. Reimplement MAZE natively. Needs a Ghidra pass + a DOSBox baseline to
+   diff against.
 
 The architecture is largely compatible. The main work is adding multi-RES support and making boot object discovery more flexible.
 

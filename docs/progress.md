@@ -476,3 +476,64 @@ the "engine crash" that was really a total-party-kill death screen; floor-item p
 requires standing ON the cell (a feature click region — the fruit trees — occludes
 ahead-cell items); stowing into an occupied backpack slot swaps the occupant onto the
 cursor; and the wall map (not lvlobj plane 0) is the real source of maze walls.
+
+## Dungeon Hack — boot + runtime bring-up (2026-08-05)
+
+DH's `OPEN.RES` (intro) and `HACK.RES` (game) now boot end-to-end through the SOP VM
+under filename auto-detection: OPEN→`opening`, HACK→`phase-one`. The boot loop learned
+HACK.BAT's errorlevel semantics (2/3 loop the title menu, 0 advances phase-one→phase-two,
+1 quits), so the title-menu attract loop functions and phase-two can be reached without
+a `THIRDEYE_BOOT=phase-two` override. Phase-two now runs its tick loop against real DH
+runtime support — file I/O primitives (`open_file`/`read_*`/`close_file`) resolve
+DOS-backslash paths against `<dh_root>/`, the SAVEGAME loaders read shipped
+`PC.DAT`/`SETTINGS.DAT`/`VISIBLE.DAT`, and the MAZE-consumer wrappers
+(`load_level_map`, `open_feature_file`+`get_feature_record`) read chunked files per the
+format spec in [dungeon_hack_maze.md](dungeon_hack_maze.md), zero-filling when MAZE
+hasn't populated them.
+
+**MAZE.EXE reverse-engineered** ([../dh_research/MAZE/](../../dh_research/MAZE/) has the
+Ghidra headless decompile + strings + xrefs; [dungeon_hack_maze.md](dungeon_hack_maze.md)
+is the reading). The non-obvious finds: MAZE isn't a level layout writer — it emits
+per-cell **entropy tables** that phase-two turns into geometry procedurally (`0xDB`
+sentinels → random bytes, everything else → `0xFF`, per 0x400-byte chunk × (DEPTH+10)
+levels). SETTINGS.DAT is a fixed **4-byte SEED + 12-byte struct** (the 12 keys from
+the strings table in listed order; only the first 16 bytes of the shipped 27-byte file
+are read). FEA files are streams of typed **8-byte records** with a 22-case switch on
+the type byte. items.dat records are 8-byte, source stride 5, permuted `[3,1,0,2,4]`.
+Confirmed against the shipped `SETTINGS.DAT`: `SEED=0x000156e0, DEPTH=15`. DGROUP base
+in MAZE resolves as `file_offset = 0x7d70 + (pushed_off)`, which is what let us pin
+every filename push to its writer function.
+
+Only 5 stubs remain in the DH boot path — all pure-renderer (`init_viewspace`,
+`build_clipping`, `copy_window`, `draw_walls`, `Transition`). Phase-two runs its
+tick loop and dispatches per-cell logic.
+
+**Phase-two renders a real gameplay HUD.** First frame is the DH title splash
+("Advanced Dungeons & Dragons Forgotten Realms — DUNGEON HACK" on wooden door);
+by ~frame 50 the full in-game UI is drawn: character portrait ("Kathra
+Shallowtaint" from the shipped `PC.DAT`), HP bar, compass with N-facing arrow,
+direction-arrow pad, CAMP button, floor items visible (bread, gems, robe, chest,
+book, plate+sword), and the wooden/stone bezel framing the dungeon-view area.
+The center of the dungeon view is empty because `draw_walls` still stubs to
+zero (SOP calls it once at boot; without a return that signals "walls updated,
+please redispatch tick," the SOP never asks again). See
+[screenshots/dh_phase_two_hud.png](screenshots/dh_phase_two_hud.png). Only the
+3D wall rendering (`draw_walls` + `init_viewspace` + `build_clipping`) stands
+between phase-two and a playable dungeon.
+
+A **native mini-MAZE** (`ensureSavegameFiles` in `runtime/dh.cpp`) seeds
+structurally-valid empty `savegame/LEVELS.DAT` + `FEA*.DAT` + `ITEMS.DAT` at
+first HACK.RES boot (idempotent — real MAZE output is preserved). DEPTH is
+read from the shipped `SETTINGS.DAT`. This is what lets phase-two consume
+zero-content dungeons instead of tripping on missing files.
+
+Notable RE side-finding during the items.dat trace: **DH's SOP kernel reads
+`SETTINGS.DAT` with a *different, wider* layout than MAZE writes**. MAZE emits
+4B SEED + 12B struct = 16 bytes; kernel reads `4 discard + 19 setting + 4 long
+= 27 bytes` (matching the shipped file exactly). MAZE and the SOP kernel
+disagree on the file's format, and the shipped 27-byte file is the SOP's
+truth. **ITEMS.DAT is never opened by any DH SOP** — the only `open_file`
+targets across all HACK.RES code resources are `PC.DAT`, `SETTINGS.DAT`,
+`SETSAVE.DAT`. So MAZE writes ITEMS.DAT but nothing in phase-two reads it
+via the SOP file API — it's either an AESOP.EXE internal consumer or a
+save/restore artifact.

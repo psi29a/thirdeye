@@ -1465,6 +1465,13 @@ void THIRDEYE::Engine::go() {
 		    [](unsigned char c) { return std::tolower(c); });
 		if (resName == "open.res") bootName = "opening";
 		else if (resName == "hack.res") bootName = "phase-one";
+		// Debug hook: force any boot object by name (e.g. THIRDEYE_BOOT=phase-two).
+		if (const char *b = std::getenv("THIRDEYE_BOOT")) bootName = b;
+		// DH-only: seed structurally-valid empty savegame/LEVELS.DAT etc. if
+		// they don't exist so phase-two can read zero-content dungeons without
+		// a MAZE.EXE (real or bootstrapped) run. Idempotent.
+		if (resName == "hack.res")
+			THIRDEYE::runtime::dh::ensureSavegameFiles(resFile.parent_path());
 		bootObject(resource, bootName);
 		return;
 	}
