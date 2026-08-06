@@ -303,6 +303,16 @@ bool tryHandle(Context &ctx, const std::string &fn,
 				// signal: switch to backdrop-restore mode here.
 				ctx.gfx->setTextRestoreBackground(true);
 			}
+			// Dungeon Hack's equivalent full-screen HUD backdrop is resource
+			// 59 ("Backdrop", drawn as draw_bitmap(1, 59, 0, 0)). DH boots
+			// with mode INTR so the engine left text boxes in flat-fill mode,
+			// and flat-fill samples a pixel just inside the box: one stray
+			// light pixel in the message bar turned the whole bar white and
+			// then kept it white (the next wipe samples its own fill). Same
+			// "now in-game" switch as EOB3's 190 above.
+			if (gDungeonHack && table == 59) {
+				ctx.gfx->setTextRestoreBackground(true);
+			}
 			ctx.gfx->drawImage(fetch(table), number, x, y, true, mirror,
 			                   static_cast<uint32_t>(table), scale);
 			// Right after the HUD Backdrop lands, the compass rect holds

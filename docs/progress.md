@@ -539,8 +539,72 @@ before the palette dump made it obvious — the lesson is to check
 index→colour resolution before blaming a decoder for black output.
 
 With both in, a wallset panel blits into the view as real cave-wall art
-(see [screenshots/dh_wall_panel.png](screenshots/dh_wall_panel.png)). What's
-left for a walkable dungeon is the per-cell walk inside `draw_walls`.
+(see [screenshots/dh_wall_panel.png](screenshots/dh_wall_panel.png)).
+
+**The maze renders (2026-08-06).** `draw_walls` is now a faithful port of
+AESOP.EXE's own routine, and DH draws a real perspective dungeon view —
+[screenshots/dh_wall_render_corridor.png](screenshots/dh_wall_render_corridor.png).
+
+Getting there needed the DH runtime's geometry tables, which only exist inside
+`AESOP.EXE`. The chain that unlocked them is worth remembering because it
+generalises to every DH runtime function:
+
+1. `AESOP.EXE` has **no** function-name strings, so its 620 functions are
+   anonymous. The name → number map is in **`HACK.RES` resource 3** ("Low
+   level functions", 330 entries) — `daesop -k HACK.RES 3`.
+2. Those numbers are global and multiples of 4 (max 656 → 165 entries), and
+   index a **far-pointer array at file `0x1c8f8`** — found by scanning the MZ
+   **relocation table** for runs of relocations at a 4-byte stride, since a
+   far-pointer array relocates every entry's segment word.
+3. Ghidra segment = stored segment + `0x1000`. Validated by cross-check:
+   `build_clipping` was independently identified as `1f36:05f4` from its
+   parameter usage, and table entry 636 reads `0f36:05f4` — exact offset
+   match. That one agreement confirmed the whole mapping, which now yields
+   the address of *any* DH runtime function (`explode_save` = `1f36:14db`,
+   etc.).
+
+`draw_walls` (`1f36:0785`) walks **25 wall faces over 18 distinct map cells**
+in 4 depth bands (11+7+5+2, nearest last), reading `lvlmap[my*32+mx]` per face
+and blitting the wallset sub-bitmap its tables name for that (wall type, face).
+Only two wall types exist. Three faces reuse a sibling panel mirrored
+(`14→13`, `15→8`, `17→16`). The `+138 / +13` blit origin is hardcoded in
+AESOP as `0x8a`/`0xd`, independently confirming the view rect derived from the
+SOP's `assign_subwindow(..., 138, 13, 313, 132)`.
+
+Verified data-driven, not just "it draws something": an all-walls map yields
+25 faces (closed chamber), a synthetic map with a single wall ahead yields
+exactly **1**, and a hand-built corridor yields **12** with side walls
+stepping back in correct perspective.
+
+A cautionary note from the same session: an earlier attempt to locate the
+geometry by scanning for a plausible **byte pattern** produced a table that
+looked right for a few rows and was subtly garbage — the DGROUP base was off
+by `0xD5`. The relocation-table route is the one to trust.
+
+**Occlusion + text-box + clip (2026-08-07).** Three loose ends closed:
+
+* `init_viewspace` / `build_clipping` ported verbatim from AESOP.EXE with the
+  clip contribution table lifted from `DS:0x1117`. Occlusion is real now:
+  cells outside the view cone (rows 0/6/7/11 of the table are all-`0x7e`)
+  don't render, and cells behind walls cull correctly. `notblocks` gets
+  populated by the SOP's own bytecode loop between the two calls.
+* One trap in that loop cost a while to find: the SOP reads `view_X`/`view_Y`
+  via `LSBA` (sign-extended byte) BEFORE `build_clipping` runs its `& 0x1f`
+  mask. So an unmasked value like `-3` becomes `-96` when scaled, and
+  `lvlmap[y*32 + x]` reads 96 bytes BEFORE `lvlmap` — into `lvlbit`, which
+  is a different array — and every off-map cell reads as an occupied wall.
+  Fix: mask coordinates to 0..31 on the way out of `init_viewspace` (the
+  SOP's 32×32 wrap semantics). Party-at-(0,0) starts wouldn't have worked
+  otherwise.
+* The message bar went white on movement because DH boots with mode `INTR`,
+  which leaves `text_window` erase on flat-fill. Flat-fill samples a pixel
+  just inside the box, one stray light pixel turned the whole bar white,
+  and it perpetuated (next wipe sampled its own fill). Same fix as EOB3's
+  green-bar problem, DH-gated on the `Backdrop` resource (59) that marks
+  "now in-game".
+* `draw_walls` clips every blit to the view rect. Face 20 sits at absX 34
+  with a 129-wide panel (34..163) while the view starts at 138 — the wall
+  was overwriting the inventory column and the arch on every step.
 
 **Phase-two renders a real gameplay HUD.** First frame is the DH title splash
 ("Advanced Dungeons & Dragons Forgotten Realms — DUNGEON HACK" on wooden door);

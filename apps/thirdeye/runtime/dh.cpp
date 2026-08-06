@@ -72,12 +72,97 @@ std::filesystem::path savegamePath(Context &ctx, const std::string &name) {
 	return resolveChildCI(sg, name);
 }
 
+// --- Dungeon Hack 3D view geometry -----------------------------------------
+//
+// Lifted verbatim from AESOP.EXE's own tables (draw_walls == 1f36:0785). See
+// ../../../../dh_research/AESOP/README.md for how they were located and
+// validated; `viewspace_tables.txt` there is the extraction these mirror.
+//
+// The view is 25 wall FACES over 18 distinct map cells, in 4 depth bands
+// (11 + 7 + 5 + 2), nearest last. Per face: a map offset (per facing), a blit
+// position relative to the view origin, a mirror flag, and a wallset
+// sub-bitmap index chosen by the map cell's wall type.
+constexpr int kViewCells = 25;
+
+constexpr int8_t kCellDX[4][kViewCells] = {
+	{ -3, -2, -1,  1,  2,  3, -2, -1,  0,  1,  2, -2, -1,  1,  2, -1,  0,  1, -1,  1, -1,  0,  1, -1,  1 },
+	{  3,  3,  3,  3,  3,  3,  3,  3,  3,  3,  3,  2,  2,  2,  2,  2,  2,  2,  1,  1,  1,  1,  1,  0,  0 },
+	{  3,  2,  1, -1, -2, -3,  2,  1,  0, -1, -2,  2,  1, -1, -2,  1,  0, -1,  1, -1,  1,  0, -1,  1, -1 },
+	{ -3, -3, -3, -3, -3, -3, -3, -3, -3, -3, -3, -2, -2, -2, -2, -2, -2, -2, -1, -1, -1, -1, -1,  0,  0 },
+};
+constexpr int8_t kCellDY[4][kViewCells] = {
+	{ -3, -3, -3, -3, -3, -3, -3, -3, -3, -3, -3, -2, -2, -2, -2, -2, -2, -2, -1, -1, -1, -1, -1,  0,  0 },
+	{ -3, -2, -1,  1,  2,  3, -2, -1,  0,  1,  2, -2, -1,  1,  2, -1,  0,  1, -1,  1, -1,  0,  1, -1,  1 },
+	{  3,  3,  3,  3,  3,  3,  3,  3,  3,  3,  3,  2,  2,  2,  2,  2,  2,  2,  1,  1,  1,  1,  1,  0,  0 },
+	{  3,  2,  1, -1, -2, -3,  2,  1,  0, -1, -2,  2,  1, -1, -2,  1,  0, -1,  1, -1,  1,  0, -1,  1, -1 },
+};
+// Blit offsets relative to the view origin (AESOP adds 138 / 13 inline).
+constexpr int16_t kCellX[kViewCells] = {
+	-16, 16, 64, 104, 136, 168, -32, 16, 64, 112, 160, 0, 48, 112, 160,
+	-32, 48, 128, 24, 128, -104, 24, 152, 0, 152 };
+constexpr int16_t kCellY[kViewCells] = {
+	27, 27, 27, 27, 27, 27, 27, 27, 27, 27, 27, 26, 20, 20, 26,
+	20, 20, 20, 8, 8, 8, 8, 8, 0, 0 };
+constexpr uint8_t kCellMirror[kViewCells] = {
+	0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1 };
+// Index into the SOP's 18-entry per-cell arrays (floor_at/visible).
+constexpr uint8_t kCellVis[kViewCells] = {
+	1, 2, 3, 3, 4, 5, 8, 8, 9, 10, 10, 8, 9, 9, 10, 12, 13, 14, 13, 13,
+	15, 16, 17, 16, 16 };
+// Wallset sub-bitmap per (wall type, face). Only two wall types exist -- the
+// table in AESOP.EXE is 2 rows; past that it runs into a squares lookup table.
+constexpr uint8_t kCellPanel[2][kViewCells] = {
+	{ 4, 4, 3, 3, 4, 4, 13, 13, 13, 13, 13, 5, 2, 2, 5, 16, 16, 16, 1, 1, 8, 8, 8, 0, 0 },
+	{ 10, 10, 9, 9, 10, 10, 14, 14, 14, 14, 14, 11, 12, 12, 11, 17, 17, 17, 7, 7, 15, 15, 15, 6, 6 },
+};
+
+// --- init_viewspace / build_clipping tables ---------------------------------
+//
+// init_viewspace (1f36:040f) builds the SOP's 18 view CELLS (distinct from
+// draw_walls' 25 faces) from three per-facing unit vectors: forward, left,
+// right. Rows are base+F*3 (7 cells), +F*2 (5), +F (3), base (3) = 18.
+constexpr int kViewSlots = 18;
+constexpr int8_t kFwdX[4]   = {  0,  1,  0, -1 };   // DS:0x10eb
+constexpr int8_t kLeftX[4]  = { -1,  0,  1,  0 };   // DS:0x10f3
+constexpr int8_t kRightX[4] = {  1,  0, -1,  0 };   // DS:0x10fb
+constexpr int8_t kFwdY[4]   = { -1,  0,  1,  0 };   // DS:0x1103
+constexpr int8_t kLeftY[4]  = {  0, -1,  0,  1 };   // DS:0x110b
+constexpr int8_t kRightY[4] = {  0,  1,  0, -1 };   // DS:0x1113
+
+// build_clipping (1f36:05f4) occlusion table, DS:0x1117, 18 rows x 18 bytes of
+// SIGNED clip contributions. 0x7f = no contribution, 0x7e = hard stop (cell
+// occluded). Pixel edge = value * 8. Rows 0/6/7/11 are all-0x7e -- the extreme
+// lateral cells at depths 3 and 2 lie outside the view cone and never draw;
+// rows 15..17 (the party's own row) are all-0x7f and are never occluded.
+constexpr uint8_t kClip[18][18] = {
+	{ 0x7e, 0x7e, 0x7e, 0x7e, 0x7e, 0x7e, 0x7e, 0x7e, 0x7e, 0x7e, 0x7e, 0x7e, 0x7e, 0x7e, 0x7e, 0x7e, 0x7e, 0x7e },
+	{ 0x7f, 0x7f, 0x02, 0x7f, 0x7f, 0x7f, 0x7f, 0xfe, 0x7e, 0x7f, 0x7f, 0x7f, 0x7e, 0x03, 0x7f, 0xfd, 0x7f, 0x7f },
+	{ 0x7f, 0xfe, 0x7f, 0x08, 0x7f, 0x7f, 0x7f, 0xfe, 0x7e, 0x06, 0x7f, 0x7f, 0xfa, 0x03, 0x7f, 0xfd, 0x7f, 0x7f },
+	{ 0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0xfa, 0x7e, 0x10, 0x7f, 0xfd, 0x7e, 0x13, 0x7f, 0x7f, 0x7f },
+	{ 0x7f, 0x7f, 0x7f, 0xf2, 0x7f, 0x14, 0x7f, 0x7f, 0x7f, 0xf0, 0x7e, 0x14, 0x7f, 0xed, 0x10, 0x7f, 0x7f, 0x13 },
+	{ 0x7f, 0x7f, 0x7f, 0x7f, 0xec, 0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0x7e, 0x14, 0x7f, 0xed, 0x7e, 0x7f, 0x7f, 0x13 },
+	{ 0x7e, 0x7e, 0x7e, 0x7e, 0x7e, 0x7e, 0x7e, 0x7e, 0x7e, 0x7e, 0x7e, 0x7e, 0x7e, 0x7e, 0x7e, 0x7e, 0x7e, 0x7e },
+	{ 0x7e, 0x7e, 0x7e, 0x7e, 0x7e, 0x7e, 0x7e, 0x7e, 0x7e, 0x7e, 0x7e, 0x7e, 0x7e, 0x7e, 0x7e, 0x7e, 0x7e, 0x7e },
+	{ 0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0x06, 0x7f, 0x7f, 0xfa, 0x03, 0x7f, 0xfd, 0x7f, 0x7f },
+	{ 0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0xfa, 0x7f, 0x10, 0x7f, 0xfd, 0x7e, 0x13, 0xfd, 0x7f, 0x13 },
+	{ 0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0xf0, 0x7f, 0x7f, 0x7f, 0xed, 0x10, 0x7f, 0x7f, 0x13 },
+	{ 0x7e, 0x7e, 0x7e, 0x7e, 0x7e, 0x7e, 0x7e, 0x7e, 0x7e, 0x7e, 0x7e, 0x7e, 0x7e, 0x7e, 0x7e, 0x7e, 0x7e, 0x7e },
+	{ 0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0x03, 0x7f, 0xfd, 0x7f, 0x7f },
+	{ 0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0xfd, 0x7f, 0x13, 0xfd, 0x7f, 0x13 },
+	{ 0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0xed, 0x7f, 0x7f, 0x7f, 0x13 },
+	{ 0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0x7f },
+	{ 0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0x7f },
+	{ 0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0x7f },
+};
+
 // Top-left of Dungeon Hack's 3D view on the 320x200 screen. The SOP registers
 // it as assign_subwindow(..., 138, 13, 313, 132) -- a 176x120 rect right of the
 // inventory column and under the stone arch of the HUD backdrop -- and uses it
 // as the copy_window destination for the floor page.
 constexpr int kViewX = 138;
 constexpr int kViewY = 13;
+constexpr int kViewW = 176;   // (313 - 138 + 1)
+constexpr int kViewH = 120;   // (132 -  13 + 1)
 
 // DH exposes a single sequential-file API (open_file / read_* / close_file
 // with no handle arg), so one "current" file is enough. Buffered eagerly at
@@ -298,83 +383,206 @@ bool tryHandle(Context &ctx, const std::string &fn,
 		// draw_walls(party_x, party_y, facing, view_window, wallset_id,
 		//            &lvlmap[1024], &floor_at[18])
 		//
-		// arg[3] is the view's WINDOW HANDLE (the SOP's W:view), not a mode
-		// flag -- the same handle `copy_window(W:view, W:hold)` double-buffers
-		// through. So the destination rect comes from the window table rather
-		// than a hardcoded constant.
-		int32_t vx = kViewX, vy = kViewY, vx1 = 0, vy1 = 0;
+		// Faithful port of AESOP.EXE's draw_walls (1f36:0785). Walks the 25
+		// wall faces of the forward cone, looks each one's map cell up in
+		// lvlmap, and blits the wallset sub-bitmap the geometry tables name
+		// for that (wall type, face) at the face's fixed screen position.
+		//
+		// arg[3] is the view's WINDOW HANDLE (the SOP's W:view) -- the same
+		// handle copy_window(W:view, W:hold) double-buffers through -- so the
+		// destination origin comes from the window table, not a constant.
+		// AESOP hardcodes 138/13; we prefer the registered rect and fall back
+		// to those literals.
+		int vx = kViewX, vy = kViewY;
+		int vw = kViewW, vh = kViewH;
 		{
 			int32_t rx0, ry0, rx1, ry1;
 			if (ctx.events.windowRect(static_cast<int32_t>(args[3]),
 			                          rx0, ry0, rx1, ry1) &&
 			    !ctx.events.windowIsOffscreen(static_cast<int32_t>(args[3]))) {
-				vx = rx0; vy = ry0; vx1 = rx1; vy1 = ry1;
+				vx = static_cast<int>(rx0);
+				vy = static_cast<int>(ry0);
+				vw = static_cast<int>(rx1 - rx0 + 1);
+				vh = static_cast<int>(ry1 - ry0 + 1);
 			}
 		}
-		(void)vx1; (void)vy1;
-		//
-		// Paints the 3D wall panels for the party's forward cone. DH calls it
-		// AFTER the SOP has copy_window'd the floor into the dungeon-view rect,
-		// so walls composite on top of that, drawn straight to the screen at
-		// the view origin (the view rect is the copy_window destination -- see
-		// docs/dungeon_hack_maze.md).
-		//
-		// Wallset shape table (resource 190..196): 236 sub-bitmaps == 9 panel
-		// roles x 26 style variants + 2 full-view specials. Panel sizes give
-		// away the depth tiers:
-		//    25x120 / 25x95 / 17x59 / 9x35   side walls, near -> far
-		//    129x96 / 81x59 / 49x37          front walls, near -> far
-		//    25x35  / 17x43                  short side / alternate far
-		//
-		// Still to do: the per-cell walk that picks a panel per (cell, depth,
-		// side) from lvlmap and blits it at the matching screen offset. Until
-		// that lands, THIRDEYE_DHWALL_DUMP=<sub> blits one panel at the view
-		// origin so panels can be identified by eye.
-		if (const char *dump = std::getenv("THIRDEYE_DHWALL_DUMP")) {
-			uint16_t wallsetId =
-			    static_cast<uint16_t>(static_cast<int32_t>(args[4]));
-			int which = std::atoi(dump);
-			int ox = vx, oy = vy;
-			if (const char *o = std::getenv("THIRDEYE_DHWALL_AT"))
-				std::sscanf(o, "%d,%d", &ox, &oy);
-			try {
-				auto &bmp = ctx.res.getAsset(wallsetId);
-				static bool listed = false;
-				if (!listed) {
-					listed = true;
-					GRAPHICS::Bitmap probe(bmp);
-					uint16_t n = probe.getNumberOfBitmaps();
-					std::cout << "[dh:draw_walls] wallset " << wallsetId
-					          << ": " << n << " sub-bitmaps" << std::endl;
-					for (uint16_t i = 0; i < n && i < 18; ++i)
-						std::cout << "  sub " << i << ": " << probe.getWidth(i)
-						          << "x" << probe.getHeight(i) << std::endl;
+		const int px = static_cast<int>(args[0]);
+		const int py = static_cast<int>(args[1]);
+		const int facing = static_cast<int>(args[2]) & 3;
+		const uint16_t wallsetId =
+		    static_cast<uint16_t>(static_cast<int32_t>(args[4]));
+		const uint8_t *lvlmap = staticBytePtr(ctx, args[5], 1024);
+		const uint8_t *floorAt = staticBytePtr(ctx, args[6], 18);
+		// THIRDEYE_DHWALL_FORCE=1 ignores the floor_at visibility gate --
+		// useful diagnostic when working on init_viewspace/build_clipping.
+		// Normal path uses real occlusion.
+		const bool force = std::getenv("THIRDEYE_DHWALL_FORCE") != nullptr;
+		if (!lvlmap) { result = 0; return true; }
+
+		// Clip every blit to the view rect. Several faces are POSITIONED
+		// outside it on purpose -- e.g. face 20 sits at x=34 with a 129-wide
+		// panel (34..163) while the view starts at 138 -- because only the
+		// part inside the view should show. In AESOP the blit goes through the
+		// view window, which clips for free; we draw straight to the screen,
+		// so without this the wall spills left over the inventory column and
+		// right past the arch, painting over the HUD as the party moves.
+		int drawn = 0;
+		ctx.gfx->setClip(vx, vy, vw, vh);
+		try {
+			auto &bmp = ctx.res.getAsset(wallsetId);
+			for (int cell = 0; cell < kViewCells; ++cell) {
+				// Map cell for this face. AESOP masks to 0x1f, i.e. the 32x32
+				// grid wraps rather than clamping.
+				int mx = (px + kCellDX[facing][cell]) & 0x1f;
+				int my = (py + kCellDY[facing][cell]) & 0x1f;
+				int8_t wall = static_cast<int8_t>(lvlmap[my * 32 + mx]);
+				if (wall < 0) continue;            // 0xFF == no wall
+				if (wall > 1) continue;            // only two wall types exist
+				if (!force && floorAt &&
+				    floorAt[kCellVis[cell]] == 0) continue;
+
+				int sub = kCellPanel[wall][cell];
+				int mirror = kCellMirror[cell];
+				// Three faces reuse a sibling panel mirrored rather than
+				// carrying their own art.
+				if (sub == 14)      { sub = 13; mirror ^= 1; }
+				else if (sub == 15) { sub = 8;  mirror ^= 1; }
+				else if (sub == 17) { sub = 16; mirror ^= 1; }
+
+				ctx.gfx->drawImage(bmp, static_cast<uint16_t>(sub),
+				                   vx + kCellX[cell], vy + kCellY[cell],
+				                   /*transparency=*/true, mirror,
+				                   static_cast<uint32_t>(wallsetId), 0);
+				++drawn;
+			}
+		} catch (const std::exception &e) {
+			rt() << "  [draw_walls failed: " << e.what() << "]" << std::endl;
+		}
+		ctx.gfx->clearClip();   // must happen on the throw path too
+		rt() << "  [draw_walls @(" << px << "," << py << ") f" << facing
+		     << " wallset " << wallsetId << " -> " << drawn << " faces]"
+		     << std::endl;
+		result = 0;
+		return true;
+	}
+
+	// init_viewspace(party_x, party_y, facing, &view_X[18], &view_Y[18]):
+	// fill the SOP's 18 view cells with their map coordinates. Port of
+	// AESOP.EXE 1f36:040f -- three per-facing unit vectors (forward/left/right)
+	// laid out as rows of 7 / 5 / 3 / 3 cells receding to the party's own row.
+	// The SOP reads these back to work out notblocks/floor_at per cell, so a
+	// no-op here left all downstream visibility wrong.
+	if (fn == "init_viewspace" && args.size() >= 5) {
+		const int px = static_cast<int>(args[0]);
+		const int py = static_cast<int>(args[1]);
+		const int f = static_cast<int>(args[2]) & 3;
+		uint8_t *vX = staticBytePtr(ctx, args[3], kViewSlots);
+		uint8_t *vY = staticBytePtr(ctx, args[4], kViewSlots);
+		if (!vX || !vY) { result = 0; return true; }
+		// Mask each stored coordinate to 0..31 on the way out. AESOP's
+		// build_clipping (1f36:05f4) masks with 0x1f, but the SOP's OWN
+		// bytecode loop between init_viewspace and build_clipping reads
+		// view_X/view_Y via LSBA (sign-extended!) to compute a lvlmap index.
+		// If we leave -3 in the array as byte 0xFD, LSBA returns -3, the SOP
+		// computes lvlmap[-3*32 + view_X] = 96 bytes BEFORE lvlmap starts --
+		// which reads into lvlbit -- and every off-map cell ends up looking
+		// like an occupied wall (notblocks stays 0). Masking here matches the
+		// SOP's expected 32x32 wrap-around semantics.
+		auto wrap = [](int v) {
+			return static_cast<uint8_t>(v & 0x1f);
+		};
+		auto fill = [&wrap](uint8_t *d, int base, int fwd, int left, int right) {
+			int b = base + fwd * 3;                       // depth 3: 7 cells
+			d[0] = wrap(b + left * 3);
+			d[1] = wrap(b + left * 2);
+			d[2] = wrap(b + left);
+			d[3] = wrap(b);
+			d[4] = wrap(b + right);
+			d[5] = wrap(b + right * 2);
+			d[6] = wrap(b + right * 3);
+			b = base + fwd * 2;                           // depth 2: 5 cells
+			d[7]  = wrap(b + left * 2);
+			d[8]  = wrap(b + left);
+			d[9]  = wrap(b);
+			d[10] = wrap(b + right);
+			d[11] = wrap(b + right * 2);
+			b = base + fwd;                               // depth 1: 3 cells
+			d[12] = wrap(b + left);
+			d[13] = wrap(b);
+			d[14] = wrap(b + right);
+			d[15] = wrap(base + left);                    // depth 0: 3 cells
+			d[16] = wrap(base);
+			d[17] = wrap(base + right);
+		};
+		fill(vX, px, kFwdX[f], kLeftX[f], kRightX[f]);
+		fill(vY, py, kFwdY[f], kLeftY[f], kRightY[f]);
+		result = 0;
+		return true;
+	}
+
+	// build_clipping(&l_clip[18], &r_clip[18], &visible[18], &view_X[18],
+	//                &view_Y[18], &notblocks[18], &lvlvis[1024], &floor_at[18])
+	//
+	// Port of AESOP.EXE 1f36:05f4. Per cell: start fully open (l=0, r=175),
+	// then let every non-blocking cell contribute a clip edge from the
+	// occlusion table; if the window closes (l > r) or a hard-stop entry is
+	// hit, the cell is not visible. Visible cells get marked seen in lvlvis.
+	// Finally floor_at = visible && notblocks, which is the gate draw_walls
+	// tests -- so this is what makes occlusion real instead of drawing every
+	// face in the cone.
+	if (fn == "build_clipping" && args.size() >= 8) {
+		uint8_t *lc  = staticBytePtr(ctx, args[0], kViewSlots * 2);  // words
+		uint8_t *rc  = staticBytePtr(ctx, args[1], kViewSlots * 2);  // words
+		uint8_t *vis = staticBytePtr(ctx, args[2], kViewSlots);
+		uint8_t *vX  = staticBytePtr(ctx, args[3], kViewSlots);
+		uint8_t *vY  = staticBytePtr(ctx, args[4], kViewSlots);
+		uint8_t *nb  = staticBytePtr(ctx, args[5], kViewSlots);
+		uint8_t *lvis = staticBytePtr(ctx, args[6], 1024);
+		uint8_t *fa  = staticBytePtr(ctx, args[7], kViewSlots);
+		if (!lc || !rc || !vis || !vX || !vY || !nb || !fa) {
+			result = 0;
+			return true;
+		}
+		auto setW = [](uint8_t *p, int i, int v) {
+			p[i * 2] = static_cast<uint8_t>(v & 0xff);
+			p[i * 2 + 1] = static_cast<uint8_t>((v >> 8) & 0xff);
+		};
+		auto getW = [](const uint8_t *p, int i) {
+			return static_cast<int16_t>(p[i * 2] | (p[i * 2 + 1] << 8));
+		};
+		for (int i = 0; i < kViewSlots; ++i) {
+			setW(lc, i, 0);
+			setW(rc, i, 175);          // 0xaf -- view is 176px wide
+			vis[i] = 0;
+			vX[i] &= 0x1f;             // 32x32 map wraps
+			vY[i] &= 0x1f;
+			if (kClip[i][0x10] == 0x7e) continue;   // cell outside the cone
+			vis[i] = 1;
+			for (int j = 0; j < kViewSlots; ++j) {
+				if (static_cast<int8_t>(nb[j]) >= 2) continue;
+				uint8_t raw = kClip[i][j];
+				if (raw == 0x7f) continue;          // no contribution
+				if (raw != 0x7e) {
+					int v = static_cast<int8_t>(raw);
+					if (v < 0 && getW(lc, i) < v * -8) setW(lc, i, v * -8);
+					if (v > 0 && getW(rc, i) > v * 8 - 1) setW(rc, i, v * 8 - 1);
+					if (getW(lc, i) <= getW(rc, i)) continue;  // still open
 				}
-				if (which >= 0)
-					ctx.gfx->drawImage(bmp, static_cast<uint16_t>(which), ox,
-					                   oy, false, 0,
-					                   static_cast<uint32_t>(wallsetId), 0);
-			} catch (const std::exception &e) {
-				std::cout << "[dh:draw_walls] " << e.what() << std::endl;
+				vis[i] = 0;            // hard stop, or window closed
+				break;
+			}
+			if (vis[i] && lvis) {
+				int at = vY[i] * 32 + vX[i];
+				if (at >= 0 && at < 1024) {
+					lvis[at] = static_cast<uint8_t>((lvis[at] | 1) & ~4);
+				}
 			}
 		}
+		for (int i = 0; i < kViewSlots; ++i)
+			fa[i] = (vis[i] && nb[i]) ? 1 : 0;
 		result = 0;
 		return true;
 	}
-
-	// init_viewspace(a,b,c,d,e): sets up the 3D view rendering context
-	// (bitmap-page selection, clip masks). Our draw_walls draws directly
-	// to the current page so no state is needed for the naive pass.
-	// ponytail: no-op; wire real state when draw_walls needs per-panel
-	// scale/clip info.
-	if (fn == "init_viewspace") {
-		(void)args;
-		result = 0;
-		return true;
-	}
-
-	// build_clipping(a..h): precomputes per-cell clipping masks so
-	// draw_walls can skip occluded panels. Not needed for the placeholder
 	// blit -- everything gets overdrawn each frame.
 	if (fn == "build_clipping") {
 		(void)args;

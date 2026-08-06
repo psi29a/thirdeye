@@ -596,11 +596,28 @@ Still open (nice-to-have): a file-picker UI instead of the env var.
   wallset's 0xF6..0xFD indices hit never-loaded (black) DAC entries — the
   reason the dungeon view rendered solid black. `kFirstColorDH`, gated on
   `gDungeonHack`; `THIRDEYE_PALBASE` overrides for bring-up.
-- 🚧 **3D wall rendering.** Wall art now decodes and colours correctly (a
-  panel blits into the view as real cave wall). Remaining: the per-cell
-  walk over `lvlmap` that picks a panel per (cell, depth, side) and blits
-  it at the matching offset. See
-  [dungeon_hack_maze.md](dungeon_hack_maze.md#draw_walls).
+- ✅ **3D wall rendering.** `draw_walls` is a faithful port of AESOP.EXE's
+  own routine (`1f36:0785`): 25 wall faces over 18 map cells in 4 depth
+  bands, geometry tables lifted verbatim from the binary. Renders a real
+  perspective dungeon view — see
+  [screenshots/dh_wall_render_corridor.png](screenshots/dh_wall_render_corridor.png).
+  Validated data-driven: a synthetic map with one wall ahead draws exactly
+  1 face, a corridor draws 12, an all-walls map 25.
+  How the tables were located and validated:
+  [`../../dh_research/AESOP/README.md`](../../dh_research/AESOP/README.md).
+- ✅ **`init_viewspace` + `build_clipping`.** Both ported verbatim from
+  `AESOP.EXE` (`1f36:040f` / `1f36:05f4`) with an occlusion table lifted
+  from `DS:0x1117`. Occlusion is now real: cells outside the view cone
+  don't render, and blocked cells cull correctly with the SOP's own
+  `notblocks` results.
+- ✅ **Text/message-bar erase** now uses backdrop-restore in the DH HUD
+  (gated on `gDungeonHack && draw_bitmap(1, 59, …)` — DH's HUD-Backdrop
+  equivalent of EOB3's 190). Previously flat-fill sampled a stray pixel
+  and the whole message bar went white on movement.
+- ✅ **HUD clip.** `draw_walls` clips every blit to the view rect —
+  panels legitimately positioned outside the view (e.g. face 20 at x=34
+  spanning a 129-wide panel while view starts at 138) no longer paint
+  over the inventory column or the arch.
 - ⏳ `.TBL` support (daesop `/create_tbl` generates these).
 
 ## Phase 5 — Thirdeye-original features (post-EOB3)
