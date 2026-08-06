@@ -295,8 +295,23 @@ bool tryHandle(Context &ctx, const std::string &fn,
 	// ponytail: single-blit placeholder; upgrade to per-cell dispatch
 	// once we have the sub-bitmap layout mapped.
 	if (fn == "draw_walls" && args.size() >= 7 && ctx.gfx) {
-		// draw_walls(party_x, party_y, facing, view_mode, wallset_id,
-		//            &lvlmap[1024], &floor_at)
+		// draw_walls(party_x, party_y, facing, view_window, wallset_id,
+		//            &lvlmap[1024], &floor_at[18])
+		//
+		// arg[3] is the view's WINDOW HANDLE (the SOP's W:view), not a mode
+		// flag -- the same handle `copy_window(W:view, W:hold)` double-buffers
+		// through. So the destination rect comes from the window table rather
+		// than a hardcoded constant.
+		int32_t vx = kViewX, vy = kViewY, vx1 = 0, vy1 = 0;
+		{
+			int32_t rx0, ry0, rx1, ry1;
+			if (ctx.events.windowRect(static_cast<int32_t>(args[3]),
+			                          rx0, ry0, rx1, ry1) &&
+			    !ctx.events.windowIsOffscreen(static_cast<int32_t>(args[3]))) {
+				vx = rx0; vy = ry0; vx1 = rx1; vy1 = ry1;
+			}
+		}
+		(void)vx1; (void)vy1;
 		//
 		// Paints the 3D wall panels for the party's forward cone. DH calls it
 		// AFTER the SOP has copy_window'd the floor into the dungeon-view rect,
@@ -319,7 +334,7 @@ bool tryHandle(Context &ctx, const std::string &fn,
 			uint16_t wallsetId =
 			    static_cast<uint16_t>(static_cast<int32_t>(args[4]));
 			int which = std::atoi(dump);
-			int ox = kViewX, oy = kViewY;
+			int ox = vx, oy = vy;
 			if (const char *o = std::getenv("THIRDEYE_DHWALL_AT"))
 				std::sscanf(o, "%d,%d", &ox, &oy);
 			try {

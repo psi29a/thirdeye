@@ -643,6 +643,52 @@ Debug hook (in `apps/thirdeye/runtime/dh.cpp`):
 `draw_walls` and blits sub `<sub_num>` at the view origin so you can
 identify panels by eye; `THIRDEYE_DHWALL_AT=x,y` moves that blit.
 
+### View-space architecture (the three calls work as a set)
+
+`init_viewspace` and `build_clipping` are **not** incidental setup — they
+populate the per-cell tables `draw_walls` consumes. All three are driven from
+`dungeon`'s "init viewspace" handler, and the `dungeon` object's statics show
+the shape of it: **18 view cells**, one entry per parallel array.
+
+```
+B:view_X    [18]   map X of each visible cell
+B:view_Y    [18]   map Y of each visible cell
+B:visible   [18]   per-cell visibility flag
+W:l_clip    [18]   per-cell left clip edge
+W:r_clip    [18]   per-cell right clip edge
+B:floor_at  [18]   per-cell floor state
+B:notblocks [18]   per-cell blocking flag
+```
+
+Signatures, read off the call sites:
+
+```
+init_viewspace(px, py, facing, &view_X[18], &view_Y[18])
+
+build_clipping(&l_clip[18], &r_clip[18], &visible[18], &view_X[18],
+               &view_Y[18], &notblocks[18], &lvlvis[1024], &floor_at[18])
+
+draw_walls(px, py, facing, view_window, wallset_id,
+           &lvlmap[1024], &floor_at[18])
+```
+
+`draw_walls` arg[3] is the view's **window handle** (the SOP's `W:view`) —
+the same handle `copy_window(W:view, W:hold)` double-buffers through — so the
+destination rect comes from the window table, not a constant. Between
+`init_viewspace` and `build_clipping` the SOP itself loops `i = 0..17`,
+reading `lvlmap[view_Y[i]*32 + view_X[i]]` and filling `notblocks`/`floor_at`.
+
+The panel sizes corroborate a classic EOB depth progression — front-wall
+widths **177 → 129 → 81 → 49** (full view, then narrowing per depth) with
+side walls **25×120 → 25×95 → 17×59 → 9×35**. The 2 177×120 specials are the
+adjacent-front-wall case.
+
+**What's still missing is the cell→screen mapping**: which of the 18 slots
+corresponds to which (depth, lateral offset), and the blit x/y for each. That
+is baked into AESOP.EXE's implementations of runtime functions 262
+(`init_viewspace`) and 274 (`draw_walls`) — the natural next RE target, same
+Ghidra headless recipe as `../../dh_research/MAZE/`.
+
 **Status: the decoder and palette are both correct now** — a single panel
 blits into the view as real wall art (`THIRDEYE_DHWALL_DUMP=8` shows the
 129×96 near-front panel filling the view). What remains is the per-cell

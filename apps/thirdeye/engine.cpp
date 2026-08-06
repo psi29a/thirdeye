@@ -16,6 +16,13 @@
 
 #include <components/files/configurationmanager.hpp>
 
+#ifndef _WIN32
+#include <cerrno>       // single-instance lock (acquireInstanceLock)
+#include <fcntl.h>
+#include <sys/file.h>
+#include <unistd.h>
+#endif
+
 #include <algorithm>
 #include <cctype>
 #include <cstdio>
@@ -136,6 +143,52 @@ using THIRDEYE::runtime::gRtTrace;      // per-call trace gate; set from --debug
 using THIRDEYE::runtime::gBootStart;    // set at go(); for timing prints
 using THIRDEYE::runtime::gPerf;         // THIRDEYE_PERF=1 -- per-present timing
 using THIRDEYE::runtime::gLastPresent;  // wall-clock of previous present
+
+// Take an exclusive, non-blocking lock on `<gameDataDir>/.thirdeye.lock` and
+// hold it for the life of the process, so a second engine pointed at the same
+// install refuses to start instead of racing it through SAVEGAME/. The fd is
+// deliberately never closed -- process exit releases the lock, which also
+// makes us robust to crashes (no stale lock file to clean up, unlike a
+// PID-file scheme).
+//
+// POSIX only; on Windows this is a no-op (same non-goal as the control
+// channel -- see control.cpp).
+void acquireInstanceLock(const std::filesystem::path &gameDataDir) {
+	if (std::getenv("THIRDEYE_ALLOW_MULTI") != nullptr) {
+		std::cout << "  [instance lock bypassed (THIRDEYE_ALLOW_MULTI)]"
+		          << std::endl;
+		return;
+	}
+#ifndef _WIN32
+	auto lockPath = gameDataDir / ".thirdeye.lock";
+	// Leaked by design: the lock must outlive this function, and the OS drops
+	// it at exit. Static so repeat calls (there are none today) are harmless.
+	static int lockFd = -1;
+	if (lockFd >= 0) return;
+	lockFd = ::open(lockPath.c_str(), O_RDWR | O_CREAT | O_CLOEXEC, 0644);
+	if (lockFd < 0) {
+		// Read-only install dir, odd filesystem, etc. Don't make an
+		// unwritable game directory fatal -- warn and carry on.
+		std::cout << "  [instance lock unavailable at " << lockPath.string()
+		          << " (" << std::strerror(errno) << ") -- continuing]"
+		          << std::endl;
+		return;
+	}
+	if (::flock(lockFd, LOCK_EX | LOCK_NB) != 0) {
+		::close(lockFd);
+		lockFd = -1;
+		throw std::runtime_error(
+		    "another thirdeye instance is already running against " +
+		    gameDataDir.string() +
+		    "\n  Two engines sharing one install corrupt each other's saves"
+		    " (SAVEGAME/ITEMS.TMP, LVLnn.TMP)."
+		    "\n  Quit the other instance, or set THIRDEYE_ALLOW_MULTI=1 to"
+		    " override.");
+	}
+#else
+	(void)gameDataDir;
+#endif
+}
 
 // Resolve a child directory case-insensitively: try the exact name first
 // (the fast path on macOS/Windows and Linux installs that already match),
@@ -1430,6 +1483,17 @@ void THIRDEYE::Engine::go() {
 	if (!std::filesystem::exists(resFile)) {
 		throw std::runtime_error(resFile.string() + " does not exist!");
 	}
+
+	// Refuse to run a second instance against the same game data. Two engines
+	// sharing one install both read AND write SAVEGAME/ (ITEMS.TMP, LVLnn.TMP,
+	// MAPS*.BIN), so concurrent runs silently corrupt each other's saves --
+	// exactly how a playtest save once drifted mid-session and sent us chasing
+	// a phantom parser bug. Locking the game-data dir (not the process) is the
+	// right granularity: running EOB3 and Dungeon Hack side by side is fine
+	// because they're separate installs.
+	// THIRDEYE_ALLOW_MULTI=1 overrides (read-only experiments, side-by-side
+	// renders of the same install).
+	acquireInstanceLock(resFile.parent_path());
 
 	auto _t0 = std::chrono::steady_clock::now();
 	RESOURCES::Resource resource(resFile);	// get our game resources ready
