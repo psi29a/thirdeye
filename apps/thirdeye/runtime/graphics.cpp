@@ -23,6 +23,19 @@ namespace {
 // PAL_OUT=0xB0.
 constexpr uint16_t kFirstColor[5] = {0x00, 0xB0, 0xC0, 0xE0, 0xB0};
 
+// Dungeon Hack carves the DAC up differently: one big fixed palette plus a
+// 16-colour floor palette and a 16-colour wall palette at the very top. Its
+// kernel loads them as set_palette(1, wallpal[lvl]) / set_palette(2,
+// floorpal[lvl]) (HACK.RES/kernel "enter level"), and the art confirms the
+// bases -- wallset shapes index 0xF6..0xFD, floor shapes 0xC4..0xEE:
+//     region 0 fixed : 0x00, 225 colours -> 0x00..0xE0
+//     region 1 walls : 0xF0, 16 colours  -> 0xF0..0xFF
+//     region 2 floor : 0xE0, 16 colours  -> 0xE0..0xEF
+// With EOB3's bases the wall art landed on never-loaded (black) DAC entries,
+// which is why the dungeon view rendered solid black. See
+// docs/dungeon_hack_maze.md.
+constexpr uint16_t kFirstColorDH[5] = {0x00, 0xF0, 0xE0, 0xE0, 0xB0};
+
 // All clipping is now per-pane via events.windowRect(), matching the original
 // GIL2VFX_draw_bitmap. No hardcoded view dimensions live here -- the dungeon
 // view, the HUD, the save-picker windows etc. all carry their natural rects
@@ -46,8 +59,18 @@ bool tryHandle(Context &ctx, const std::string &fn,
 		result = h;
 		return true;
 	}
+	// assign_window(owner, x0, y0, x1, y1): unlike assign_subwindow (a rect in
+	// absolute screen coords), this registers an OFFSCREEN PAGE whose contents
+	// the SOP addresses in page-local coords and later composites with
+	// copy_window. Only Dungeon Hack uses it; EOB3 has no copy_window, so
+	// nothing there ever takes the offscreen path.
 	if (fn == "assign_window" && args.size() >= 5) {
-		result = ctx.events.assignWindow(args[0], args[1], args[2], args[3], args[4]);
+		result = ctx.events.assignWindow(args[0], args[1], args[2], args[3],
+		                                 args[4], /*offscreen=*/true);
+		if (std::getenv("THIRDEYE_REGIONS"))
+			std::cout << "  [page handle " << result << " = " << args[1] << ","
+			          << args[2] << " .. " << args[3] << "," << args[4] << "]"
+			          << std::endl;
 		return true;
 	}
 	if (fn == "release_window" && args.size() >= 1) {
@@ -157,10 +180,21 @@ bool tryHandle(Context &ctx, const std::string &fn,
 	// set_palette(region, resource): load a palette resource into the region.
 	if (fn == "set_palette" && args.size() >= 2) {
 		uint16_t region = static_cast<uint16_t>(args[0]);
-		uint16_t first = region < 5 ? kFirstColor[region] : 0;
+		const uint16_t *bases = gDungeonHack ? kFirstColorDH : kFirstColor;
+		uint16_t first = region < 5 ? bases[region] : 0;
+		// THIRDEYE_PALBASE=b0,b1,b2,b3 overrides the region bases (how the DH
+		// map above was worked out; keep it for the next game we bring up).
+		if (const char *pb = std::getenv("THIRDEYE_PALBASE")) {
+			int b[5] = {bases[0], bases[1], bases[2], bases[3], bases[4]};
+			std::sscanf(pb, "%d,%d,%d,%d", &b[0], &b[1], &b[2], &b[3]);
+			if (region < 5) first = static_cast<uint16_t>(b[region]);
+		}
 		try {
 			ctx.gfx->setPaletteRange(fetch(args[1]), first);
-			rt() << "  [palette region " << region << "]" << std::endl;
+			rt() << "  [palette region " << region << " -> base "
+			     << first << ", "
+			     << GRAPHICS::Palette(fetch(args[1])).getNumOfColours()
+			     << " colours]" << std::endl;
 		} catch (const std::exception &e) {
 			rt() << "  [palette failed: " << e.what() << "]" << std::endl;
 		}
@@ -183,6 +217,17 @@ bool tryHandle(Context &ctx, const std::string &fn,
 		int32_t px0, py0, px1, py1;
 		bool clipped = ctx.events.windowRect(static_cast<int32_t>(page),
 		                                     px0, py0, px1, py1);
+		// Offscreen page (DH's assign_window): redirect the draw into the page's
+		// own surface, addressed in page-local coords, and skip the screen-rect
+		// clip -- the page IS the clip. endPage() at the bottom of this branch
+		// puts the visible screen back. Without this every DH panel draws at
+		// screen (0,0) and stomps the previous one (see docs/dungeon_hack_maze.md).
+		bool onPage = false;
+		if (clipped && ctx.events.windowIsOffscreen(static_cast<int32_t>(page))) {
+			onPage = ctx.gfx->beginPage(static_cast<int32_t>(page),
+			                            px1 - px0 + 1, py1 - py0 + 1);
+			clipped = false;
+		}
 		if (clipped)
 			ctx.gfx->setClip(px0, py0, px1 - px0 + 1, py1 - py0 + 1);
 		// arg[5] = depth-tier scale (256 = native, 128 = half, 64 = quarter);
@@ -218,6 +263,8 @@ bool tryHandle(Context &ctx, const std::string &fn,
 				// later dialog/menu draw to the compass pane (CodeRabbit).
 				if (clipped)
 					ctx.gfx->clearClip();
+				if (onPage)
+					ctx.gfx->endPage();
 				result = 0;
 				return true;
 			}
@@ -305,6 +352,8 @@ bool tryHandle(Context &ctx, const std::string &fn,
 		}
 		if (clipped)
 			ctx.gfx->clearClip();
+		if (onPage)
+			ctx.gfx->endPage();
 		result = 0;
 		return true;
 	}

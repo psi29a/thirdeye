@@ -87,6 +87,11 @@ struct Context {
 // logging routes through rt() so it's a no-op when off.
 extern bool gRtTrace;
 
+// True when the loaded resource is Dungeon Hack (HACK.RES / OPEN.RES). DH
+// shares the AESOP runtime with EOB3 but differs in a few table constants --
+// currently the palette-region bases (see set_palette in runtime/graphics.cpp).
+extern bool gDungeonHack;
+
 // Set when the bytecode redraws the compass facing indicator (draw_bitmap to
 // page 104, resource 187, on a turn); consumed by the next compass-page
 // refresh to re-snapshot. See Graphics::snapshotCompass/restoreCompass.

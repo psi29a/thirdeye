@@ -508,6 +508,40 @@ Only 5 stubs remain in the DH boot path — all pure-renderer (`init_viewspace`,
 `build_clipping`, `copy_window`, `draw_walls`, `Transition`). Phase-two runs its
 tick loop and dispatches per-cell logic.
 
+**Screen layout + wall art (2026-08-06).** Two engine-level differences from
+EOB3 had to be fixed before DH could draw a correct screen. Both DH-gated;
+EOB3 verified pixel-identical to a pre-change baseline frame.
+
+*Page compositing.* EOB3 flattens every page onto one surface. DH instead draws
+each panel into its **own offscreen page** at page-local `(0,0)` and then
+`copy_window`s it to a screen rect — `copy_window(16, 9)` is the floor art
+landing in the dungeon view at `(138,13)`. The distinguishing signal is
+`assign_window` (offscreen page, page-local coords) vs `assign_subwindow`
+(absolute screen rect); both had been funnelling into the same
+`EventSystem::assignWindow`, so every DH panel drew at screen `(0,0)` and
+stomped the previous one. `Win::offscreen` records which is which, `draw_bitmap`
+redirects into the page's surface (Graphics swaps its `mScreen` pointer, so all
+existing draw routines follow with no changes), and `copy_window` blits to the
+destination's registered origin. That alone turned the DH screen from
+"items floating on black in the top-left" into the real layout: inventory
+paper-doll column on the left, 3D view on the right under the stone arch.
+
+*Palette regions.* DH carves the DAC up differently from EOB3's
+`PAL_FIXED/PAL_WALLS/PAL_M1/PAL_M2` (`00/B0/C0/E0`): fixed at `0x00` (225
+colours), **walls at `0xF0`**, **floor at `0xE0`**, both 16 colours, loaded by
+the kernel as `set_palette(1, wallpal[lvl])` / `set_palette(2, floorpal[lvl])`.
+Probing the art pins it — wallset shapes index `0xF6..0xFD`, floor shapes
+`0xC4..0xEE`. With EOB3's bases nothing ever loaded DAC 225–255, so every
+wallset pixel resolved to `(0,0,0)`: **the dungeon view rendered solid black
+even though the shape decoder was working perfectly** (sub 8 decodes to 12,384
+bytes / 12,102 non-zero pixels). A long detour went into suspecting the decoder
+before the palette dump made it obvious — the lesson is to check
+index→colour resolution before blaming a decoder for black output.
+
+With both in, a wallset panel blits into the view as real cave-wall art
+(see [screenshots/dh_wall_panel.png](screenshots/dh_wall_panel.png)). What's
+left for a walkable dungeon is the per-cell walk inside `draw_walls`.
+
 **Phase-two renders a real gameplay HUD.** First frame is the DH title splash
 ("Advanced Dungeons & Dragons Forgotten Realms — DUNGEON HACK" on wooden door);
 by ~frame 50 the full in-game UI is drawn: character portrait ("Kathra

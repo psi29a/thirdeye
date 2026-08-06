@@ -584,6 +584,23 @@ Still open (nice-to-have): a file-picker UI instead of the env var.
   `ITEMS.DAT` into `savegame/` per fresh game — full RE writeup in
   [dungeon_hack_maze.md](dungeon_hack_maze.md). Two paths: bootstrap
   by running MAZE under DOSBox once, or reimplement natively.
+- ✅ **Offscreen page compositing.** DH draws each HUD panel into its own
+  page at page-local (0,0) then `copy_window`s it to a screen rect;
+  `assign_window` now marks pages offscreen, `draw_bitmap` redirects into
+  the page surface, and `copy_window` blits to the destination origin.
+  Before this every DH panel piled up at screen (0,0). EOB3 has no
+  `copy_window` so its flattened path is untouched (verified
+  pixel-identical).
+- ✅ **DH palette-region map.** DH's bases are fixed=0x00 / walls=0xF0 /
+  floor=0xE0, not EOB3's 0x00/0xB0/0xC0/0xE0. With EOB3's table the
+  wallset's 0xF6..0xFD indices hit never-loaded (black) DAC entries — the
+  reason the dungeon view rendered solid black. `kFirstColorDH`, gated on
+  `gDungeonHack`; `THIRDEYE_PALBASE` overrides for bring-up.
+- 🚧 **3D wall rendering.** Wall art now decodes and colours correctly (a
+  panel blits into the view as real cave wall). Remaining: the per-cell
+  walk over `lvlmap` that picks a panel per (cell, depth, side) and blits
+  it at the matching offset. See
+  [dungeon_hack_maze.md](dungeon_hack_maze.md#draw_walls).
 - ⏳ `.TBL` support (daesop `/create_tbl` generates these).
 
 ## Phase 5 — Thirdeye-original features (post-EOB3)

@@ -11,6 +11,7 @@
 namespace THIRDEYE::runtime {
 
 bool gRtTrace = false;
+bool gDungeonHack = false;
 bool gCompassDirty = false;
 bool gPerf = false;
 int gDrawCount = 0;

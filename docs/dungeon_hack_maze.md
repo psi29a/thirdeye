@@ -515,6 +515,146 @@ for the full function table. Highlights:
    MAZE (it's a DH runtime CALL inside `AESOP.EXE`/`HACK.RES`) but
    blocks savegame support.
 
+## Screen layout + page compositing (2026-08-06)
+
+Two engine-level differences from EOB3 had to be fixed before any dungeon
+pixels could appear. Both are DH-only and gated so EOB3 is untouched
+(verified pixel-identical against a baseline frame).
+
+### 1. DH composites through offscreen pages
+
+EOB3 draws everything straight to one flattened surface. DH instead draws
+each panel into its **own offscreen page** at page-local `(0,0)` and then
+`copy_window`s it to the screen rect where it belongs:
+
+```
+draw_bitmap(12, 60, …) @ 0,0      Inventory display -> page 12
+draw_bitmap(14, 61, …) @ 0,0      Character display -> page 14
+draw_bitmap(16, 159,…) @ 0,0      Floor-6           -> page 16
+copy_window(12, 1)                page 12 -> screen
+copy_window(14, 89)               page 14 -> (139,136)
+copy_window(16, 9)                page 16 -> (138,13)   <- the dungeon view
+```
+
+The two window calls mean different things, which is the crux:
+
+| Call | Meaning | Example |
+|---|---|---|
+| `assign_window(owner, x0,y0,x1,y1)` | **offscreen page**, page-local space | `(0,0,175,119)` = a 176×120 buffer |
+| `assign_subwindow(owner, parent, x0,y0,x1,y1)` | **screen rect** | `(138,13,313,132)` = where it lands |
+
+Both were funnelling into the same `EventSystem::assignWindow`, so every
+DH panel drew at screen `(0,0)` and stomped the previous one — the inventory,
+character sheet and floor art all piled up in the top-left corner while the
+dungeon view stayed empty. `Win::offscreen` now records which is which;
+`draw_bitmap` redirects into the page's own surface (Graphics swaps its
+`mScreen` pointer, so every existing draw routine follows with no changes),
+and `copy_window` blits the page to the destination's registered origin.
+
+**Screen layout that falls out of the rects:**
+
+```
+(0,0)-(135,181)    inventory / paper-doll column   (left)
+(138,13)-(313,132) 3D dungeon view                 (right, under the arch)
+(139,136)-(…)      character portrait
+(40,182)-(319,199) message bar
+(0,182)-(35,199)   CAMP button
+```
+
+### 2. DH carves the palette up differently
+
+EOB3's regions (`arun/src/SHARED.H`):
+
+```
+PAL_FIXED 0 = 00-AF     PAL_M1 2 = C0-DF
+PAL_WALLS 1 = B0-BF     PAL_M2 3 = E0-FF
+```
+
+DH's kernel loads only three regions, and not at those bases
+(`HACK.RES/kernel`, the level-enter handler):
+
+```
+set_palette(0, <fixed>)                          225 colours
+set_palette(1, table978[wallpal[party_lvl]])     16 colours   <- WALL
+set_palette(2, table978[floorpal[party_lvl]])    16 colours   <- FLOOR
+```
+
+Probing the art's actual index usage pins the bases exactly:
+
+| Region | Art | Indices used | Base | Covers |
+|---|---|---|---|---|
+| 0 fixed | — | — | `0x00` | 0–224 |
+| 2 floor | `Floor-6` (159) | 196–238 | `0xE0` | 224–239 |
+| 1 wall | wallsets 190–196 | …246–253 | `0xF0` | 240–255 |
+
+With EOB3's bases (`B0`/`C0`/`E0`) nothing ever loaded DAC entries 225–255,
+so the wallset's 246–253 all resolved to `(0,0,0)` — **the dungeon view
+rendered solid black even though the shape decoder was working perfectly**
+(sub 8 decodes to 12,384 bytes / 12,102 non-zero pixels). With the corrected
+bases the same indices resolve to a proper 8-step wall gradient.
+
+Table lives in `kFirstColorDH` in [runtime/graphics.cpp](../apps/thirdeye/runtime/graphics.cpp),
+selected by `gDungeonHack`. `THIRDEYE_PALBASE=b0,b1,b2,b3` overrides the
+bases at runtime — that env var is how the map above was worked out, and is
+worth keeping for the next game brought up on this runtime.
+
+## `draw_walls` — the 3D wall renderer
+
+The one remaining gate between phase-two's working HUD and playable DH.
+Call signature (from `HACK.RES/dungeon.dasm` "draw walls" handler):
+
+```
+draw_walls(
+  party_x,         // B:staticVar9515 -- byte
+  party_y,         // B:staticVar9516 -- byte
+  party_facing,    // B:staticVar9517 -- byte
+  view_mode,       // W:view          -- word (view state / mode flag)
+  wallset_id,      // L:wallset       -- long, resource number
+  &lvlmap[1024],   // 32x32 grid, 1 byte per cell
+  &floor_at        // per-cell floor-decoration state
+)
+```
+
+Wallset resources are 190..196 (Marble / Wood / Stone / Foil / Ice /
+Mine / Rock). Enumerating resource 196 (Rock Wallset, 88,419 bytes)
+via our `GRAPHICS::Bitmap` decoder yields **236 sub-bitmaps** with a
+very clean structure:
+
+| Panel size (WxH) | Occurrences | Likely role |
+|---|---|---|
+| 25 × 120 | 26 | Near side wall |
+| 25 × 95  | 26 | Medium side wall |
+| 17 × 59  | 26 | Far side wall |
+| 9 × 35   | 26 | Very far side wall |
+| 25 × 35  | 26 | Short side (niche?) |
+| 17 × 43  | 26 | Alternate far side |
+| 129 × 96 | 26 | Near front wall |
+| 81 × 59  | 26 | Medium front wall |
+| 49 × 37  | 26 | Far front wall |
+| 177 × 120 |  2 | Full-view special (opening?) |
+
+= 9 panel roles × 26 style variants + 2 specials. Interpretation: DH
+has **26 different wall styles** (mossy, cracked, wood, brick, etc.),
+each with the same set of 9 panel positions covering side + front
+walls at 3–4 depth tiers.
+
+Debug hook (in `apps/thirdeye/runtime/dh.cpp`):
+`THIRDEYE_DHWALL_DUMP=<sub_num>` prints the shape table on first
+`draw_walls` and blits sub `<sub_num>` at the view origin so you can
+identify panels by eye; `THIRDEYE_DHWALL_AT=x,y` moves that blit.
+
+**Status: the decoder and palette are both correct now** — a single panel
+blits into the view as real wall art (`THIRDEYE_DHWALL_DUMP=8` shows the
+129×96 near-front panel filling the view). What remains is the per-cell
+walk: read `lvlmap` for the party's forward cone, pick the panel for each
+(cell, depth, side), and blit at the matching screen offset. Standard
+EOB-style view assembly; no unknown formats left in the way.
+
+One ordering detail matters: DH calls `draw_walls` **after** the SOP has
+already `copy_window`'d the floor page into the view rect, so walls paint
+on top, straight to the screen at the view origin (138,13) — writing into
+the floor page instead is too late to be composited.
+
 ## Path to phase-two working
 
 Current state: **phase-two boots and runs its tick loop.** The DH
@@ -522,10 +662,10 @@ runtime layer implements all file I/O and dungeon-load helpers per
 the specs above (`apps/thirdeye/runtime/dh.cpp`). A native mini-MAZE
 seeds structurally-valid empty `savegame/LEVELS.DAT`, `FEA*.DAT` and
 `ITEMS.DAT` at first HACK.RES boot (idempotent — real MAZE output is
-preserved), so nothing crashes on missing files. What's left is only
-the wall renderer (`init_viewspace` / `build_clipping` / `draw_walls`
-/ `copy_window` / `Transition`) — a separate mountain from the format
-work covered here.
+preserved), so nothing crashes on missing files. Page compositing and the
+DH palette map are both in (see the section above), so the HUD and
+inventory render correctly and wall art resolves to real colours. What's
+left is the per-cell panel walk inside `draw_walls`.
 
 Two paths for producing *actual* dungeon content (not zero-filled):
 

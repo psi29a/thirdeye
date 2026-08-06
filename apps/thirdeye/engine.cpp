@@ -1465,6 +1465,10 @@ void THIRDEYE::Engine::go() {
 		    [](unsigned char c) { return std::tolower(c); });
 		if (resName == "open.res") bootName = "opening";
 		else if (resName == "hack.res") bootName = "phase-one";
+		// DH shares the AESOP runtime with EOB3 but not all of its table
+		// constants (palette-region bases, so far).
+		THIRDEYE::runtime::gDungeonHack =
+		    (resName == "open.res" || resName == "hack.res");
 		// Debug hook: force any boot object by name (e.g. THIRDEYE_BOOT=phase-two).
 		if (const char *b = std::getenv("THIRDEYE_BOOT")) bootName = b;
 		// DH-only: seed structurally-valid empty savegame/LEVELS.DAT etc. if

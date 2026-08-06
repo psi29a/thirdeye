@@ -4,6 +4,8 @@
 #include "../resources/res.hpp"
 #include "../vm/events.hpp"
 
+#include <iostream>
+
 #include <cctype>
 #include <chrono>
 #include <cstdint>
@@ -69,6 +71,13 @@ std::filesystem::path savegamePath(Context &ctx, const std::string &name) {
 	auto sg = resolveChildCI(ctx.res.resourcePath().parent_path(), "savegame");
 	return resolveChildCI(sg, name);
 }
+
+// Top-left of Dungeon Hack's 3D view on the 320x200 screen. The SOP registers
+// it as assign_subwindow(..., 138, 13, 313, 132) -- a 176x120 rect right of the
+// inventory column and under the stone arch of the HUD backdrop -- and uses it
+// as the copy_window destination for the floor page.
+constexpr int kViewX = 138;
+constexpr int kViewY = 13;
 
 // DH exposes a single sequential-file API (open_file / read_* / close_file
 // with no handle arg), so one "current" file is enough. Buffered eagerly at
@@ -271,6 +280,122 @@ bool tryHandle(Context &ctx, const std::string &fn,
 	if (fn == "notify" && args.size() == 3) {
 		ctx.events.notify(args[0], static_cast<uint32_t>(args[1]),
 		                  /*event=*/VM::Value{1}, args[2]);
+		result = 0;
+		return true;
+	}
+
+	// -------- 3D wall renderer (naive first pass) --------
+	//
+	// Real DH's `draw_walls(x, y, facing, view_mode, wallset, &lvlmap,
+	// &floor_at)` iterates the party's forward cone and blits per-cell
+	// wall panels. The wallset (e.g. resource 196 "Rock Wallset") is a
+	// shape table with a sub-bitmap per (depth, position, wall-side)
+	// tuple. First pass: blit sub 0 across the view rectangle so we can
+	// SEE that pixels are being placed and iterate from there.
+	// ponytail: single-blit placeholder; upgrade to per-cell dispatch
+	// once we have the sub-bitmap layout mapped.
+	if (fn == "draw_walls" && args.size() >= 7 && ctx.gfx) {
+		// draw_walls(party_x, party_y, facing, view_mode, wallset_id,
+		//            &lvlmap[1024], &floor_at)
+		//
+		// Paints the 3D wall panels for the party's forward cone. DH calls it
+		// AFTER the SOP has copy_window'd the floor into the dungeon-view rect,
+		// so walls composite on top of that, drawn straight to the screen at
+		// the view origin (the view rect is the copy_window destination -- see
+		// docs/dungeon_hack_maze.md).
+		//
+		// Wallset shape table (resource 190..196): 236 sub-bitmaps == 9 panel
+		// roles x 26 style variants + 2 full-view specials. Panel sizes give
+		// away the depth tiers:
+		//    25x120 / 25x95 / 17x59 / 9x35   side walls, near -> far
+		//    129x96 / 81x59 / 49x37          front walls, near -> far
+		//    25x35  / 17x43                  short side / alternate far
+		//
+		// Still to do: the per-cell walk that picks a panel per (cell, depth,
+		// side) from lvlmap and blits it at the matching screen offset. Until
+		// that lands, THIRDEYE_DHWALL_DUMP=<sub> blits one panel at the view
+		// origin so panels can be identified by eye.
+		if (const char *dump = std::getenv("THIRDEYE_DHWALL_DUMP")) {
+			uint16_t wallsetId =
+			    static_cast<uint16_t>(static_cast<int32_t>(args[4]));
+			int which = std::atoi(dump);
+			int ox = kViewX, oy = kViewY;
+			if (const char *o = std::getenv("THIRDEYE_DHWALL_AT"))
+				std::sscanf(o, "%d,%d", &ox, &oy);
+			try {
+				auto &bmp = ctx.res.getAsset(wallsetId);
+				static bool listed = false;
+				if (!listed) {
+					listed = true;
+					GRAPHICS::Bitmap probe(bmp);
+					uint16_t n = probe.getNumberOfBitmaps();
+					std::cout << "[dh:draw_walls] wallset " << wallsetId
+					          << ": " << n << " sub-bitmaps" << std::endl;
+					for (uint16_t i = 0; i < n && i < 18; ++i)
+						std::cout << "  sub " << i << ": " << probe.getWidth(i)
+						          << "x" << probe.getHeight(i) << std::endl;
+				}
+				if (which >= 0)
+					ctx.gfx->drawImage(bmp, static_cast<uint16_t>(which), ox,
+					                   oy, false, 0,
+					                   static_cast<uint32_t>(wallsetId), 0);
+			} catch (const std::exception &e) {
+				std::cout << "[dh:draw_walls] " << e.what() << std::endl;
+			}
+		}
+		result = 0;
+		return true;
+	}
+
+	// init_viewspace(a,b,c,d,e): sets up the 3D view rendering context
+	// (bitmap-page selection, clip masks). Our draw_walls draws directly
+	// to the current page so no state is needed for the naive pass.
+	// ponytail: no-op; wire real state when draw_walls needs per-panel
+	// scale/clip info.
+	if (fn == "init_viewspace") {
+		(void)args;
+		result = 0;
+		return true;
+	}
+
+	// build_clipping(a..h): precomputes per-cell clipping masks so
+	// draw_walls can skip occluded panels. Not needed for the placeholder
+	// blit -- everything gets overdrawn each frame.
+	if (fn == "build_clipping") {
+		(void)args;
+		result = 0;
+		return true;
+	}
+
+	// copy_window(src_page, dst_page): composite an offscreen page onto its
+	// destination. This is how DH assembles the screen -- each HUD panel and
+	// the dungeon view are drawn into their own page at page-local (0,0), then
+	// copied to the screen rect the SOP registered for the destination. E.g.
+	// `copy_window(16, 9)` puts the floor art into handle 9 = (138,13)-(313,132),
+	// the dungeon view. Without this every panel piles up at screen (0,0).
+	if (fn == "copy_window" && args.size() >= 2 && ctx.gfx) {
+		int32_t src = static_cast<int32_t>(args[0]);
+		int32_t dst = static_cast<int32_t>(args[1]);
+		// Destination origin: an offscreen destination is addressed in its own
+		// page-local coords (so 0,0), a screen rect at its registered corner.
+		int dx = 0, dy = 0;
+		int32_t rx0, ry0, rx1, ry1;
+		if (!ctx.events.windowIsOffscreen(dst) &&
+		    ctx.events.windowRect(dst, rx0, ry0, rx1, ry1)) {
+			dx = static_cast<int>(rx0);
+			dy = static_cast<int>(ry0);
+		}
+		bool ok = ctx.gfx->blitPage(src, dst, dx, dy);
+		rt() << "  [copy_window " << src << " -> " << dst << " @ " << dx << ","
+		     << dy << (ok ? "]" : " MISS]") << std::endl;
+		result = 0;
+		return true;
+	}
+
+	// Transition(): screen wipe/fade effect. Skipping keeps timings tight;
+	// re-enable when we have per-transition presentation to show off.
+	if (fn == "Transition") {
+		(void)args;
 		result = 0;
 		return true;
 	}

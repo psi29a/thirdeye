@@ -66,6 +66,14 @@ private:
 	SDL_Surface *mOverlaySave = nullptr;
 	std::function<void()> mPresentOverlay;
 	std::function<bool()> mOverlayActive; // gates the save-under + paint
+	// Offscreen AESOP pages -- Dungeon Hack's assign_window + copy_window model.
+	// DH draws each HUD panel into its own page at page-local (0,0) and then
+	// copy_window()s the page onto its screen rect; without real page buffers
+	// every panel lands at screen (0,0) and stomps the previous one. Keyed by
+	// window handle. EOB3 never creates these (it has no copy_window), so its
+	// flattened single-surface path is untouched.
+	std::map<int32_t, SDL_Surface *> mPages;
+	SDL_Surface *mScreenSaved = nullptr; // real screen while a page is target
 	// The compass widget lives on its own AESOP page (104) that the original
 	// re-composites every frame, so it survives HUD redraws. We flatten pages onto
 	// one surface, so we instead snapshot the compass region when it refreshes and
@@ -189,6 +197,27 @@ public:
 	// scale is the AESOP draw_bitmap `scale` arg: 0 = native size, else the shape
 	// is drawn at scale/256 (so 256 = 100%, 128 = 50%, 64 = 25%). Depth tiers
 	// in the dungeon view rely on this to shrink monster sprites as they recede.
+	// One live palette entry, for diagnostics (e.g. "does this art's index
+	// range resolve to anything but black in the current palette?").
+	SDL_Color paletteColor(uint8_t index) const {
+		return mPalette != nullptr ? mPalette->colors[index] : SDL_Color{};
+	}
+
+	// --- Offscreen pages (Dungeon Hack's copy_window compositing) ---
+	// beginPage redirects ALL subsequent drawing (drawImage, fills, text, …)
+	// into page `handle`'s own w*h surface, creating it on first use; the page
+	// is addressed in page-local coords, so the SOP's (0,0) means the page's
+	// top-left rather than the screen's. endPage restores the visible screen as
+	// the target. Implemented by swapping the mScreen pointer, so every existing
+	// draw routine redirects without changes. Nesting is not supported (DH never
+	// nests): a second beginPage before endPage is ignored and returns false.
+	bool beginPage(int32_t handle, int w, int h);
+	void endPage();
+	// copy_window(src, dst): blit page `src`'s surface onto `dst` at (dstX,dstY).
+	// dst is the visible screen when `dstPage` has no offscreen surface.
+	// Returns false if `src` has no surface yet (nothing was ever drawn to it).
+	bool blitPage(int32_t src, int32_t dstPage, int dstX, int dstY);
+
 	void drawImage(std::vector<uint8_t> &bmp, uint16_t index, int posX,
 			int posY, bool transparency = false, int mirror = 0,
 			uint32_t cacheId = 0, int scale = 0);

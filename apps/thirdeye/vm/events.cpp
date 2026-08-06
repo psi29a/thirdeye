@@ -359,18 +359,23 @@ void EventSystem::flushInputEvents() {
 // --- interface / input layer (port of INTRFACE.C) ---------------------------
 
 int32_t EventSystem::assignWindow(int32_t owner, int32_t x1, int32_t y1,
-                                  int32_t x2, int32_t y2) {
+                                  int32_t x2, int32_t y2, bool offscreen) {
 	// Subwindow coordinates are absolute in the page's buffer space (GIL2VFX
 	// stores them verbatim), so we keep the rectangle as-is. Handles 0/1 are the
 	// pages; allocate the first free slot at/after 2.
 	for (int32_t i = 2; i < MAX_WINDOWS; ++i) {
 		if (!mWindows[i].used) {
-			mWindows[i] = Win{x1, y1, x2, y2, owner, true};
+			mWindows[i] = Win{x1, y1, x2, y2, owner, true, offscreen};
 			return i;
 		}
 	}
 	std::cerr << "[events] window table full (" << MAX_WINDOWS << ")" << std::endl;
 	return -1;
+}
+
+bool EventSystem::windowIsOffscreen(int32_t handle) const {
+	return handle >= 0 && handle < MAX_WINDOWS && mWindows[handle].used &&
+	       mWindows[handle].offscreen;
 }
 
 void EventSystem::releaseWindow(int32_t handle) {
