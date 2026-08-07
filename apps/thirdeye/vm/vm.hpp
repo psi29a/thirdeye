@@ -192,6 +192,16 @@ public:
 	// latter two via the extern-statics hook). Used by sprint() for PC name etc.
 	std::string readString(Value addr) const;
 
+	// Borrow `size` bytes of the code resource at `off`, or nullptr if that
+	// range doesn't fit. Non-throwing counterpart to the internal codePtr(),
+	// for runtime functions handed a Code-space data pointer (LETA "?:tableNN")
+	// -- e.g. Dungeon Hack's roll_chance probability tables, which live in the
+	// code resource rather than in object statics.
+	const uint8_t *codeDataPtr(uint32_t off, uint32_t size) const {
+		if (static_cast<uint64_t>(off) + size > mCode.size()) return nullptr;
+		return mCode.data() + off;
+	}
+
 	// Read the little-endian u16 at element `index` of a Code-space table
 	// (as produced by LETA for a constant array). Returns -1 if `addr` isn't a
 	// Code address or the element is out of range. Used by load_sound_block to

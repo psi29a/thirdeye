@@ -6,6 +6,7 @@
 
 #include <iostream>
 
+#include <algorithm>  // std::min (readInto)
 #include <cctype>
 #include <chrono>
 #include <cstdint>
@@ -279,11 +280,35 @@ bool tryHandle(Context &ctx, const std::string &fn,
 	// ponytail: bounded scan (256 entries max), returns 0 if the table can't be
 	// bound-checked -- rare enough not to be worth loud failure yet.
 	if (fn == "roll_chance" && args.size() >= 1) {
-		uint8_t *tbl = staticBytePtr(ctx, args[0], 256);
+		// The table lives in the CODE resource, not in object statics: both
+		// HACK.RES call sites pass it as `LETA "?:tableNN"`, which is an
+		// AddrSpace::Code address (`tables` has ORIGINAL_STATIC_SIZE 1, so a
+		// probability table could not live in its statics at all). Resolving
+		// it with staticBytePtr therefore always failed and roll_chance
+		// always returned 0. Accept either space, and grow the probe window
+		// instead of demanding 256 readable bytes up front so a short table
+		// near the end of its buffer still resolves.
+		const uint8_t *tbl = nullptr;
+		std::size_t avail = 0;
+		for (std::size_t want : {16u, 64u, 256u}) {
+			const VM::Addr a = VM::decodeAddr(args[0]);
+			const uint8_t *p =
+			    (a.space == VM::AddrSpace::Code)
+			        ? ctx.vm.codeDataPtr(a.offset, static_cast<uint32_t>(want))
+			        : staticBytePtr(ctx, args[0], static_cast<uint32_t>(want));
+			if (!p) break;              // window no longer fits; keep the last
+			tbl = p;
+			avail = want;
+			// Stop early once the terminator is inside the resolved window.
+			if (std::memchr(p, 0xFF, want) != nullptr) break;
+		}
 		if (!tbl) { result = 0; return true; }
 		int sum = 0;
 		int n = 0;
-		while (n < 256 && tbl[n] != 0xFF) { sum += tbl[n]; ++n; }
+		while (static_cast<std::size_t>(n) < avail && tbl[n] != 0xFF) {
+			sum += tbl[n];
+			++n;
+		}
 		int roll = sum > 0 ? static_cast<int>(dhRng()() % sum) : 0;
 		int idx = 0, acc = 0;
 		for (idx = 0; idx < n; ++idx) {
