@@ -10,6 +10,8 @@
 #include <chrono>
 #include <cstdint>
 #include <cstdio>
+#include <cstdlib>   // getenv
+#include <cstring>   // memcpy/memset -- libstdc++ does not pull these in
 #include <filesystem>
 #include <fstream>
 #include <random>
@@ -782,8 +784,17 @@ void ensureSavegameFiles(const std::filesystem::path &dhRoot) {
 	}
 	const int levels = depth + 10;
 
-	auto writeIfMissing = [&](const fs::path &p,
+	// Resolve the name case-insensitively BEFORE testing existence: reads go
+	// through savegamePath()/resolveChildCI, so on a case-sensitive filesystem
+	// a real MAZE (or DOSBox) run that produced `levels.dat` would not be seen
+	// by a fixed-case `LEVELS.DAT` check. We would then drop an empty
+	// uppercase stub next to it and the SOP could load whichever the directory
+	// iterator yields first -- silently serving an empty dungeon over the real
+	// one. Checking and writing the same resolved path keeps the "real MAZE
+	// output is preserved" guarantee honest.
+	auto writeIfMissing = [&](const std::string &name,
 	                          const std::vector<uint8_t> &bytes) {
+		auto p = resolveChildCI(sg, name);
 		if (fs::exists(p, ec)) return;
 		std::ofstream out(p, std::ios::binary);
 		if (out) out.write(reinterpret_cast<const char *>(bytes.data()),
@@ -793,7 +804,7 @@ void ensureSavegameFiles(const std::filesystem::path &dhRoot) {
 	// LEVELS.DAT: 4-byte header + N x 0x400 zero chunks.
 	{
 		std::vector<uint8_t> data(4 + static_cast<size_t>(levels) * 0x400, 0);
-		writeIfMissing(sg / "LEVELS.DAT", data);
+		writeIfMissing("LEVELS.DAT", data);
 	}
 
 	// FEA00..FEA{levels-1}.DAT: 8-byte header + 8-byte terminator = 16 bytes
@@ -805,14 +816,14 @@ void ensureSavegameFiles(const std::filesystem::path &dhRoot) {
 		for (int i = 0; i < levels; ++i) {
 			char name[16];
 			std::snprintf(name, sizeof(name), "FEA%02d.DAT", i);
-			writeIfMissing(sg / name, data);
+			writeIfMissing(name, data);
 		}
 	}
 
 	// ITEMS.DAT: just the terminator (8 zero bytes = empty stream).
 	{
 		std::vector<uint8_t> data(8, 0);
-		writeIfMissing(sg / "ITEMS.DAT", data);
+		writeIfMissing("ITEMS.DAT", data);
 	}
 }
 

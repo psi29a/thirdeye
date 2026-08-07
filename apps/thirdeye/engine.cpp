@@ -154,10 +154,16 @@ using THIRDEYE::runtime::gLastPresent;  // wall-clock of previous present
 // POSIX only; on Windows this is a no-op (same non-goal as the control
 // channel -- see control.cpp).
 void acquireInstanceLock(const std::filesystem::path &gameDataDir) {
-	if (std::getenv("THIRDEYE_ALLOW_MULTI") != nullptr) {
-		std::cout << "  [instance lock bypassed (THIRDEYE_ALLOW_MULTI)]"
-		          << std::endl;
-		return;
+	// Require the documented value. This guards save data, so a stray
+	// `THIRDEYE_ALLOW_MULTI=0` (or an empty value) left in a shell profile or
+	// deployment config must NOT silently disable the protection -- unlike the
+	// THIRDEYE_* debug switches, where mere presence is the convention.
+	if (const char *am = std::getenv("THIRDEYE_ALLOW_MULTI")) {
+		if (std::strcmp(am, "1") == 0) {
+			std::cout << "  [instance lock bypassed (THIRDEYE_ALLOW_MULTI=1)]"
+			          << std::endl;
+			return;
+		}
 	}
 #ifndef _WIN32
 	auto lockPath = gameDataDir / ".thirdeye.lock";
@@ -174,16 +180,33 @@ void acquireInstanceLock(const std::filesystem::path &gameDataDir) {
 		          << std::endl;
 		return;
 	}
-	if (::flock(lockFd, LOCK_EX | LOCK_NB) != 0) {
+	// Retry EINTR; only a genuine "someone else holds it" answer
+	// (EWOULDBLOCK/EAGAIN) means a second instance. Anything else -- a
+	// filesystem with no flock support (NFS, some FUSE mounts), EBADF, ENOLCK
+	// -- is a locking failure, not contention, and must not be reported as
+	// "already running". Treat those like the open() failure above: warn and
+	// continue rather than refusing to start a legitimately-single instance.
+	int rc;
+	do {
+		rc = ::flock(lockFd, LOCK_EX | LOCK_NB);
+	} while (rc != 0 && errno == EINTR);
+	if (rc != 0) {
+		const int err = errno;   // preserve across close()
 		::close(lockFd);
 		lockFd = -1;
-		throw std::runtime_error(
-		    "another thirdeye instance is already running against " +
-		    gameDataDir.string() +
-		    "\n  Two engines sharing one install corrupt each other's saves"
-		    " (SAVEGAME/ITEMS.TMP, LVLnn.TMP)."
-		    "\n  Quit the other instance, or set THIRDEYE_ALLOW_MULTI=1 to"
-		    " override.");
+		if (err == EWOULDBLOCK || err == EAGAIN) {
+			throw std::runtime_error(
+			    "another thirdeye instance is already running against " +
+			    gameDataDir.string() +
+			    "\n  Two engines sharing one install corrupt each other's saves"
+			    " (SAVEGAME/ITEMS.TMP, LVLnn.TMP)."
+			    "\n  Quit the other instance, or set THIRDEYE_ALLOW_MULTI=1 to"
+			    " override.");
+		}
+		std::cout << "  [instance lock unavailable at " << lockPath.string()
+		          << " (" << std::strerror(err) << ") -- continuing]"
+		          << std::endl;
+		return;
 	}
 #else
 	(void)gameDataDir;
@@ -1169,12 +1192,20 @@ void THIRDEYE::Engine::bootObject(RESOURCES::Resource &resource,
 				continue; // loop to re-create start in the cleared environment
 			}
 			if (isDHPhase(currentBoot)) {
-				// HACK.BAT flow control by errorlevel. 2/3 loop the title;
-				// 0 advances phase-one -> phase-two (MAZE.EXE step is not
-				// implemented). Anything else is a normal exit.
+				// HACK.BAT flow control by errorlevel. NOTE batch semantics:
+				// `if ERRORLEVEL n` matches n AND ABOVE, and the checks run
+				// high-to-low, so the real routing is:
+				//     rc >= 3  -> :CONTINUE   re-run phase-one
+				//     rc == 2  -> :CHECKDEMO  re-run the intro, then phase-one
+				//     rc == 1  -> :EXIT
+				//     rc == 0  -> fall through: run MAZE, then phase-two
+				// We land 2 and 3+ on the same target because the cross-.RES
+				// hop back to OPEN.RES for the intro isn't wired up yet; the
+				// range test still has to be >= 3 rather than == 3 so a
+				// higher code doesn't fall through to "quit".
 				const int32_t rc = result;
 				std::string nextBoot;
-				if (rc == 2 || rc == 3) nextBoot = "phase-one";
+				if (rc >= 2) nextBoot = "phase-one";
 				else if (rc == 0 && currentBoot == "phase-one") nextBoot = "phase-two";
 				if (!nextBoot.empty()) {
 					uint16_t nextClass = 0;

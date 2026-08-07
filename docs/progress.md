@@ -481,8 +481,11 @@ cursor; and the wall map (not lvlobj plane 0) is the real source of maze walls.
 
 DH's `OPEN.RES` (intro) and `HACK.RES` (game) now boot end-to-end through the SOP VM
 under filename auto-detection: OPEN→`opening`, HACK→`phase-one`. The boot loop learned
-HACK.BAT's errorlevel semantics (2/3 loop the title menu, 0 advances phase-one→phase-two,
-1 quits), so the title-menu attract loop functions and phase-two can be reached without
+HACK.BAT's errorlevel semantics — remembering that batch `if ERRORLEVEL n` matches
+*n and above*, tested high-to-low: `>= 3` re-runs phase-one (`:CONTINUE`), `2` re-runs
+the intro first (`:CHECKDEMO`), `1` quits, `0` falls through to MAZE then phase-two.
+We land 2 and 3+ on the same target for now because the cross-.RES hop back to OPEN.RES
+isn't wired up. So the title-menu attract loop functions and phase-two can be reached without
 a `THIRDEYE_BOOT=phase-two` override. Phase-two now runs its tick loop against real DH
 runtime support — file I/O primitives (`open_file`/`read_*`/`close_file`) resolve
 DOS-backslash paths against `<dh_root>/`, the SAVEGAME loaders read shipped

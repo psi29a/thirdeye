@@ -136,17 +136,21 @@ const SDL_Rect &GRAPHICS::Graphics::menuUnderlayRect() {
 bool GRAPHICS::Graphics::beginPage(int32_t handle, int w, int h) {
 	if (mScreenSaved != nullptr) return false;  // no nesting (DH never nests)
 	if (w <= 0 || h <= 0) return false;
-	SDL_Surface *&page = mPages[handle];
+	// .find() rather than operator[]: the latter default-inserts a null entry
+	// on every miss, so a failed SDL_CreateSurface would leave a null in the
+	// table for a handle that has no page (see CLAUDE.md on operator[] as a
+	// foot-gun for sparse-index containers).
+	SDL_Surface *page = nullptr;
+	auto it = mPages.find(handle);
+	if (it != mPages.end()) page = it->second;
 	if (page == nullptr) {
 		page = SDL_CreateSurface(w, h, SDL_PIXELFORMAT_ARGB8888);
-		if (page == nullptr) {
-			mPages.erase(handle);
-			return false;
-		}
+		if (page == nullptr) return false;   // table untouched on failure
 		// Start transparent-black so a page that only gets a partial draw
 		// composites without a surprise opaque border.
 		SDL_FillSurfaceRect(page, nullptr,
 		                    SDL_MapSurfaceRGBA(page, 0, 0, 0, 0));
+		mPages[handle] = page;
 	}
 	mScreenSaved = mScreen;
 	mScreen = page;

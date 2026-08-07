@@ -8,6 +8,7 @@
 #include <array>
 #include <chrono>
 #include <cstdint>
+#include <cstdio>    // sscanf (THIRDEYE_PALBASE override)
 #include <cstdlib>
 #include <iostream>
 #include <random>
@@ -226,7 +227,13 @@ bool tryHandle(Context &ctx, const std::string &fn,
 		if (clipped && ctx.events.windowIsOffscreen(static_cast<int32_t>(page))) {
 			onPage = ctx.gfx->beginPage(static_cast<int32_t>(page),
 			                            px1 - px0 + 1, py1 - py0 + 1);
-			clipped = false;
+			// Only drop the pane clip when the redirect actually took. If
+			// beginPage failed (a page is already the target, the rect is
+			// degenerate because set_x1/set_x2 put px1 below px0, or the
+			// surface allocation failed) the draw still goes to the visible
+			// screen -- and clearing `clipped` there would paint a DH panel
+			// unclipped over the whole frame.
+			if (onPage) clipped = false;
 		}
 		if (clipped)
 			ctx.gfx->setClip(px0, py0, px1 - px0 + 1, py1 - py0 + 1);

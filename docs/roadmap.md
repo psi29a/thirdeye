@@ -562,10 +562,15 @@ Still open (nice-to-have): a file-picker UI instead of the env var.
 
 - ✅ **OPEN.RES / HACK.RES flow.** Filename-based auto-detect routes
   OPEN.RES→`opening`, HACK.RES→`phase-one`. `bootObject` interprets
-  HACK.BAT errorlevels (0/1/2/3) so phase-one loops the title and can
-  chain to phase-two. `THIRDEYE_BOOT=<name>` overrides the boot object
+  HACK.BAT errorlevels so phase-one loops the title and can chain to
+  phase-two. Batch `if ERRORLEVEL n` matches *n and above*, tested
+  high-to-low: `>= 3` → re-run phase-one (`:CONTINUE`), `2` → re-run the
+  intro first (`:CHECKDEMO`), `1` → quit, `0` → MAZE then phase-two.
+  2 and 3+ share a target until the cross-.RES intro hop is wired up.
+  `THIRDEYE_BOOT=<name>` overrides the boot object
   for debugging. See [progress.md](progress.md) DH section.
-- 🚧 **DH-only runtime functions.** Trivial helpers landed (`page_flip`,
+- ✅ **DH-only runtime functions.** A phase-two session with movement now
+  reports **zero** stubbed CALLs. Trivial helpers landed (`page_flip`,
   `sequence_playing`, `touch`, `pause`, `seed_random`, `roll_chance`,
   `randomize_array`, `long2hex`, `xmsallocated`, `text_background`,
   `lock_resource`/`unlock_resource`, `printer_on_line`); DH-variant
@@ -576,8 +581,7 @@ Still open (nice-to-have): a file-picker UI instead of the env var.
   `open_feature_file`, `get_feature_record`, `close_feature_file`)
   read chunks per the format spec in
   [dungeon_hack_maze.md](dungeon_hack_maze.md) or zero-fill when files
-  are missing. Only 5 stubs left, all pure-renderer: `init_viewspace`,
-  `build_clipping`, `copy_window`, `draw_walls`, `Transition`. See
+  are missing. See
   [`apps/thirdeye/runtime/dh.cpp`](../apps/thirdeye/runtime/dh.cpp).
 - 🚧 **MAZE.EXE (dungeon generator) integration.** MAZE is a small
   Borland C++ utility that writes `LEVELS.DAT` / `FEA%02d.DAT` /
