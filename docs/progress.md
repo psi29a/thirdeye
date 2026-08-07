@@ -691,3 +691,116 @@ automap tile renderer, which nothing had called while the dungeon was empty.
 It is now the only stub left in a DH session, which is a good illustration of
 why getting something playable matters: the HUD overdraw, the white message
 bar and this all became visible only once the thing could actually be used.
+
+### `draw_auto_square`, and the rest of the feature types (2026-08-06)
+
+`draw_auto_square` turned out not to be a bitmap blit at all. AESOP.EXE
+`1f36:0966` draws each automap cell as a **9×9 box of lines**: outline in
+colour `0x66`, passage stubs toward open neighbours in `0x67`, an inner
+highlight on an open side in `0x69`. `lvlvis & 4` marks a cell unseen (skip the
+outline); in `lvlbit` the even bits 0/2/4/6 are passages N/E/S/W and the odd
+bits are corners.
+
+One thing had to be added rather than ported: AESOP hands the page down to its
+line primitive, so its clipping is free, while our `drawLine` writes straight
+to the screen. Without an explicit clip a map-edge cell spills over the HUD —
+the same failure the wall panels had. With it, the parchment shows the explored
+corridor and the party arrow, matching the walked route.
+
+That closed the last stub: **a DH session now runs with zero stubs.**
+
+With the automap working the remaining feature types went in quickly:
+
+- **Creatures** (type 12) — `fea[4]` selects one of the level's three monster
+  slots via `mon_types[lvl*12 + fea[4]*4]`; slot 2 additionally sends
+  `make boss monster` (message 233).
+- **Doors** (type 1) → `create door` (message 493, class 2855). Bytes 6/7 form
+  a 16-bit link id matching the `doors` object's `W:button_num` /
+  `W:lock_num`. Placed only on corridor cells — open along exactly one axis —
+  so they sit in passages rather than floating in junctions.
+- **Buttons** (type 6) → `create thing` (message 496, class 2894); types 2 and
+  7 are the same shape with classes 2813 / 2897.
+
+Worth recording as a process note: while wiring the creatures up we reported
+"0 monsters spawning" and started hunting a VM extern bug. That was a bad grep,
+not a bug — a `--debug` trace showed `SEND msg 494` executing and jumping
+straight into `create monster`. Monsters had been spawning the whole time. The
+VM trace is cheap; reach for it before theorising.
+
+### MAZE.EXE, actually ported (2026-08-07)
+
+The placeholder generator above is gone. The real one is in
+[apps/thirdeye/runtime/dh_maze.cpp](../apps/thirdeye/runtime/dh_maze.cpp), and
+the full reading is in
+[docs/dungeon_hack_maze.md](dungeon_hack_maze.md#the-generator-itself-2026-08-07).
+Three findings mattered.
+
+**The chunk was never entropy.** This document previously recorded that
+`savegame/LEVELS.DAT` holds "per-cell entropy" that phase-two expands
+procedurally, because `FUN_1325_4017` looked like it wrote `random(0..255)`
+over `0xDB` sentinels. It does not. `FUN_1766_00c1` takes *two* 16-bit
+arguments that Borland pushes as one dword, so `random(0, 1)` decompiles as the
+single literal `FUN_1766_00c1(0x10000)`. Read correctly the pass is
+`0xDB → random(0,1)` (a wall with one of two textures), everything else
+`→ 0xFF` (floor) — the chunk is a plain 32×32 tile map all along. The rule to
+carry forward: **any `FUN_1766_00c1(0xNNNN0000)` is `random(0, 0xNNNN)`.**
+
+**The PRNG is R250, and it is the whole ballgame.** MAZE ships its own
+generator in segment 1766 — a 250-word lagged-Fibonacci XOR with lags 250/103,
+seeded by a Lehmer LCG with 16 words forced to a staircase bit pattern. Every
+layout decision is a draw from that stream, so no substitute PRNG can produce
+DH's dungeons no matter how faithful the surrounding code is. Two traps: the
+staircase loop's bound is `!= 179`, not `< 250` (running to the end of the
+array shifts the mask to zero and wipes the state), and the global immediately
+below the state array is a call counter, easy to absorb into the ring by
+mistake.
+
+**Each level is seeded independently.** `FUN_1325_375f` opens with
+`srand(seed + level + 1)`, which means a port can reproduce level *N* without
+replaying every draw the program made before it — the single most useful fact
+for incremental work on this.
+
+**All five layout algorithms are in.** MAZE assigns each level a *zone* up
+front (levels 0–3 are zone 1, the deepest is zone 4, one random middle level is
+zone 0, the rest roll 1–3) and switches on it. Zones 0 and 2 are the maze
+branch — a stackless recursive backtracker over odd coordinates `(1,1)…(29,29)`,
+where each cell holds the direction it was entered from while the walk is inside
+it, so no stack is needed. Zones 1, 3 and 4 run `FUN_1325_0e3c`, which places
+rooms and corridors *first* and then backtracks through whatever rock is left,
+so the maze grows around the rooms. Zone 4 falls out with no doors at all: with
+no rooms placed, its door loop starts past the end of the room list.
+
+Also superseded: the placeholder's even-coordinate scheme, which existed so
+`(0,0)` would be walkable. MAZE puts cells on odd coordinates and ships the
+arrival point in the FEA header record (bytes 1/2/3 = x, y, facing). It walks
+the entry until it lands in a dead end, marks that cell, and puts the party on
+the one open neighbour facing away down the corridor — so we emit that.
+
+Two quirks are reproduced deliberately. `FUN_1325_08cb`'s perimeter-door loop
+starts one room late, so the first room on every zone-2 level never gets
+perimeter doors; and doors only fit where the rock forms a clean passage, never
+at a corner or junction. Both would be easy to "fix" into a desync. Three loops
+in the original can spin forever (they don't decrement on rejection) — those we
+did cap.
+
+One more find worth recording: **the working grid is a CP437 character map**.
+`0xDB █` rock, `0xB3 │`/`0xC4 ─` doors, `0x18 ↑`/`0x19 ↓` stairs, `0xB0 ░` pit.
+`main` dumps it verbatim into `SEED.TXT` *before* the finalize pass throws the
+semantics away, which makes SEED.TXT a byte-exact oracle: run real MAZE under
+DOSBox with a known seed, run ours, diff. We have not been able to do that yet,
+so nothing here is validated against real MAZE output — only against the
+disassembly and structural invariants.
+
+Verified: 25 levels generate with zones distributed correctly, every level
+structurally sound (only the three on-disk byte values, frame sealed), every
+entry and stairs walkable and chained, and the zone-0 level a provably perfect
+maze — 225 cells, 224 corridors, fully connected, no loops. In game the party
+appears at `(3,26)` facing north and walks up column 3, matching the generated
+map cell for cell. Zero stubs, zero errors, 115 tests green, EOB3 unaffected.
+
+Still ours rather than MAZE's: the feature-placement tail (15 passes driven by
+the `FREQ_*` settings), which includes the real stairs pass — so we pick stairs
+by BFS from the entry and feed them forward as the next level's arrival, MAZE's
+chaining with our placement. That tail is now fully decoded in
+`dh_research/MAZE/FEATURES.md`, so it is a transcription job rather than an RE
+one.

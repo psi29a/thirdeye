@@ -10,9 +10,11 @@ set(UNITTEST
     chargen_tests.cpp
     clip_tests.cpp
     codetable_tests.cpp
+    dhmaze_tests.cpp
     control_tests.cpp
     ../thirdeye/control.cpp
     ../thirdeye/automap.cpp  # control.cpp calls automap::toggle()
+    ../thirdeye/runtime/dh_maze.cpp  # MAZE.EXE port (dhmaze_tests)
 )
 
 set(UNITTEST_HEADER

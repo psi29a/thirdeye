@@ -583,16 +583,23 @@ Still open (nice-to-have): a file-picker UI instead of the env var.
   [dungeon_hack_maze.md](dungeon_hack_maze.md) or zero-fill when files
   are missing. See
   [`apps/thirdeye/runtime/dh.cpp`](../apps/thirdeye/runtime/dh.cpp).
-- ✅ **Native maze generator — DH is walkable.** `carveMaze` in
-  [`runtime/dh.cpp`](../apps/thirdeye/runtime/dh.cpp) writes a real
-  connected maze per level instead of the old all-walls zero-fill, so
-  the party can actually move: verified walking `(0,0)→(1,0)→(2,0)`,
-  turning, then `(2,1)→(2,2)`, with the path matching the map exactly.
-  Cells sit on **even** coordinates so `(0,0)` is open — the SOP starts
-  the party there, and an odd-coordinate scheme would seal it in rock.
-  Seeded from SETTINGS.DAT's own `SEED`, so a given install reproduces
-  the same dungeon; every level verified fully connected, no islands.
-  **Not** MAZE.EXE's algorithm — layouts won't match real DH.
+- ✅ **Native dungeon generator — MAZE.EXE's own algorithms.**
+  [`runtime/dh_maze.cpp`](../apps/thirdeye/runtime/dh_maze.cpp) ports
+  MAZE's R250 PRNG (`1766:0005/006e/00c1`), its zone assignment
+  (`1325:3986`) and **all five layout algorithms**: the stackless
+  recursive backtracker for zones 0/2 (`1325:04ab/05a0/056a`) and the
+  room-and-corridor generator for zones 1/3/4 (`1325:0e3c`), plus door
+  placement (`0cdc`/`08cb`/`07ce`/`107a`), pocket filling (`06d1`),
+  entry placement (`0c1d`) and the `1325:4017` finalize pass. Cells sit
+  on **odd** coordinates as MAZE puts them, with the party arrival
+  shipped in the FEA header record (bytes 1/2/3 = x, y, facing) rather
+  than assumed at `(0,0)`; entry chains level to level the way MAZE
+  does. Verified over 25 levels at seed `0x000156e0`, and in game the
+  party spawns at `(3,26)` facing north and walks up column 3 matching
+  the map cell for cell. Nine tests in
+  [`apps/tests/dhmaze_tests.cpp`](../apps/tests/dhmaze_tests.cpp).
+  **Not yet validated against a real MAZE run** — SEED.TXT is a
+  byte-exact oracle for that once DOSBox is available.
 - ✅ **FEA stairs.** The `dungeon` object's CASE table has 31 entries:
   `0` ends the record loop and `1..30` are the feature types in MAZE's
   string-table order, so **4 = stairs up, 5 = stairs down**. Type 5
@@ -622,11 +629,19 @@ Still open (nice-to-have): a file-picker UI instead of the env var.
   three monster slots and slot 2 also gets `make boss monster` (msg 233).
   Verified live: a level spawns stairs + 4 doors + 4 buttons +
   bugbear/goblin/bugbear, 0 stubs, 0 errors.
-- 🚧 **MAZE.EXE (dungeon generator) integration.** MAZE is a small
-  Borland C++ utility that writes `LEVELS.DAT` / `FEA%02d.DAT` /
-  `ITEMS.DAT` into `savegame/` per fresh game — full RE writeup in
-  [dungeon_hack_maze.md](dungeon_hack_maze.md). Two paths: bootstrap
-  by running MAZE under DOSBox once, or reimplement natively.
+- 🚧 **MAZE.EXE — the feature-placement tail.** Geometry is done; what
+  remains is the 15 passes `FUN_1325_375f` runs after the layout, which
+  scatter treasure, traps, pits, illusionary walls, hint sheets, keys and
+  monsters according to the `FREQ_*` settings, plus `FUN_1325_3c76`'s
+  22-case packer that turns internal feature types into on-disk FEA
+  records. All of it is decoded in
+  [`dh_research/MAZE/FEATURES.md`](../../dh_research/MAZE/FEATURES.md)
+  (including the real stairs pass, `FUN_1325_10a6`), so this is now a
+  transcription job. We synthesise stairs/doors/buttons/creatures
+  ourselves in the meantime. Two gotchas recorded there: MAZE has **two**
+  type namespaces (5-byte item records vs 9-byte feature records), and
+  SETTINGS.DAT bytes 3 and 4 are swapped relative to the name table in
+  the binary — go by DS offset, never by name.
 - ✅ **Offscreen page compositing.** DH draws each HUD panel into its own
   page at page-local (0,0) then `copy_window`s it to a screen rect;
   `assign_window` now marks pages offscreen, `draw_bitmap` redirects into

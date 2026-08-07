@@ -844,65 +844,19 @@ bool tryHandle(Context &ctx, const std::string &fn,
 	return false;
 }
 
-// Native mini-MAZE.EXE stand-in. Real MAZE writes per-cell entropy tables
-// (see docs/dungeon_hack_maze.md); until we ship a full port or the user
-// runs MAZE under DOSBox, this writes *structurally valid empty* files
-// so phase-two consumes zero-content dungeons instead of tripping on
-// missing files. Idempotent -- only writes what doesn't already exist,
-// so a real MAZE run's output is preserved.
+// Stands in for running MAZE.EXE, which HACK.BAT invokes between phase-one and
+// phase-two to generate the dungeon. Geometry comes from dh_maze.cpp (a port of
+// MAZE's own carver); the feature and item streams are still ours. Idempotent --
+// only writes what doesn't already exist, so a real MAZE run (or a DOSBox one)
+// is preserved.
 //
-// File formats (matching the RE'd MAZE writers):
-//   LEVELS.DAT   = 4-byte header + (DEPTH+10) x 0x400 chunks
-//   FEA%02d.DAT  = 8-byte header record + 8-byte all-zero terminator
+// File formats (matching the RE'd MAZE writers, docs/dungeon_hack_maze.md):
+//   LEVELS.DAT   = u32 seed + (DEPTH+10) x 0x400 tile chunks
+//   FEA%02d.DAT  = 8-byte header record + body records + 8-byte terminator
 //   ITEMS.DAT    = 8-byte all-zero terminator (empty item stream)
 //
-// DEPTH is read from savegame/SETTINGS.DAT byte 4; falls back to 15 (the
-// shipped-settings value) if the file is missing/short.
-// Carve a perfect maze into one 32x32 level chunk: 0xFF = open, 0x00 = wall
-// (the encoding load_level_map/draw_walls consume -- lvlmap == -1 means "no
-// wall here"). Iterative recursive-backtracker.
-//
-// Cells sit on EVEN coordinates (0,2,..,30 -> 16x16 cells) with the shared
-// wall between two cells on the odd coordinate between them. That choice is
-// deliberate: it puts a cell at (0,0), which is where the SOP starts the party
-// until FEA feature records supply a real entry point -- an odd-coordinate
-// scheme would seal the party in rock on turn one. Row/column 31 is odd and
-// stays solid, giving a border for free.
-//
-// ponytail: a plain perfect maze -- no rooms, loops or features. This is not
-// MAZE.EXE's algorithm and will not reproduce DH's dungeons; it exists so the
-// engine has something walkable. Swap it for a real MAZE port when authentic
-// layouts matter (docs/dungeon_hack_maze.md).
-void carveMaze(uint8_t *grid, uint32_t seed) {
-	constexpr int kW = 32;      // grid is 32x32 bytes
-	constexpr int kCells = 16;  // cells on even coords 0,2,...,30
-	std::memset(grid, 0x00, static_cast<size_t>(kW) * kW);   // solid rock
-	std::mt19937 rng(seed);
-	std::vector<uint8_t> seen(static_cast<size_t>(kCells) * kCells, 0);
-	std::vector<std::pair<int, int>> stack;
-	stack.emplace_back(0, 0);
-	seen[0] = 1;
-	grid[0] = 0xFF;                                          // party start
-	static constexpr int kDir[4][2] = { {0,-1}, {1,0}, {0,1}, {-1,0} };
-	while (!stack.empty()) {
-		const int cx = stack.back().first, cy = stack.back().second;
-		int avail[4], n = 0;
-		for (int d = 0; d < 4; ++d) {
-			const int nx = cx + kDir[d][0], ny = cy + kDir[d][1];
-			if (nx < 0 || ny < 0 || nx >= kCells || ny >= kCells) continue;
-			if (seen[static_cast<size_t>(ny) * kCells + nx]) continue;
-			avail[n++] = d;
-		}
-		if (n == 0) { stack.pop_back(); continue; }
-		const int d = avail[rng() % static_cast<uint32_t>(n)];
-		const int nx = cx + kDir[d][0], ny = cy + kDir[d][1];
-		// Knock out the shared wall, then open the neighbour cell.
-		grid[(2 * cy + kDir[d][1]) * kW + (2 * cx + kDir[d][0])] = 0xFF;
-		grid[(2 * ny) * kW + (2 * nx)] = 0xFF;
-		seen[static_cast<size_t>(ny) * kCells + nx] = 1;
-		stack.emplace_back(nx, ny);
-	}
-}
+// SEED and DEPTH come from savegame/SETTINGS.DAT (u32 at 0, DEPTH at 4); both
+// fall back to the shipped values if the file is missing or short.
 
 void ensureSavegameFiles(const std::filesystem::path &dhRoot) {
 	namespace fs = std::filesystem;
@@ -918,6 +872,7 @@ void ensureSavegameFiles(const std::filesystem::path &dhRoot) {
 	// but at least a stable one.
 	uint32_t seed = 0x000156e0;   // shipped SETTINGS.DAT seed
 	int depth = 15;               // shipped DEPTH
+	bool waterOn = true;          // shipped WATER_ON
 	{
 		auto settings = resolveChildCI(sg, "SETTINGS.DAT");
 		std::ifstream in(settings, std::ios::binary);
@@ -930,6 +885,8 @@ void ensureSavegameFiles(const std::filesystem::path &dhRoot) {
 				       (static_cast<uint32_t>(buf[2]) << 16) |
 				       (static_cast<uint32_t>(buf[3]) << 24);
 				depth = buf[4];
+				// WATER_ON is settings-struct byte 10, i.e. file byte 14.
+				if (in.gcount() >= 15) waterOn = buf[14] != 0;
 			}
 		}
 	}
@@ -952,14 +909,17 @@ void ensureSavegameFiles(const std::filesystem::path &dhRoot) {
 		                   static_cast<std::streamsize>(bytes.size()));
 	};
 
-	// LEVELS.DAT: 4-byte header + N x 0x400 chunks, one carved maze per level
-	// (each level gets seed+level so they differ but stay reproducible).
-	// Kept around afterwards so the FEA writer can place stairs on cells that
-	// are actually open.
+	// LEVELS.DAT: the 4-byte header MAZE writes is the seed itself
+	// (FUN_1325_4053 fwrites &seed before the chunks), then N x 0x400 tile
+	// chunks. generateDungeon() is the MAZE port -- it owns zone assignment,
+	// all five layout algorithms, the entry chaining and the stairs. We keep
+	// the buffer afterwards so the FEA writer can place features on cells
+	// that are actually open.
 	std::vector<uint8_t> levelData(4 + static_cast<size_t>(levels) * 0x400, 0);
-	for (int l = 0; l < levels; ++l)
-		carveMaze(levelData.data() + 4 + static_cast<size_t>(l) * 0x400,
-		          seed + static_cast<uint32_t>(l));
+	for (int i = 0; i < 4; ++i)
+		levelData[i] = static_cast<uint8_t>(seed >> (8 * i));
+	std::vector<LevelInfo> info(static_cast<size_t>(levels));
+	generateDungeon(levelData.data() + 4, levels, seed, waterOn, info.data());
 	writeIfMissing("LEVELS.DAT", levelData);
 
 	// FEA00..FEA{levels-1}.DAT -- feature records for each level:
@@ -990,18 +950,18 @@ void ensureSavegameFiles(const std::filesystem::path &dhRoot) {
 				static_cast<uint8_t>(b6), static_cast<uint8_t>(b7) };
 		};
 		for (int i = 0; i < levels; ++i) {
-			std::vector<uint8_t> data(8, 0);        // header
-			// Put the down-stairs on the open cell furthest from the party
-			// start, so reaching it means actually walking the maze.
+			// Header record. MAZE packs the party entry into it (bytes 1/2 =
+			// x/y from the level descriptor's fields 8/7, byte 3 = facing);
+			// the maze lives on odd coordinates, so without this the party
+			// would spawn at (0,0) -- solid rock.
 			const uint8_t *grid = levelData.data() + 4 +
 			                      static_cast<size_t>(i) * 0x400;
-			int bx = -1, by = -1, best = -1;
-			for (int cy = 0; cy < 32; cy += 2)
-				for (int cx = 0; cx < 32; cx += 2)
-					if (grid[cy * 32 + cx] == 0xFF && cx + cy > best) {
-						best = cx + cy; bx = cx; by = cy;
-					}
-			if (bx >= 0 && i + 1 < levels) {
+			std::vector<uint8_t> data{
+				0, static_cast<uint8_t>(info[i].entryCol),
+				static_cast<uint8_t>(info[i].entryRow),
+				static_cast<uint8_t>(info[i].fdir), 0, 0, 0, 0 };
+			const int by = info[i].stairRow, bx = info[i].stairCol;
+			if (i + 1 < levels) {
 				auto r = feaRecord(5, bx, by, 0, 0, i + 1, 0);
 				data.insert(data.end(), r.begin(), r.end());
 			}
@@ -1020,9 +980,11 @@ void ensureSavegameFiles(const std::filesystem::path &dhRoot) {
 					return x >= 0 && y >= 0 && x < 32 && y < 32 &&
 					       grid[y * 32 + x] == 0xFF;
 				};
-				for (int cy = 0; cy < 32 && doors < 4; cy += 2)
-					for (int cx = 0; cx < 32 && doors < 4; cx += 2) {
-						if (!isOpen(cx, cy) || cx + cy < 8) continue;
+				for (int cy = 1; cy < 31 && doors < 4; cy += 2)
+					for (int cx = 1; cx < 31 && doors < 4; cx += 2) {
+						if (!isOpen(cx, cy)) continue;
+						if (std::abs(cy - info[i].entryRow) +
+						    std::abs(cx - info[i].entryCol) < 6) continue;
 						const bool ns = isOpen(cx, cy - 1) && isOpen(cx, cy + 1);
 						const bool ew = isOpen(cx - 1, cy) && isOpen(cx + 1, cy);
 						if (ns == ew) continue;          // junction or dead end
@@ -1043,10 +1005,12 @@ void ensureSavegameFiles(const std::filesystem::path &dhRoot) {
 			{
 				int placed = 0;
 				std::mt19937 mrng(seed + 0x9e37u + static_cast<uint32_t>(i));
-				for (int cy = 0; cy < 32 && placed < 3; cy += 2)
-					for (int cx = 0; cx < 32 && placed < 3; cx += 2) {
+				for (int cy = 1; cy < 31 && placed < 3; cy += 2)
+					for (int cx = 1; cx < 31 && placed < 3; cx += 2) {
 						if (grid[cy * 32 + cx] != 0xFF) continue;
-						if (cx + cy < 12) continue;         // not on the doorstep
+						// not on the doorstep
+						if (std::abs(cy - info[i].entryRow) +
+						    std::abs(cx - info[i].entryCol) < 8) continue;
 						if (mrng() % 24 != 0) continue;     // sparse
 						auto m = feaRecord(12, cx, cy,
 						                   static_cast<int>(mrng() % 3),

@@ -179,7 +179,42 @@ namespace dh       { bool tryHandle(Context&, const std::string &fn,
                      // consumes zero-content dungeons instead of
                      // tripping on missing files. Idempotent.
                      void ensureSavegameFiles(
-                         const std::filesystem::path &dhRoot); }
+                         const std::filesystem::path &dhRoot);
+
+                     // MAZE.EXE's PRNG: R250 (lagged-Fibonacci XOR, lags
+                     // 250/103), ported from segment 1766. Exposed only so
+                     // the unit tests can assert the lag invariant -- the
+                     // dungeon generator is the sole production caller.
+                     // Implementation + provenance in dh.cpp.
+                     class R250 {
+                     public:
+                         explicit R250(uint32_t seed);
+                         uint16_t next();           // 1766:006e
+                         int range(int lo, int hi);  // 1766:00c1
+                         int roll(int n, int sides, int bonus);  // 1766:00dd
+                     private:
+                         uint16_t mState[250] = {};
+                         int mIndex = 0;
+                     };
+
+                     // Per-level results of a generateDungeon() run.
+                     struct LevelInfo {
+                         uint8_t zone;      // 0..4 -- which layout algorithm
+                         bool water;
+                         int entryRow, entryCol;  // where the party arrives
+                         int fdir;                // 0=N 1=E 2=S 3=W
+                         int stairRow, stairCol;  // our stairs-down choice
+                     };
+
+                     // Generate `levels` consecutive 0x400-byte tile chunks
+                     // into `chunks`, the way MAZE.EXE does: zones decided up
+                     // front from `seed`, then each level generated from
+                     // `seed + level + 1`. `info` must have room for `levels`
+                     // entries. Chunks come out in the on-disk encoding
+                     // (0xFF = floor, 0x00/0x01 = wall).
+                     void generateDungeon(uint8_t *chunks, int levels,
+                                          uint32_t seed, bool waterOn,
+                                          LevelInfo *info); }
 
 } // namespace THIRDEYE::runtime
 
