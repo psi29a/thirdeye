@@ -649,3 +649,45 @@ targets across all HACK.RES code resources are `PC.DAT`, `SETTINGS.DAT`,
 `SETSAVE.DAT`. So MAZE writes ITEMS.DAT but nothing in phase-two reads it
 via the SOP file API — it's either an AESOP.EXE internal consumer or a
 save/restore artifact.
+
+## Dungeon Hack is walkable (2026-08-07)
+
+Two pieces closed the gap between "renders correctly" and "you can play with it".
+
+**A native maze generator.** `ensureSavegameFiles` used to seed an all-walls
+LEVELS.DAT, which was structurally valid but left the party sealed in rock —
+`draw_walls -> 0 faces` was the *correct* render of being inside solid stone.
+`carveMaze` now writes a real connected maze per level. One non-obvious
+constraint drove the design: cells sit on **even** coordinates (0,2,…,30 →
+16×16 cells, shared walls on the odd coordinate between them) specifically so
+`(0,0)` is open, because that is where the SOP starts the party until FEA
+supplies an entry point — the conventional odd-coordinate maze layout would
+have walled the party in on turn one. Row/column 31 is odd and stays solid,
+giving a border for free. Seeded from SETTINGS.DAT's own `SEED` field so a
+given install reproduces its dungeon; verified byte-identical across
+regeneration, every level fully connected with no islands, and the party
+verified walking `(0,0)→(1,0)→(2,0)`, turning, then `(2,1)→(2,2)` with the
+route matching the generated map cell for cell.
+
+This is emphatically **not** MAZE.EXE's algorithm — a plain perfect maze with
+no rooms, loops or decoration. Real DH layouts still need the generator port.
+
+**FEA stairs.** The decoder fell out of `dungeon`'s own CASE table, which has
+31 entries: type `0` ends the record loop (that's what the all-zero terminator
+does) and `1..30` are the feature types in exactly the order MAZE's string
+table lists them — so **4 = stairs up, 5 = stairs down**, and 30 names + the
+terminator is precisely `CASE #001f`. Type 5 forwards `fea[4..7]` to
+`create teleporter` (message 495) against class 2870, which daesop resolves as
+*"current stairs down"*, and those four bytes line up with the `teleporters`
+object's `dest_x` / `dest_y` / `dest_lvl` / `dest_fdir` externs. So a stairs
+record is `[5][x][y][?][dest_x][dest_y][dest_lvl][dest_fdir]`.
+
+We emit one down-stairs per level on the open cell furthest from the start
+(84 steps away on level 0, BFS-verified reachable). The SOP takes it and
+builds the object: `create_program(1000, 2870)`.
+
+Placing a feature immediately surfaced a new stub — `draw_auto_square`, the
+automap tile renderer, which nothing had called while the dungeon was empty.
+It is now the only stub left in a DH session, which is a good illustration of
+why getting something playable matters: the HUD overdraw, the white message
+bar and this all became visible only once the thing could actually be used.

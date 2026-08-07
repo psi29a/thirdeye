@@ -583,6 +583,45 @@ Still open (nice-to-have): a file-picker UI instead of the env var.
   [dungeon_hack_maze.md](dungeon_hack_maze.md) or zero-fill when files
   are missing. See
   [`apps/thirdeye/runtime/dh.cpp`](../apps/thirdeye/runtime/dh.cpp).
+- ✅ **Native maze generator — DH is walkable.** `carveMaze` in
+  [`runtime/dh.cpp`](../apps/thirdeye/runtime/dh.cpp) writes a real
+  connected maze per level instead of the old all-walls zero-fill, so
+  the party can actually move: verified walking `(0,0)→(1,0)→(2,0)`,
+  turning, then `(2,1)→(2,2)`, with the path matching the map exactly.
+  Cells sit on **even** coordinates so `(0,0)` is open — the SOP starts
+  the party there, and an odd-coordinate scheme would seal it in rock.
+  Seeded from SETTINGS.DAT's own `SEED`, so a given install reproduces
+  the same dungeon; every level verified fully connected, no islands.
+  **Not** MAZE.EXE's algorithm — layouts won't match real DH.
+- ✅ **FEA stairs.** The `dungeon` object's CASE table has 31 entries:
+  `0` ends the record loop and `1..30` are the feature types in MAZE's
+  string-table order, so **4 = stairs up, 5 = stairs down**. Type 5
+  forwards `fea[4..7]` to `create teleporter` (msg 495) on class 2870
+  ("current stairs down"), matching the `teleporters` object's
+  `dest_x/dest_y/dest_lvl/dest_fdir` externs. We now emit one
+  down-stairs per level at the open cell furthest from the start
+  (verified reachable — 84 steps on level 0) and the SOP creates the
+  object (`create_program(1000, 2870)`).
+- ✅ **`draw_auto_square` — automap works, and DH now runs with ZERO
+  stubs.** Ported from AESOP.EXE `1f36:0966`: each map cell is a 9x9 box
+  of *lines*, not a bitmap — outline in colour 0x66, passage stubs to
+  neighbours in 0x67, inner highlight on an open side in 0x69.
+  `lvlvis & 4` = unseen (skip outline); `lvlbit` even bits 0/2/4/6 are
+  passages N/E/S/W and odd bits are corners. Clipped to its window
+  (subwindow 11) — AESOP clips via the page it is handed, we draw
+  straight to the screen, so without it a map-edge cell spills over the
+  HUD exactly as the wall panels did.
+- ✅ **Feature types: creatures, doors, buttons.** All decoded from the
+  `dungeon` CASE table and emitted by the generator:
+  type 1 door -> `create door` (msg 493, class 2855; bytes 6/7 form a
+  16-bit link id = the `doors` object's W:button_num/W:lock_num),
+  type 6 button -> `create thing` (msg 496, class 2894; types 2 and 7
+  are the same shape with classes 2813/2897),
+  type 12 creature -> `create monster` (msg 494) with the class from
+  `mon_types[lvl*12 + fea[4]*4]`, i.e. fea[4] picks one of the level's
+  three monster slots and slot 2 also gets `make boss monster` (msg 233).
+  Verified live: a level spawns stairs + 4 doors + 4 buttons +
+  bugbear/goblin/bugbear, 0 stubs, 0 errors.
 - 🚧 **MAZE.EXE (dungeon generator) integration.** MAZE is a small
   Borland C++ utility that writes `LEVELS.DAT` / `FEA%02d.DAT` /
   `ITEMS.DAT` into `savegame/` per fresh game — full RE writeup in

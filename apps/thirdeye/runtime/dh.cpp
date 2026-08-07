@@ -7,6 +7,7 @@
 #include <iostream>
 
 #include <algorithm>  // std::min (readInto)
+#include <array>
 #include <cctype>
 #include <chrono>
 #include <cstdint>
@@ -380,6 +381,77 @@ bool tryHandle(Context &ctx, const std::string &fn,
 	// modern build, so always false ("please pay attention to your Prodigy
 	// modem" -- return 0 and DH shows a "no printer" dialog instead of
 	// hanging on a BIOS status poll).
+	// draw_auto_square(level, page, sx, sy, mx, my, &lvlvis, &lvlbit) -> byte
+	//
+	// One automap cell, ported from AESOP.EXE 1f36:0966. Each cell is a 9x9
+	// box of LINES (not a bitmap): the outline in colour 0x66, passage stubs
+	// into neighbouring cells in 0x67, and a highlight just inside an open
+	// side in 0x69.
+	//
+	//   lvlvis[my*32+mx] & 4  -> cell not yet seen; skip the outline
+	//   lvlbit[my*32+mx]      -> even bits 0/2/4/6 = passage N/E/S/W,
+	//                            odd bits 1/3/5/7  = corner present
+	//
+	// Returns the lvlvis "unseen" bit, which the SOP stores and tests.
+	if (fn == "draw_auto_square" && args.size() >= 7 && ctx.gfx) {
+		// args[0] is the automap's WINDOW handle (subwindow 11 in a stock
+		// session = the little parchment panel at (64,141)-(101,178)); the
+		// coordinates that follow are absolute screen. AESOP passes the page
+		// down to its line primitive, which clips for free -- our drawLine
+		// writes straight to the screen, so clip explicitly or a cell at the
+		// edge of the map spills over the HUD, exactly as the wall panels did.
+		const int32_t win = static_cast<int32_t>(args[0]);
+		int32_t wx0, wy0, wx1, wy1;
+		const bool clip = ctx.events.windowRect(win, wx0, wy0, wx1, wy1) &&
+		                  !ctx.events.windowIsOffscreen(win);
+		if (clip)
+			ctx.gfx->setClip(wx0, wy0, wx1 - wx0 + 1, wy1 - wy0 + 1);
+		struct ClipGuard {
+			GRAPHICS::Graphics *g; bool on;
+			~ClipGuard() { if (on) g->clearClip(); }
+		} guard{ ctx.gfx, clip };
+		const int sx = static_cast<int>(args[1]);
+		const int sy = static_cast<int>(args[2]);
+		const int mx = static_cast<int>(args[3]) & 0x1f;
+		const int my = static_cast<int>(args[4]) & 0x1f;
+		const uint8_t *lvlvis = staticBytePtr(ctx, args[5], 1024);
+		const uint8_t *lvlbit = staticBytePtr(ctx, args[6], 1024);
+		if (!lvlvis || !lvlbit) { result = 0; return true; }
+		const int at = my * 32 + mx;
+		const uint8_t unseen = lvlvis[at] & 4;
+		const uint8_t bits = lvlbit[at];
+		auto line = [&](int x0, int y0, int x1, int y1, uint8_t c) {
+			ctx.gfx->drawLine(sx + x0, sy + y0, sx + x1, sy + y1, c);
+		};
+		auto dot = [&](int x, int y, uint8_t c) { line(x, y, x, y, c); };
+		if (unseen == 0) {
+			line(2, 1, 7, 1, 0x66);           // top
+			line(8, 2, 8, 7, 0x66);           // right
+			line(2, 8, 7, 8, 0x66);           // bottom
+			line(1, 2, 1, 7, 0x66);           // left
+			if (!(bits & 0x02)) dot(8, 1, 0x66);   // corners, when not open
+			if (!(bits & 0x08)) dot(8, 8, 0x66);
+			if (!(bits & 0x20)) dot(1, 8, 0x66);
+			if (!(bits & 0x80)) dot(1, 1, 0x66);
+		}
+		// Corner joins: both adjacent bits set -> carry the wall round.
+		if ((bits & 0x03) == 0x03) line(8, 0, 9, 0, 0x67);
+		if ((bits & 0x06) == 0x06) line(9, 0, 9, 1, 0x67);
+		if ((bits & 0x0c) == 0x0c) line(9, 8, 9, 9, 0x67);
+		if ((bits & 0x18) == 0x18) line(9, 9, 8, 9, 0x67);
+		if ((bits & 0x30) == 0x30) line(1, 9, 0, 9, 0x67);
+		if ((bits & 0x60) == 0x60) line(0, 9, 0, 8, 0x67);
+		if ((bits & 0xc0) == 0xc0) line(0, 1, 0, 0, 0x67);
+		if ((bits & 0x81) == 0x81) line(0, 0, 1, 0, 0x67);
+		// Open sides: passage stub plus the inner highlight.
+		if (bits & 0x01) { line(2, 0, 7, 0, 0x67); line(1, 1, 8, 1, 0x69); }
+		if (bits & 0x04) { line(9, 2, 9, 7, 0x67); line(8, 1, 8, 8, 0x69); }
+		if (bits & 0x10) { line(2, 9, 7, 9, 0x67); line(1, 8, 8, 8, 0x69); }
+		if (bits & 0x40) { line(0, 2, 0, 7, 0x67); line(1, 1, 1, 8, 0x69); }
+		result = unseen;
+		return true;
+	}
+
 	if (fn == "printer_on_line") {
 		result = 0;
 		return true;
@@ -786,22 +858,79 @@ bool tryHandle(Context &ctx, const std::string &fn,
 //
 // DEPTH is read from savegame/SETTINGS.DAT byte 4; falls back to 15 (the
 // shipped-settings value) if the file is missing/short.
+// Carve a perfect maze into one 32x32 level chunk: 0xFF = open, 0x00 = wall
+// (the encoding load_level_map/draw_walls consume -- lvlmap == -1 means "no
+// wall here"). Iterative recursive-backtracker.
+//
+// Cells sit on EVEN coordinates (0,2,..,30 -> 16x16 cells) with the shared
+// wall between two cells on the odd coordinate between them. That choice is
+// deliberate: it puts a cell at (0,0), which is where the SOP starts the party
+// until FEA feature records supply a real entry point -- an odd-coordinate
+// scheme would seal the party in rock on turn one. Row/column 31 is odd and
+// stays solid, giving a border for free.
+//
+// ponytail: a plain perfect maze -- no rooms, loops or features. This is not
+// MAZE.EXE's algorithm and will not reproduce DH's dungeons; it exists so the
+// engine has something walkable. Swap it for a real MAZE port when authentic
+// layouts matter (docs/dungeon_hack_maze.md).
+void carveMaze(uint8_t *grid, uint32_t seed) {
+	constexpr int kW = 32;      // grid is 32x32 bytes
+	constexpr int kCells = 16;  // cells on even coords 0,2,...,30
+	std::memset(grid, 0x00, static_cast<size_t>(kW) * kW);   // solid rock
+	std::mt19937 rng(seed);
+	std::vector<uint8_t> seen(static_cast<size_t>(kCells) * kCells, 0);
+	std::vector<std::pair<int, int>> stack;
+	stack.emplace_back(0, 0);
+	seen[0] = 1;
+	grid[0] = 0xFF;                                          // party start
+	static constexpr int kDir[4][2] = { {0,-1}, {1,0}, {0,1}, {-1,0} };
+	while (!stack.empty()) {
+		const int cx = stack.back().first, cy = stack.back().second;
+		int avail[4], n = 0;
+		for (int d = 0; d < 4; ++d) {
+			const int nx = cx + kDir[d][0], ny = cy + kDir[d][1];
+			if (nx < 0 || ny < 0 || nx >= kCells || ny >= kCells) continue;
+			if (seen[static_cast<size_t>(ny) * kCells + nx]) continue;
+			avail[n++] = d;
+		}
+		if (n == 0) { stack.pop_back(); continue; }
+		const int d = avail[rng() % static_cast<uint32_t>(n)];
+		const int nx = cx + kDir[d][0], ny = cy + kDir[d][1];
+		// Knock out the shared wall, then open the neighbour cell.
+		grid[(2 * cy + kDir[d][1]) * kW + (2 * cx + kDir[d][0])] = 0xFF;
+		grid[(2 * ny) * kW + (2 * nx)] = 0xFF;
+		seen[static_cast<size_t>(ny) * kCells + nx] = 1;
+		stack.emplace_back(nx, ny);
+	}
+}
+
 void ensureSavegameFiles(const std::filesystem::path &dhRoot) {
 	namespace fs = std::filesystem;
 	std::error_code ec;
 	auto sg = resolveChildCI(dhRoot, "savegame");
 	fs::create_directories(sg, ec);   // no-op if it exists
 
-	// Read DEPTH from SETTINGS.DAT (offset 4). SETTINGS.DAT ships with the
-	// game so it's normally there; default to 15 if not.
-	int depth = 15;
+	// SETTINGS.DAT layout (docs/dungeon_hack_maze.md): u32 SEED at offset 0,
+	// then the 12-byte settings struct whose first byte is DEPTH. It ships
+	// with the game so it is normally present; fall back to the shipped
+	// values if not. Feeding the game's own seed into our generator means the
+	// same settings reproduce the same dungeon run-to-run -- not DH's dungeon,
+	// but at least a stable one.
+	uint32_t seed = 0x000156e0;   // shipped SETTINGS.DAT seed
+	int depth = 15;               // shipped DEPTH
 	{
 		auto settings = resolveChildCI(sg, "SETTINGS.DAT");
 		std::ifstream in(settings, std::ios::binary);
 		if (in) {
-			char buf[16] = {0};
-			in.read(buf, sizeof(buf));
-			if (in.gcount() > 4) depth = static_cast<uint8_t>(buf[4]);
+			uint8_t buf[16] = {0};
+			in.read(reinterpret_cast<char *>(buf), sizeof(buf));
+			if (in.gcount() >= 5) {
+				seed = static_cast<uint32_t>(buf[0]) |
+				       (static_cast<uint32_t>(buf[1]) << 8) |
+				       (static_cast<uint32_t>(buf[2]) << 16) |
+				       (static_cast<uint32_t>(buf[3]) << 24);
+				depth = buf[4];
+			}
 		}
 	}
 	const int levels = depth + 10;
@@ -823,19 +952,110 @@ void ensureSavegameFiles(const std::filesystem::path &dhRoot) {
 		                   static_cast<std::streamsize>(bytes.size()));
 	};
 
-	// LEVELS.DAT: 4-byte header + N x 0x400 zero chunks.
-	{
-		std::vector<uint8_t> data(4 + static_cast<size_t>(levels) * 0x400, 0);
-		writeIfMissing("LEVELS.DAT", data);
-	}
+	// LEVELS.DAT: 4-byte header + N x 0x400 chunks, one carved maze per level
+	// (each level gets seed+level so they differ but stay reproducible).
+	// Kept around afterwards so the FEA writer can place stairs on cells that
+	// are actually open.
+	std::vector<uint8_t> levelData(4 + static_cast<size_t>(levels) * 0x400, 0);
+	for (int l = 0; l < levels; ++l)
+		carveMaze(levelData.data() + 4 + static_cast<size_t>(l) * 0x400,
+		          seed + static_cast<uint32_t>(l));
+	writeIfMissing("LEVELS.DAT", levelData);
 
-	// FEA00..FEA{levels-1}.DAT: 8-byte header + 8-byte terminator = 16 bytes
-	// of zeros. The 22-case type switch in the SOP reader still runs on the
-	// header's type byte (0 = level-header record); the terminator is what
-	// stops the inner get_feature_record loop.
+	// FEA00..FEA{levels-1}.DAT -- feature records for each level:
+	//
+	//     [8-byte header]  [8-byte body record] x N  [8 zero bytes]
+	//
+	// The SOP reads the header with its own get_feature_record call, then
+	// loops reading body records and switching on byte 0 (dungeon's CASE
+	// table has 31 entries: 0 ends the loop, 1..30 are the feature types in
+	// the order MAZE's string table lists them -- 4 = stairs up,
+	// 5 = stairs down). For a placement feature byte 1/2 are the cell x/y.
+	//
+	// Stairs forward bytes 4..7 to `create teleporter` (message 495) on class
+	// 2870 "current stairs down", and those four line up with the
+	// `teleporters` object's dest_x / dest_y / dest_lvl / dest_fdir externs.
+	//
+	// ponytail: stairs only -- no doors, buttons, items or monsters. Enough to
+	// descend; the other 28 feature types need their SOP cases read first.
 	{
-		std::vector<uint8_t> data(16, 0);
+		// [0]=type, [1]=x, [2]=y, [3] unused by the cases we emit, [4..7]
+		// are type-specific (stairs: dest x/y/lvl/fdir; creature: [4] is the
+		// monster slot).
+		auto feaRecord = [](uint8_t type, int x, int y,
+		                    int b4, int b5, int b6, int b7) {
+			return std::array<uint8_t, 8>{
+				type, static_cast<uint8_t>(x), static_cast<uint8_t>(y), 0,
+				static_cast<uint8_t>(b4), static_cast<uint8_t>(b5),
+				static_cast<uint8_t>(b6), static_cast<uint8_t>(b7) };
+		};
 		for (int i = 0; i < levels; ++i) {
+			std::vector<uint8_t> data(8, 0);        // header
+			// Put the down-stairs on the open cell furthest from the party
+			// start, so reaching it means actually walking the maze.
+			const uint8_t *grid = levelData.data() + 4 +
+			                      static_cast<size_t>(i) * 0x400;
+			int bx = -1, by = -1, best = -1;
+			for (int cy = 0; cy < 32; cy += 2)
+				for (int cx = 0; cx < 32; cx += 2)
+					if (grid[cy * 32 + cx] == 0xFF && cx + cy > best) {
+						best = cx + cy; bx = cx; by = cy;
+					}
+			if (bx >= 0 && i + 1 < levels) {
+				auto r = feaRecord(5, bx, by, 0, 0, i + 1, 0);
+				data.insert(data.end(), r.begin(), r.end());
+			}
+			// Type 1 = "current door" -> `create door` (msg 493); bytes 6/7
+			// form a 16-bit link id (the `doors` object's W:button_num /
+			// W:lock_num), left 0 here for a plain unlinked door. Type 6 =
+			// "regular button" -> `create thing` (msg 496, class 2894); types
+			// 2 and 7 are the same shape with classes 2813 / 2897.
+			// Doors go on corridor cells -- a cell open exactly along one
+			// axis -- so they sit in a passage rather than floating in a
+			// junction.
+			{
+				int doors = 0;
+				std::mt19937 drng(seed + 0x5eedu + static_cast<uint32_t>(i));
+				auto isOpen = [&](int x, int y) {
+					return x >= 0 && y >= 0 && x < 32 && y < 32 &&
+					       grid[y * 32 + x] == 0xFF;
+				};
+				for (int cy = 0; cy < 32 && doors < 4; cy += 2)
+					for (int cx = 0; cx < 32 && doors < 4; cx += 2) {
+						if (!isOpen(cx, cy) || cx + cy < 8) continue;
+						const bool ns = isOpen(cx, cy - 1) && isOpen(cx, cy + 1);
+						const bool ew = isOpen(cx - 1, cy) && isOpen(cx + 1, cy);
+						if (ns == ew) continue;          // junction or dead end
+						if (drng() % 10 != 0) continue;  // sparse
+						auto d = feaRecord(1, cx, cy, 0, 0, 0, 0);
+						data.insert(data.end(), d.begin(), d.end());
+						auto b = feaRecord(6, cx, cy, 0, 0, 0, 0);
+						data.insert(data.end(), b.begin(), b.end());
+						++doors;
+					}
+			}
+			// Type 12 = "level creature": the SOP sends `create monster`
+			// (msg 494) with the class taken from mon_types[lvl*12 + fea[4]*4],
+			// i.e. fea[4] picks one of the level's three monster slots
+			// (dungeon's W:monster_nums[.., 3]); slot 2 also gets
+			// `make boss monster` (msg 233). Sprinkle a few on open cells
+			// away from the start so there is something down there.
+			{
+				int placed = 0;
+				std::mt19937 mrng(seed + 0x9e37u + static_cast<uint32_t>(i));
+				for (int cy = 0; cy < 32 && placed < 3; cy += 2)
+					for (int cx = 0; cx < 32 && placed < 3; cx += 2) {
+						if (grid[cy * 32 + cx] != 0xFF) continue;
+						if (cx + cy < 12) continue;         // not on the doorstep
+						if (mrng() % 24 != 0) continue;     // sparse
+						auto m = feaRecord(12, cx, cy,
+						                   static_cast<int>(mrng() % 3),
+						                   0, 0, 0);
+						data.insert(data.end(), m.begin(), m.end());
+						++placed;
+					}
+			}
+			data.insert(data.end(), 8, 0);          // terminator
 			char name[16];
 			std::snprintf(name, sizeof(name), "FEA%02d.DAT", i);
 			writeIfMissing(name, data);
