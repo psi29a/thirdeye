@@ -443,7 +443,11 @@ bool tryHandle(Context &ctx, const std::string &fn,
 		// THIRDEYE_DHWALL_FORCE=1 ignores the floor_at visibility gate --
 		// useful diagnostic when working on init_viewspace/build_clipping.
 		// Normal path uses real occlusion.
-		const bool force = std::getenv("THIRDEYE_DHWALL_FORCE") != nullptr;
+		// Sampled once: draw_walls runs every frame and the flag cannot change
+		// mid-process, so this matches how the other debug switches are cached
+		// (gRtTrace / gPerf are read once at boot).
+		static const bool force =
+		    std::getenv("THIRDEYE_DHWALL_FORCE") != nullptr;
 		if (!lvlmap) { result = 0; return true; }
 
 		// Clip every blit to the view rect. Several faces are POSITIONED
@@ -610,13 +614,6 @@ bool tryHandle(Context &ctx, const std::string &fn,
 		result = 0;
 		return true;
 	}
-	// blit -- everything gets overdrawn each frame.
-	if (fn == "build_clipping") {
-		(void)args;
-		result = 0;
-		return true;
-	}
-
 	// copy_window(src_page, dst_page): composite an offscreen page onto its
 	// destination. This is how DH assembles the screen -- each HUD panel and
 	// the dungeon view are drawn into their own page at page-local (0,0), then

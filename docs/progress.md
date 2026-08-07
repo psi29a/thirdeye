@@ -511,6 +511,10 @@ Only 5 stubs remain in the DH boot path — all pure-renderer (`init_viewspace`,
 `build_clipping`, `copy_window`, `draw_walls`, `Transition`). Phase-two runs its
 tick loop and dispatches per-cell logic.
 
+> **Superseded (2026-08-07):** all five have since been implemented — see
+> *The maze renders* and *Occlusion + text-box + clip* below. A phase-two
+> session with movement now reports zero stubbed CALLs.
+
 **Screen layout + wall art (2026-08-06).** Two engine-level differences from
 EOB3 had to be fixed before DH could draw a correct screen. Both DH-gated;
 EOB3 verified pixel-identical to a pre-change baseline frame.
@@ -621,6 +625,13 @@ please redispatch tick," the SOP never asks again). See
 [screenshots/dh_phase_two_hud.png](screenshots/dh_phase_two_hud.png). Only the
 3D wall rendering (`draw_walls` + `init_viewspace` + `build_clipping`) stands
 between phase-two and a playable dungeon.
+
+> **Superseded (2026-08-07):** the wall renderer landed — `draw_walls`,
+> `init_viewspace` and `build_clipping` are all implemented (ported from
+> AESOP.EXE) and the view renders with real occlusion. What actually stands
+> between phase-two and a playable dungeon is dungeon *content*: the native
+> mini-MAZE seeds an all-walls map, so the party starts sealed in rock. See
+> *The maze renders* below.
 
 A **native mini-MAZE** (`ensureSavegameFiles` in `runtime/dh.cpp`) seeds
 structurally-valid empty `savegame/LEVELS.DAT` + `FEA*.DAT` + `ITEMS.DAT` at
