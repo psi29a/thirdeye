@@ -871,26 +871,30 @@ void ensureSavegameFiles(const std::filesystem::path &dhRoot) {
 	// same settings reproduce the same dungeon run-to-run -- not DH's dungeon,
 	// but at least a stable one.
 	uint32_t seed = 0x000156e0;   // shipped SETTINGS.DAT seed
-	int depth = 15;               // shipped DEPTH
-	bool waterOn = true;          // shipped WATER_ON
+	// The shipped 12-byte settings struct, used if the file is missing/short.
+	// Order is DEPTH, FREQ_MONSTERS, FREQ_TREASURE, [rations], [illusionary
+	// walls], FREQ_KEYS, FREQ_TRAPS, FREQ_PITS, HINT_SHEET_FREQ, ZONES_ON,
+	// WATER_ON, MULTI_LEVEL_PUZZLES_ON -- note bytes 3 and 4 are swapped
+	// relative to the name table inside MAZE.EXE, which has no xrefs and is
+	// wrong; the code indexes them the other way round. See
+	// dh_research/MAZE/FEATURES.md §4.
+	uint8_t settings[12] = { 15, 7, 0, 0, 7, 7, 7, 7, 0, 1, 1, 0 };
 	{
-		auto settings = resolveChildCI(sg, "SETTINGS.DAT");
-		std::ifstream in(settings, std::ios::binary);
+		auto settingsPath = resolveChildCI(sg, "SETTINGS.DAT");
+		std::ifstream in(settingsPath, std::ios::binary);
 		if (in) {
 			uint8_t buf[16] = {0};
 			in.read(reinterpret_cast<char *>(buf), sizeof(buf));
-			if (in.gcount() >= 5) {
+			if (in.gcount() >= 16) {
 				seed = static_cast<uint32_t>(buf[0]) |
 				       (static_cast<uint32_t>(buf[1]) << 8) |
 				       (static_cast<uint32_t>(buf[2]) << 16) |
 				       (static_cast<uint32_t>(buf[3]) << 24);
-				depth = buf[4];
-				// WATER_ON is settings-struct byte 10, i.e. file byte 14.
-				if (in.gcount() >= 15) waterOn = buf[14] != 0;
+				std::memcpy(settings, buf + 4, sizeof(settings));
 			}
 		}
 	}
-	const int levels = depth + 10;
+	const int levels = settings[0] + 10;
 
 	// Resolve the name case-insensitively BEFORE testing existence: reads go
 	// through savegamePath()/resolveChildCI, so on a case-sensitive filesystem
@@ -918,119 +922,21 @@ void ensureSavegameFiles(const std::filesystem::path &dhRoot) {
 	std::vector<uint8_t> levelData(4 + static_cast<size_t>(levels) * 0x400, 0);
 	for (int i = 0; i < 4; ++i)
 		levelData[i] = static_cast<uint8_t>(seed >> (8 * i));
-	std::vector<LevelInfo> info(static_cast<size_t>(levels));
-	generateDungeon(levelData.data() + 4, levels, seed, waterOn, info.data());
+	DungeonOut dungeon;
+	generateDungeon(levelData.data() + 4, levels, seed, settings, dungeon);
 	writeIfMissing("LEVELS.DAT", levelData);
 
-	// FEA00..FEA{levels-1}.DAT -- feature records for each level:
-	//
-	//     [8-byte header]  [8-byte body record] x N  [8 zero bytes]
-	//
-	// The SOP reads the header with its own get_feature_record call, then
-	// loops reading body records and switching on byte 0 (dungeon's CASE
-	// table has 31 entries: 0 ends the loop, 1..30 are the feature types in
-	// the order MAZE's string table lists them -- 4 = stairs up,
-	// 5 = stairs down). For a placement feature byte 1/2 are the cell x/y.
-	//
-	// Stairs forward bytes 4..7 to `create teleporter` (message 495) on class
-	// 2870 "current stairs down", and those four line up with the
-	// `teleporters` object's dest_x / dest_y / dest_lvl / dest_fdir externs.
-	//
-	// ponytail: stairs only -- no doors, buttons, items or monsters. Enough to
-	// descend; the other 28 feature types need their SOP cases read first.
-	{
-		// [0]=type, [1]=x, [2]=y, [3] unused by the cases we emit, [4..7]
-		// are type-specific (stairs: dest x/y/lvl/fdir; creature: [4] is the
-		// monster slot).
-		auto feaRecord = [](uint8_t type, int x, int y,
-		                    int b4, int b5, int b6, int b7) {
-			return std::array<uint8_t, 8>{
-				type, static_cast<uint8_t>(x), static_cast<uint8_t>(y), 0,
-				static_cast<uint8_t>(b4), static_cast<uint8_t>(b5),
-				static_cast<uint8_t>(b6), static_cast<uint8_t>(b7) };
-		};
-		for (int i = 0; i < levels; ++i) {
-			// Header record. MAZE packs the party entry into it (bytes 1/2 =
-			// x/y from the level descriptor's fields 8/7, byte 3 = facing);
-			// the maze lives on odd coordinates, so without this the party
-			// would spawn at (0,0) -- solid rock.
-			const uint8_t *grid = levelData.data() + 4 +
-			                      static_cast<size_t>(i) * 0x400;
-			std::vector<uint8_t> data{
-				0, static_cast<uint8_t>(info[i].entryCol),
-				static_cast<uint8_t>(info[i].entryRow),
-				static_cast<uint8_t>(info[i].fdir), 0, 0, 0, 0 };
-			const int by = info[i].stairRow, bx = info[i].stairCol;
-			if (i + 1 < levels) {
-				auto r = feaRecord(5, bx, by, 0, 0, i + 1, 0);
-				data.insert(data.end(), r.begin(), r.end());
-			}
-			// Type 1 = "current door" -> `create door` (msg 493); bytes 6/7
-			// form a 16-bit link id (the `doors` object's W:button_num /
-			// W:lock_num), left 0 here for a plain unlinked door. Type 6 =
-			// "regular button" -> `create thing` (msg 496, class 2894); types
-			// 2 and 7 are the same shape with classes 2813 / 2897.
-			// Doors go on corridor cells -- a cell open exactly along one
-			// axis -- so they sit in a passage rather than floating in a
-			// junction.
-			{
-				int doors = 0;
-				std::mt19937 drng(seed + 0x5eedu + static_cast<uint32_t>(i));
-				auto isOpen = [&](int x, int y) {
-					return x >= 0 && y >= 0 && x < 32 && y < 32 &&
-					       grid[y * 32 + x] == 0xFF;
-				};
-				for (int cy = 1; cy < 31 && doors < 4; cy += 2)
-					for (int cx = 1; cx < 31 && doors < 4; cx += 2) {
-						if (!isOpen(cx, cy)) continue;
-						if (std::abs(cy - info[i].entryRow) +
-						    std::abs(cx - info[i].entryCol) < 6) continue;
-						const bool ns = isOpen(cx, cy - 1) && isOpen(cx, cy + 1);
-						const bool ew = isOpen(cx - 1, cy) && isOpen(cx + 1, cy);
-						if (ns == ew) continue;          // junction or dead end
-						if (drng() % 10 != 0) continue;  // sparse
-						auto d = feaRecord(1, cx, cy, 0, 0, 0, 0);
-						data.insert(data.end(), d.begin(), d.end());
-						auto b = feaRecord(6, cx, cy, 0, 0, 0, 0);
-						data.insert(data.end(), b.begin(), b.end());
-						++doors;
-					}
-			}
-			// Type 12 = "level creature": the SOP sends `create monster`
-			// (msg 494) with the class taken from mon_types[lvl*12 + fea[4]*4],
-			// i.e. fea[4] picks one of the level's three monster slots
-			// (dungeon's W:monster_nums[.., 3]); slot 2 also gets
-			// `make boss monster` (msg 233). Sprinkle a few on open cells
-			// away from the start so there is something down there.
-			{
-				int placed = 0;
-				std::mt19937 mrng(seed + 0x9e37u + static_cast<uint32_t>(i));
-				for (int cy = 1; cy < 31 && placed < 3; cy += 2)
-					for (int cx = 1; cx < 31 && placed < 3; cx += 2) {
-						if (grid[cy * 32 + cx] != 0xFF) continue;
-						// not on the doorstep
-						if (std::abs(cy - info[i].entryRow) +
-						    std::abs(cx - info[i].entryCol) < 8) continue;
-						if (mrng() % 24 != 0) continue;     // sparse
-						auto m = feaRecord(12, cx, cy,
-						                   static_cast<int>(mrng() % 3),
-						                   0, 0, 0);
-						data.insert(data.end(), m.begin(), m.end());
-						++placed;
-					}
-			}
-			data.insert(data.end(), 8, 0);          // terminator
-			char name[16];
-			std::snprintf(name, sizeof(name), "FEA%02d.DAT", i);
-			writeIfMissing(name, data);
-		}
+	// FEA00..FEA{levels-1}.DAT and ITEMS.DAT come straight out of MAZE's own
+	// writers now (1325:3c76 and 1325:3bb0): an 8-byte header record carrying
+	// the party entry, one 8-byte body record per feature, an all-zero
+	// terminator. The 30 feature types and 12 item types, what places each and
+	// how bytes 4..7 are packed, are in dh_research/MAZE/FEATURES.md.
+	for (int i = 0; i < levels; ++i) {
+		char name[16];
+		std::snprintf(name, sizeof(name), "FEA%02d.DAT", i);
+		writeIfMissing(name, packFeatureFile(dungeon, i));
 	}
-
-	// ITEMS.DAT: just the terminator (8 zero bytes = empty stream).
-	{
-		std::vector<uint8_t> data(8, 0);
-		writeIfMissing("ITEMS.DAT", data);
-	}
+	writeIfMissing("ITEMS.DAT", packItemFile(dungeon));
 }
 
 } // namespace THIRDEYE::runtime::dh

@@ -197,24 +197,63 @@ namespace dh       { bool tryHandle(Context&, const std::string &fn,
                          int mIndex = 0;
                      };
 
-                     // Per-level results of a generateDungeon() run.
+                     // Per-level results of a generateDungeon() run --
+                     // MAZE's 16-byte level descriptor, named.
                      struct LevelInfo {
-                         uint8_t zone;      // 0..4 -- which layout algorithm
-                         bool water;
-                         int entryRow, entryCol;  // where the party arrives
-                         int fdir;                // 0=N 1=E 2=S 3=W
-                         int stairRow, stairCol;  // our stairs-down choice
+                         uint8_t zone = 1;  // 0..4 -- which layout algorithm
+                         bool water = false;
+                         int entryRow = 0, entryCol = 0;  // party arrival cell
+                         int fdir = 0;                    // 0=N 1=E 2=S 3=W
+                         int stairRow = 0, stairCol = 0;  // the down-staircase
+                         // The cell in front of the staircase, and the facing
+                         // there: what the next level's stairs-up record aims
+                         // back at.
+                         int stairFrontRow = 0, stairFrontCol = 0;
+                         int stairFdir = 0;
+                         bool stairFdirValid = false;
+                         int regionCount = 0;
+                     };
+
+                     // 1325:121d's 9-byte feature record, and 1325:11af's
+                     // 5-byte item record, before the file writers permute
+                     // them. `type` indexes MAZE's own name tables (feature
+                     // 1..30, item 1..12) -- see dh_research/MAZE/FEATURES.md.
+                     struct FeatureRecord {
+                         uint8_t y, x, level, mask, type;
+                         uint16_t p2, p3;   // type-specific; 0xFFFF = unset
+                     };
+                     struct ItemRecord {
+                         uint8_t y, x, level, type, aux;
+                     };
+                     struct MagicZone {
+                         bool present = false;
+                         uint8_t x = 0, y = 0, w = 0, h = 0, kind = 0;
+                     };
+
+                     struct DungeonOut {
+                         std::vector<LevelInfo> info;
+                         std::vector<std::vector<FeatureRecord>> features;
+                         std::vector<MagicZone> zones;    // one per level
+                         std::vector<ItemRecord> items;   // whole dungeon
                      };
 
                      // Generate `levels` consecutive 0x400-byte tile chunks
                      // into `chunks`, the way MAZE.EXE does: zones decided up
-                     // front from `seed`, then each level generated from
-                     // `seed + level + 1`. `info` must have room for `levels`
-                     // entries. Chunks come out in the on-disk encoding
-                     // (0xFF = floor, 0x00/0x01 = wall).
+                     // front from `seed`, each level generated from
+                     // `seed + level + 1`, then the feature-placement tail.
+                     // `settings` is SETTINGS.DAT's 12-byte struct (the bytes
+                     // after the u32 seed). Chunks come out in the on-disk
+                     // encoding (0xFF = floor, 0x00/0x01 = wall).
                      void generateDungeon(uint8_t *chunks, int levels,
-                                          uint32_t seed, bool waterOn,
-                                          LevelInfo *info); }
+                                          uint32_t seed,
+                                          const uint8_t *settings,
+                                          DungeonOut &out);
+
+                     // Serialise what generateDungeon produced, in MAZE's
+                     // on-disk layouts.
+                     std::vector<uint8_t> packFeatureFile(const DungeonOut &d,
+                                                          int level);
+                     std::vector<uint8_t> packItemFile(const DungeonOut &d); }
 
 } // namespace THIRDEYE::runtime
 

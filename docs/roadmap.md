@@ -629,19 +629,19 @@ Still open (nice-to-have): a file-picker UI instead of the env var.
   three monster slots and slot 2 also gets `make boss monster` (msg 233).
   Verified live: a level spawns stairs + 4 doors + 4 buttons +
   bugbear/goblin/bugbear, 0 stubs, 0 errors.
-- 🚧 **MAZE.EXE — the feature-placement tail.** Geometry is done; what
-  remains is the 15 passes `FUN_1325_375f` runs after the layout, which
-  scatter treasure, traps, pits, illusionary walls, hint sheets, keys and
-  monsters according to the `FREQ_*` settings, plus `FUN_1325_3c76`'s
-  22-case packer that turns internal feature types into on-disk FEA
-  records. All of it is decoded in
-  [`dh_research/MAZE/FEATURES.md`](../../dh_research/MAZE/FEATURES.md)
-  (including the real stairs pass, `FUN_1325_10a6`), so this is now a
-  transcription job. We synthesise stairs/doors/buttons/creatures
-  ourselves in the meantime. Two gotchas recorded there: MAZE has **two**
-  type namespaces (5-byte item records vs 9-byte feature records), and
-  SETTINGS.DAT bytes 3 and 4 are swapped relative to the name table in
-  the binary — go by DS offset, never by name.
+- ✅ **MAZE.EXE feature tail — the dungeon is populated.** The fifteen
+  per-level passes plus `26f6` (pits) and `36a2` (quest objects) are
+  ported: regions (`2081`), stairs (`10a6`), illusionary walls, arches,
+  the glyph→record sweep (`330f`), door openers and their matching keys
+  (`312c`/`3004`), disguised walls (`219b`), pillars, monsters, traps,
+  shelves, hint sheets, rations, treasure, windows and decorations. All
+  seven `FREQ_*` tables transcribed and verified byte-for-byte. A live
+  25-level dungeon: 489 doors, **385 locks with 385 matching keys**,
+  1147 creatures, 63 traps, 3 pit pairs, 18 teleporters. Field-by-field
+  RE in [`dh_research/MAZE/FEATURES.md`](../../dh_research/MAZE/FEATURES.md).
+  Remaining gap: the region *walk* is ours rather than a transcription of
+  `13d8`, and none of it is validated against a real MAZE run — SEED.TXT
+  is the byte-exact oracle once DOSBox is available.
 - ✅ **Offscreen page compositing.** DH draws each HUD panel into its own
   page at page-local (0,0) then `copy_window`s it to a screen rect;
   `assign_window` now marks pages offscreen, `draw_bitmap` redirects into

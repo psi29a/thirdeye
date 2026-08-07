@@ -15,6 +15,9 @@
 
 using THIRDEYE::runtime::dh::R250;
 using THIRDEYE::runtime::dh::generateDungeon;
+using THIRDEYE::runtime::dh::packFeatureFile;
+using THIRDEYE::runtime::dh::packItemFile;
+using THIRDEYE::runtime::dh::DungeonOut;
 using THIRDEYE::runtime::dh::LevelInfo;
 
 namespace {
@@ -72,15 +75,21 @@ namespace {
 constexpr uint32_t kShippedSeed = 0x000156e0;   // the shipped SETTINGS.DAT seed
 constexpr int kLevels = 25;                     // DEPTH 15 + 10
 
+// The shipped SETTINGS.DAT's 12-byte struct: DEPTH 15, monsters 7, no
+// treasure, no rations, max illusionary walls, keys/traps/pits 7, no hints,
+// zones + water on, multi-level puzzles off.
+constexpr uint8_t kShippedSettings[12] = { 15, 7, 0, 0, 7, 7, 7, 7, 0, 1, 1, 0 };
+
 struct Dungeon {
 	std::vector<uint8_t> chunks = std::vector<uint8_t>(kLevels * 0x400);
-	std::vector<LevelInfo> info = std::vector<LevelInfo>(kLevels);
+	DungeonOut out;
 	const uint8_t *grid(int l) const { return chunks.data() + l * 0x400; }
+	const std::vector<LevelInfo> &info() const { return out.info; }
 };
 
-Dungeon build(uint32_t seed = kShippedSeed, bool water = true) {
+Dungeon build(uint32_t seed = kShippedSeed) {
 	Dungeon d;
-	generateDungeon(d.chunks.data(), kLevels, seed, water, d.info.data());
+	generateDungeon(d.chunks.data(), kLevels, seed, kShippedSettings, d.out);
 	return d;
 }
 
@@ -144,11 +153,13 @@ TEST(DhMaze, EntryAndStairsAreWalkableAndChain) {
 	const Dungeon d = build();
 	for (int l = 0; l < kLevels; ++l) {
 		const uint8_t *g = d.grid(l);
-		const LevelInfo &n = d.info[l];
+		const LevelInfo &n = d.out.info[l];
 		ASSERT_EQ(g[n.entryRow * 32 + n.entryCol], 0xFF)
 			<< "level " << l << " entry in rock";
-		ASSERT_EQ(g[n.stairRow * 32 + n.stairCol], 0xFF)
-			<< "level " << l << " stairs in rock";
+		// The bottom level has no down-staircase -- nothing below to reach.
+		if (l < kLevels - 1)
+			ASSERT_EQ(g[n.stairRow * 32 + n.stairCol], 0xFF)
+				<< "level " << l << " stairs in rock";
 		ASSERT_GE(n.fdir, 0);
 		ASSERT_LE(n.fdir, 3);
 		// The stairs are chosen by BFS from the entry, so reaching them is
@@ -164,34 +175,39 @@ TEST(DhMaze, EntryAndStairsAreWalkableAndChain) {
 // always zone 4, and exactly one middle level is zone 0.
 TEST(DhMaze, ZonesFollowMazesAssignment) {
 	const Dungeon d = build();
-	for (int l = 0; l < 4; ++l) EXPECT_EQ(d.info[l].zone, 1) << "level " << l;
-	EXPECT_EQ(d.info[kLevels - 1].zone, 4);
+	for (int l = 0; l < 4; ++l) EXPECT_EQ(d.out.info[l].zone, 1) << "level " << l;
+	EXPECT_EQ(d.out.info[kLevels - 1].zone, 4);
 	int zeros = 0;
 	for (int l = 0; l < kLevels; ++l) {
-		ASSERT_LE(d.info[l].zone, 4) << "level " << l;
-		if (d.info[l].zone == 0) ++zeros;
+		ASSERT_LE(d.out.info[l].zone, 4) << "level " << l;
+		if (d.out.info[l].zone == 0) ++zeros;
 	}
 	EXPECT_EQ(zeros, 1);
 	// The zone-0 pick must not be the water level.
 	for (int l = 0; l < kLevels; ++l)
-		if (d.info[l].zone == 0) EXPECT_FALSE(d.info[l].water);
+		if (d.out.info[l].zone == 0) EXPECT_FALSE(d.out.info[l].water);
 }
 
-// Zone 0 is the pure maze branch: no rooms, no corridors, and doors only ever
-// replace tiles that are already floor. So it must come out a *perfect* maze
-// over the 15x15 odd-coordinate cells -- 225 cells plus 224 corridors joining
-// them, all connected, no loops. That is a tight check on the backtracker: a
-// swapped entry in the step table severs whole rows and the count collapses.
-TEST(DhMaze, ZoneZeroLevelIsAPerfectMaze) {
+// Zone 0 is the pure maze branch: no rooms and no corridors, so its geometry
+// is a *perfect* maze over the 15x15 odd-coordinate cells -- 225 cells plus
+// 224 corridors joining them. That is a tight check on the backtracker (a
+// swapped entry in the step table severs whole rows and the count collapses),
+// so keep it exact rather than approximate: the only thing the feature tail
+// adds to a zone-0 level is windows, which by design punch a hole through a
+// wall block, so account for them by count.
+TEST(DhMaze, ZoneZeroLevelIsAMazePlusItsWindows) {
 	const Dungeon d = build();
 	int found = 0;
 	for (int l = 0; l < kLevels; ++l) {
-		if (d.info[l].zone != 0) continue;
+		if (d.out.info[l].zone != 0) continue;
 		++found;
 		const uint8_t *g = d.grid(l);
+		int windows = 0;
+		for (const auto &f : d.out.features[l])
+			if (f.type == 24 || f.type == 29) ++windows;
 		const int open = openTiles(g);
-		EXPECT_EQ(open, 15 * 15 + (15 * 15 - 1)) << "level " << l;
-		EXPECT_EQ(reachableFrom(g, d.info[l].entryRow, d.info[l].entryCol), open)
+		EXPECT_EQ(open, 15 * 15 + (15 * 15 - 1) + windows) << "level " << l;
+		EXPECT_EQ(reachableFrom(g, d.out.info[l].entryRow, d.out.info[l].entryCol), open)
 			<< "level " << l << ": maze is not fully connected";
 	}
 	ASSERT_EQ(found, 1);
@@ -202,11 +218,77 @@ TEST(DhMaze, ZoneZeroLevelIsAPerfectMaze) {
 TEST(DhMaze, RoomZonesCarveMoreThanABareMaze) {
 	const Dungeon d = build();
 	for (int l = 0; l < kLevels; ++l) {
-		if (d.info[l].zone != 1 && d.info[l].zone != 3) continue;
+		if (d.out.info[l].zone != 1 && d.out.info[l].zone != 3) continue;
 		EXPECT_GT(openTiles(d.grid(l)), 449)
-			<< "level " << l << " (zone " << int(d.info[l].zone)
+			<< "level " << l << " (zone " << int(d.out.info[l].zone)
 			<< ") has no more open ground than a plain maze";
 	}
+}
+
+// Every lock must have its key. MAZE plants the matching key/gem/activator
+// the moment it places a keyhole, and never deeper in the maze than the lock
+// itself -- that pairing is what makes a randomly generated dungeon solvable
+// rather than merely random. A keyhole with no key is a door that never opens.
+TEST(DhMaze, EveryLockHasItsKey) {
+	const Dungeon d = build();
+	int locks = 0, keys = 0;
+	for (int l = 0; l < kLevels; ++l)
+		for (const auto &f : d.out.features[l])
+			if (f.type == 9 || f.type == 10 || f.type == 11) ++locks;
+	for (const auto &i : d.out.items)
+		if (i.type == 4 || i.type == 5 || i.type == 6) ++keys;
+	EXPECT_GT(locks, 0);
+	EXPECT_EQ(locks, keys);
+}
+
+// Every level must be labelled into at least one region: the region list is
+// what the stairs, key and monster passes all draw their cells from, so a
+// level with none comes out empty.
+TEST(DhMaze, EveryLevelHasRegions) {
+	const Dungeon d = build();
+	for (int l = 0; l < kLevels; ++l)
+		EXPECT_GT(d.out.info[l].regionCount, 0) << "level " << l;
+}
+
+// The tail has to actually populate: stairs on every level but the last, a
+// healer and a spread of creatures everywhere.
+TEST(DhMaze, EveryLevelIsPopulated) {
+	const Dungeon d = build();
+	for (int l = 0; l < kLevels; ++l) {
+		int creatures = 0, stairsDown = 0, stairsUp = 0;
+		for (const auto &f : d.out.features[l]) {
+			if (f.type == 12) ++creatures;
+			if (f.type == 5) ++stairsDown;
+			if (f.type == 4) ++stairsUp;
+		}
+		EXPECT_GT(creatures, 0) << "level " << l << " has no monsters";
+		EXPECT_EQ(stairsUp, 1) << "level " << l;
+		EXPECT_EQ(stairsDown, l < kLevels - 1 ? 1 : 0) << "level " << l;
+	}
+}
+
+// A stairs-down record's bytes 4..7 are a destination tuple; it has to name
+// the next level and the cell that level actually starts you on.
+TEST(DhMaze, StairsPointAtTheNextLevelsEntry) {
+	const Dungeon d = build();
+	for (int l = 0; l + 1 < kLevels; ++l) {
+		const std::vector<uint8_t> fea = packFeatureFile(d.out, l);
+		bool seen = false;
+		for (size_t o = 8; o + 8 <= fea.size(); o += 8) {
+			if (fea[o] != 5) continue;
+			seen = true;
+			EXPECT_EQ(fea[o + 4], d.out.info[l + 1].entryCol) << "level " << l;
+			EXPECT_EQ(fea[o + 5], d.out.info[l + 1].entryRow) << "level " << l;
+			EXPECT_EQ(fea[o + 6], l + 1) << "level " << l;
+		}
+		EXPECT_TRUE(seen) << "level " << l << " has no stairs-down record";
+	}
+	// The bottom level's stairs-up must be the all-0xFF "nowhere" marker only
+	// on level 0; deeper ones point back up.
+	const std::vector<uint8_t> top = packFeatureFile(d.out, 0);
+	for (size_t o = 8; o + 8 <= top.size(); o += 8)
+		if (top[o] == 4)
+			EXPECT_EQ(top[o + 6], 0xFF) << "level 0 stairs-up should lead nowhere";
 }
 
 // Same seed, same dungeon -- the whole point of chaining off SETTINGS.DAT's
@@ -215,9 +297,9 @@ TEST(DhMaze, GenerationIsDeterministic) {
 	const Dungeon a = build(), b = build();
 	EXPECT_EQ(a.chunks, b.chunks);
 	for (int l = 0; l < kLevels; ++l) {
-		EXPECT_EQ(a.info[l].entryRow, b.info[l].entryRow) << "level " << l;
-		EXPECT_EQ(a.info[l].entryCol, b.info[l].entryCol) << "level " << l;
-		EXPECT_EQ(a.info[l].zone, b.info[l].zone) << "level " << l;
+		EXPECT_EQ(a.out.info[l].entryRow, b.out.info[l].entryRow) << "level " << l;
+		EXPECT_EQ(a.out.info[l].entryCol, b.out.info[l].entryCol) << "level " << l;
+		EXPECT_EQ(a.out.info[l].zone, b.out.info[l].zone) << "level " << l;
 	}
 	EXPECT_NE(build(kShippedSeed + 1).chunks, a.chunks);
 }

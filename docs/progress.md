@@ -804,3 +804,57 @@ by BFS from the entry and feed them forward as the next level's arrival, MAZE's
 chaining with our placement. That tail is now fully decoded in
 `dh_research/MAZE/FEATURES.md`, so it is a transcription job rather than an RE
 one.
+
+### MAZE's feature-placement tail — the dungeon gets populated (2026-08-07)
+
+Geometry was only half of MAZE. The other half is the fifteen passes
+`FUN_1325_375f` runs after the layout, plus two whole-dungeon ones, and those
+are what turn corridors into a dungeon. They are in now.
+
+**Regions turned out to be the backbone.** `FUN_1325_2081` floods each level
+from the party's arrival cell and labels every connected patch of floor with
+its region id — literally, as the character `'A' + id`. Doors bound regions,
+and each region records how many doors lie between it and the entry. That
+*depth* is what every later pass steers by, and it is the thing that makes a
+randomly generated dungeon **solvable**: `FUN_1325_3004` never hides a key
+deeper in the maze than the shallowest lock it opens. Get that wrong and you
+generate a door nobody can ever get through.
+
+Which we did, at first. The initial cut produced 358 locks and 327 keys — 31
+doors with no key anywhere in the dungeon. Two causes, both worth recording.
+The door's own cell holds a door glyph, not a region letter, so reading the
+region off it always yielded region 0; the key has to be keyed to the floor
+*beside* the door, and specifically the shallower side. And the teleporter
+repair path could drop a teleporter on the party's arrival cell, after which
+re-labelling bailed and the level came out with **zero** regions — no keys, no
+stairs, no monsters. Two of 25 levels were silently empty. Both fixed; the
+count is now exactly 385 locks and 385 keys, and that 1:1 pairing is a test.
+
+**Counts come from the `FREQ_*` settings** through `FUN_1325_0117` — roll a
+percentage, then roll dice, both from an 8-entry table indexed by the setting
+byte. All seven tables are transcribed and were verified byte-for-byte against
+the binary before being hard-coded. It is satisfying when the shipped settings
+explain themselves: `HINT_SHEET_FREQ = 0` maps to a `0%` row, and sure enough a
+full dungeon contains no hint sheets at all.
+
+**Two record streams, not one.** `FUN_1325_121d` emits 9-byte *feature*
+records (30 types) and `FUN_1325_11af` emits 5-byte *item* records (12 types).
+They are separate numbering schemes — earlier notes had conflated them, which
+is why the feature-name table never seemed to line up.
+
+A live 25-level dungeon at the shipped settings now carries 489 doors, 385
+locks with 385 matching keys, 1147 creatures, 1041 decorations, 105
+illusionary walls, 13 doors disguised as solid wall, 81 arches, 35 windows,
+72 shelves, 63 traps, 3 pit pairs and 18 teleporters. In game that is 186
+objects on level 0 alone, against 12 before. Walking forward six cells now
+gets the party **spun** — the compass flips without a turn key, which is a
+spinner trap doing exactly its job.
+
+Deviations are deliberate and marked in the source: the region walk is our own
+connected-components pass (MAZE's frontier array is not fully traced, so we
+reproduce its shape rather than its cell order); three loops that the original
+only exits by luck are capped; and the arrival cell is claimed the moment it
+is chosen so nothing gets built on top of the player. Still not validated
+against a real MAZE run — SEED.TXT remains the oracle for that.
+
+Zero stubs, zero errors, 119 tests green, EOB3 unaffected.

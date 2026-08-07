@@ -761,18 +761,79 @@ the semantics away. We have not been able to do this yet (no DOSBox
 run), so *nothing here is validated against real MAZE output* — only
 against the disassembly and against structural invariants.
 
-### What is not ported yet
+### The feature-placement tail — ported
 
-- **The feature-placement tail.** `FUN_1325_375f` ends with 15 passes
-  that place stairs, treasure, traps, pits, illusionary walls, hint
-  sheets and monsters, each driven by a `FREQ_*` setting through
-  `FUN_1325_0117`. Fully decoded in
-  [`dh_research/MAZE/FEATURES.md`](../../dh_research/MAZE/FEATURES.md);
-  our FEA writer still synthesises stairs, doors, buttons and creatures
-  itself instead. Because the down-stairs pass (`FUN_1325_10a6`) lives
-  in that tail, we pick the stairs ourselves — furthest cell from the
-  entry by BFS — and feed them forward as the next level's entry, which
-  is MAZE's chaining with our placement.
+`FUN_1325_375f` ends with fifteen passes that turn an empty layout into a
+dungeon, run in this order (r2 `0x6b40`):
+
+```
+2081 → [10a6] → 2132 → 1cfb → 330f → 219b → 299e → 27a6 → 254d
+     → 2a81 → 23be → 24e4 → 2415 → 289b → 2b51
+```
+
+plus two whole-dungeon passes afterwards, `26f6` (pits, which need two
+levels to line up) and `36a2` (the quest objects). All of it is in
+`dh_maze.cpp`; the field-by-field reading is in
+[`dh_research/MAZE/FEATURES.md`](../../dh_research/MAZE/FEATURES.md).
+
+**Regions are the backbone.** `FUN_1325_2081` floods the level from the
+party's arrival cell, labelling each connected patch of floor with its
+region id — literally, as the character `'A' + id`, which is why the
+grid reads as text. Doors bound regions, and each region records how
+many doors lie between it and the entry. That *depth* is what every
+later pass steers by, and it is what makes the dungeon solvable rather
+than merely random: `FUN_1325_3004` never hides a key deeper than the
+shallowest lock that opens with it.
+
+**Counts come from the `FREQ_*` settings** through `FUN_1325_0117`:
+roll a percentage, then roll dice, both read from an 8-entry table
+indexed by the setting byte. All seven tables are transcribed verbatim
+(and verified byte-for-byte against DGROUP). So `FREQ_MONSTERS=7` means
+`100% 10d10` monsters per level, and `HINT_SHEET_FREQ=0` means `0%` —
+which is why the shipped settings produce no hint sheets at all.
+
+**Two record streams, two type namespaces.** `FUN_1325_121d` emits
+9-byte *feature* records (30 types: doors, stairs, traps, pits,
+teleporters, pillars, shelves, the healer…); `FUN_1325_11af` emits
+5-byte *item* records (12 types: keys, gems, treasure, rations, the
+quest objects). They are separate numbering schemes and were conflated
+in earlier notes. The writers permute both into 8 bytes on disk.
+
+What a live 25-level dungeon at the shipped settings comes out as:
+
+| | |
+|---|---|
+| doors / frame buttons | 489 / 43 |
+| locks (keyhole, gem hole, activator) | 385 — and **385** matching items |
+| creatures | 1147 |
+| decorations (wall + floor) | 851 + 190 |
+| illusionary walls / solid-wall doors | 105 / 13 |
+| arches / windows / pillars / shelves | 81 / 35 / 17 / 72 |
+| traps (spike, spinner, holes) | 13 / 16 / 34 |
+| pits (floor + ceiling, paired) | 3 + 3 |
+| teleporters (always in pairs) | 18 |
+| stairs up / down | 25 / 24 |
+
+**Deviations, all deliberate:**
+
+- **The region walk is ours, not MAZE's.** `FUN_1325_13d8`'s frontier
+  array was not fully traced, so we reproduce its *shape* — components
+  split at doors, each carrying its door-distance from the entry —
+  rather than its exact cell order. Region ids won't match a real run
+  even though everything built on them behaves the same.
+- **Stairs placement.** `FUN_1325_10a6` scans regions deepest-first for
+  a dead-end pocket, which we do; where it finds none we fall back to
+  the furthest cell by BFS rather than leaving the level without an
+  exit.
+- **Three loops in the original never terminate on failure** (the
+  monster scatter, the room scatter, the door punch). We cap the
+  attempts.
+- **Two robustness fixes with no MAZE counterpart.** The arrival cell is
+  claimed as soon as it is chosen, so a later door or teleporter cannot
+  be built on top of the player; and region labelling falls back to any
+  floor cell if the entry has been overwritten. Without these, a level
+  can end up with zero regions — and therefore no keys, no stairs and
+  no monsters. We hit exactly that on 2 of 25 levels before fixing it.
 - **Wall textures.** `FUN_1325_4017` runs at write time off the global
   stream, not the per-level one, so our texture bytes differ from a
   real run even where the geometry matches. Nothing but the renderer
