@@ -176,7 +176,16 @@ struct DHFile {
 	std::size_t cursor = 0;
 	std::string name;
 	bool open = false;
-	void reset() { buf.clear(); cursor = 0; name.clear(); open = false; }
+	// Set by create_file: on close, `buf` is flushed to `path` instead of
+	// being discarded. The SOP writes sequentially and never seeks, so
+	// accumulating in memory and writing once at close is both simpler and
+	// safer than keeping an ofstream open across VM calls.
+	bool writing = false;
+	std::filesystem::path path;
+	void reset() {
+		buf.clear(); cursor = 0; name.clear();
+		open = false; writing = false; path.clear();
+	}
 };
 DHFile &currentFile() { static DHFile f; return f; }
 
@@ -721,9 +730,10 @@ bool tryHandle(Context &ctx, const std::string &fn,
 
 	// -------- generic sequential file I/O --------
 	//
-	// DH's open_file / close_file / read_number_from_file / read_array_from_file
-	// operate on an implicit "current file" (no handle arg). One buffered file
-	// at a time is all the SOP asks for.
+	// DH's open_file / create_file / close_file / read_* / write_* operate on
+	// an implicit "current file" (no handle arg). One buffered file at a time
+	// is all the SOP asks for. Reads slurp the whole file at open; writes
+	// accumulate and flush at close.
 
 	if (fn == "open_file" && args.size() >= 1) {
 		std::string name = ctx.vm.readCodeString(
@@ -745,8 +755,73 @@ bool tryHandle(Context &ctx, const std::string &fn,
 		return true;
 	}
 
+	// create_file(name): truncate-or-create for writing. Everything written
+	// buffers up until close_file flushes it. Used by the Customization screen
+	// (SETTINGS.DAT) and character creation (PC.DAT).
+	if (fn == "create_file" && args.size() >= 1) {
+		std::string name = ctx.vm.readCodeString(
+		    static_cast<uint32_t>(args[0]));
+		DHFile &f = currentFile();
+		f.reset();
+		f.name = name;
+		f.path = resolveDosPath(ctx, name);
+		f.open = true;
+		f.writing = true;
+		rt() << "  [create_file \"" << name << "\" -> " << f.path.string()
+		     << "]" << std::endl;
+		result = 0;
+		return true;
+	}
+
 	if (fn == "close_file") {
-		currentFile().reset();
+		DHFile &f = currentFile();
+		if (f.writing && !f.path.empty()) {
+			std::ofstream out(f.path, std::ios::binary | std::ios::trunc);
+			const bool ok = out && (out.write(
+			    reinterpret_cast<const char *>(f.buf.data()),
+			    static_cast<std::streamsize>(f.buf.size())), out.good());
+			rt() << "  [close_file wrote " << f.buf.size() << " bytes to "
+			     << f.path.string() << (ok ? "]" : " FAILED]") << std::endl;
+		}
+		f.reset();
+		result = 0;
+		return true;
+	}
+
+	// write_number_to_file(value) / write_long_to_file(value): the write side
+	// of read_number_from_file. `write_long_to_file` is always 4 bytes;
+	// `write_number_to_file` takes an explicit size.
+	if ((fn == "write_long_to_file" || fn == "write_number_to_file") &&
+	    args.size() >= 1) {
+		const bool sized = (fn == "write_number_to_file" && args.size() >= 2);
+		const int sz = sized ? static_cast<int>(args[1]) : 4;
+		const int32_t v = static_cast<int32_t>(args[0]);
+		if (sz > 0 && sz <= 4) {
+			DHFile &f = currentFile();
+			for (int i = 0; i < sz; ++i)
+				f.buf.push_back(static_cast<uint8_t>(
+				    (static_cast<uint32_t>(v) >> (8 * i)) & 0xFF));
+		}
+		result = 0;
+		return true;
+	}
+
+	if (fn == "write_array_to_file" && args.size() >= 2) {
+		const int len = static_cast<int>(args[1]);
+		if (len <= 0) { result = 0; return true; }
+		const uint8_t *src = staticBytePtr(ctx, args[0],
+		                                   static_cast<uint32_t>(len));
+		if (!src) { result = 0; return true; }
+		DHFile &f = currentFile();
+		f.buf.insert(f.buf.end(), src, src + len);
+		result = 0;
+		return true;
+	}
+
+	// update_file(): the original flushes the buffer without closing. We
+	// accumulate in memory and flush at close, so there is nothing to do --
+	// but claim the name so it stops reporting as a stub.
+	if (fn == "update_file") {
 		result = 0;
 		return true;
 	}
