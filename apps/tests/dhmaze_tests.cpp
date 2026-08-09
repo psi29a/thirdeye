@@ -291,6 +291,26 @@ TEST(DhMaze, StairsPointAtTheNextLevelsEntry) {
 			EXPECT_EQ(top[o + 6], 0xFF) << "level 0 stairs-up should lead nowhere";
 }
 
+// Seed 0 is not a seed -- it is DH's Customization screen saying "(random)",
+// and MAZE (1325:3aee) substitutes the BIOS timer for it. Taking the 0
+// literally would give every install the same dungeon, so the generator must
+// roll one and report which it used.
+TEST(DhMaze, SeedZeroRollsARealSeed) {
+	Dungeon d;
+	generateDungeon(d.chunks.data(), kLevels, 0, kShippedSettings, d.out);
+	EXPECT_NE(d.out.seedUsed, 0u);
+	// ...and the result has to be a real dungeon, not a degenerate one.
+	for (int l = 0; l < kLevels; ++l) {
+		EXPECT_GT(d.out.info[l].regionCount, 0) << "level " << l;
+		EXPECT_EQ(d.grid(l)[d.out.info[l].entryRow * 32 + d.out.info[l].entryCol],
+		          0xFF) << "level " << l << " entry in rock";
+	}
+	// A seed passed in explicitly is reported back unchanged.
+	Dungeon e;
+	generateDungeon(e.chunks.data(), kLevels, kShippedSeed, kShippedSettings, e.out);
+	EXPECT_EQ(e.out.seedUsed, kShippedSeed);
+}
+
 // Same seed, same dungeon -- the whole point of chaining off SETTINGS.DAT's
 // seed rather than a clock.
 TEST(DhMaze, GenerationIsDeterministic) {

@@ -298,6 +298,92 @@ goto CONTINUE
    - Runs the "phase-two" handler from HACK.RES -- this is the game loop,
      and it consumes what MAZE just generated
 
+#### Where the errorlevel actually comes from (2026-08-09)
+
+`phase-one`'s exported handlers are `customize`, `create character`,
+`select character`, `get palette`, `main screen`, `create`, `destroy`.
+Its `create` handler is short:
+
+```
+init_sound / init_graphics / init_interface / wipe_window
+create_program(2005, 2922)
+create_program(2003, 2929)
+SEND THIS, "main screen"
+END                          <- returns main screen's value
+```
+
+`END` returns top-of-stack, and `phase-one` imports **no** exit-code
+runtime function (its whole import list is `create_program`,
+`destroy_object`, `hide_mouse`, `set_palette`, `set_wait_pointer`,
+`set_mouse_pointer`, `envval`, `draw_bitmap`, `color_fade`, `pause`,
+`show_mouse`, `light_fade`, `wipe_window`, `Transition`, `init_*`,
+`shutdown_*`). So the DOS errorlevel *is* the value `main screen`
+returns.
+
+`main screen` is a `while(1)` around a 5-way `CASE` on what the menu
+object's `run` message returns:
+
+| case | menu item | what it does | returns |
+|---|---|---|---|
+| 0 | Show Intro | fade + wipe, `staticVar0 = 2` | **2** → `:CHECKDEMO` |
+| 1 | Continue | `create_program(kernel)`, SEND `enter game` (msg 468), `staticVar0 = 3` | **3** → `:CONTINUE` |
+| 2 | Choose Character | SEND `select character` → SEND `customize` | **1** on success, else loop |
+| 3 | Create Character | SEND `create character` → SEND `customize` | **1** on success, else loop |
+| 4 | — | `staticVar0 = 1` | **1** |
+
+Cases 0 and 1 line up with `HACK.BAT` exactly, which is good evidence
+the model is right.
+
+**Open contradiction.** No path returns **0**, and 0 is what the batch
+needs in order to run MAZE and enter `phase-two`. The `BRA LBL_872`
+that would return 0 sits behind `SHTC #01; BRT`, so it is dead code.
+Clicking **Play** on the Customization screen genuinely returns 1,
+which `HACK.BAT` reads as `:EXIT`. Two candidate explanations, neither
+confirmed:
+
+1. **`AESOP.EXE` transforms the code.** EOB3's `AESOP.C` is only a
+   `spawnvp` launcher that collapses everything non-zero to `exit(1)`
+   (and re-execs on 127). DH ships its own 16-bit `AESOP.EXE`, which
+   may map the interpreter's value differently.
+2. **This install's `HACK.BAT` is not retail's.** It ships
+   `DEMOGNBG.EXE` and a `G.BAT`, which suggests a bundled or demo
+   build.
+
+Settling this is a question about `AESOP.EXE`, not about our runtime.
+Until it is settled, reaching gameplay needs `THIRDEYE_BOOT=phase-two`.
+
+#### File I/O: what phase-one reads and writes
+
+Traced live (all with zero stubs since the writers landed):
+
+```
+create_file("SAVEGAME\PC.DAT")
+  write_array_to_file(ptr, 20)      ; name, NUL-padded
+  write_array_to_file(ptr, 13)      ; race/class/stats
+close_file()                        ; 33 bytes -- matches the shipped file
+
+open_file("SAVEGAME\SETTINGS.DAT")
+  read_array_from_file(ptr, 4)      ; the seed, read and discarded
+  read_array_from_file(ptr, 19)     ; the settings struct
+  read_number_from_file(4)
+close_file()
+
+create_file("SAVEGAME\SETTINGS.DAT")
+  write_long_to_file(seed)          ; 0 when the screen reads "(random)"
+  write_array_to_file(ptr, 19)
+  write_long_to_file(n)             ; a counter; 46 -> 47 on our run
+close_file()                        ; 27 bytes -- byte-identical round-trip
+```
+
+Note the kernel's 27-byte view (4 + 19 + 4) versus MAZE's 16-byte one
+(4 + 12) — the same file, two readers, two layouts.
+
+**Seed 0 means "roll one."** `1325:3aee` substitutes the BIOS timer at
+`0040:006C`; we substitute a clock read and record the result in
+`LEVELS.DAT`'s 4-byte header, where MAZE also stores the seed it
+actually used. Taking the 0 literally would give every install the same
+dungeon.
+
 #### AESOP Command Semantics
 
 The batch uses `aesop <res-basename> <object-name>` which implies:

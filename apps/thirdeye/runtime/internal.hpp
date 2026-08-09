@@ -231,6 +231,9 @@ namespace dh       { bool tryHandle(Context&, const std::string &fn,
                      };
 
                      struct DungeonOut {
+                         // The seed actually used. Differs from the one passed
+                         // in only when that was 0, which means "roll one".
+                         uint32_t seedUsed = 0;
                          std::vector<LevelInfo> info;
                          std::vector<std::vector<FeatureRecord>> features;
                          std::vector<MagicZone> zones;    // one per level

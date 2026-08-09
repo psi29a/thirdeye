@@ -629,6 +629,25 @@ Still open (nice-to-have): a file-picker UI instead of the env var.
   three monster slots and slot 2 also gets `make boss monster` (msg 233).
   Verified live: a level spawns stairs + 4 doors + 4 buttons +
   bugbear/goblin/bugbear, 0 stubs, 0 errors.
+- ✅ **DH file writers.** `create_file` / `write_array_to_file` /
+  `write_long_to_file` / `write_number_to_file` / `update_file` land in
+  [`runtime/dh.cpp`](../apps/thirdeye/runtime/dh.cpp) beside the existing
+  readers (buffer in memory, flush at `close_file`). `PC.DAT` (33 B) and
+  `SETTINGS.DAT` (27 B) round-trip byte-perfectly, and the whole phase-one
+  flow — menu, character select, Customization, Play — runs with zero
+  stubs. Seed 0 ("(random)" on the Customization screen) is substituted in
+  `generateDungeon` the way `1325:3aee` does, and the seed actually used is
+  recorded in `LEVELS.DAT`'s header.
+- 🚧 **DH new-game path — blocked on the errorlevel.** `phase-one`'s
+  `main screen` returns 2 (Show Intro), 3 (Continue) or 1 (Choose/Create
+  Character + Customize), and **never 0** — which is what `HACK.BAT` needs
+  to run MAZE and enter phase-two. Cases 2 and 3 map onto the batch exactly,
+  so the reading is probably right and the transform happens elsewhere:
+  either DH's own 16-bit `AESOP.EXE` remaps the interpreter's exit code, or
+  this install's `HACK.BAT` is a demo/bundled variant (it ships
+  `DEMOGNBG.EXE` + `G.BAT`). Next step is disassembling DH's `AESOP.EXE`
+  exit path. Until then gameplay needs `THIRDEYE_BOOT=phase-two`. Full
+  trace in [dungeon_hack.md](dungeon_hack.md#where-the-errorlevel-actually-comes-from-2026-08-09).
 - ✅ **MAZE.EXE feature tail — the dungeon is populated.** The fifteen
   per-level passes plus `26f6` (pits) and `36a2` (quest objects) are
   ported: regions (`2081`), stairs (`10a6`), illusionary walls, arches,

@@ -858,3 +858,45 @@ is chosen so nothing gets built on top of the player. Still not validated
 against a real MAZE run — SEED.TXT remains the oracle for that.
 
 Zero stubs, zero errors, 119 tests green, EOB3 unaffected.
+
+### DH file writers, and the phase-one errorlevel contract (2026-08-09)
+
+Driving DH's own menus turned up three stubs — `create_file`,
+`write_array_to_file`, `write_long_to_file` — and they were the whole reason
+phase-one could never persist anything. They are implemented now, alongside
+`write_number_to_file` and `update_file`. Writes buffer in memory and flush at
+`close_file`; the SOP writes sequentially and never seeks, so that is both
+simpler and safer than holding an `ofstream` open across VM calls.
+
+Both files DH writes now round-trip byte-perfectly: `PC.DAT` at 33 bytes
+(a 20-byte name plus a 13-byte stat block) and `SETTINGS.DAT` at 27 bytes
+(`u32 seed` + 19-byte struct + a trailing counter). The whole phase-one flow —
+menu, character selection, the Customization screen, Play — now runs with
+**zero stubs**.
+
+**Seed 0 is not a seed.** DH's Customization screen displays "(random)" and
+writes 0; `1325:3aee` substitutes the BIOS timer for it. We were about to take
+that 0 literally, which would have handed every install the same dungeon. The
+substitution now lives in `generateDungeon` (where MAZE does it), and the seed
+actually used comes back in `DungeonOut::seedUsed` and goes into `LEVELS.DAT`'s
+4-byte header — which is exactly where MAZE records it too.
+
+**The errorlevel contract, mapped.** `phase-one`'s `create` handler is just
+`init_*` then `SEND "main screen"` then `END`, and `END` returns top-of-stack.
+Since phase-one imports no exit-code function at all, the DOS errorlevel *is*
+what `main screen` returns. That handler is a `while(1)` around a 5-way CASE on
+the menu selection: Show Intro returns **2** (`:CHECKDEMO`), Continue runs
+`enter game` and returns **3** (`:CONTINUE`), and Choose/Create Character run
+`customize` and return **1**. Cases 0 and 1 line up with `HACK.BAT` exactly,
+which is good evidence the reading is right.
+
+And then it doesn't work: **no path returns 0**, which is what the batch needs
+to run MAZE and enter phase-two. The branch that would return 0 is dead code
+behind `SHTC #01; BRT`. Clicking Play genuinely returns 1 — `:EXIT`. Either
+DH's own 16-bit `AESOP.EXE` transforms the interpreter's exit code (EOB3's
+`AESOP.C` is only a `spawnvp` launcher that collapses everything non-zero to
+1), or this install's `HACK.BAT` isn't retail's — it ships `DEMOGNBG.EXE` and a
+`G.BAT`, which smells like a bundled build. That is a question about
+`AESOP.EXE`, not about our runtime, and it is where the new-game path is
+currently blocked. Full trace in
+[dungeon_hack.md](dungeon_hack.md#where-the-errorlevel-actually-comes-from-2026-08-09).

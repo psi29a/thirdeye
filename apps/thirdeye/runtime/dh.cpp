@@ -995,10 +995,12 @@ void ensureSavegameFiles(const std::filesystem::path &dhRoot) {
 	// the buffer afterwards so the FEA writer can place features on cells
 	// that are actually open.
 	std::vector<uint8_t> levelData(4 + static_cast<size_t>(levels) * 0x400, 0);
-	for (int i = 0; i < 4; ++i)
-		levelData[i] = static_cast<uint8_t>(seed >> (8 * i));
 	DungeonOut dungeon;
 	generateDungeon(levelData.data() + 4, levels, seed, settings, dungeon);
+	// The header records the seed MAZE actually used -- which is not the one
+	// from SETTINGS.DAT when that said 0 ("random").
+	for (int i = 0; i < 4; ++i)
+		levelData[i] = static_cast<uint8_t>(dungeon.seedUsed >> (8 * i));
 	writeIfMissing("LEVELS.DAT", levelData);
 
 	// FEA00..FEA{levels-1}.DAT and ITEMS.DAT come straight out of MAZE's own

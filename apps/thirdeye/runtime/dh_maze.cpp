@@ -1,5 +1,6 @@
 #include "internal.hpp"
 
+#include <chrono>
 #include <cstdint>
 #include <cstdlib>
 #include <vector>
@@ -1290,6 +1291,16 @@ void generateDungeon(uint8_t *chunks, int levels, uint32_t seed,
 	out.features.assign(static_cast<size_t>(levels), {});
 	out.zones.assign(static_cast<size_t>(levels), MagicZone{});
 	out.items.clear();
+
+	// 1325:3aee -- a seed of 0 means "roll one": MAZE substitutes the BIOS
+	// timer at 0040:006C, and DH's Customization screen writes 0 whenever the
+	// seed reads "(random)". Taking the 0 literally would hand every install
+	// the same dungeon. Whatever we settle on is reported back so the caller
+	// can record it, exactly as MAZE stores it for SEED.TXT and LEVELS.DAT.
+	if (seed == 0)
+		seed = static_cast<uint32_t>(
+		    std::chrono::steady_clock::now().time_since_epoch().count()) | 1u;
+	out.seedUsed = seed;
 
 	Gen g;
 	g.chunks = chunks;
