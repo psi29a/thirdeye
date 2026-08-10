@@ -10,9 +10,9 @@ them straight from `arun.exe` so our `apps/thirdeye/savegame/transfer.cpp` +
 Reproduce with:
 
 ```bash
-r2 -q -c 'pd 50 @ 0x240b0' /Users/bret.curtis/.../arun/arun.exe   # player_attrib
-r2 -q -c 'pd 60 @ 0x24100' /Users/bret.curtis/.../arun/arun.exe   # item_attrib
-r2 -q -c 'pd 50 @ 0x124c2' /Users/bret.curtis/.../arun/arun.exe   # write_initial_tempfiles
+r2 -q -c 'pd 50 @ 0x240b0' ~/.../arun/arun.exe   # player_attrib
+r2 -q -c 'pd 60 @ 0x24100' ~/.../arun/arun.exe   # item_attrib
+r2 -q -c 'pd 50 @ 0x124c2' ~/.../arun/arun.exe   # write_initial_tempfiles
 # (function addresses from arun.map; reloc placeholders look like `0x3250 ; RELOC 32`
 #  — apply `-A -e bin.relocs.apply=true` and they resolve into the data segment
 #  at 0x33250+.)

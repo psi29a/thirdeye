@@ -66,9 +66,9 @@ This document records the steps taken to obtain and extract the Dungeon Hack (US
 8. DATA3.NFO
 
 ## ARJ archives found (absolute paths)
-1. /Users/bret.curtis/Downloads/HACK_ISO/DATA1.ARJ
-2. /Users/bret.curtis/Downloads/HACK_ISO/DEMO1.ARJ
-3. /Users/bret.curtis/Downloads/HACK_ISO/DEMO2.ARJ
+1. ~/Downloads/HACK_ISO/DATA1.ARJ
+2. ~/Downloads/HACK_ISO/DEMO1.ARJ
+3. ~/Downloads/HACK_ISO/DEMO2.ARJ
 
 ## Contents of the final extraction from the ARJ files
 (These files were extracted into ~/Downloads/HACK — paths are relative to that directory.)
@@ -493,11 +493,16 @@ The launcher simply loads a RES file, finds a named object in its export diction
 
 **HACK.BAT** (multi-phase):
 ```batch
-aesop open opening           # Phase 1: Load OPEN.RES, run intro/menu
-aesop hack phase-one         # Phase 2: Load HACK.RES, initialize game state
+aesop open opening           # Phase 1: Load OPEN.RES, run the intro
+aesop hack phase-one         # Phase 2: Load HACK.RES, title menu + character +
+                             #          the Customization (settings) screen
 ..\maze %1 %2                # Phase 3: generate the dungeon files
-aesop hack phase-two         # Phase 4: Load HACK.RES, cleanup/save
+aesop hack phase-two         # Phase 4: Load HACK.RES, THE GAME ITSELF
 ```
+
+`phase-two` is the game loop, not a cleanup step: it is what consumes
+`LEVELS.DAT` / `FEA%02d.DAT` / `ITEMS.DAT` and runs play. See
+"What Does MAZE.EXE Do?" below and the errorlevel section above.
 
 **Architecture**:
 - Multiple executables: `AESOP.EXE` (the AESOP runtime) + `MAZE.EXE`

@@ -311,6 +311,22 @@ TEST(DhMaze, SeedZeroRollsARealSeed) {
 	EXPECT_EQ(e.out.seedUsed, kShippedSeed);
 }
 
+// Region ids ride in the tile byte as 'A' + id and are read back by a
+// 0x41..0x7C range check, so id 59 is the last one that survives. An id of 60
+// encodes as 0x7D, which fails that check -- those cells would silently become
+// rock for every later pass. Assert no level ever labels past the limit.
+TEST(DhMaze, RegionIdsStayInsideTheGlyphRange) {
+	const Dungeon d = build();
+	for (int l = 0; l < kLevels; ++l) {
+		EXPECT_LE(d.out.info[l].regionCount, 60) << "level " << l;
+		for (int i = 0; i < 0x400; ++i) {
+			const uint8_t t = d.grid(l)[i];
+			ASSERT_TRUE(t == 0xFF || t == 0 || t == 1)
+				<< "level " << l << " tile " << i << " = " << int(t);
+		}
+	}
+}
+
 // Same seed, same dungeon -- the whole point of chaining off SETTINGS.DAT's
 // seed rather than a clock.
 TEST(DhMaze, GenerationIsDeterministic) {

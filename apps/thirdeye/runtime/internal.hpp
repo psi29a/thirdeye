@@ -185,7 +185,7 @@ namespace dh       { bool tryHandle(Context&, const std::string &fn,
                      // 250/103), ported from segment 1766. Exposed only so
                      // the unit tests can assert the lag invariant -- the
                      // dungeon generator is the sole production caller.
-                     // Implementation + provenance in dh.cpp.
+                     // Implementation + provenance in dh_maze.cpp.
                      class R250 {
                      public:
                          explicit R250(uint32_t seed);

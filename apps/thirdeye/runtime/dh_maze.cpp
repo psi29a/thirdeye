@@ -532,7 +532,11 @@ void labelRegions(Level &lv, int entryRow, int entryCol) {
 		std::vector<std::pair<int, int>> next;
 		for (const auto &[seed, depth] : pending) {
 			if (lv.grid[seed] != kFloor) continue;   // already claimed
-			if (lv.regions.size() > 60) return;      // 'A'+id must stay <= '|'
+			// Region ids are stored as 'A' + id and read back through
+			// isFloorGlyph (0x41..0x7C), so 59 is the last id that survives
+			// the round trip: id 60 encodes as 0x7D and every later pass
+			// would treat those cells as solid rock.
+			if (lv.regions.size() >= 60) return;
 			const int id = static_cast<int>(lv.regions.size());
 			lv.regions.push_back(Region{ depth, 0 });
 			// Flood this region, queueing whatever lies past each door.
@@ -562,7 +566,7 @@ void labelRegions(Level &lv, int entryRow, int entryCol) {
 		// Floor that no door leads to is still floor: give it its own region
 		// at the deepest depth seen, so later passes can use it. MAZE reaches
 		// the same end by retrying the carve and, failing that, teleporters.
-		if (pending.empty() && lv.regions.size() <= 60) {
+		if (pending.empty() && lv.regions.size() < 60) {
 			for (int i = 0; i < 0x400; ++i)
 				if (lv.grid[i] == kFloor) {
 					pending.emplace_back(i, static_cast<int>(lv.regions.size()));

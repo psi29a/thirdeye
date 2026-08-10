@@ -796,8 +796,11 @@ bool tryHandle(Context &ctx, const std::string &fn,
 		const bool sized = (fn == "write_number_to_file" && args.size() >= 2);
 		const int sz = sized ? static_cast<int>(args[1]) : 4;
 		const int32_t v = static_cast<int32_t>(args[0]);
-		if (sz > 0 && sz <= 4) {
-			DHFile &f = currentFile();
+		DHFile &f = currentFile();
+		if (!f.writing) {
+			rt() << "  [" << fn << " with no file open for writing -- dropped]"
+			     << std::endl;
+		} else if (sz > 0 && sz <= 4) {
 			for (int i = 0; i < sz; ++i)
 				f.buf.push_back(static_cast<uint8_t>(
 				    (static_cast<uint32_t>(v) >> (8 * i)) & 0xFF));
@@ -813,6 +816,15 @@ bool tryHandle(Context &ctx, const std::string &fn,
 		                                   static_cast<uint32_t>(len));
 		if (!src) { result = 0; return true; }
 		DHFile &f = currentFile();
+		// Only ever append to a file opened by create_file. Appending to a
+		// read buffer would be silently dropped at close_file; appending with
+		// nothing open would leak the bytes into the next file written.
+		if (!f.writing) {
+			rt() << "  [write_array_to_file with no file open for writing"
+			        " -- dropped]" << std::endl;
+			result = 0;
+			return true;
+		}
 		f.buf.insert(f.buf.end(), src, src + len);
 		result = 0;
 		return true;
@@ -971,29 +983,36 @@ void ensureSavegameFiles(const std::filesystem::path &dhRoot) {
 	}
 	const int levels = settings[0] + 10;
 
-	// Resolve the name case-insensitively BEFORE testing existence: reads go
+	// The dungeon is one artifact spread over many files, so treat it as
+	// all-or-nothing. Writing only the missing members would mix two different
+	// dungeons: a real MAZE (or DOSBox) LEVELS.DAT preserved alongside freshly
+	// generated FEA files puts features inside rock and points the stairs at
+	// entry cells the preserved map does not have -- a broken level, and one
+	// that is much harder to diagnose than a missing file.
+	//
+	// Resolve every name case-insensitively before testing existence: reads go
 	// through savegamePath()/resolveChildCI, so on a case-sensitive filesystem
-	// a real MAZE (or DOSBox) run that produced `levels.dat` would not be seen
-	// by a fixed-case `LEVELS.DAT` check. We would then drop an empty
-	// uppercase stub next to it and the SOP could load whichever the directory
-	// iterator yields first -- silently serving an empty dungeon over the real
-	// one. Checking and writing the same resolved path keeps the "real MAZE
-	// output is preserved" guarantee honest.
-	auto writeIfMissing = [&](const std::string &name,
-	                          const std::vector<uint8_t> &bytes) {
-		auto p = resolveChildCI(sg, name);
-		if (fs::exists(p, ec)) return;
-		std::ofstream out(p, std::ios::binary);
-		if (out) out.write(reinterpret_cast<const char *>(bytes.data()),
-		                   static_cast<std::streamsize>(bytes.size()));
-	};
+	// a run that produced `levels.dat` would not be seen by a fixed-case
+	// `LEVELS.DAT` check, and we would drop an uppercase stub beside it for the
+	// SOP to load instead.
+	std::vector<std::string> names{ "LEVELS.DAT", "ITEMS.DAT" };
+	for (int i = 0; i < levels; ++i) {
+		char name[16];
+		std::snprintf(name, sizeof(name), "FEA%02d.DAT", i);
+		names.emplace_back(name);
+	}
+	bool complete = true;
+	for (const std::string &n : names)
+		if (!fs::exists(resolveChildCI(sg, n), ec)) { complete = false; break; }
+	// Every member present: a previous run (ours, MAZE's or DOSBox's) owns this
+	// dungeon. Leave it alone -- and skip generating one we would only discard.
+	if (complete) return;
 
 	// LEVELS.DAT: the 4-byte header MAZE writes is the seed itself
 	// (FUN_1325_4053 fwrites &seed before the chunks), then N x 0x400 tile
 	// chunks. generateDungeon() is the MAZE port -- it owns zone assignment,
-	// all five layout algorithms, the entry chaining and the stairs. We keep
-	// the buffer afterwards so the FEA writer can place features on cells
-	// that are actually open.
+	// all five layout algorithms, the entry chaining, the stairs and the
+	// feature/item streams.
 	std::vector<uint8_t> levelData(4 + static_cast<size_t>(levels) * 0x400, 0);
 	DungeonOut dungeon;
 	generateDungeon(levelData.data() + 4, levels, seed, settings, dungeon);
@@ -1001,19 +1020,21 @@ void ensureSavegameFiles(const std::filesystem::path &dhRoot) {
 	// from SETTINGS.DAT when that said 0 ("random").
 	for (int i = 0; i < 4; ++i)
 		levelData[i] = static_cast<uint8_t>(dungeon.seedUsed >> (8 * i));
-	writeIfMissing("LEVELS.DAT", levelData);
 
-	// FEA00..FEA{levels-1}.DAT and ITEMS.DAT come straight out of MAZE's own
-	// writers now (1325:3c76 and 1325:3bb0): an 8-byte header record carrying
-	// the party entry, one 8-byte body record per feature, an all-zero
-	// terminator. The 30 feature types and 12 item types, what places each and
-	// how bytes 4..7 are packed, are in dh_research/MAZE/FEATURES.md.
-	for (int i = 0; i < levels; ++i) {
-		char name[16];
-		std::snprintf(name, sizeof(name), "FEA%02d.DAT", i);
-		writeIfMissing(name, packFeatureFile(dungeon, i));
-	}
-	writeIfMissing("ITEMS.DAT", packItemFile(dungeon));
+	// FEA%02d.DAT and ITEMS.DAT come straight out of MAZE's own writers
+	// (1325:3c76 and 1325:3bb0): an 8-byte header record carrying the party
+	// entry, one 8-byte body record per feature, an all-zero terminator. The 30
+	// feature types and 12 item types, what places each and how bytes 4..7 are
+	// packed, are in dh_research/MAZE/FEATURES.md.
+	auto write = [&](const std::string &name, const std::vector<uint8_t> &bytes) {
+		std::ofstream out(resolveChildCI(sg, name), std::ios::binary);
+		if (out) out.write(reinterpret_cast<const char *>(bytes.data()),
+		                   static_cast<std::streamsize>(bytes.size()));
+	};
+	write("LEVELS.DAT", levelData);
+	for (int i = 0; i < levels; ++i)
+		write(names[static_cast<size_t>(i) + 2], packFeatureFile(dungeon, i));
+	write("ITEMS.DAT", packItemFile(dungeon));
 }
 
 } // namespace THIRDEYE::runtime::dh

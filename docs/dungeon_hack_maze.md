@@ -61,7 +61,7 @@ optionally overrides settings from `argv`, and writes four artefacts:
 | `SETTINGS.DAT` | in | 4B seed + 12B struct | dungeon-gen params (§SETTINGS.DAT) |
 | `LEVELS.DAT` | out | 4B seed + `(DEPTH+10)`×0x400 | per-level 32×32 tile map (§LEVELS.DAT) |
 | `FEA%02d.DAT` | out (per level) | stream of 8-byte records | feature records (§FEA) |
-| `ITEMS.DAT` | out | stream of 5-byte permuted records + zero terminator | initial item placements |
+| `ITEMS.DAT` | out | stream of **8-byte** records + zero terminator | initial item placements (permuted from a 5-byte source record) |
 | `SEED.TXT` | out | ASCII | seed + settings for repro |
 
 Error strings that anchor the writer paths:
@@ -441,8 +441,11 @@ Shipped alongside a fresh install (as GoG delivers it):
 HISCORE.DAT   1.0K   high-score board (leading u16 count + entries; player
                      "Urlithani Windleaf won" visible in the first record)
 HISCORE.DEF   1.0K   default (empty?) high-score table
-PC.DAT       33 B    last character:  15-byte name + stat bytes
-                     (currently "Kathra Shallowtaint" + 15 bytes)
+PC.DAT       33 B    the shipped ready-to-play character: a 20-byte
+                     NUL-padded name + a 13-byte stat block. Confirmed
+                     from phase-one's own writes -- create_file then
+                     write_array_to_file(ptr,20) + (ptr,13). Ships as
+                     "Kathra Shallowtaint".
 SETSAVE.DAT  19 B    binary snapshot of the last-used SETTINGS
 SETTINGS.DAT 27 B    binary SETTINGS.DAT (see §SETTINGS.DAT)
 VISIBLE.DAT  25 KB   visibility masks (per-level, consumed by
@@ -492,9 +495,11 @@ for the full function table. Highlights:
   (`fcn.00007329`), then opens+writes `SEED.TXT` and exits.
 - Write pipeline calls three writers in order (identities pinned via
   DGROUP push audit — see `../../dh_research/MAZE/README.md`):
-  - `FUN_1325_4053` → **`LEVELS.DAT`** — 4-byte header +
-    `(DEPTH+10)` × 0x400-byte entropy chunks (`FUN_1325_4017`:
-    `0xDB` → random byte, else → `0xFF`)
+  - `FUN_1325_4053` → **`LEVELS.DAT`** — a 4-byte header holding the
+    seed, then `(DEPTH+10)` × 0x400-byte **32×32 tile maps**
+    (`FUN_1325_4017` finalizes each: `0xDB` → `random(0,1)`, a wall with
+    one of two texture variants; everything else → `0xFF`, open floor).
+    Not entropy — see the correction in the LEVELS.DAT section.
   - `FUN_1325_3bb0` → **`items.dat`** (DOS is case-insensitive, so this
     is the same file referred to elsewhere as `ITEMS.DAT`; note no DH SOP
     object opens it — see the ITEMS.DAT section) — 5-byte source records

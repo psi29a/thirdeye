@@ -24,10 +24,24 @@
 
 namespace {
 
+// A code resource opens with a 14-byte PHDR -- static_size, then the import,
+// export and parent resource numbers -- and bytecode starts at offset 14.
+// (There is no magic here: `AESOP/16 V1.00` is the *container* magic on the
+// .RES file, not on a code resource.) codeDataPtr addresses the buffer flat,
+// so the header does not change what it returns, but building fixtures with a
+// real one keeps them honest if the constructor ever starts validating.
+constexpr size_t kPhdr = 14;
+
 // A probability table as MAZE/HACK stores one: percentage weights terminated
-// by 0xFF.
+// by 0xFF, planted `at` bytes into the resource.
 std::vector<uint8_t> codeWith(std::vector<uint8_t> table, size_t at) {
-	std::vector<uint8_t> code(at, 0x00);
+	std::vector<uint8_t> code{
+		0x01, 0x00,               // static_size = 1
+		0xFF, 0xFF, 0xFF, 0xFF,   // import_resource = none
+		0xFF, 0xFF, 0xFF, 0xFF,   // export_resource = none
+		0xFF, 0xFF, 0xFF, 0xFF }; // parent = none
+	if (at < kPhdr) at = kPhdr;   // never plant a table inside the header
+	code.resize(at, 0x00);
 	code.insert(code.end(), table.begin(), table.end());
 	return code;
 }
@@ -44,10 +58,10 @@ TEST(CodeTable, ResolvesTableInTheMiddleOfTheCodeResource) {
 // The case the old 256-byte demand broke: a valid short table whose buffer
 // simply does not extend 256 bytes past it.
 TEST(CodeTable, ShortTableNearEndOfBufferStillResolves) {
-	auto code = codeWith({5, 5, 0xFF}, 8);   // 11 bytes total
+	auto code = codeWith({5, 5, 0xFF}, kPhdr);   // 17 bytes total
 	VM::Interpreter vm(code);
-	EXPECT_EQ(vm.codeDataPtr(8, 256), nullptr);  // the old, over-wide probe
-	const uint8_t *p = vm.codeDataPtr(8, 3);     // the narrowed probe
+	EXPECT_EQ(vm.codeDataPtr(kPhdr, 256), nullptr);  // the old, over-wide probe
+	const uint8_t *p = vm.codeDataPtr(kPhdr, 3);     // the narrowed probe
 	ASSERT_NE(p, nullptr);
 	EXPECT_EQ(p[2], 0xFF);
 }

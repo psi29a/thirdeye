@@ -485,8 +485,16 @@ HACK.BAT's errorlevel semantics — remembering that batch `if ERRORLEVEL n` mat
 *n and above*, tested high-to-low: `>= 3` re-runs phase-one (`:CONTINUE`), `2` re-runs
 the intro first (`:CHECKDEMO`), `1` quits, `0` falls through to MAZE then phase-two.
 We land 2 and 3+ on the same target for now because the cross-.RES hop back to OPEN.RES
-isn't wired up. So the title-menu attract loop functions and phase-two can be reached without
-a `THIRDEYE_BOOT=phase-two` override. Phase-two now runs its tick loop against real DH
+isn't wired up. So the title-menu attract loop functions.
+
+> **Corrected 2026-08-09.** This paragraph originally went on to claim phase-two
+> could be reached without a `THIRDEYE_BOOT=phase-two` override. It cannot.
+> Tracing `phase-one`'s bytecode later showed that `main screen` returns 1, 2 or
+> 3 and **never 0**, so the batch never falls through to MAZE + phase-two. Only
+> the debug override reaches gameplay. See the errorlevel-contract section
+> further down, and [dungeon_hack.md](dungeon_hack.md#where-the-errorlevel-actually-comes-from-2026-08-09).
+
+Phase-two now runs its tick loop against real DH
 runtime support — file I/O primitives (`open_file`/`read_*`/`close_file`) resolve
 DOS-backslash paths against `<dh_root>/`, the SAVEGAME loaders read shipped
 `PC.DAT`/`SETTINGS.DAT`/`VISIBLE.DAT`, and the MAZE-consumer wrappers
