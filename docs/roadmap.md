@@ -78,12 +78,11 @@ narrative on completed work.
     are clickable at the quadrant where the SOP draws them.
   - **Equip/move** — portrait click opens the equipment screen (M:240); clicking the
     right-hand slot takes the sword to hand (`in_hand -1 → 993`), clicking again places
-    it back (`993 → -1`). Two more stored-as-sentinel fixes made this possible: the §2.3
-    item stream stores `items.W:itmflags` as **0xFFFF** — and bit 0x400 is the CURSED
-    gate (`utils` r1386 @3646), so every restored item refused to unequip ("cannot
-    release the item!  It is cursed!"); itmflags is now re-seeded from the class's
-    `report(1)` low word. Likewise `arms.B:bonus` is stored as -1 with the REAL magical
-    bonus in trailer byte 3 — now applied on restore (a -1 bonus also reads as cursed).
+    it back (`993 → -1`). (Historical note: this originally needed two "stored-as-sentinel"
+    workarounds — re-seeding `items.W:itmflags` and applying `arms.B:bonus` from a
+    "trailer byte" — because the §2.3 parser was reading each item's static block 4 bytes
+    early. The 2026-07-19 CDESC-framing fix reads the block correctly, so itmflags and
+    bonus arrive in-frame and both workarounds are gone.)
     Backpack slots `W:inventory[0..13]` are now parsed from ITEMS.TMP @+96 and restored
     (they were left zero-filled = "item object 0", so clicking an empty backpack slot
     picked up the kernel).
@@ -407,10 +406,14 @@ originals define exactly:
   (chargen's). Strength bonuses + real weapons together drop a troll 30→18 HP
   in 8 seconds.
 - **Live item-object stream (§2.3)** RE'd + parsed
-  ([`parseItemStream`](../apps/thirdeye/savegame/items_tmp.hpp)): variable-
-  stride records `(u16 id, u16 class, N statics, 4 trailer)`, where N comes
-  from the SOP class's total `instanceStaticSize` via a caller-supplied lookup.
-  Unit-tested + verified against the Quick Start save.
+  ([`parseItemStream`](../apps/thirdeye/savegame/items_tmp.hpp)): native CDESC
+  records `(u16 slot, u32 name, u16 size, size statics)` — the same
+  `save_range` format as the rest of the file. **(Corrected 2026-07-19:** the
+  original reading here was a 4-byte `(u16 id, u16 class, N statics, 4
+  trailer)` frame, which read every static block 4 bytes early and dropped the
+  placement fields — hiding every initial floor item in the game. See §2.3 in
+  [eob3_savegame_format.md](eob3_savegame_format.md).) Unit-tested + verified
+  against the Quick Start save.
 - **Title-menu → Restore-Game picker → in-game flow** wired end-to-end. The
   SOP's `savegame_title`/`string_compare`/`restore_items`/`restore_level_objects`
   runtime functions now do the real work (read `SAVEGAME.DIR`, expose slot
@@ -477,14 +480,16 @@ originals define exactly:
   entity, and copies `LVLnn_00.BIN → LVLnn.TMP` for all 14 levels via
   `restoreLevels(dir, 0)`. Chargen-transfer's new-game save now round-trips
   through `resume_level`.
-- ~~The 4-byte trailer in each §2.3 record is currently skipped~~ ✅ RE'd:
-  - **byte 3 = magical bonus (signed int8)** -- verified end-to-end
-    against named items (Father Jon's ring of protection +3, Sir Mikeal's
-    +1 plate/sword/shield, etc.). Accessor: `ItemRecord::magicalBonus()`.
-  - bytes 0..2 = placement word + flags, partially decoded; see
-    [`../eob3_research/SAVEGAME/README.md`](../eob3_research/SAVEGAME/README.md)
-    for the per-pattern breakdown and trailer log artifact.
-  - Probe behind `THIRDEYE_DUMP_TRAILERS=1` for further RE.
+- ~~The 4-byte trailer in each §2.3 record~~ ❌ **there is no trailer**
+  (corrected 2026-07-19). The "trailer" was an artifact of misreading the
+  8-byte CDESC header as 4 bytes: the last 4 bytes of each item's real static
+  block were being read as a standalone trailer, and "byte 3 = magical bonus"
+  was just the block's final byte. The static block carries `arms.B:bonus` and
+  `items.W:itmflags` at their true offsets, so the bonus/itmflags side-channel
+  patch-ups are gone; `ItemRecord::magicalBonus()` and `THIRDEYE_DUMP_TRAILERS`
+  were removed with the fix. Placement lives in the entity block:
+  `items.W:place@0` (holder object id, or -1 for a dungeon floor with
+  B:x/B:y/B:lvl set).
 - ~~Per-PC unmapped fields~~ ✅ done: race/classes/portrait/PCstat/alignment/
   levels[3]/lost_levels[3]/lost_hp/hbon/xp[1..2] now all parsed and patched.
   Remaining unmapped: memorized/known spells (the big B:spell_cnt/spell_stat
@@ -555,9 +560,142 @@ Still open (nice-to-have): a file-picker UI instead of the env var.
 
 ## Phase 4 — Dungeon Hack
 
-- Add the DH-only runtime functions (`eob3_research/ADDITIONAL_DH_RUNTIME_FUNCTIONS.TXT`).
-- `.TBL` support (daesop `/create_tbl` generates these).
-- `OPEN.RES`/`HACK.RES` flow.
+- ✅ **OPEN.RES / HACK.RES flow.** Filename-based auto-detect routes
+  OPEN.RES→`opening`, HACK.RES→`phase-one`. `bootObject` interprets
+  HACK.BAT errorlevels so phase-one loops the title and can chain to
+  phase-two. Batch `if ERRORLEVEL n` matches *n and above*, tested
+  high-to-low: `>= 3` → re-run phase-one (`:CONTINUE`), `2` → re-run the
+  intro first (`:CHECKDEMO`), `1` → quit, `0` → MAZE then phase-two.
+  2 and 3+ share a target until the cross-.RES intro hop is wired up.
+  `THIRDEYE_BOOT=<name>` overrides the boot object
+  for debugging. See [progress.md](progress.md) DH section.
+- ✅ **DH-only runtime functions.** A phase-two session with movement now
+  reports **zero** stubbed CALLs. Trivial helpers landed (`page_flip`,
+  `sequence_playing`, `touch`, `pause`, `seed_random`, `roll_chance`,
+  `randomize_array`, `long2hex`, `xmsallocated`, `text_background`,
+  `lock_resource`/`unlock_resource`, `printer_on_line`); DH-variant
+  3-arg `notify` shim landed; file I/O primitives (`open_file`,
+  `close_file`, `read_number_from_file`, `read_array_from_file`) read
+  from `<dh_root>/SAVEGAME/` with DOS-backslash path resolution;
+  dungeon loaders (`load_level_map`, `load_visibility`,
+  `open_feature_file`, `get_feature_record`, `close_feature_file`)
+  read chunks per the format spec in
+  [dungeon_hack_maze.md](dungeon_hack_maze.md) or zero-fill when files
+  are missing. See
+  [`apps/thirdeye/runtime/dh.cpp`](../apps/thirdeye/runtime/dh.cpp).
+- ✅ **Native dungeon generator — MAZE.EXE's own algorithms.**
+  [`runtime/dh_maze.cpp`](../apps/thirdeye/runtime/dh_maze.cpp) ports
+  MAZE's R250 PRNG (`1766:0005/006e/00c1`), its zone assignment
+  (`1325:3986`) and **all five layout algorithms**: the stackless
+  recursive backtracker for zones 0/2 (`1325:04ab/05a0/056a`) and the
+  room-and-corridor generator for zones 1/3/4 (`1325:0e3c`), plus door
+  placement (`0cdc`/`08cb`/`07ce`/`107a`), pocket filling (`06d1`),
+  entry placement (`0c1d`) and the `1325:4017` finalize pass. Cells sit
+  on **odd** coordinates as MAZE puts them, with the party arrival
+  shipped in the FEA header record (bytes 1/2/3 = x, y, facing) rather
+  than assumed at `(0,0)`; entry chains level to level the way MAZE
+  does. Verified over 25 levels at seed `0x000156e0`, and in game the
+  party spawns at `(3,26)` facing north and walks up column 3 matching
+  the map cell for cell. Nine tests in
+  [`apps/tests/dhmaze_tests.cpp`](../apps/tests/dhmaze_tests.cpp).
+  **Not yet validated against a real MAZE run** — SEED.TXT is a
+  byte-exact oracle for that once DOSBox is available.
+- ✅ **FEA stairs.** The `dungeon` object's CASE table has 31 entries:
+  `0` ends the record loop and `1..30` are the feature types in MAZE's
+  string-table order, so **4 = stairs up, 5 = stairs down**. Type 5
+  forwards `fea[4..7]` to `create teleporter` (msg 495) on class 2870
+  ("current stairs down"), matching the `teleporters` object's
+  `dest_x/dest_y/dest_lvl/dest_fdir` externs. We now emit one
+  down-stairs per level at the open cell furthest from the start
+  (verified reachable — 84 steps on level 0) and the SOP creates the
+  object (`create_program(1000, 2870)`).
+- ✅ **`draw_auto_square` — automap works, and DH now runs with ZERO
+  stubs.** Ported from AESOP.EXE `1f36:0966`: each map cell is a 9x9 box
+  of *lines*, not a bitmap — outline in colour 0x66, passage stubs to
+  neighbours in 0x67, inner highlight on an open side in 0x69.
+  `lvlvis & 4` = unseen (skip outline); `lvlbit` even bits 0/2/4/6 are
+  passages N/E/S/W and odd bits are corners. Clipped to its window
+  (subwindow 11) — AESOP clips via the page it is handed, we draw
+  straight to the screen, so without it a map-edge cell spills over the
+  HUD exactly as the wall panels did.
+- ✅ **Feature types: creatures, doors, buttons.** All decoded from the
+  `dungeon` CASE table and emitted by the generator:
+  type 1 door -> `create door` (msg 493, class 2855; bytes 6/7 form a
+  16-bit link id = the `doors` object's W:button_num/W:lock_num),
+  type 6 button -> `create thing` (msg 496, class 2894; types 2 and 7
+  are the same shape with classes 2813/2897),
+  type 12 creature -> `create monster` (msg 494) with the class from
+  `mon_types[lvl*12 + fea[4]*4]`, i.e. fea[4] picks one of the level's
+  three monster slots and slot 2 also gets `make boss monster` (msg 233).
+  Verified live: a level spawns stairs + 4 doors + 4 buttons +
+  bugbear/goblin/bugbear, 0 stubs, 0 errors.
+- ✅ **DH file writers.** `create_file` / `write_array_to_file` /
+  `write_long_to_file` / `write_number_to_file` / `update_file` land in
+  [`runtime/dh.cpp`](../apps/thirdeye/runtime/dh.cpp) beside the existing
+  readers (buffer in memory, flush at `close_file`). `PC.DAT` (33 B) and
+  `SETTINGS.DAT` (27 B) round-trip byte-perfectly, and the whole phase-one
+  flow — menu, character select, Customization, Play — runs with zero
+  stubs. Seed 0 ("(random)" on the Customization screen) is substituted in
+  `generateDungeon` the way `1325:3aee` does, and the seed actually used is
+  recorded in `LEVELS.DAT`'s header.
+- 🚧 **DH new-game path — blocked on the errorlevel.** `phase-one`'s
+  `main screen` returns 2 (Show Intro), 3 (Continue) or 1 (Choose/Create
+  Character + Customize), and **never 0** — which is what `HACK.BAT` needs
+  to run MAZE and enter phase-two. Cases 2 and 3 map onto the batch exactly,
+  so the reading is probably right and the transform happens elsewhere:
+  either DH's own 16-bit `AESOP.EXE` remaps the interpreter's exit code, or
+  this install's `HACK.BAT` is a demo/bundled variant (it ships
+  `DEMOGNBG.EXE` + `G.BAT`). Next step is disassembling DH's `AESOP.EXE`
+  exit path. Until then gameplay needs `THIRDEYE_BOOT=phase-two`. Full
+  trace in [dungeon_hack.md](dungeon_hack.md#where-the-errorlevel-actually-comes-from-2026-08-09).
+- ✅ **MAZE.EXE feature tail — the dungeon is populated.** The fifteen
+  per-level passes plus `26f6` (pits) and `36a2` (quest objects) are
+  ported: regions (`2081`), stairs (`10a6`), illusionary walls, arches,
+  the glyph→record sweep (`330f`), door openers and their matching keys
+  (`312c`/`3004`), disguised walls (`219b`), pillars, monsters, traps,
+  shelves, hint sheets, rations, treasure, windows and decorations. All
+  seven `FREQ_*` tables transcribed and verified byte-for-byte. A live
+  25-level dungeon: 489 doors, **385 locks with 385 matching keys**,
+  1147 creatures, 63 traps, 3 pit pairs, 18 teleporters. Field-by-field
+  RE in [`dh_research/MAZE/FEATURES.md`](../../dh_research/MAZE/FEATURES.md).
+  Remaining gap: the region *walk* is ours rather than a transcription of
+  `13d8`, and none of it is validated against a real MAZE run — SEED.TXT
+  is the byte-exact oracle once DOSBox is available.
+- ✅ **Offscreen page compositing.** DH draws each HUD panel into its own
+  page at page-local (0,0) then `copy_window`s it to a screen rect;
+  `assign_window` now marks pages offscreen, `draw_bitmap` redirects into
+  the page surface, and `copy_window` blits to the destination origin.
+  Before this every DH panel piled up at screen (0,0). EOB3 has no
+  `copy_window` so its flattened path is untouched (verified
+  pixel-identical).
+- ✅ **DH palette-region map.** DH's bases are fixed=0x00 / walls=0xF0 /
+  floor=0xE0, not EOB3's 0x00/0xB0/0xC0/0xE0. With EOB3's table the
+  wallset's 0xF6..0xFD indices hit never-loaded (black) DAC entries — the
+  reason the dungeon view rendered solid black. `kFirstColorDH`, gated on
+  `gDungeonHack`; `THIRDEYE_PALBASE` overrides for bring-up.
+- ✅ **3D wall rendering.** `draw_walls` is a faithful port of AESOP.EXE's
+  own routine (`1f36:0785`): 25 wall faces over 18 map cells in 4 depth
+  bands, geometry tables lifted verbatim from the binary. Renders a real
+  perspective dungeon view — see
+  [screenshots/dh_wall_render_corridor.png](screenshots/dh_wall_render_corridor.png).
+  Validated data-driven: a synthetic map with one wall ahead draws exactly
+  1 face, a corridor draws 12, an all-walls map 25.
+  How the tables were located and validated:
+  [`../../dh_research/AESOP/README.md`](../../dh_research/AESOP/README.md).
+- ✅ **`init_viewspace` + `build_clipping`.** Both ported verbatim from
+  `AESOP.EXE` (`1f36:040f` / `1f36:05f4`) with an occlusion table lifted
+  from `DS:0x1117`. Occlusion is now real: cells outside the view cone
+  don't render, and blocked cells cull correctly with the SOP's own
+  `notblocks` results.
+- ✅ **Text/message-bar erase** now uses backdrop-restore in the DH HUD
+  (gated on `gDungeonHack && draw_bitmap(1, 59, …)` — DH's HUD-Backdrop
+  equivalent of EOB3's 190). Previously flat-fill sampled a stray pixel
+  and the whole message bar went white on movement.
+- ✅ **HUD clip.** `draw_walls` clips every blit to the view rect —
+  panels legitimately positioned outside the view (e.g. face 20 at x=34
+  spanning a 129-wide panel while view starts at 138) no longer paint
+  over the inventory column or the arch.
+- ⏳ `.TBL` support (daesop `/create_tbl` generates these).
 
 ## Phase 5 — Thirdeye-original features (post-EOB3)
 

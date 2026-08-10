@@ -7,7 +7,7 @@ AESOP/32), the bytecode VM that powers **Eye of the Beholder 3** (`EYE.RES`) and
 **End goal:** play EOB3 (and Dungeon Hack) natively from the original game data. You must own
 the original games — Thirdeye ships no game assets.
 
-Version 0.89.0 · GPLv3 · SDL3 (Linux/macOS/Windows), C++20.
+Version 0.90.0 · GPLv3 · SDL3 (Linux/macOS/Windows), C++20.
 
 ## Where things live
 
@@ -26,6 +26,9 @@ Version 0.89.0 · GPLv3 · SDL3 (Linux/macOS/Windows), C++20.
   layout + EOB1 type → EOB3 class table + why the current chargen placement is wrong.
 - [docs/create_sav_and_item_format.md](docs/create_sav_and_item_format.md) — char-gen save +
   EOB1 14-byte item format.
+- [docs/dungeon_hack_maze.md](docs/dungeon_hack_maze.md) — RE of Dungeon Hack's `MAZE.EXE`
+  (random dungeon generator) + `LEVELS.DAT` / `FEA%02d.DAT` / `ITEMS.DAT` formats + the
+  DH SOP consumer-side calls. Read before doing more Phase 4 work.
 - [docs/upgrade_to_cpp20.md](docs/upgrade_to_cpp20.md) — build notes.
 - [docs/control_channel.md](docs/control_channel.md) — design for the live control
   socket (agent-driven play + interactive debugging); phased hand-off spec.

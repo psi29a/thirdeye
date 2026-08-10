@@ -33,6 +33,7 @@ and the next silent-stall hunt will need the same toolkit.
 | `THIRDEYE_COMPASSDBG=1` | Trace compass-rect cover events + underlay captures (`[compass] …`); dumps each captured underlay to `/tmp/underlay_N.bmp`. |
 | `THIRDEYE_NO_WORLDITEMS=1` | Skip the resume-time world-item gap-fill from `ITEMS_00.BIN` (bisect helper — niches/monster drops go dark). |
 | `THIRDEYE_QUIT_AFTER_FIRST=1` | Exit right after the first frame (for `time` measurement). |
+| `THIRDEYE_CTL=<path>` | Open the live control channel on a Unix socket at `<path>` (macOS/Linux; no-op on Windows). Line protocol for injecting input + querying game state — see [control_channel.md](control_channel.md). Zero cost when unset. |
 
 ## Perf gotcha — the runtime-call trace is gated behind `--debug`
 

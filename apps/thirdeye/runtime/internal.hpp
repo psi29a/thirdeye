@@ -19,6 +19,7 @@
 
 #include <chrono>
 #include <cstdint>
+#include <filesystem>
 #include <iosfwd>
 #include <map>
 #include <string>
@@ -85,6 +86,11 @@ struct Context {
 // Runtime-call trace gate. Set from --debug before the VM runs; per-call
 // logging routes through rt() so it's a no-op when off.
 extern bool gRtTrace;
+
+// True when the loaded resource is Dungeon Hack (HACK.RES / OPEN.RES). DH
+// shares the AESOP runtime with EOB3 but differs in a few table constants --
+// currently the palette-region bases (see set_palette in runtime/graphics.cpp).
+extern bool gDungeonHack;
 
 // Set when the bytecode redraws the compass facing indicator (draw_bitmap to
 // page 104, resource 187, on a turn); consumed by the next compass-page
@@ -163,6 +169,94 @@ namespace graphics { bool tryHandle(Context&, const std::string &fn,
 namespace sound    { bool tryHandle(Context&, const std::string &fn,
                                     const std::vector<VM::Value>&,
                                     VM::Value &result); }
+namespace dh       { bool tryHandle(Context&, const std::string &fn,
+                                    const std::vector<VM::Value>&,
+                                    VM::Value &result);
+                     // Called once per DH boot (from engine.cpp when
+                     // HACK.RES is being loaded). Writes structurally
+                     // valid empty savegame/LEVELS.DAT / FEA*.DAT /
+                     // ITEMS.DAT if they don't exist, so phase-two
+                     // consumes zero-content dungeons instead of
+                     // tripping on missing files. Idempotent.
+                     void ensureSavegameFiles(
+                         const std::filesystem::path &dhRoot);
+
+                     // MAZE.EXE's PRNG: R250 (lagged-Fibonacci XOR, lags
+                     // 250/103), ported from segment 1766. Exposed only so
+                     // the unit tests can assert the lag invariant -- the
+                     // dungeon generator is the sole production caller.
+                     // Implementation + provenance in dh_maze.cpp.
+                     class R250 {
+                     public:
+                         explicit R250(uint32_t seed);
+                         uint16_t next();           // 1766:006e
+                         int range(int lo, int hi);  // 1766:00c1
+                         int roll(int n, int sides, int bonus);  // 1766:00dd
+                     private:
+                         uint16_t mState[250] = {};
+                         int mIndex = 0;
+                     };
+
+                     // Per-level results of a generateDungeon() run --
+                     // MAZE's 16-byte level descriptor, named.
+                     struct LevelInfo {
+                         uint8_t zone = 1;  // 0..4 -- which layout algorithm
+                         bool water = false;
+                         int entryRow = 0, entryCol = 0;  // party arrival cell
+                         int fdir = 0;                    // 0=N 1=E 2=S 3=W
+                         int stairRow = 0, stairCol = 0;  // the down-staircase
+                         // The cell in front of the staircase, and the facing
+                         // there: what the next level's stairs-up record aims
+                         // back at.
+                         int stairFrontRow = 0, stairFrontCol = 0;
+                         int stairFdir = 0;
+                         bool stairFdirValid = false;
+                         int regionCount = 0;
+                     };
+
+                     // 1325:121d's 9-byte feature record, and 1325:11af's
+                     // 5-byte item record, before the file writers permute
+                     // them. `type` indexes MAZE's own name tables (feature
+                     // 1..30, item 1..12) -- see dh_research/MAZE/FEATURES.md.
+                     struct FeatureRecord {
+                         uint8_t y, x, level, mask, type;
+                         uint16_t p2, p3;   // type-specific; 0xFFFF = unset
+                     };
+                     struct ItemRecord {
+                         uint8_t y, x, level, type, aux;
+                     };
+                     struct MagicZone {
+                         bool present = false;
+                         uint8_t x = 0, y = 0, w = 0, h = 0, kind = 0;
+                     };
+
+                     struct DungeonOut {
+                         // The seed actually used. Differs from the one passed
+                         // in only when that was 0, which means "roll one".
+                         uint32_t seedUsed = 0;
+                         std::vector<LevelInfo> info;
+                         std::vector<std::vector<FeatureRecord>> features;
+                         std::vector<MagicZone> zones;    // one per level
+                         std::vector<ItemRecord> items;   // whole dungeon
+                     };
+
+                     // Generate `levels` consecutive 0x400-byte tile chunks
+                     // into `chunks`, the way MAZE.EXE does: zones decided up
+                     // front from `seed`, each level generated from
+                     // `seed + level + 1`, then the feature-placement tail.
+                     // `settings` is SETTINGS.DAT's 12-byte struct (the bytes
+                     // after the u32 seed). Chunks come out in the on-disk
+                     // encoding (0xFF = floor, 0x00/0x01 = wall).
+                     void generateDungeon(uint8_t *chunks, int levels,
+                                          uint32_t seed,
+                                          const uint8_t *settings,
+                                          DungeonOut &out);
+
+                     // Serialise what generateDungeon produced, in MAZE's
+                     // on-disk layouts.
+                     std::vector<uint8_t> packFeatureFile(const DungeonOut &d,
+                                                          int level);
+                     std::vector<uint8_t> packItemFile(const DungeonOut &d); }
 
 } // namespace THIRDEYE::runtime
 

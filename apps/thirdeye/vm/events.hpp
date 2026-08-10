@@ -104,7 +104,9 @@ public:
 	// owned by `owner`; returns the handle the SOP code passes to notify() for
 	// region events. Handles 0/1 (PAGE1/PAGE2) are pre-created full-screen.
 	int32_t assignWindow(int32_t owner, int32_t x1, int32_t y1, int32_t x2,
-	                     int32_t y2);
+	                     int32_t y2, bool offscreen = false);
+	// True if `handle` was registered as an offscreen page (see Win::offscreen).
+	bool windowIsOffscreen(int32_t handle) const;
 	// release_window: free a window handle.
 	void releaseWindow(int32_t handle);
 	// release_owned_windows(owner): free every window whose assignWindow(owner,…)
@@ -191,10 +193,15 @@ private:
 	static constexpr int MAX_WINDOWS = 256;           // window-handle table size
 
 	// A registered window/region: an inclusive rectangle in screen coords.
+	// `offscreen` marks a handle created by AESOP's `assign_window` (as opposed
+	// to `assign_subwindow`): the SOP treats it as its own page-local drawing
+	// surface at (0,0)-(w-1,h-1) and later `copy_window`s it onto a screen rect.
+	// Only Dungeon Hack uses this; EOB3 has no copy_window and never sets it.
 	struct Win {
 		int32_t x0 = 0, y0 = 0, x1 = 0, y1 = 0;
 		int32_t owner = -1;
 		bool used = false;
+		bool offscreen = false;
 	};
 
 	// A request matches an event when the parameters agree: -1 is a wildcard,

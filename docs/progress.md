@@ -426,3 +426,485 @@ ignores the return so char-gen never noticed, M:14 branches on it ("run CHARCOPY
 EOB1 saves are rejected by design, matching the original CHARCOPY ("Eye of the Beholder
 III won't work with Eye I save games"): EOB1's record layout differs (243-byte records at
 0x02) and the intended path is EOB1 → EOB2's importer → EOB3.
+
+## Savegame item stream — the CDESC-framing fix (2026-07-19)
+
+✅ **Every initial floor item in the game now spawns.** `ITEMS.TMP`'s §2.3 item stream is
+one native `save_range` **CDESC** stream (RTOBJECT.C/.H): `{u16 slot, u32 name, u16 size}`
++ `size` bytes of verbatim instance statics per record, `name == 0xFFFFFFFF` for a dead
+slot. `parseItemStream` had been reading it as a **4-byte** `{u16 id, u16 class}` header +
+a class-size lookup + a "4-byte trailer" — which shifted every static block 4 bytes early
+and read the block's real last 4 bytes as a standalone trailer. The load-bearing casualty:
+the shifted read discarded the entity block's placement fields, so **no item with
+`W:place == -1` (on a dungeon floor) ever materialized** — the Burial Glen wands, the axe
+cache, every "on the ground here, you'll find…" in the walkthroughs was silently absent
+from a fresh QSP boot. The fix reads the true 8-byte CDESC header and copies the whole
+`size`-byte block verbatim; floor items now spawn, `loadLevelObjects` links them into
+lvlobj plane 1, and they render in the 3D view. See §2.3 in
+[eob3_savegame_format.md](eob3_savegame_format.md).
+
+**Three workarounds fell out with the misframe** (all were compensating for the 4-byte
+shift, none were real): the "magical bonus in trailer byte 3" reader (`arms.B:bonus` is in
+the block at its true offset), the `items.W:itmflags` re-seed via `report(1)` (itmflags is
+in the block too — the shifted read produced 0xFFFF, whose bit 0x400 read as CURSED and
+made every restored item refuse to unequip), and the "owner lives at `B:lvl@4`" misread
+(ownership is `items.W:place@0`: a holder object id, or -1 for a floor item). The writer now
+emits CDESC too (with a u16-size overflow guard, CodeRabbit), so our saves are
+byte-compatible with the DOS record layout. Found while driving phase 3 of the control
+channel below — the "why is `items` empty on the QSP save?" question.
+
+## Live control channel + agent-driven play (2026-07-19)
+
+✅ **A running thirdeye can be driven and inspected over a socket.**
+`THIRDEYE_CTL=<path>` opens a Unix domain socket (macOS/Linux; a no-op stub on Windows,
+per the design's non-goals) polled once per host-loop pump — no threads, zero cost when
+unset. Line protocol ([control_channel.md](control_channel.md)): `key`/`click`/`map`/`dump`
+inject input and snapshot the screen exactly as `THIRDEYE_AUTOWALK` does internally;
+`party`/`monsters`/`items`/`cell`/`lvlmap`/`obj`/`peek` read the object system directly
+(the same statics the SOP reads — strictly better than OCR'ing screenshots); `poke`/`send`
+mutate live state for debugging. The parser is a pure function (unit-tested on all
+platforms); a headless ctest (`control_e2e`) boots the real binary, drives
+`ping→party→key→party`, and asserts the pose changed.
+
+**Proof of concept — an agent played Burial Glen end-to-end** via
+[scripts/glen_drive.py](../scripts/glen_drive.py): BFS pathfinding on the live wall map
+(`lvlmap`), ALL-ATTACK combat (select PC name-plates → the button appears under the arrow
+pad), chopping hackable trees to open the tree maze, auto-dismissing the Florn Falconhand
+cutscene, and picking floor items into backpacks — all 26 pieces of the item-stream fix's
+newly-spawned treasure, into the party's packs. Bugs it surfaced are fixed or documented:
+the "engine crash" that was really a total-party-kill death screen; floor-item pickup
+requires standing ON the cell (a feature click region — the fruit trees — occludes
+ahead-cell items); stowing into an occupied backpack slot swaps the occupant onto the
+cursor; and the wall map (not lvlobj plane 0) is the real source of maze walls.
+
+## Dungeon Hack — boot + runtime bring-up (2026-08-05)
+
+DH's `OPEN.RES` (intro) and `HACK.RES` (game) now boot end-to-end through the SOP VM
+under filename auto-detection: OPEN→`opening`, HACK→`phase-one`. The boot loop learned
+HACK.BAT's errorlevel semantics — remembering that batch `if ERRORLEVEL n` matches
+*n and above*, tested high-to-low: `>= 3` re-runs phase-one (`:CONTINUE`), `2` re-runs
+the intro first (`:CHECKDEMO`), `1` quits, `0` falls through to MAZE then phase-two.
+We land 2 and 3+ on the same target for now because the cross-.RES hop back to OPEN.RES
+isn't wired up. So the title-menu attract loop functions.
+
+> **Corrected 2026-08-09.** This paragraph originally went on to claim phase-two
+> could be reached without a `THIRDEYE_BOOT=phase-two` override. It cannot.
+> Tracing `phase-one`'s bytecode later showed that `main screen` returns 1, 2 or
+> 3 and **never 0**, so the batch never falls through to MAZE + phase-two. Only
+> the debug override reaches gameplay. See the errorlevel-contract section
+> further down, and [dungeon_hack.md](dungeon_hack.md#where-the-errorlevel-actually-comes-from-2026-08-09).
+
+Phase-two now runs its tick loop against real DH
+runtime support — file I/O primitives (`open_file`/`read_*`/`close_file`) resolve
+DOS-backslash paths against `<dh_root>/`, the SAVEGAME loaders read shipped
+`PC.DAT`/`SETTINGS.DAT`/`VISIBLE.DAT`, and the MAZE-consumer wrappers
+(`load_level_map`, `open_feature_file`+`get_feature_record`) read chunked files per the
+format spec in [dungeon_hack_maze.md](dungeon_hack_maze.md), zero-filling when MAZE
+hasn't populated them.
+
+**MAZE.EXE reverse-engineered** ([../dh_research/MAZE/](../../dh_research/MAZE/) has the
+Ghidra headless decompile + strings + xrefs; [dungeon_hack_maze.md](dungeon_hack_maze.md)
+is the reading). The non-obvious finds: MAZE isn't a level layout writer — it emits
+per-cell **entropy tables** that phase-two turns into geometry procedurally (`0xDB`
+sentinels → random bytes, everything else → `0xFF`, per 0x400-byte chunk × (DEPTH+10)
+levels). SETTINGS.DAT is a fixed **4-byte SEED + 12-byte struct** (the 12 keys from
+the strings table in listed order; only the first 16 bytes of the shipped 27-byte file
+are read). FEA files are streams of typed **8-byte records** with a 22-case switch on
+the type byte. items.dat records are 8-byte, source stride 5, permuted `[3,1,0,2,4]`.
+Confirmed against the shipped `SETTINGS.DAT`: `SEED=0x000156e0, DEPTH=15`. DGROUP base
+in MAZE resolves as `file_offset = 0x7d70 + (pushed_off)`, which is what let us pin
+every filename push to its writer function.
+
+Only 5 stubs remain in the DH boot path — all pure-renderer (`init_viewspace`,
+`build_clipping`, `copy_window`, `draw_walls`, `Transition`). Phase-two runs its
+tick loop and dispatches per-cell logic.
+
+> **Superseded (2026-08-07):** all five have since been implemented — see
+> *The maze renders* and *Occlusion + text-box + clip* below. A phase-two
+> session with movement now reports zero stubbed CALLs.
+
+**Screen layout + wall art (2026-08-06).** Two engine-level differences from
+EOB3 had to be fixed before DH could draw a correct screen. Both DH-gated;
+EOB3 verified pixel-identical to a pre-change baseline frame.
+
+*Page compositing.* EOB3 flattens every page onto one surface. DH instead draws
+each panel into its **own offscreen page** at page-local `(0,0)` and then
+`copy_window`s it to a screen rect — `copy_window(16, 9)` is the floor art
+landing in the dungeon view at `(138,13)`. The distinguishing signal is
+`assign_window` (offscreen page, page-local coords) vs `assign_subwindow`
+(absolute screen rect); both had been funnelling into the same
+`EventSystem::assignWindow`, so every DH panel drew at screen `(0,0)` and
+stomped the previous one. `Win::offscreen` records which is which, `draw_bitmap`
+redirects into the page's surface (Graphics swaps its `mScreen` pointer, so all
+existing draw routines follow with no changes), and `copy_window` blits to the
+destination's registered origin. That alone turned the DH screen from
+"items floating on black in the top-left" into the real layout: inventory
+paper-doll column on the left, 3D view on the right under the stone arch.
+
+*Palette regions.* DH carves the DAC up differently from EOB3's
+`PAL_FIXED/PAL_WALLS/PAL_M1/PAL_M2` (`00/B0/C0/E0`): fixed at `0x00` (225
+colours), **walls at `0xF0`**, **floor at `0xE0`**, both 16 colours, loaded by
+the kernel as `set_palette(1, wallpal[lvl])` / `set_palette(2, floorpal[lvl])`.
+Probing the art pins it — wallset shapes index `0xF6..0xFD`, floor shapes
+`0xC4..0xEE`. With EOB3's bases nothing ever loaded DAC 225–255, so every
+wallset pixel resolved to `(0,0,0)`: **the dungeon view rendered solid black
+even though the shape decoder was working perfectly** (sub 8 decodes to 12,384
+bytes / 12,102 non-zero pixels). A long detour went into suspecting the decoder
+before the palette dump made it obvious — the lesson is to check
+index→colour resolution before blaming a decoder for black output.
+
+With both in, a wallset panel blits into the view as real cave-wall art
+(see [screenshots/dh_wall_panel.png](screenshots/dh_wall_panel.png)).
+
+**The maze renders (2026-08-06).** `draw_walls` is now a faithful port of
+AESOP.EXE's own routine, and DH draws a real perspective dungeon view —
+[screenshots/dh_wall_render_corridor.png](screenshots/dh_wall_render_corridor.png).
+
+Getting there needed the DH runtime's geometry tables, which only exist inside
+`AESOP.EXE`. The chain that unlocked them is worth remembering because it
+generalises to every DH runtime function:
+
+1. `AESOP.EXE` has **no** function-name strings, so its 620 functions are
+   anonymous. The name → number map is in **`HACK.RES` resource 3** ("Low
+   level functions", 330 entries) — `daesop -k HACK.RES 3`.
+2. Those numbers are global and multiples of 4 (max 656 → 165 entries), and
+   index a **far-pointer array at file `0x1c8f8`** — found by scanning the MZ
+   **relocation table** for runs of relocations at a 4-byte stride, since a
+   far-pointer array relocates every entry's segment word.
+3. Ghidra segment = stored segment + `0x1000`. Validated by cross-check:
+   `build_clipping` was independently identified as `1f36:05f4` from its
+   parameter usage, and table entry 636 reads `0f36:05f4` — exact offset
+   match. That one agreement confirmed the whole mapping, which now yields
+   the address of *any* DH runtime function (`explode_save` = `1f36:14db`,
+   etc.).
+
+`draw_walls` (`1f36:0785`) walks **25 wall faces over 18 distinct map cells**
+in 4 depth bands (11+7+5+2, nearest last), reading `lvlmap[my*32+mx]` per face
+and blitting the wallset sub-bitmap its tables name for that (wall type, face).
+Only two wall types exist. Three faces reuse a sibling panel mirrored
+(`14→13`, `15→8`, `17→16`). The `+138 / +13` blit origin is hardcoded in
+AESOP as `0x8a`/`0xd`, independently confirming the view rect derived from the
+SOP's `assign_subwindow(..., 138, 13, 313, 132)`.
+
+Verified data-driven, not just "it draws something": an all-walls map yields
+25 faces (closed chamber), a synthetic map with a single wall ahead yields
+exactly **1**, and a hand-built corridor yields **12** with side walls
+stepping back in correct perspective.
+
+A cautionary note from the same session: an earlier attempt to locate the
+geometry by scanning for a plausible **byte pattern** produced a table that
+looked right for a few rows and was subtly garbage — the DGROUP base was off
+by `0xD5`. The relocation-table route is the one to trust.
+
+**Occlusion + text-box + clip (2026-08-07).** Three loose ends closed:
+
+* `init_viewspace` / `build_clipping` ported verbatim from AESOP.EXE with the
+  clip contribution table lifted from `DS:0x1117`. Occlusion is real now:
+  cells outside the view cone (rows 0/6/7/11 of the table are all-`0x7e`)
+  don't render, and cells behind walls cull correctly. `notblocks` gets
+  populated by the SOP's own bytecode loop between the two calls.
+* One trap in that loop cost a while to find: the SOP reads `view_X`/`view_Y`
+  via `LSBA` (sign-extended byte) BEFORE `build_clipping` runs its `& 0x1f`
+  mask. So an unmasked value like `-3` becomes `-96` when scaled, and
+  `lvlmap[y*32 + x]` reads 96 bytes BEFORE `lvlmap` — into `lvlbit`, which
+  is a different array — and every off-map cell reads as an occupied wall.
+  Fix: mask coordinates to 0..31 on the way out of `init_viewspace` (the
+  SOP's 32×32 wrap semantics). Party-at-(0,0) starts wouldn't have worked
+  otherwise.
+* The message bar went white on movement because DH boots with mode `INTR`,
+  which leaves `text_window` erase on flat-fill. Flat-fill samples a pixel
+  just inside the box, one stray light pixel turned the whole bar white,
+  and it perpetuated (next wipe sampled its own fill). Same fix as EOB3's
+  green-bar problem, DH-gated on the `Backdrop` resource (59) that marks
+  "now in-game".
+* `draw_walls` clips every blit to the view rect. Face 20 sits at absX 34
+  with a 129-wide panel (34..163) while the view starts at 138 — the wall
+  was overwriting the inventory column and the arch on every step.
+
+**Phase-two renders a real gameplay HUD.** First frame is the DH title splash
+("Advanced Dungeons & Dragons Forgotten Realms — DUNGEON HACK" on wooden door);
+by ~frame 50 the full in-game UI is drawn: character portrait ("Kathra
+Shallowtaint" from the shipped `PC.DAT`), HP bar, compass with N-facing arrow,
+direction-arrow pad, CAMP button, floor items visible (bread, gems, robe, chest,
+book, plate+sword), and the wooden/stone bezel framing the dungeon-view area.
+The center of the dungeon view is empty because `draw_walls` still stubs to
+zero (SOP calls it once at boot; without a return that signals "walls updated,
+please redispatch tick," the SOP never asks again). See
+[screenshots/dh_phase_two_hud.png](screenshots/dh_phase_two_hud.png). Only the
+3D wall rendering (`draw_walls` + `init_viewspace` + `build_clipping`) stands
+between phase-two and a playable dungeon.
+
+> **Superseded (2026-08-07):** the wall renderer landed — `draw_walls`,
+> `init_viewspace` and `build_clipping` are all implemented (ported from
+> AESOP.EXE) and the view renders with real occlusion. What actually stands
+> between phase-two and a playable dungeon is dungeon *content*: the native
+> mini-MAZE seeds an all-walls map, so the party starts sealed in rock. See
+> *The maze renders* below.
+
+A **native mini-MAZE** (`ensureSavegameFiles` in `runtime/dh.cpp`) seeds
+structurally-valid empty `savegame/LEVELS.DAT` + `FEA*.DAT` + `ITEMS.DAT` at
+first HACK.RES boot (idempotent — real MAZE output is preserved). DEPTH is
+read from the shipped `SETTINGS.DAT`. This is what lets phase-two consume
+zero-content dungeons instead of tripping on missing files.
+
+Notable RE side-finding during the items.dat trace: **DH's SOP kernel reads
+`SETTINGS.DAT` with a *different, wider* layout than MAZE writes**. MAZE emits
+4B SEED + 12B struct = 16 bytes; kernel reads `4 discard + 19 setting + 4 long
+= 27 bytes` (matching the shipped file exactly). MAZE and the SOP kernel
+disagree on the file's format, and the shipped 27-byte file is the SOP's
+truth. **ITEMS.DAT is never opened by any DH SOP** — the only `open_file`
+targets across all HACK.RES code resources are `PC.DAT`, `SETTINGS.DAT`,
+`SETSAVE.DAT`. So MAZE writes ITEMS.DAT but nothing in phase-two reads it
+via the SOP file API — it's either an AESOP.EXE internal consumer or a
+save/restore artifact.
+
+## Dungeon Hack is walkable (2026-08-07)
+
+Two pieces closed the gap between "renders correctly" and "you can play with it".
+
+**A native maze generator.** `ensureSavegameFiles` used to seed an all-walls
+LEVELS.DAT, which was structurally valid but left the party sealed in rock —
+`draw_walls -> 0 faces` was the *correct* render of being inside solid stone.
+`carveMaze` now writes a real connected maze per level. One non-obvious
+constraint drove the design: cells sit on **even** coordinates (0,2,…,30 →
+16×16 cells, shared walls on the odd coordinate between them) specifically so
+`(0,0)` is open, because that is where the SOP starts the party until FEA
+supplies an entry point — the conventional odd-coordinate maze layout would
+have walled the party in on turn one. Row/column 31 is odd and stays solid,
+giving a border for free. Seeded from SETTINGS.DAT's own `SEED` field so a
+given install reproduces its dungeon; verified byte-identical across
+regeneration, every level fully connected with no islands, and the party
+verified walking `(0,0)→(1,0)→(2,0)`, turning, then `(2,1)→(2,2)` with the
+route matching the generated map cell for cell.
+
+This is emphatically **not** MAZE.EXE's algorithm — a plain perfect maze with
+no rooms, loops or decoration. Real DH layouts still need the generator port.
+
+**FEA stairs.** The decoder fell out of `dungeon`'s own CASE table, which has
+31 entries: type `0` ends the record loop (that's what the all-zero terminator
+does) and `1..30` are the feature types in exactly the order MAZE's string
+table lists them — so **4 = stairs up, 5 = stairs down**, and 30 names + the
+terminator is precisely `CASE #001f`. Type 5 forwards `fea[4..7]` to
+`create teleporter` (message 495) against class 2870, which daesop resolves as
+*"current stairs down"*, and those four bytes line up with the `teleporters`
+object's `dest_x` / `dest_y` / `dest_lvl` / `dest_fdir` externs. So a stairs
+record is `[5][x][y][?][dest_x][dest_y][dest_lvl][dest_fdir]`.
+
+We emit one down-stairs per level on the open cell furthest from the start
+(84 steps away on level 0, BFS-verified reachable). The SOP takes it and
+builds the object: `create_program(1000, 2870)`.
+
+Placing a feature immediately surfaced a new stub — `draw_auto_square`, the
+automap tile renderer, which nothing had called while the dungeon was empty.
+It is now the only stub left in a DH session, which is a good illustration of
+why getting something playable matters: the HUD overdraw, the white message
+bar and this all became visible only once the thing could actually be used.
+
+### `draw_auto_square`, and the rest of the feature types (2026-08-06)
+
+`draw_auto_square` turned out not to be a bitmap blit at all. AESOP.EXE
+`1f36:0966` draws each automap cell as a **9×9 box of lines**: outline in
+colour `0x66`, passage stubs toward open neighbours in `0x67`, an inner
+highlight on an open side in `0x69`. `lvlvis & 4` marks a cell unseen (skip the
+outline); in `lvlbit` the even bits 0/2/4/6 are passages N/E/S/W and the odd
+bits are corners.
+
+One thing had to be added rather than ported: AESOP hands the page down to its
+line primitive, so its clipping is free, while our `drawLine` writes straight
+to the screen. Without an explicit clip a map-edge cell spills over the HUD —
+the same failure the wall panels had. With it, the parchment shows the explored
+corridor and the party arrow, matching the walked route.
+
+That closed the last stub: **a DH session now runs with zero stubs.**
+
+With the automap working the remaining feature types went in quickly:
+
+- **Creatures** (type 12) — `fea[4]` selects one of the level's three monster
+  slots via `mon_types[lvl*12 + fea[4]*4]`; slot 2 additionally sends
+  `make boss monster` (message 233).
+- **Doors** (type 1) → `create door` (message 493, class 2855). Bytes 6/7 form
+  a 16-bit link id matching the `doors` object's `W:button_num` /
+  `W:lock_num`. Placed only on corridor cells — open along exactly one axis —
+  so they sit in passages rather than floating in junctions.
+- **Buttons** (type 6) → `create thing` (message 496, class 2894); types 2 and
+  7 are the same shape with classes 2813 / 2897.
+
+Worth recording as a process note: while wiring the creatures up we reported
+"0 monsters spawning" and started hunting a VM extern bug. That was a bad grep,
+not a bug — a `--debug` trace showed `SEND msg 494` executing and jumping
+straight into `create monster`. Monsters had been spawning the whole time. The
+VM trace is cheap; reach for it before theorising.
+
+### MAZE.EXE, actually ported (2026-08-07)
+
+The placeholder generator above is gone. The real one is in
+[apps/thirdeye/runtime/dh_maze.cpp](../apps/thirdeye/runtime/dh_maze.cpp), and
+the full reading is in
+[docs/dungeon_hack_maze.md](dungeon_hack_maze.md#the-generator-itself-2026-08-07).
+Three findings mattered.
+
+**The chunk was never entropy.** This document previously recorded that
+`savegame/LEVELS.DAT` holds "per-cell entropy" that phase-two expands
+procedurally, because `FUN_1325_4017` looked like it wrote `random(0..255)`
+over `0xDB` sentinels. It does not. `FUN_1766_00c1` takes *two* 16-bit
+arguments that Borland pushes as one dword, so `random(0, 1)` decompiles as the
+single literal `FUN_1766_00c1(0x10000)`. Read correctly the pass is
+`0xDB → random(0,1)` (a wall with one of two textures), everything else
+`→ 0xFF` (floor) — the chunk is a plain 32×32 tile map all along. The rule to
+carry forward: **any `FUN_1766_00c1(0xNNNN0000)` is `random(0, 0xNNNN)`.**
+
+**The PRNG is R250, and it is the whole ballgame.** MAZE ships its own
+generator in segment 1766 — a 250-word lagged-Fibonacci XOR with lags 250/103,
+seeded by a Lehmer LCG with 16 words forced to a staircase bit pattern. Every
+layout decision is a draw from that stream, so no substitute PRNG can produce
+DH's dungeons no matter how faithful the surrounding code is. Two traps: the
+staircase loop's bound is `!= 179`, not `< 250` (running to the end of the
+array shifts the mask to zero and wipes the state), and the global immediately
+below the state array is a call counter, easy to absorb into the ring by
+mistake.
+
+**Each level is seeded independently.** `FUN_1325_375f` opens with
+`srand(seed + level + 1)`, which means a port can reproduce level *N* without
+replaying every draw the program made before it — the single most useful fact
+for incremental work on this.
+
+**All five layout algorithms are in.** MAZE assigns each level a *zone* up
+front (levels 0–3 are zone 1, the deepest is zone 4, one random middle level is
+zone 0, the rest roll 1–3) and switches on it. Zones 0 and 2 are the maze
+branch — a stackless recursive backtracker over odd coordinates `(1,1)…(29,29)`,
+where each cell holds the direction it was entered from while the walk is inside
+it, so no stack is needed. Zones 1, 3 and 4 run `FUN_1325_0e3c`, which places
+rooms and corridors *first* and then backtracks through whatever rock is left,
+so the maze grows around the rooms. Zone 4 falls out with no doors at all: with
+no rooms placed, its door loop starts past the end of the room list.
+
+Also superseded: the placeholder's even-coordinate scheme, which existed so
+`(0,0)` would be walkable. MAZE puts cells on odd coordinates and ships the
+arrival point in the FEA header record (bytes 1/2/3 = x, y, facing). It walks
+the entry until it lands in a dead end, marks that cell, and puts the party on
+the one open neighbour facing away down the corridor — so we emit that.
+
+Two quirks are reproduced deliberately. `FUN_1325_08cb`'s perimeter-door loop
+starts one room late, so the first room on every zone-2 level never gets
+perimeter doors; and doors only fit where the rock forms a clean passage, never
+at a corner or junction. Both would be easy to "fix" into a desync. Three loops
+in the original can spin forever (they don't decrement on rejection) — those we
+did cap.
+
+One more find worth recording: **the working grid is a CP437 character map**.
+`0xDB █` rock, `0xB3 │`/`0xC4 ─` doors, `0x18 ↑`/`0x19 ↓` stairs, `0xB0 ░` pit.
+`main` dumps it verbatim into `SEED.TXT` *before* the finalize pass throws the
+semantics away, which makes SEED.TXT a byte-exact oracle: run real MAZE under
+DOSBox with a known seed, run ours, diff. We have not been able to do that yet,
+so nothing here is validated against real MAZE output — only against the
+disassembly and structural invariants.
+
+Verified: 25 levels generate with zones distributed correctly, every level
+structurally sound (only the three on-disk byte values, frame sealed), every
+entry and stairs walkable and chained, and the zone-0 level a provably perfect
+maze — 225 cells, 224 corridors, fully connected, no loops. In game the party
+appears at `(3,26)` facing north and walks up column 3, matching the generated
+map cell for cell. Zero stubs, zero errors, 115 tests green, EOB3 unaffected.
+
+Still ours rather than MAZE's: the feature-placement tail (15 passes driven by
+the `FREQ_*` settings), which includes the real stairs pass — so we pick stairs
+by BFS from the entry and feed them forward as the next level's arrival, MAZE's
+chaining with our placement. That tail is now fully decoded in
+`dh_research/MAZE/FEATURES.md`, so it is a transcription job rather than an RE
+one.
+
+### MAZE's feature-placement tail — the dungeon gets populated (2026-08-07)
+
+Geometry was only half of MAZE. The other half is the fifteen passes
+`FUN_1325_375f` runs after the layout, plus two whole-dungeon ones, and those
+are what turn corridors into a dungeon. They are in now.
+
+**Regions turned out to be the backbone.** `FUN_1325_2081` floods each level
+from the party's arrival cell and labels every connected patch of floor with
+its region id — literally, as the character `'A' + id`. Doors bound regions,
+and each region records how many doors lie between it and the entry. That
+*depth* is what every later pass steers by, and it is the thing that makes a
+randomly generated dungeon **solvable**: `FUN_1325_3004` never hides a key
+deeper in the maze than the shallowest lock it opens. Get that wrong and you
+generate a door nobody can ever get through.
+
+Which we did, at first. The initial cut produced 358 locks and 327 keys — 31
+doors with no key anywhere in the dungeon. Two causes, both worth recording.
+The door's own cell holds a door glyph, not a region letter, so reading the
+region off it always yielded region 0; the key has to be keyed to the floor
+*beside* the door, and specifically the shallower side. And the teleporter
+repair path could drop a teleporter on the party's arrival cell, after which
+re-labelling bailed and the level came out with **zero** regions — no keys, no
+stairs, no monsters. Two of 25 levels were silently empty. Both fixed; the
+count is now exactly 385 locks and 385 keys, and that 1:1 pairing is a test.
+
+**Counts come from the `FREQ_*` settings** through `FUN_1325_0117` — roll a
+percentage, then roll dice, both from an 8-entry table indexed by the setting
+byte. All seven tables are transcribed and were verified byte-for-byte against
+the binary before being hard-coded. It is satisfying when the shipped settings
+explain themselves: `HINT_SHEET_FREQ = 0` maps to a `0%` row, and sure enough a
+full dungeon contains no hint sheets at all.
+
+**Two record streams, not one.** `FUN_1325_121d` emits 9-byte *feature*
+records (30 types) and `FUN_1325_11af` emits 5-byte *item* records (12 types).
+They are separate numbering schemes — earlier notes had conflated them, which
+is why the feature-name table never seemed to line up.
+
+A live 25-level dungeon at the shipped settings now carries 489 doors, 385
+locks with 385 matching keys, 1147 creatures, 1041 decorations, 105
+illusionary walls, 13 doors disguised as solid wall, 81 arches, 35 windows,
+72 shelves, 63 traps, 3 pit pairs and 18 teleporters. In game that is 186
+objects on level 0 alone, against 12 before. Walking forward six cells now
+gets the party **spun** — the compass flips without a turn key, which is a
+spinner trap doing exactly its job.
+
+Deviations are deliberate and marked in the source: the region walk is our own
+connected-components pass (MAZE's frontier array is not fully traced, so we
+reproduce its shape rather than its cell order); three loops that the original
+only exits by luck are capped; and the arrival cell is claimed the moment it
+is chosen so nothing gets built on top of the player. Still not validated
+against a real MAZE run — SEED.TXT remains the oracle for that.
+
+Zero stubs, zero errors, 119 tests green, EOB3 unaffected.
+
+### DH file writers, and the phase-one errorlevel contract (2026-08-09)
+
+Driving DH's own menus turned up three stubs — `create_file`,
+`write_array_to_file`, `write_long_to_file` — and they were the whole reason
+phase-one could never persist anything. They are implemented now, alongside
+`write_number_to_file` and `update_file`. Writes buffer in memory and flush at
+`close_file`; the SOP writes sequentially and never seeks, so that is both
+simpler and safer than holding an `ofstream` open across VM calls.
+
+Both files DH writes now round-trip byte-perfectly: `PC.DAT` at 33 bytes
+(a 20-byte name plus a 13-byte stat block) and `SETTINGS.DAT` at 27 bytes
+(`u32 seed` + 19-byte struct + a trailing counter). The whole phase-one flow —
+menu, character selection, the Customization screen, Play — now runs with
+**zero stubs**.
+
+**Seed 0 is not a seed.** DH's Customization screen displays "(random)" and
+writes 0; `1325:3aee` substitutes the BIOS timer for it. We were about to take
+that 0 literally, which would have handed every install the same dungeon. The
+substitution now lives in `generateDungeon` (where MAZE does it), and the seed
+actually used comes back in `DungeonOut::seedUsed` and goes into `LEVELS.DAT`'s
+4-byte header — which is exactly where MAZE records it too.
+
+**The errorlevel contract, mapped.** `phase-one`'s `create` handler is just
+`init_*` then `SEND "main screen"` then `END`, and `END` returns top-of-stack.
+Since phase-one imports no exit-code function at all, the DOS errorlevel *is*
+what `main screen` returns. That handler is a `while(1)` around a 5-way CASE on
+the menu selection: Show Intro returns **2** (`:CHECKDEMO`), Continue runs
+`enter game` and returns **3** (`:CONTINUE`), and Choose/Create Character run
+`customize` and return **1**. Cases 0 and 1 line up with `HACK.BAT` exactly,
+which is good evidence the reading is right.
+
+And then it doesn't work: **no path returns 0**, which is what the batch needs
+to run MAZE and enter phase-two. The branch that would return 0 is dead code
+behind `SHTC #01; BRT`. Clicking Play genuinely returns 1 — `:EXIT`. Either
+DH's own 16-bit `AESOP.EXE` transforms the interpreter's exit code (EOB3's
+`AESOP.C` is only a `spawnvp` launcher that collapses everything non-zero to
+1), or this install's `HACK.BAT` isn't retail's — it ships `DEMOGNBG.EXE` and a
+`G.BAT`, which smells like a bundled build. That is a question about
+`AESOP.EXE`, not about our runtime, and it is where the new-game path is
+currently blocked. Full trace in
+[dungeon_hack.md](dungeon_hack.md#where-the-errorlevel-actually-comes-from-2026-08-09).

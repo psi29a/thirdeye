@@ -67,6 +67,13 @@ GRAPHICS::Graphics::Graphics(uint16_t scale, bool /*renderer*/) {
 	                                 SDL_LOGICAL_PRESENTATION_LETTERBOX);
 
 	mPalette = SDL_CreatePalette(256);
+	// SDL3 seeds palette entries to WHITE; any bitmap using a palette index
+	// the SOP hasn't loaded yet then renders as pure white. EOB3 hides this
+	// by loading the full palette on boot, but DH's opening cinematic starts
+	// with only a partial set_palette(0, 28) load -- silhouette pixels using
+	// higher indices came out as white blobs on top of the throne-room art.
+	for (int i = 0; i < 256; ++i)
+		mPalette->colors[i] = SDL_Color{0, 0, 0, 255};
 	mCursor = nullptr;
 	mFrames = 0;
 	mCounter = 0;
@@ -79,6 +86,13 @@ GRAPHICS::Graphics::Graphics(uint16_t scale, bool /*renderer*/) {
 }
 
 GRAPHICS::Graphics::~Graphics() {
+	// If a DH page was still the render target, put the real screen back first
+	// so the mScreen free below doesn't hit a page surface (double free with
+	// the mPages sweep).
+	if (mScreenSaved != nullptr) {
+		mScreen = mScreenSaved;
+		mScreenSaved = nullptr;
+	}
 	SDL_DestroyCursor(mCursor);
 	SDL_DestroySurface(mScreen);
 	SDL_DestroySurface(mBackdrop);     // lazily created in drawImage (nullptr-safe)
@@ -86,6 +100,13 @@ GRAPHICS::Graphics::~Graphics() {
 	SDL_DestroySurface(mCompassUnderlay);
 	SDL_DestroySurface(mOverlaySave);  // lazily created in update (save-under)
 	SDL_DestroySurface(mLastShown);    // lazily created in update
+	// Offscreen DH pages. endPage() has already restored mScreen by now in any
+	// sane shutdown; if a page were still the target, mScreen above would be a
+	// page surface -- so restore first to avoid a double free of the same ptr.
+	for (auto &kv : mPages)
+		if (kv.second != nullptr && kv.second != mScreen)
+			SDL_DestroySurface(kv.second);
+	mPages.clear();
 	if (mPresentTex != nullptr) SDL_DestroyTexture(mPresentTex);
 	SDL_DestroyPalette(mPalette);
 	SDL_DestroyRenderer(mRenderer);
@@ -104,6 +125,64 @@ static const SDL_Rect kMenuUnderlayRect = { 0, 120, 117, 56 };
 
 const SDL_Rect &GRAPHICS::Graphics::menuUnderlayRect() {
 	return kMenuUnderlayRect;
+}
+
+// --- Offscreen pages (Dungeon Hack copy_window compositing) ------------------
+//
+// The trick here is that we redirect by swapping the mScreen pointer rather
+// than threading a render-target parameter through every draw routine: all the
+// existing drawing code keeps writing to "mScreen" and lands in the page.
+
+bool GRAPHICS::Graphics::beginPage(int32_t handle, int w, int h) {
+	if (mScreenSaved != nullptr) return false;  // no nesting (DH never nests)
+	if (w <= 0 || h <= 0) return false;
+	// .find() rather than operator[]: the latter default-inserts a null entry
+	// on every miss, so a failed SDL_CreateSurface would leave a null in the
+	// table for a handle that has no page (see CLAUDE.md on operator[] as a
+	// foot-gun for sparse-index containers).
+	SDL_Surface *page = nullptr;
+	auto it = mPages.find(handle);
+	if (it != mPages.end()) page = it->second;
+	if (page == nullptr) {
+		page = SDL_CreateSurface(w, h, SDL_PIXELFORMAT_ARGB8888);
+		if (page == nullptr) return false;   // table untouched on failure
+		// Start transparent-black so a page that only gets a partial draw
+		// composites without a surprise opaque border.
+		SDL_FillSurfaceRect(page, nullptr,
+		                    SDL_MapSurfaceRGBA(page, 0, 0, 0, 0));
+		mPages[handle] = page;
+	}
+	mScreenSaved = mScreen;
+	mScreen = page;
+	SDL_SetSurfaceClipRect(mScreen, nullptr);
+	return true;
+}
+
+void GRAPHICS::Graphics::endPage() {
+	if (mScreenSaved == nullptr) return;
+	mScreen = mScreenSaved;
+	mScreenSaved = nullptr;
+}
+
+bool GRAPHICS::Graphics::blitPage(int32_t src, int32_t dstPage, int dstX,
+		int dstY) {
+	auto it = mPages.find(src);
+	if (it == mPages.end() || it->second == nullptr) return false;
+	SDL_Surface *from = it->second;
+	// Destination is another page when one exists, else the visible screen.
+	SDL_Surface *to = mScreen;
+	auto dit = mPages.find(dstPage);
+	if (dit != mPages.end() && dit->second != nullptr) to = dit->second;
+	SDL_Rect dst{ dstX, dstY, from->w, from->h };
+	// Straight copy: the page already holds composited pixels, and DH relies on
+	// the copy overwriting whatever the destination had.
+	SDL_SetSurfaceBlendMode(from, SDL_BLENDMODE_NONE);
+	SDL_Rect saved;
+	bool hadClip = SDL_GetSurfaceClipRect(to, &saved);
+	SDL_SetSurfaceClipRect(to, nullptr);
+	bool ok = SDL_BlitSurface(from, nullptr, to, &dst);
+	if (hadClip) SDL_SetSurfaceClipRect(to, &saved);
+	return ok;
 }
 
 void GRAPHICS::Graphics::drawImage(std::vector<uint8_t> &bmp, uint16_t index,

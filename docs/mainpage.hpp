@@ -2,4 +2,4 @@
 ///
 /// This is the source documentation for:
 ///
-/// Thirdeye 0.89.0
+/// Thirdeye 0.90.0

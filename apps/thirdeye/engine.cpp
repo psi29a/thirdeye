@@ -16,6 +16,13 @@
 
 #include <components/files/configurationmanager.hpp>
 
+#ifndef _WIN32
+#include <cerrno>       // single-instance lock (acquireInstanceLock)
+#include <fcntl.h>
+#include <sys/file.h>
+#include <unistd.h>
+#endif
+
 #include <algorithm>
 #include <cctype>
 #include <cstdio>
@@ -136,6 +143,75 @@ using THIRDEYE::runtime::gRtTrace;      // per-call trace gate; set from --debug
 using THIRDEYE::runtime::gBootStart;    // set at go(); for timing prints
 using THIRDEYE::runtime::gPerf;         // THIRDEYE_PERF=1 -- per-present timing
 using THIRDEYE::runtime::gLastPresent;  // wall-clock of previous present
+
+// Take an exclusive, non-blocking lock on `<gameDataDir>/.thirdeye.lock` and
+// hold it for the life of the process, so a second engine pointed at the same
+// install refuses to start instead of racing it through SAVEGAME/. The fd is
+// deliberately never closed -- process exit releases the lock, which also
+// makes us robust to crashes (no stale lock file to clean up, unlike a
+// PID-file scheme).
+//
+// POSIX only; on Windows this is a no-op (same non-goal as the control
+// channel -- see control.cpp).
+void acquireInstanceLock(const std::filesystem::path &gameDataDir) {
+	// Require the documented value. This guards save data, so a stray
+	// `THIRDEYE_ALLOW_MULTI=0` (or an empty value) left in a shell profile or
+	// deployment config must NOT silently disable the protection -- unlike the
+	// THIRDEYE_* debug switches, where mere presence is the convention.
+	if (const char *am = std::getenv("THIRDEYE_ALLOW_MULTI")) {
+		if (std::strcmp(am, "1") == 0) {
+			std::cout << "  [instance lock bypassed (THIRDEYE_ALLOW_MULTI=1)]"
+			          << std::endl;
+			return;
+		}
+	}
+#ifndef _WIN32
+	auto lockPath = gameDataDir / ".thirdeye.lock";
+	// Leaked by design: the lock must outlive this function, and the OS drops
+	// it at exit. Static so repeat calls (there are none today) are harmless.
+	static int lockFd = -1;
+	if (lockFd >= 0) return;
+	lockFd = ::open(lockPath.c_str(), O_RDWR | O_CREAT | O_CLOEXEC, 0644);
+	if (lockFd < 0) {
+		// Read-only install dir, odd filesystem, etc. Don't make an
+		// unwritable game directory fatal -- warn and carry on.
+		std::cout << "  [instance lock unavailable at " << lockPath.string()
+		          << " (" << std::strerror(errno) << ") -- continuing]"
+		          << std::endl;
+		return;
+	}
+	// Retry EINTR; only a genuine "someone else holds it" answer
+	// (EWOULDBLOCK/EAGAIN) means a second instance. Anything else -- a
+	// filesystem with no flock support (NFS, some FUSE mounts), EBADF, ENOLCK
+	// -- is a locking failure, not contention, and must not be reported as
+	// "already running". Treat those like the open() failure above: warn and
+	// continue rather than refusing to start a legitimately-single instance.
+	int rc;
+	do {
+		rc = ::flock(lockFd, LOCK_EX | LOCK_NB);
+	} while (rc != 0 && errno == EINTR);
+	if (rc != 0) {
+		const int err = errno;   // preserve across close()
+		::close(lockFd);
+		lockFd = -1;
+		if (err == EWOULDBLOCK || err == EAGAIN) {
+			throw std::runtime_error(
+			    "another thirdeye instance is already running against " +
+			    gameDataDir.string() +
+			    "\n  Two engines sharing one install corrupt each other's saves"
+			    " (SAVEGAME/ITEMS.TMP, LVLnn.TMP)."
+			    "\n  Quit the other instance, or set THIRDEYE_ALLOW_MULTI=1 to"
+			    " override.");
+		}
+		std::cout << "  [instance lock unavailable at " << lockPath.string()
+		          << " (" << std::strerror(err) << ") -- continuing]"
+		          << std::endl;
+		return;
+	}
+#else
+	(void)gameDataDir;
+#endif
+}
 
 // Resolve a child directory case-insensitively: try the exact name first
 // (the fast path on macOS/Windows and Linux installs that already match),
@@ -679,6 +755,7 @@ VM::Value defaultRuntimeCall(VM::ObjectSystem &objects, VM::EventSystem &events,
 	if (THIRDEYE::runtime::eye::tryHandle(ctx, fn, args, result))      return result;
 	if (THIRDEYE::runtime::graphics::tryHandle(ctx, fn, args, result)) return result;
 	if (THIRDEYE::runtime::sound::tryHandle(ctx, fn, args, result))    return result;
+	if (THIRDEYE::runtime::dh::tryHandle(ctx, fn, args, result))       return result;
 
 	THIRDEYE::runtime::rt() << "  [stub -> 0]" << std::endl;
 	// Always log the first hit on each unimplemented runtime function (max a few
@@ -1026,6 +1103,18 @@ void THIRDEYE::Engine::bootObject(RESOURCES::Resource &resource,
 
 	std::cout << "\nBooting object \"" << objectName
 	          << "\" (sending MSG_CREATE)..." << std::endl;
+	// Dungeon Hack ships as a chain of AESOP programs launched by HACK.BAT
+	// (opening / phase-one / phase-two), each returning an errorlevel that
+	// the batch script switches on -- 3=re-run same phase, 2=re-run intro
+	// then phase-one, 1=quit, 0=fall through. We honor the intra-.RES half
+	// of that (phase-one <-> phase-two) here; cross-.RES chaining to OPEN
+	// isn't wired yet (see runtime/dh.cpp header for the DH TODO list).
+	// ponytail: phase-two on rc=0 will crash without MAZE.EXE-generated
+	// dungeon data; that's the honest signal, upgrade when MAZE is stubbed.
+	std::string currentBoot = objectName;
+	auto isDHPhase = [](const std::string &n) {
+		return n == "phase-one" || n == "phase-two";
+	};
 	// Program-chain loop: start.MSG_CREATE runs the whole session and normally
 	// returns only at quit (Abandon, or window-close via QuitRequested). A menu
 	// choice that hands off to a sub-program (Introduction->cine, Gather->chgen)
@@ -1102,9 +1191,49 @@ void THIRDEYE::Engine::bootObject(RESOURCES::Resource &resource,
 				events.reset();
 				continue; // loop to re-create start in the cleared environment
 			}
-			std::cout << "Boot handler returned " << result << " -- quitting."
-			          << std::endl;
-			quit = true; // start returned normally (e.g. "Abandon the Quest")
+			if (isDHPhase(currentBoot)) {
+				// HACK.BAT flow control by errorlevel. NOTE batch semantics:
+				// `if ERRORLEVEL n` matches n AND ABOVE, and the checks run
+				// high-to-low, so the real routing is:
+				//     rc >= 3  -> :CONTINUE   re-run phase-one
+				//     rc == 2  -> :CHECKDEMO  re-run the intro, then phase-one
+				//     rc == 1  -> :EXIT
+				//     rc == 0  -> fall through: run MAZE, then phase-two
+				// We land 2 and 3+ on the same target because the cross-.RES
+				// hop back to OPEN.RES for the intro isn't wired up yet; the
+				// range test still has to be >= 3 rather than == 3 so a
+				// higher code doesn't fall through to "quit".
+				const int32_t rc = result;
+				std::string nextBoot;
+				if (rc >= 2) nextBoot = "phase-one";
+				else if (rc == 0 && currentBoot == "phase-one") nextBoot = "phase-two";
+				if (!nextBoot.empty()) {
+					uint16_t nextClass = 0;
+					if (!objects.findClassByName(nextBoot, nextClass)) {
+						std::cout << "DH phase \"" << nextBoot
+						          << "\" not found in this .RES -- quitting."
+						          << std::endl;
+						quit = true;
+					} else {
+						std::cout << "  [DH " << currentBoot << " returned "
+						          << rc << " -- resetting + booting "
+						          << nextBoot << "]" << std::endl;
+						objects.resetInstances();
+						events.reset();
+						currentBoot = nextBoot;
+						classNumber = nextClass;
+						continue;
+					}
+				} else {
+					std::cout << "DH " << currentBoot << " returned " << rc
+					          << " -- quitting." << std::endl;
+					quit = true;
+				}
+			} else {
+				std::cout << "Boot handler returned " << result << " -- quitting."
+				          << std::endl;
+				quit = true; // start returned normally (e.g. "Abandon the Quest")
+			}
 		} catch (const QuitRequested &q) {
 			std::cout << "\n" << (q.reason.empty() ? "Window closed" : q.reason)
 			          << " -- quitting." << std::endl;
@@ -1386,6 +1515,17 @@ void THIRDEYE::Engine::go() {
 		throw std::runtime_error(resFile.string() + " does not exist!");
 	}
 
+	// Refuse to run a second instance against the same game data. Two engines
+	// sharing one install both read AND write SAVEGAME/ (ITEMS.TMP, LVLnn.TMP,
+	// MAPS*.BIN), so concurrent runs silently corrupt each other's saves --
+	// exactly how a playtest save once drifted mid-session and sent us chasing
+	// a phantom parser bug. Locking the game-data dir (not the process) is the
+	// right granularity: running EOB3 and Dungeon Hack side by side is fine
+	// because they're separate installs.
+	// THIRDEYE_ALLOW_MULTI=1 overrides (read-only experiments, side-by-side
+	// renders of the same install).
+	acquireInstanceLock(resFile.parent_path());
+
 	auto _t0 = std::chrono::steady_clock::now();
 	RESOURCES::Resource resource(resFile);	// get our game resources ready
 	if (std::getenv("THIRDEYE_TIMING")) {
@@ -1411,10 +1551,27 @@ void THIRDEYE::Engine::go() {
 	}
 
 	// --vm (or the --skip-* flags, which only make sense here): boot the SOP
-	// bytecode VM (the 'start' object). This is the real, data-driven game path:
-	// start.MSG_CREATE shows the title menu (or, with --skip-menu, the game).
+	// bytecode VM. EOB3 boots the "start" object; Dungeon Hack's HACK.BAT
+	// wires it as `aesop open opening` (intro) / `aesop hack phase-one` (game).
 	if (mForceVM || mSkipMenu || mSkipIntro) {
-		bootObject(resource, "start");
+		std::string bootName = "start";
+		std::string resName = resFile.filename().string();
+		std::transform(resName.begin(), resName.end(), resName.begin(),
+		    [](unsigned char c) { return std::tolower(c); });
+		if (resName == "open.res") bootName = "opening";
+		else if (resName == "hack.res") bootName = "phase-one";
+		// DH shares the AESOP runtime with EOB3 but not all of its table
+		// constants (palette-region bases, so far).
+		THIRDEYE::runtime::gDungeonHack =
+		    (resName == "open.res" || resName == "hack.res");
+		// Debug hook: force any boot object by name (e.g. THIRDEYE_BOOT=phase-two).
+		if (const char *b = std::getenv("THIRDEYE_BOOT")) bootName = b;
+		// DH-only: seed structurally-valid empty savegame/LEVELS.DAT etc. if
+		// they don't exist so phase-two can read zero-content dungeons without
+		// a MAZE.EXE (real or bootstrapped) run. Idempotent.
+		if (resName == "hack.res")
+			THIRDEYE::runtime::dh::ensureSavegameFiles(resFile.parent_path());
+		bootObject(resource, bootName);
 		return;
 	}
 

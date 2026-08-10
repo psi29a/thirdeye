@@ -1,19 +1,16 @@
-Dungeon Hack — extraction notes
+# Dungeon Hack — extraction notes
 
-Summary
--------
+## Summary
 This document records the steps taken to obtain and extract the Dungeon Hack (USA) distribution from the Internet Archive item "DungeonHackUSA", and the final contents obtained after extracting ARJ archives found inside the ISO.
 
-What was downloaded
--------------------
+## What was downloaded
 - Source: https://archive.org/download/DungeonHackUSA
 - File downloaded: "Dungeon Hack (USA).zip" (saved locally as /tmp/dungeonhack.zip)
 - The ZIP contained two files of interest:
   - "Dungeon Hack (USA).cue"
   - "Dungeon Hack (USA).bin"
 
-Steps performed
----------------
+## Steps performed
 1. Downloaded the ZIP from Archive.org and extracted the .cue and .bin into the repository workspace under extracted/DungeonHackUSA/.
    - CUE contents: referenced the BIN (MODE1/2352, INDEX 01 00:00:00).
    - BIN SHA-1: 510dfc5038bb17671be5722b9e676de4044d604b
@@ -40,16 +37,14 @@ Steps performed
    - DEMO1.ARJ
    - DEMO2.ARJ
 
-Tools used
-----------
+## Tools used
 - curl (download)
 - unzip (to inspect ZIP contents and extract the CUE/BIN)
 - Python (to split 2352-byte sectors and write 2048-byte payloads into an ISO)
 - 7z (p7zip) when available for ISO and ARJ extraction; fallback: hdiutil (macOS) + rsync, or unar/arj if available
 - xxd / hexdump for previews
 
-Files created on disk (key paths)
----------------------------------
+## Files created on disk (key paths)
 - /tmp/dungeonhack.zip (downloaded ZIP)
 - extracted/DungeonHackUSA/Dungeon Hack (USA).cue
 - extracted/DungeonHackUSA/Dungeon Hack (USA).bin
@@ -60,8 +55,7 @@ Files created on disk (key paths)
 - ~/Downloads/HACK_ISO/  (ISO contents)
 - ~/Downloads/HACK/      (ARJ-extracted final files)
 
-ISO top-level files (from ISO extraction)
------------------------------------------
+## ISO top-level files (from ISO extraction)
 1. DEARJ.EXE
 2. DATA1.ARJ
 3. DEMO1.ARJ
@@ -71,14 +65,12 @@ ISO top-level files (from ISO extraction)
 7. DATA2.NFO
 8. DATA3.NFO
 
-ARJ archives found (absolute paths)
------------------------------------
-1. /Users/bret.curtis/Downloads/HACK_ISO/DATA1.ARJ
-2. /Users/bret.curtis/Downloads/HACK_ISO/DEMO1.ARJ
-3. /Users/bret.curtis/Downloads/HACK_ISO/DEMO2.ARJ
+## ARJ archives found (absolute paths)
+1. ~/Downloads/HACK_ISO/DATA1.ARJ
+2. ~/Downloads/HACK_ISO/DEMO1.ARJ
+3. ~/Downloads/HACK_ISO/DEMO2.ARJ
 
-Contents of the final extraction from the ARJ files
----------------------------------------------------
+## Contents of the final extraction from the ARJ files
 (These files were extracted into ~/Downloads/HACK — paths are relative to that directory.)
 
 --- extracted files (first 200 entries) ---
@@ -231,8 +223,7 @@ RES1
 
 (If you need the complete tree instead of the first 200 entries, run: find ~/Downloads/HACK -type f | sed 's|^~/Downloads/HACK/||')
 
-Notes & next actions
---------------------
+## Notes & next actions
 - I used 7z for ISO and ARJ extraction; if you'd prefer mounting the ISO and inspecting it interactively, hdiutil attach ~/Downloads/DungeonHackUSA.iso will mount the image on macOS.
 - If you want a CUE pointing to the generated ISO instead of the BIN, add a small cue file like:
 
@@ -249,10 +240,9 @@ If you want, next can:
 
 ---
 
-Boot Architecture (AESOP/Thirdeye Integration)
-==============================================
+## Boot Architecture (AESOP/Thirdeye Integration)
 
-## DOS Launcher (HACK.BAT)
+### DOS Launcher (HACK.BAT)
 
 The DOS batch file `HACK.BAT` reveals the correct boot sequence:
 
@@ -277,16 +267,16 @@ if ERRORLEVEL 3 goto CONTINUE
 if ERRORLEVEL 2 goto CHECKDEMO
 if ERRORLEVEL 1 goto EXIT
 cd savegame
-..\maze %1 %2                 # Run MAZE.EXE (game loop) with args
+..\maze %1 %2                 # Run MAZE.EXE (random dungeon generator)
 cd ..
 if ERRORLEVEL 1 goto EXIT
 
-aesop hack phase-two          # Load HACK.RES, run "phase-two" handler (cleanup)
+aesop hack phase-two          # Load HACK.RES, run "phase-two" -- the game itself
 if ERRORLEVEL 1 goto EXIT
 goto CONTINUE
 ```
 
-### Boot Sequence Summary
+#### Boot Sequence Summary
 
 1. **System check**: CHECKSYS.EXE verifies 386+ CPU and 640KB RAM
 2. **Create save directory**: mkdir savegame (if first run)
@@ -302,11 +292,99 @@ goto CONTINUE
      - 1: exit
      - 2: restart from CHECKDEMO (menu)
      - 3+: loop CONTINUE
-5. **Run game loop**: MAZE.EXE (the compiled game engine/interpreter)
-6. **Post-game cleanup**: `aesop hack phase-two`
-   - Runs the "phase-two" handler from HACK.RES for shutdown
+5. **Generate the dungeon**: MAZE.EXE writes LEVELS.DAT / FEA%02d.DAT /
+   ITEMS.DAT into `savegame/`
+6. **Play**: `aesop hack phase-two`
+   - Runs the "phase-two" handler from HACK.RES -- this is the game loop,
+     and it consumes what MAZE just generated
 
-### AESOP Command Semantics
+#### Where the errorlevel actually comes from (2026-08-09)
+
+`phase-one`'s exported handlers are `customize`, `create character`,
+`select character`, `get palette`, `main screen`, `create`, `destroy`.
+Its `create` handler is short:
+
+```
+init_sound / init_graphics / init_interface / wipe_window
+create_program(2005, 2922)
+create_program(2003, 2929)
+SEND THIS, "main screen"
+END                          <- returns main screen's value
+```
+
+`END` returns top-of-stack, and `phase-one` imports **no** exit-code
+runtime function (its whole import list is `create_program`,
+`destroy_object`, `hide_mouse`, `set_palette`, `set_wait_pointer`,
+`set_mouse_pointer`, `envval`, `draw_bitmap`, `color_fade`, `pause`,
+`show_mouse`, `light_fade`, `wipe_window`, `Transition`, `init_*`,
+`shutdown_*`). So the DOS errorlevel *is* the value `main screen`
+returns.
+
+`main screen` is a `while(1)` around a 5-way `CASE` on what the menu
+object's `run` message returns:
+
+| case | menu item | what it does | returns |
+|---|---|---|---|
+| 0 | Show Intro | fade + wipe, `staticVar0 = 2` | **2** → `:CHECKDEMO` |
+| 1 | Continue | `create_program(kernel)`, SEND `enter game` (msg 468), `staticVar0 = 3` | **3** → `:CONTINUE` |
+| 2 | Choose Character | SEND `select character` → SEND `customize` | **1** on success, else loop |
+| 3 | Create Character | SEND `create character` → SEND `customize` | **1** on success, else loop |
+| 4 | — | `staticVar0 = 1` | **1** |
+
+Cases 0 and 1 line up with `HACK.BAT` exactly, which is good evidence
+the model is right.
+
+**Open contradiction.** No path returns **0**, and 0 is what the batch
+needs in order to run MAZE and enter `phase-two`. The `BRA LBL_872`
+that would return 0 sits behind `SHTC #01; BRT`, so it is dead code.
+Clicking **Play** on the Customization screen genuinely returns 1,
+which `HACK.BAT` reads as `:EXIT`. Two candidate explanations, neither
+confirmed:
+
+1. **`AESOP.EXE` transforms the code.** EOB3's `AESOP.C` is only a
+   `spawnvp` launcher that collapses everything non-zero to `exit(1)`
+   (and re-execs on 127). DH ships its own 16-bit `AESOP.EXE`, which
+   may map the interpreter's value differently.
+2. **This install's `HACK.BAT` is not retail's.** It ships
+   `DEMOGNBG.EXE` and a `G.BAT`, which suggests a bundled or demo
+   build.
+
+Settling this is a question about `AESOP.EXE`, not about our runtime.
+Until it is settled, reaching gameplay needs `THIRDEYE_BOOT=phase-two`.
+
+#### File I/O: what phase-one reads and writes
+
+Traced live (all with zero stubs since the writers landed):
+
+```
+create_file("SAVEGAME\PC.DAT")
+  write_array_to_file(ptr, 20)      ; name, NUL-padded
+  write_array_to_file(ptr, 13)      ; race/class/stats
+close_file()                        ; 33 bytes -- matches the shipped file
+
+open_file("SAVEGAME\SETTINGS.DAT")
+  read_array_from_file(ptr, 4)      ; the seed, read and discarded
+  read_array_from_file(ptr, 19)     ; the settings struct
+  read_number_from_file(4)
+close_file()
+
+create_file("SAVEGAME\SETTINGS.DAT")
+  write_long_to_file(seed)          ; 0 when the screen reads "(random)"
+  write_array_to_file(ptr, 19)
+  write_long_to_file(n)             ; a counter; 46 -> 47 on our run
+close_file()                        ; 27 bytes -- byte-identical round-trip
+```
+
+Note the kernel's 27-byte view (4 + 19 + 4) versus MAZE's 16-byte one
+(4 + 12) — the same file, two readers, two layouts.
+
+**Seed 0 means "roll one."** `1325:3aee` substitutes the BIOS timer at
+`0040:006C`; we substitute a clock read and record the result in
+`LEVELS.DAT`'s 4-byte header, where MAZE also stores the seed it
+actually used. Taking the 0 literally would give every install the same
+dungeon.
+
+#### AESOP Command Semantics
 
 The batch uses `aesop <res-basename> <object-name>` which implies:
 - `aesop` is a launcher that loads a RES file and instantiates an object
@@ -316,9 +394,9 @@ The batch uses `aesop <res-basename> <object-name>` which implies:
 
 ---
 
-## AESOP RES Structure for Dungeon Hack
+### AESOP RES Structure for Dungeon Hack
 
-### OPEN.RES (1.5 MB)
+#### OPEN.RES (1.5 MB)
 
 **Boot object**: `"opening"` (resource 154)
 
@@ -338,7 +416,7 @@ The batch uses `aesop <res-basename> <object-name>` which implies:
 
 **Purpose**: Displays opening cinematic, menu screens, and transitions. If OPEN.RES exists, it's the entry point before HACK.RES.
 
-### HACK.RES (6.8 MB)
+#### HACK.RES (6.8 MB)
 
 **Boot objects**: At minimum, "phase-one" and "phase-two" handlers must exist
 
@@ -356,7 +434,7 @@ The batch uses `aesop <res-basename> <object-name>` which implies:
 
 ---
 
-## Implications for Thirdeye
+### Implications for Thirdeye
 
 1. **Boot order**: Load OPEN.RES first (if present), then HACK.RES
 2. **Boot object**: Look for "opening" in OPEN.RES (not "start")
@@ -371,9 +449,9 @@ The batch uses `aesop <res-basename> <object-name>` which implies:
 
 ---
 
-## Comparison: EOB3 vs Dungeon Hack Architecture
+### Comparison: EOB3 vs Dungeon Hack Architecture
 
-### EOB3 — Pure AESOP Bytecode Runtime
+#### EOB3 — Pure AESOP Bytecode Runtime
 
 **EYE.BAT** (2 lines):
 ```batch
@@ -411,20 +489,27 @@ exit(rtn);
 
 The launcher simply loads a RES file, finds a named object in its export dictionary, creates it (calls M:0), runs its message loop, destroys it, and exits with a return code.
 
-### Dungeon Hack — Hybrid AESOP + Compiled Game Loop
+#### Dungeon Hack — AESOP Bytecode + a Separate Dungeon Generator
 
 **HACK.BAT** (multi-phase):
 ```batch
-aesop open opening           # Phase 1: Load OPEN.RES, run intro/menu
-aesop hack phase-one         # Phase 2: Load HACK.RES, initialize game state
-..\maze %1 %2                # Phase 3: Run compiled game loop
-aesop hack phase-two         # Phase 4: Load HACK.RES, cleanup/save
+aesop open opening           # Phase 1: Load OPEN.RES, run the intro
+aesop hack phase-one         # Phase 2: Load HACK.RES, title menu + character +
+                             #          the Customization (settings) screen
+..\maze %1 %2                # Phase 3: generate the dungeon files
+aesop hack phase-two         # Phase 4: Load HACK.RES, THE GAME ITSELF
 ```
 
+`phase-two` is the game loop, not a cleanup step: it is what consumes
+`LEVELS.DAT` / `FEA%02d.DAT` / `ITEMS.DAT` and runs play. See
+"What Does MAZE.EXE Do?" below and the errorlevel section above.
+
 **Architecture**:
-- Multiple executables: `AESOP.EXE` (launcher) + `MAZE.EXE` (game loop)
+- Multiple executables: `AESOP.EXE` (the AESOP runtime) + `MAZE.EXE`
+  (random dungeon generator, run once per new game)
 - Multiple RES files: `OPEN.RES` (1.5 MB intro/menu) + `HACK.RES` (6.8 MB gameplay)
-- Hybrid: AESOP for initialization/scripting, compiled `MAZE.EXE` for rendering/gameplay
+- Split: the SOP bytecode does intro/menu/gameplay; `MAZE.EXE` only
+  pre-generates the dungeon files the gameplay SOP reads
 - Boot objects: "opening" (OPEN.RES), "phase-one" (HACK.RES), "phase-two" (HACK.RES)
 - Error code flow control: Exit codes (0/1/2/3+) control batch flow
 
@@ -434,64 +519,53 @@ aesop hack phase-two         # Phase 4: Load HACK.RES, cleanup/save
 |--------|------|------|
 | **Intro/Menu** | In "start" bytecode handlers | In "opening" (separate RES) |
 | **Game Init** | In "start" bytecode handlers | In "phase-one" bytecode handler |
-| **Game Loop** | "start" M:3 timer tick + Thirdeye renderer | MAZE.EXE (51 KB compiled) |
-| **Game Cleanup** | In "start" bytecode handlers | In "phase-two" bytecode handler |
-| **Optimization** | Pure bytecode (simpler) | Compiled game loop (faster) |
+| **Game Loop** | "start" M:3 timer tick + Thirdeye renderer | "phase-two" bytecode handler |
+| **Dungeon source** | Hand-authored `LVLnn.TMP` shipped with the game | Generated per playthrough by MAZE.EXE |
+| **Optimization** | Pure bytecode (simpler) | Pure bytecode + a separate generator binary |
 | **Distribution** | Single RES file (7.1 MB) | Split RES files (8.3 MB) |
 
-### What Does MAZE.EXE Do?
+#### What Does MAZE.EXE Do?
 
-**MAZE.EXE** is a **compiled game loop** (51 KB) that:
+**Corrected (2026-08-05):** MAZE.EXE is *not* the game loop — that was
+speculation. It is the **random dungeon generator**: a small Borland C++
+utility ("Random Dungeon Generator v1.0/386  Event Horizon Software Inc.")
+that reads `savegame/SETTINGS.DAT`, generates a fresh dungeon, and writes
+`LEVELS.DAT` + `FEA%02d.DAT` (per-level) + `ITEMS.DAT` + `SEED.TXT` into
+`savegame/`. `phase-two` (a HACK.RES SOP object) is the game loop; it
+consumes MAZE's output via `load_level_map` / `open_feature_file` /
+`get_feature_record` runtime calls.
 
-1. **Receives** pre-initialized game state from `aesop hack phase-one`:
-   - Party data, inventory, character stats
-   - Level maps and object data loaded into HACK.RES namespace
-   - Kernel object and all game state objects created
+Full RE writeup — file formats, feature tables, `dungeon` object's load
+sequence, and paths to reimplementation — lives in
+[dungeon_hack_maze.md](dungeon_hack_maze.md).
 
-2. **Runs** the main rendering and event loop:
-   - Input handling (keyboard, mouse)
-   - Real-time 3D dungeon view rendering
-   - HUD and UI rendering
-   - Party movement and pathfinding
-   - Combat simulation and monster AI
-   - Event dispatch (calls to kernel object handlers)
+Errorlevel semantics (from HACK.BAT, confirmed against `phase-one`'s
+observed return values). Batch `if ERRORLEVEL n` matches **n and above**,
+and HACK.BAT tests high-to-low, so the effective routing is:
+- `>= 3` → back to `:CONTINUE` (re-run phase-one)
+- `2` → back to `:CHECKDEMO` (re-run intro, then phase-one)
+- `1` → EXIT (quit game)
+- `0` → fall through: run MAZE, then phase-two
 
-3. **Interfaces** with HACK.RES:
-   - Calls kernel message handlers for high-level game logic
-   - Reads/modifies party data structures
-   - Coordinates with scripted events and timers
-   - Manages level transitions and saves
+#### Implications for Thirdeye
 
-4. **Returns** exit code to HACK.BAT:
-   - `0` = Normal completion (continue to phase-two)
-   - `1` = Error/Exit (quit game)
-   - `2` = Return to menu (restart loop)
-   - `3+` = Retry (loop CONTINUE)
+**Current state**: Thirdeye plays EOB3 (pure bytecode, single RES). For DH
+we have OPEN.RES/HACK.RES loading, the phase-one/phase-two boot chain
+(`bootObject` interprets HACK.BAT errorlevels), page compositing, the DH
+palette-region map, and the 3D wall renderer — `load_level_map`,
+`get_feature_record`, `init_viewspace`, `build_clipping` and `draw_walls`
+are all implemented, and a phase-two session with movement reports **zero**
+stubbed CALLs. What's missing is dungeon *content*: we ship a native
+mini-MAZE that seeds structurally valid but empty files, so the party
+starts sealed in rock until MAZE.EXE output (or a native generator)
+provides a real map.
 
-**Why compiled instead of pure bytecode?**
-
-- **Performance**: Real-time render loop requires tight, optimized code. Bytecode overhead (VM dispatch, stack manipulation) would hurt framerate. Compiled code runs faster.
-- **Direct hardware access**: Video buffers, sound card I/O, input devices benefit from direct access rather than VM abstraction layers.
-- **Code size**: 51 KB compiled vs multi-MB bytecode for equivalent functionality.
-- **Separation of concerns**: AESOP handles initialization, event scripting, and state management. MAZE.EXE handles real-time graphics and input. Better modularity and maintenance.
-
-This hybrid approach was likely a performance optimization for the demo/promotional release.
-
-### Implications for Thirdeye
-
-**Current state**: Thirdeye fully supports the EOB3 model (pure bytecode, single RES).
-
-**Dungeon Hack support requires**:
-1. Multi-RES loading: Support loading OPEN.RES and HACK.RES separately
-2. Flexible boot objects: Search for "opening", "phase-one", "phase-two" (not hardcoded "start")
-3. Exit code semantics: Capture return codes from object execution
-4. Optional intro: Support skipping OPEN.RES if not present
-
-**Thirdeye already IS the replacement for MAZE.EXE**:
-- The `phase-one` handler initializes game state
-- Thirdeye's event loop + renderer replaces MAZE.EXE
-- `phase-two` handler handles cleanup
-- No separate binary needed — Thirdeye is the compiled game loop
+**Two paths forward** (detail in [dungeon_hack_maze.md](dungeon_hack_maze.md)):
+1. Bootstrap by running MAZE.EXE once under DOSBox, capture its output,
+   feed our stubs against real files. Proves format and unblocks
+   phase-two without reimplementing MAZE.
+2. Reimplement MAZE natively. Needs a Ghidra pass + a DOSBox baseline to
+   diff against.
 
 The architecture is largely compatible. The main work is adding multi-RES support and making boot object discovery more flexible.
 
