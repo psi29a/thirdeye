@@ -172,14 +172,20 @@ namespace sound    { bool tryHandle(Context&, const std::string &fn,
 namespace dh       { bool tryHandle(Context&, const std::string &fn,
                                     const std::vector<VM::Value>&,
                                     VM::Value &result);
-                     // Called once per DH boot (from engine.cpp when
-                     // HACK.RES is being loaded). Writes structurally
-                     // valid empty savegame/LEVELS.DAT / FEA*.DAT /
-                     // ITEMS.DAT if they don't exist, so phase-two
-                     // consumes zero-content dungeons instead of
-                     // tripping on missing files. Idempotent.
+                     // Generates savegame/LEVELS.DAT + FEA*.DAT +
+                     // ITEMS.DAT -- our stand-in for running MAZE.EXE.
+                     // The set is all-or-nothing: if every member is
+                     // already present it is left alone, otherwise the
+                     // whole set is rewritten.
+                     //
+                     // `regenerate` forces the rewrite. HACK.BAT runs
+                     // `..\maze` unconditionally between phase-one and
+                     // phase-two, and MAZE always overwrites -- that is
+                     // what makes each new game a new dungeon, from
+                     // whatever SETTINGS.DAT phase-one just wrote.
                      void ensureSavegameFiles(
-                         const std::filesystem::path &dhRoot);
+                         const std::filesystem::path &dhRoot,
+                         bool regenerate = false);
 
                      // MAZE.EXE's PRNG: R250 (lagged-Fibonacci XOR, lags
                      // 250/103), ported from segment 1766. Exposed only so

@@ -908,3 +908,43 @@ DH's own 16-bit `AESOP.EXE` transforms the interpreter's exit code (EOB3's
 `AESOP.EXE`, not about our runtime, and it is where the new-game path is
 currently blocked. Full trace in
 [dungeon_hack.md](dungeon_hack.md#where-the-errorlevel-actually-comes-from-2026-08-09).
+
+### The DH new-game path — no env var required (2026-08-10)
+
+The blocker turned out to be a wrong assumption about where AESOP's exit code
+comes from. We were using the boot handler's return value. It is not that.
+
+AESOP creates the boot object, runs it, **destroys it**, and exits with a code —
+and `phase-one`'s `destroy` handler is, in its entirety at the end:
+
+```text
+1116: LSB  "B:staticVar0"
+1119: END
+```
+
+The exit code is that static. `main screen` only *sets* it on the way out: 2 for
+Show Intro, 3 after `enter game`, 1 to quit — and the Choose/Create Character →
+Customize → Play path never assigns it at all, so it keeps its initial **0**,
+which is exactly what `HACK.BAT` needs to run MAZE and enter `phase-two`.
+
+What made this convincing rather than merely plausible: `destroy` branches on
+the same static, and at 0 it paints the **"Generating"** bitmap — the splash
+that sits on screen while MAZE runs. It also calls `shutdown_graphics` only at
+1, the real quit. The bytecode is describing the batch file's control flow back
+to us.
+
+So `bootObject` now sends `MSG_DESTROY` after the boot handler returns and uses
+*that* as the errorlevel, and the `phase-one` → `phase-two` hop runs the dungeon
+generator first — HACK.BAT's `..\maze` step, which overwrites unconditionally,
+so each new game gets a new dungeon from the settings phase-one just wrote.
+
+Verified with no `THIRDEYE_BOOT` anywhere: Show Intro returns 2, Continue loops
+the menu on the empty save picker, and Choose Character → Customize → Play
+returns 0, regenerates 25 levels with a freshly rolled seed (seed 0 means
+"random", and a second new game gets a different dungeon), boots phase-two with
+186 objects on level 0, and the party walks six cells east while monster AI
+ticks. Zero stubs, zero errors, 121 tests, EOB3 unaffected.
+
+The lesson worth keeping: when a return value looks wrong, check *which* return
+value the caller is actually supposed to read. We had the right contract and the
+wrong source for three sessions.

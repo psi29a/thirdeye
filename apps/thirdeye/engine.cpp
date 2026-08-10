@@ -133,6 +133,11 @@ namespace {
 // boot/initialize it (see eob3_research/runtime/DEFS.H + RTOBJECT.C).
 constexpr int MSG_CREATE = 0;
 
+// MSG_DESTROY: the counterpart AESOP sends before tearing an instance down.
+// For a *boot* object this is not just cleanup -- it is where the program's
+// exit code comes from. See bootObject().
+constexpr int MSG_DESTROY = 1;
+
 // Runtime functions + savegame parsers live in dedicated subdirs (see
 // CLAUDE.md). Pull the names we still reference here into this TU.
 using TransferState = THIRDEYE::savegame::TransferState;
@@ -1192,6 +1197,24 @@ void THIRDEYE::Engine::bootObject(RESOURCES::Resource &resource,
 				continue; // loop to re-create start in the cleared environment
 			}
 			if (isDHPhase(currentBoot)) {
+				// The DOS errorlevel is NOT what the boot handler returned.
+				// AESOP creates the boot object, runs it, then destroys it and
+				// exits with a code -- and phase-one's `destroy` handler is
+				// literally `LSB "B:staticVar0"; END`, so the exit code is that
+				// static. `main screen` only sets it on the way out:
+				//
+				//     0  (its initial value, left alone by the Choose/Create
+				//        Character -> Customize -> Play path) -> generate + play
+				//     1  quit            2  show the intro
+				//     3  returned from a game (after `enter game`)
+				//
+				// `destroy` also branches on it: at 0 it paints the
+				// "Generating" bitmap -- the splash that sits on screen while
+				// MAZE runs -- and only at 1 does it call shutdown_graphics.
+				// Reading MSG_CREATE's value instead gave 1 for the Play path
+				// and quit the game just as it was about to start.
+				const VM::Value destroyRc = objects.send(objIndex, MSG_DESTROY, {});
+				result = destroyRc;
 				// HACK.BAT flow control by errorlevel. NOTE batch semantics:
 				// `if ERRORLEVEL n` matches n AND ABOVE, and the checks run
 				// high-to-low, so the real routing is:
@@ -1206,7 +1229,17 @@ void THIRDEYE::Engine::bootObject(RESOURCES::Resource &resource,
 				const int32_t rc = result;
 				std::string nextBoot;
 				if (rc >= 2) nextBoot = "phase-one";
-				else if (rc == 0 && currentBoot == "phase-one") nextBoot = "phase-two";
+				else if (rc == 0 && currentBoot == "phase-one") {
+					// This is HACK.BAT's `cd savegame & ..\maze` step. MAZE
+					// overwrites unconditionally, so force a rewrite: the
+					// player just chose their settings on the Customization
+					// screen and phase-one wrote them to SETTINGS.DAT, and a
+					// new game must get a new dungeon from them.
+					THIRDEYE::runtime::dh::ensureSavegameFiles(
+					    resource.resourcePath().parent_path(),
+					    /*regenerate=*/true);
+					nextBoot = "phase-two";
+				}
 				if (!nextBoot.empty()) {
 					uint16_t nextClass = 0;
 					if (!objects.findClassByName(nextBoot, nextClass)) {

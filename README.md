@@ -115,10 +115,9 @@ To configure without tests (also avoids the GoogleTest download):
 CHANGELOG
 
 0.90.0 (unreleased):
-Dungeon Hack boots, renders and generates its own dungeons. MAZE.EXE -- the DOS
-binary that builds a fresh dungeon for every new game -- is reimplemented
-natively, so mazes, rooms, doors, keys, traps and monsters are generated
-in-process.
+Dungeon Hack is playable from its own menus. MAZE.EXE -- the DOS binary that
+builds a fresh dungeon for every new game -- is reimplemented natively, so
+mazes, rooms, doors, keys, traps and monsters are generated in-process.
 
 * Dungeon Hack boots end to end (OPEN.RES -> `opening`, HACK.RES ->
   `phase-one`), following HACK.BAT's errorlevel chain. The game is auto-detected
@@ -139,9 +138,10 @@ in-process.
   corrupt a savegame. Set THIRDEYE_ALLOW_MULTI=1 to opt out.
 * Fixed `roll_chance`, which always returned 0 -- it looked for its probability
   table in object statics, but both call sites pass a code-space address.
-* Known limitation: DH gameplay still needs `THIRDEYE_BOOT=phase-two`.
-  `phase-one` never returns the 0 that HACK.BAT needs to reach the game. EOB3 is
-  unaffected.
+* The DH new-game path works from the menu: pick a character, set the dungeon
+  options, hit Play, and the game generates a dungeon and drops you into it --
+  no debug env var. (AESOP's exit code comes from the boot object's `destroy`
+  handler, not from the handler that ran the game.)
 
 0.89.0 (released 2026-07-13):
 Save/load lands for real -- save at camp, quit, continue -- plus an automap,

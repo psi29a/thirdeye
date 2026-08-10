@@ -945,7 +945,7 @@ bool tryHandle(Context &ctx, const std::string &fn,
 // SEED and DEPTH come from savegame/SETTINGS.DAT (u32 at 0, DEPTH at 4); both
 // fall back to the shipped values if the file is missing or short.
 
-void ensureSavegameFiles(const std::filesystem::path &dhRoot) {
+void ensureSavegameFiles(const std::filesystem::path &dhRoot, bool regenerate) {
 	namespace fs = std::filesystem;
 	std::error_code ec;
 	auto sg = resolveChildCI(dhRoot, "savegame");
@@ -1006,7 +1006,8 @@ void ensureSavegameFiles(const std::filesystem::path &dhRoot) {
 		if (!fs::exists(resolveChildCI(sg, n), ec)) { complete = false; break; }
 	// Every member present: a previous run (ours, MAZE's or DOSBox's) owns this
 	// dungeon. Leave it alone -- and skip generating one we would only discard.
-	if (complete) return;
+	// `regenerate` is the new-game path, where MAZE would have overwritten it.
+	if (complete && !regenerate) return;
 
 	// LEVELS.DAT: the 4-byte header MAZE writes is the seed itself
 	// (FUN_1325_4053 fwrites &seed before the chunks), then N x 0x400 tile

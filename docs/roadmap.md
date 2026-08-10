@@ -638,16 +638,16 @@ Still open (nice-to-have): a file-picker UI instead of the env var.
   stubs. Seed 0 ("(random)" on the Customization screen) is substituted in
   `generateDungeon` the way `1325:3aee` does, and the seed actually used is
   recorded in `LEVELS.DAT`'s header.
-- 🚧 **DH new-game path — blocked on the errorlevel.** `phase-one`'s
-  `main screen` returns 2 (Show Intro), 3 (Continue) or 1 (Choose/Create
-  Character + Customize), and **never 0** — which is what `HACK.BAT` needs
-  to run MAZE and enter phase-two. Cases 2 and 3 map onto the batch exactly,
-  so the reading is probably right and the transform happens elsewhere:
-  either DH's own 16-bit `AESOP.EXE` remaps the interpreter's exit code, or
-  this install's `HACK.BAT` is a demo/bundled variant (it ships
-  `DEMOGNBG.EXE` + `G.BAT`). Next step is disassembling DH's `AESOP.EXE`
-  exit path. Until then gameplay needs `THIRDEYE_BOOT=phase-two`. Full
-  trace in [dungeon_hack.md](dungeon_hack.md#where-the-errorlevel-actually-comes-from-2026-08-09).
+- ✅ **DH new-game path — works from the menu.** AESOP's exit code comes
+  from the boot object's `destroy` handler, not from the handler that ran
+  the game: `phase-one`'s `destroy` is `LSB "B:staticVar0"; END`, and the
+  Choose/Create Character → Customize → Play path leaves that static at its
+  initial 0 — exactly what `HACK.BAT` needs. `bootObject` now sends
+  `MSG_DESTROY` and uses its return as the errorlevel, and runs the dungeon
+  generator on the `phase-one` → `phase-two` hop (the `..\maze` step).
+  Verified with no `THIRDEYE_BOOT`: Show Intro → 2, Continue → menu loop,
+  Play → 0 → new dungeon → gameplay. Trace in
+  [dungeon_hack.md](dungeon_hack.md#where-the-errorlevel-actually-comes-from-2026-08-09).
 - ✅ **MAZE.EXE feature tail — the dungeon is populated.** The fifteen
   per-level passes plus `26f6` (pits) and `36a2` (quest objects) are
   ported: regions (`2081`), stairs (`10a6`), illusionary walls, arches,
