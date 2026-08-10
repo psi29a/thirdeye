@@ -6,7 +6,7 @@ Thirdeye is from-scratch C++ reimplementation of SSI/Westwood's **AESOP** engine
 
 
 
-Version: 0.89.0  
+Version: 0.90.0 (unreleased)  
 License: GPL (see GPL3.txt for more information)  
 Website:  http://www.mindwerks.net/projects/thirdeye/  
 
@@ -114,7 +114,36 @@ To configure without tests (also avoids the GoogleTest download):
 
 CHANGELOG
 
-0.89.0:
+0.90.0 (unreleased):
+Dungeon Hack boots, renders and generates its own dungeons. MAZE.EXE -- the DOS
+binary that builds a fresh dungeon for every new game -- is reimplemented
+natively, so mazes, rooms, doors, keys, traps and monsters are generated
+in-process.
+
+* Dungeon Hack boots end to end (OPEN.RES -> `opening`, HACK.RES ->
+  `phase-one`), following HACK.BAT's errorlevel chain. The game is auto-detected
+  from the .RES file, so EOB3 and DH share one binary with no flags.
+* DH rendering: the 3D view with real occlusion, the HUD, and the automap. DH
+  composites each panel through an offscreen page; EOB3's flattened path is
+  untouched (verified pixel-identical).
+* MAZE.EXE ported natively, including its R250 PRNG -- every layout decision is
+  a draw from that stream, so nothing else reproduces DH's dungeons. All five
+  layout algorithms, plus the feature pass that places stairs, locks, traps,
+  pits, teleporters, monsters and treasure from SETTINGS.DAT's FREQ_* values.
+  Every lock gets a key no deeper in the maze than the lock, so the dungeon
+  stays solvable. See docs/dungeon_hack_maze.md.
+* DH file I/O: SETTINGS.DAT and PC.DAT round-trip byte-perfectly, so the
+  Customization screen's settings and the chosen character persist. Seed 0 means
+  "random", as in the original.
+* Single-instance lock: two copies running against one game directory could
+  corrupt a savegame. Set THIRDEYE_ALLOW_MULTI=1 to opt out.
+* Fixed `roll_chance`, which always returned 0 -- it looked for its probability
+  table in object statics, but both call sites pass a code-space address.
+* Known limitation: DH gameplay still needs `THIRDEYE_BOOT=phase-two`.
+  `phase-one` never returns the 0 that HACK.BAT needs to reach the game. EOB3 is
+  unaffected.
+
+0.89.0 (released 2026-07-13):
 Save/load lands for real -- save at camp, quit, continue -- plus an automap,
 a launcher that can install the game for you, and a live control channel that
 lets a script (or an AI agent) play the game.

@@ -7,7 +7,7 @@ AESOP/32), the bytecode VM that powers **Eye of the Beholder 3** (`EYE.RES`) and
 **End goal:** play EOB3 (and Dungeon Hack) natively from the original game data. You must own
 the original games — Thirdeye ships no game assets.
 
-Version 0.89.0 · GPLv3 · SDL3 (Linux/macOS/Windows), C++20.
+Version 0.90.0 · GPLv3 · SDL3 (Linux/macOS/Windows), C++20.
 
 ## Where things live
 
