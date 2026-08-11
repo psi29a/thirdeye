@@ -403,14 +403,20 @@ bool GRAPHICS::Graphics::visibleBitmapRect(std::vector<uint8_t> &bmp,
 		uint16_t index, int posX, int posY, int mirror, int out[4]) {
 	Bitmap image(bmp);
 	int iw = image.getWidth(index), ih = image.getHeight(index);
-	std::vector<uint8_t> pixels = image[index];
+	// Bound the box by COVERAGE, not by colour: a shape may paint palette
+	// index 0, and testing `pixel != 0` would shrink the rect around those
+	// pixels -- or report a shape that is entirely painted black as fully
+	// transparent. Same reason drawImage stopped colorkeying.
+	std::vector<uint8_t> mask;
+	std::vector<uint8_t> pixels = image.decodeScanlineMasked(index, mask);
 	if (iw <= 0 || ih <= 0 ||
-	    pixels.size() < static_cast<size_t>(iw) * ih)
+	    pixels.size() < static_cast<size_t>(iw) * ih ||
+	    mask.size() < static_cast<size_t>(iw) * ih)
 		return false;
 	int minX = iw, minY = ih, maxX = -1, maxY = -1;
 	for (int y = 0; y < ih; ++y)
 		for (int x = 0; x < iw; ++x)
-			if (pixels[static_cast<size_t>(y) * iw + x] != 0) {
+			if (mask[static_cast<size_t>(y) * iw + x] != 0) {
 				if (x < minX) minX = x;
 				if (x > maxX) maxX = x;
 				if (y < minY) minY = y;

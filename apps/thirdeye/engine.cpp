@@ -1619,10 +1619,20 @@ void THIRDEYE::Engine::go() {
 		// DH-only: make sure a dungeon exists before we boot, so that jumping
 		// straight to phase-two (THIRDEYE_BOOT=phase-two) has something to
 		// read. The real new-game path regenerates on the phase-one ->
-		// phase-two hop instead. Failure is not fatal here -- phase-one does
-		// not need a dungeon, and the hop checks for itself.
-		if (resName == "hack.res")
-			(void)THIRDEYE::runtime::dh::ensureSavegameFiles(resFile.parent_path());
+		// phase-two hop instead, and checks for itself there.
+		//
+		// Failure only matters if we are about to boot phase-two: phase-one is
+		// the menu and never touches the dungeon, but phase-two would come up
+		// on whatever half-set is on disk.
+		if (resName == "hack.res") {
+			const bool ok = THIRDEYE::runtime::dh::ensureSavegameFiles(
+			    resFile.parent_path());
+			if (!ok && bootName == "phase-two") {
+				std::cout << "DH dungeon generation failed -- refusing to boot "
+				             "phase-two." << std::endl;
+				return;
+			}
+		}
 		bootObject(resource, bootName);
 		return;
 	}

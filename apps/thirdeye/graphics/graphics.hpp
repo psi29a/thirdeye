@@ -130,11 +130,12 @@ private:
 	struct DecodedShape {
 		int w, h;
 		std::vector<uint8_t> pixels; // indexed (w*h bytes)
-		// Per-pixel opacity from the VFX RLE: 1 = painted (opaque even when
-		// the value is 0 = black), 0 = skipped (transparent). VFX shapes have
-		// no color keying -- painted black is real black (the spell-book
-		// arrows/checker). Empty for non-VFX formats (GFF frames, CHARPICS),
-		// which keep the legacy 0-is-transparent colorkey path.
+		// Per-pixel coverage: 1 = painted (opaque even when the value is
+		// 0 = black), 0 = transparent. Both AESOP bitmap formats encode
+		// transparency structurally -- the VFX RLE has an explicit skip
+		// token, the older scanline format simply omits pixels no run
+		// covers -- so neither colour-keys. Painted black is real black
+		// (the spell-book arrows, and DH's UI panels).
 		std::vector<uint8_t> mask;
 	};
 	struct ShapeKey {
