@@ -133,6 +133,11 @@ namespace {
 // boot/initialize it (see eob3_research/runtime/DEFS.H + RTOBJECT.C).
 constexpr int MSG_CREATE = 0;
 
+// MSG_DESTROY: the counterpart AESOP sends before tearing an instance down.
+// For a *boot* object this is not just cleanup -- it is where the program's
+// exit code comes from. See bootObject().
+constexpr int MSG_DESTROY = 1;
+
 // Runtime functions + savegame parsers live in dedicated subdirs (see
 // CLAUDE.md). Pull the names we still reference here into this TU.
 using TransferState = THIRDEYE::savegame::TransferState;
@@ -1192,21 +1197,66 @@ void THIRDEYE::Engine::bootObject(RESOURCES::Resource &resource,
 				continue; // loop to re-create start in the cleared environment
 			}
 			if (isDHPhase(currentBoot)) {
-				// HACK.BAT flow control by errorlevel. NOTE batch semantics:
-				// `if ERRORLEVEL n` matches n AND ABOVE, and the checks run
-				// high-to-low, so the real routing is:
-				//     rc >= 3  -> :CONTINUE   re-run phase-one
-				//     rc == 2  -> :CHECKDEMO  re-run the intro, then phase-one
-				//     rc == 1  -> :EXIT
-				//     rc == 0  -> fall through: run MAZE, then phase-two
-				// We land 2 and 3+ on the same target because the cross-.RES
-				// hop back to OPEN.RES for the intro isn't wired up yet; the
-				// range test still has to be >= 3 rather than == 3 so a
-				// higher code doesn't fall through to "quit".
+				// The DOS errorlevel is NOT what the boot handler returned.
+				// AESOP creates the boot object, runs it, then destroys it and
+				// exits with a code -- and phase-one's `destroy` handler is
+				// literally `LSB "B:staticVar0"; END`, so the exit code is that
+				// static. `main screen` only sets it on the way out:
+				//
+				//     0  (its initial value, left alone by the Choose/Create
+				//        Character -> Customize -> Play path) -> generate + play
+				//     1  quit            2  show the intro
+				//     3  returned from a game (after `enter game`)
+				//
+				// `destroy` also branches on it: at 0 it paints the
+				// "Generating" bitmap -- the splash that sits on screen while
+				// MAZE runs -- and only at 1 does it call shutdown_graphics.
+				// Reading MSG_CREATE's value instead gave 1 for the Play path
+				// and quit the game just as it was about to start.
+				const VM::Value destroyRc = objects.send(objIndex, MSG_DESTROY, {});
+				result = destroyRc;
+				// HACK.BAT flow control by errorlevel. Batch `if ERRORLEVEL n`
+				// matches n AND ABOVE and the checks run high-to-low, so each
+				// phase routes differently:
+				//
+				//   phase-one:  >= 3 -> :CONTINUE   re-run phase-one
+				//               == 2 -> :CHECKDEMO  intro, then phase-one
+				//               == 1 -> :EXIT
+				//               == 0 -> run MAZE, then phase-two
+				//   phase-two:  >= 1 -> :EXIT
+				//               == 0 -> :CONTINUE   back to phase-one
+				//
+				// Note phase-two's sense is inverted from phase-one's: a clean
+				// return to the title menu is 0, and anything else quits.
+				// We land phase-one's 2 and 3+ on the same target because the
+				// cross-.RES hop back to OPEN.RES for the intro isn't wired up
+				// yet; the range test still has to be >= 3 rather than == 3 so
+				// a higher code doesn't fall through to "quit".
 				const int32_t rc = result;
 				std::string nextBoot;
-				if (rc >= 2) nextBoot = "phase-one";
-				else if (rc == 0 && currentBoot == "phase-one") nextBoot = "phase-two";
+				if (currentBoot == "phase-two") {
+					if (rc == 0) nextBoot = "phase-one";
+				} else if (rc >= 2) {
+					nextBoot = "phase-one";
+				} else if (rc == 0) {
+					// HACK.BAT's `cd savegame & ..\maze` step. MAZE overwrites
+					// unconditionally, so force a rewrite: the player just
+					// chose their settings on the Customization screen and
+					// phase-one wrote them to SETTINGS.DAT, and a new game must
+					// get a new dungeon from them.
+					//
+					// The batch checks MAZE's own errorlevel here and quits on
+					// failure rather than starting a game on a half-written
+					// dungeon; do the same.
+					if (THIRDEYE::runtime::dh::ensureSavegameFiles(
+					        resource.resourcePath().parent_path(),
+					        /*regenerate=*/true)) {
+						nextBoot = "phase-two";
+					} else {
+						std::cout << "DH dungeon generation failed -- quitting."
+						          << std::endl;
+					}
+				}
 				if (!nextBoot.empty()) {
 					uint16_t nextClass = 0;
 					if (!objects.findClassByName(nextBoot, nextClass)) {
@@ -1566,11 +1616,23 @@ void THIRDEYE::Engine::go() {
 		    (resName == "open.res" || resName == "hack.res");
 		// Debug hook: force any boot object by name (e.g. THIRDEYE_BOOT=phase-two).
 		if (const char *b = std::getenv("THIRDEYE_BOOT")) bootName = b;
-		// DH-only: seed structurally-valid empty savegame/LEVELS.DAT etc. if
-		// they don't exist so phase-two can read zero-content dungeons without
-		// a MAZE.EXE (real or bootstrapped) run. Idempotent.
-		if (resName == "hack.res")
-			THIRDEYE::runtime::dh::ensureSavegameFiles(resFile.parent_path());
+		// DH-only: make sure a dungeon exists before we boot, so that jumping
+		// straight to phase-two (THIRDEYE_BOOT=phase-two) has something to
+		// read. The real new-game path regenerates on the phase-one ->
+		// phase-two hop instead, and checks for itself there.
+		//
+		// Failure only matters if we are about to boot phase-two: phase-one is
+		// the menu and never touches the dungeon, but phase-two would come up
+		// on whatever half-set is on disk.
+		if (resName == "hack.res") {
+			const bool ok = THIRDEYE::runtime::dh::ensureSavegameFiles(
+			    resFile.parent_path());
+			if (!ok && bootName == "phase-two") {
+				std::cout << "DH dungeon generation failed -- refusing to boot "
+				             "phase-two." << std::endl;
+				return;
+			}
+		}
 		bootObject(resource, bootName);
 		return;
 	}

@@ -945,7 +945,7 @@ bool tryHandle(Context &ctx, const std::string &fn,
 // SEED and DEPTH come from savegame/SETTINGS.DAT (u32 at 0, DEPTH at 4); both
 // fall back to the shipped values if the file is missing or short.
 
-void ensureSavegameFiles(const std::filesystem::path &dhRoot) {
+bool ensureSavegameFiles(const std::filesystem::path &dhRoot, bool regenerate) {
 	namespace fs = std::filesystem;
 	std::error_code ec;
 	auto sg = resolveChildCI(dhRoot, "savegame");
@@ -1006,7 +1006,8 @@ void ensureSavegameFiles(const std::filesystem::path &dhRoot) {
 		if (!fs::exists(resolveChildCI(sg, n), ec)) { complete = false; break; }
 	// Every member present: a previous run (ours, MAZE's or DOSBox's) owns this
 	// dungeon. Leave it alone -- and skip generating one we would only discard.
-	if (complete) return;
+	// `regenerate` is the new-game path, where MAZE would have overwritten it.
+	if (complete && !regenerate) return true;
 
 	// LEVELS.DAT: the 4-byte header MAZE writes is the seed itself
 	// (FUN_1325_4053 fwrites &seed before the chunks), then N x 0x400 tile
@@ -1026,15 +1027,52 @@ void ensureSavegameFiles(const std::filesystem::path &dhRoot) {
 	// entry, one 8-byte body record per feature, an all-zero terminator. The 30
 	// feature types and 12 item types, what places each and how bytes 4..7 are
 	// packed, are in dh_research/MAZE/FEATURES.md.
-	auto write = [&](const std::string &name, const std::vector<uint8_t> &bytes) {
-		std::ofstream out(resolveChildCI(sg, name), std::ios::binary);
-		if (out) out.write(reinterpret_cast<const char *>(bytes.data()),
-		                   static_cast<std::streamsize>(bytes.size()));
+	// Stage every file, then commit. A dungeon half-replaced by a disk-full or
+	// permission error is the same broken-level failure the all-or-nothing rule
+	// above exists to prevent -- and on the regenerate path we would be
+	// destroying a working dungeon to produce it. So write to `.tmp` siblings
+	// first, check every one, and only then rename them into place.
+	std::vector<std::pair<fs::path, fs::path>> staged;   // tmp -> final
+	auto discard = [&] {
+		for (const auto &[tmp, final] : staged) fs::remove(tmp, ec);
 	};
-	write("LEVELS.DAT", levelData);
-	for (int i = 0; i < levels; ++i)
-		write(names[static_cast<size_t>(i) + 2], packFeatureFile(dungeon, i));
-	write("ITEMS.DAT", packItemFile(dungeon));
+	auto stage = [&](const std::string &name,
+	                 const std::vector<uint8_t> &bytes) -> bool {
+		auto final = resolveChildCI(sg, name);
+		auto tmp = final;
+		tmp += ".tmp";
+		{
+			std::ofstream out(tmp, std::ios::binary | std::ios::trunc);
+			if (!out) return false;
+			out.write(reinterpret_cast<const char *>(bytes.data()),
+			          static_cast<std::streamsize>(bytes.size()));
+			out.flush();
+			if (!out) return false;          // catches a full disk on close
+		}
+		staged.emplace_back(tmp, final);
+		return true;
+	};
+
+	bool ok = stage("LEVELS.DAT", levelData);
+	for (int i = 0; ok && i < levels; ++i)
+		ok = stage(names[static_cast<size_t>(i) + 2], packFeatureFile(dungeon, i));
+	if (ok) ok = stage("ITEMS.DAT", packItemFile(dungeon));
+	if (!ok) {
+		std::cerr << "dh: failed to write the dungeon into " << sg.string()
+		          << " -- leaving the existing files alone" << std::endl;
+		discard();
+		return false;
+	}
+	for (const auto &[tmp, final] : staged) {
+		fs::rename(tmp, final, ec);
+		if (ec) {
+			std::cerr << "dh: failed to commit " << final.string() << " ("
+			          << ec.message() << ")" << std::endl;
+			discard();
+			return false;
+		}
+	}
+	return true;
 }
 
 } // namespace THIRDEYE::runtime::dh

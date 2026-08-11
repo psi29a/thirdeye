@@ -202,13 +202,15 @@ void GRAPHICS::Graphics::drawImage(std::vector<uint8_t> &bmp, uint16_t index,
 		Bitmap image(bmp);
 		s.w = image.getWidth(index);
 		s.h = image.getHeight(index);
-		// VFX shapes carry a per-pixel opacity mask (skip = transparent,
-		// painted = opaque even when black); other formats keep the legacy
-		// colorkey-0 convention and leave the mask empty.
-		if (image.isVFXShape())
-			s.pixels = image.decodeVFXShapeMasked(index, s.mask);
-		else
-			s.pixels = image[index];
+		// Both AESOP bitmap formats encode transparency structurally, not by
+		// colour: the VFX RLE has an explicit skip token, and the older
+		// scanline format simply omits the pixels it does not paint. Either
+		// way a run may legitimately paint palette index 0, and the original
+		// draws that as solid black. So always decode with a coverage mask and
+		// never colorkey -- keying index 0 punched a hole through every
+		// painted-black pixel (DH's camp panel showed the dungeon through it;
+		// the same class of bug the VFX path had before it was masked).
+		s.pixels = image.decodeScanlineMasked(index, s.mask);
 	};
 	if (cacheId != 0) {
 		ShapeKey key{cacheId, index};
@@ -401,14 +403,20 @@ bool GRAPHICS::Graphics::visibleBitmapRect(std::vector<uint8_t> &bmp,
 		uint16_t index, int posX, int posY, int mirror, int out[4]) {
 	Bitmap image(bmp);
 	int iw = image.getWidth(index), ih = image.getHeight(index);
-	std::vector<uint8_t> pixels = image[index];
+	// Bound the box by COVERAGE, not by colour: a shape may paint palette
+	// index 0, and testing `pixel != 0` would shrink the rect around those
+	// pixels -- or report a shape that is entirely painted black as fully
+	// transparent. Same reason drawImage stopped colorkeying.
+	std::vector<uint8_t> mask;
+	std::vector<uint8_t> pixels = image.decodeScanlineMasked(index, mask);
 	if (iw <= 0 || ih <= 0 ||
-	    pixels.size() < static_cast<size_t>(iw) * ih)
+	    pixels.size() < static_cast<size_t>(iw) * ih ||
+	    mask.size() < static_cast<size_t>(iw) * ih)
 		return false;
 	int minX = iw, minY = ih, maxX = -1, maxY = -1;
 	for (int y = 0; y < ih; ++y)
 		for (int x = 0; x < iw; ++x)
-			if (pixels[static_cast<size_t>(y) * iw + x] != 0) {
+			if (mask[static_cast<size_t>(y) * iw + x] != 0) {
 				if (x < minX) minX = x;
 				if (x > maxX) maxX = x;
 				if (y < minY) minY = y;

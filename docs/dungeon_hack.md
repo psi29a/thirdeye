@@ -304,7 +304,7 @@ goto CONTINUE
 `select character`, `get palette`, `main screen`, `create`, `destroy`.
 Its `create` handler is short:
 
-```
+```text
 init_sound / init_graphics / init_interface / wipe_window
 create_program(2005, 2922)
 create_program(2003, 2929)
@@ -331,32 +331,54 @@ object's `run` message returns:
 | 3 | Create Character | SEND `create character` → SEND `customize` | **1** on success, else loop |
 | 4 | — | `staticVar0 = 1` | **1** |
 
-Cases 0 and 1 line up with `HACK.BAT` exactly, which is good evidence
-the model is right.
+Cases 0 and 1 line up with `HACK.BAT` exactly. But note that no case
+returns 0 — which is the clue that `main screen`'s return value is not
+the errorlevel at all.
 
-**Open contradiction.** No path returns **0**, and 0 is what the batch
-needs in order to run MAZE and enter `phase-two`. The `BRA LBL_872`
-that would return 0 sits behind `SHTC #01; BRT`, so it is dead code.
-Clicking **Play** on the Customization screen genuinely returns 1,
-which `HACK.BAT` reads as `:EXIT`. Two candidate explanations, neither
-confirmed:
+**Resolved (2026-08-10): the errorlevel is not `main screen`'s return
+value.** AESOP creates the boot object, runs it, **destroys it**, and
+exits with a code — and `phase-one`'s `destroy` handler ends:
 
-1. **`AESOP.EXE` transforms the code.** EOB3's `AESOP.C` is only a
-   `spawnvp` launcher that collapses everything non-zero to `exit(1)`
-   (and re-execs on 127). DH ships its own 16-bit `AESOP.EXE`, which
-   may map the interpreter's value differently.
-2. **This install's `HACK.BAT` is not retail's.** It ships
-   `DEMOGNBG.EXE` and a `G.BAT`, which suggests a bundled or demo
-   build.
+```text
+1116: LSB  "B:staticVar0"
+1119: END
+```
 
-Settling this is a question about `AESOP.EXE`, not about our runtime.
-Until it is settled, reaching gameplay needs `THIRDEYE_BOOT=phase-two`.
+So the exit code is `staticVar0`, and `main screen` only *sets* it on
+the way out. The Choose/Create Character → Customize → Play path never
+assigns it, so it keeps its initial **0** — which is exactly the value
+`HACK.BAT` needs to run MAZE and enter `phase-two`.
+
+`destroy` corroborates this by branching on the same static:
+
+| `staticVar0` | `destroy` does | batch |
+|---|---|---|
+| 0 | fade, wipe, set the Fixed palette, draw the **"Generating"** bitmap, colour-fade | run MAZE, then `phase-two` |
+| 1 | fade + wipe, and this is the only case that calls `shutdown_graphics` | `:EXIT` |
+| 2 | (no extra teardown) | `:CHECKDEMO` |
+| 3 | (no extra teardown) | `:CONTINUE` |
+
+The "Generating" bitmap is the splash that sits on screen while MAZE
+runs, which is about as direct a confirmation as the bytecode can give.
+
+We were reading `MSG_CREATE`'s return value instead, which is 1 on the
+Play path — so the engine quit at the exact moment the game was about
+to start. `bootObject` now sends `MSG_DESTROY` after the boot handler
+returns and uses *that* as the errorlevel, and runs the generator on
+the `phase-one` → `phase-two` hop (HACK.BAT's `..\maze` step, which
+overwrites unconditionally, so a new game always gets a new dungeon
+from the settings phase-one just wrote).
+
+Verified end to end with no env override: Show Intro returns 2,
+Continue loops the menu, and Choose Character → Customize → Play
+returns 0, regenerates the dungeon with a freshly rolled seed, boots
+`phase-two`, and the party walks.
 
 #### File I/O: what phase-one reads and writes
 
 Traced live (all with zero stubs since the writers landed):
 
-```
+```text
 create_file("SAVEGAME\PC.DAT")
   write_array_to_file(ptr, 20)      ; name, NUL-padded
   write_array_to_file(ptr, 13)      ; race/class/stats

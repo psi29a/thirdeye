@@ -10,6 +10,7 @@ set(UNITTEST
     chargen_tests.cpp
     clip_tests.cpp
     codetable_tests.cpp
+    bitmapmask_tests.cpp
     dhmaze_tests.cpp
     control_tests.cpp
     ../thirdeye/control.cpp
