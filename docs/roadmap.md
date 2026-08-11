@@ -492,9 +492,19 @@ originals define exactly:
   B:x/B:y/B:lvl set).
 - ~~Per-PC unmapped fields~~ ✅ done: race/classes/portrait/PCstat/alignment/
   levels[3]/lost_levels[3]/lost_hp/hbon/xp[1..2] now all parsed and patched.
-  Remaining unmapped: memorized/known spells (the big B:spell_cnt/spell_stat
-  arrays at PC offset 209/409 — likely fill most of the +216..+626 tail), AC,
-  L:magiceffects, B:sparkle. None blocking gameplay today.
+  ~~Remaining unmapped: memorized/known spells, AC, L:magiceffects,
+  B:sparkle.~~ ✅ **Corrected 2026-08-11 — nothing is missing from save/load.**
+  `B:sparkle` (198) and `L:magiceffects` (199) are parsed and written back, and
+  `B:spell_cnt[200]` (209) / `B:spell_stat[200]` (409) are captured and
+  restored verbatim, so memorized spells *do* survive a save+load; the four
+  bytes at +223..+226 round-trip as `unknownGap` too. All asserted in
+  `savegame_tests.cpp`. **AC is not stored at all** — the PC object exports no
+  AC static (checked against EYE.RES), so it is derived from equipment and
+  there is nothing to persist.
+  What is still open is *semantic* decoding, not persistence: we do not know
+  the per-class × per-level × per-slot layout inside the two spell arrays, nor
+  what the four bytes at +223..+226 mean. That only matters if we want to read
+  or edit spell memorisation natively — the SOP's own camp UI already does it.
 
 Reference data in `../data/SAVEGAME/`: the **"Quick Start Party"** save —
 *not* the user's; this is a pre-rolled save game that Westwood/SSI shipped
@@ -648,6 +658,14 @@ Still open (nice-to-have): a file-picker UI instead of the env var.
   Verified with no `THIRDEYE_BOOT`: Show Intro → 2, Continue → menu loop,
   Play → 0 → new dungeon → gameplay. Trace in
   [dungeon_hack.md](dungeon_hack.md#where-the-errorlevel-actually-comes-from-2026-08-09).
+- ✅ **DH camp menu is functional.** Clicking an option fires
+  `camp option selected` (msg 525) and the handlers run — verified by
+  rendering the Hall of Fame and opening the save-slot picker headlessly. An
+  earlier note here claimed the options were unreachable; that was a
+  keyboard-only test. `camp accelerators` (531) merely *highlights* a row
+  (`SEND "show"`), so activation needs the click. Exit Game (case 5) is
+  confirm-gated behind `decision` (msg 530). Row mapping and harness
+  coordinates in [progress.md](progress.md).
 - ✅ **MAZE.EXE feature tail — the dungeon is populated.** The fifteen
   per-level passes plus `26f6` (pits) and `36a2` (quest objects) are
   ported: regions (`2081`), stairs (`10a6`), illusionary walls, arches,
@@ -734,7 +752,13 @@ never change game behaviour.
   Graphics backdrop tracking so it doesn't corrupt the SOP's text-restore snapshot.
   History: initial (b68f163) → review fixes (atomic MAPS load, sidecar gating, font probe once, 381371a).
 
-## Phase 6 — Replace CHGEN.EXE with a C++20 chargen 🚧
+## Phase 6 — Replace CHGEN.EXE with a C++20 chargen ✅
+
+**Done (all three sub-phases below are ✅).** EOB3 character generation runs
+natively; `CHGEN.EXE` is no longer needed. **Dungeon Hack needs no equivalent
+work** — its chargen is SOP bytecode (`cgen` in HACK.RES) that runs on our VM
+and renders with zero stubs, the same reason Phase 6c turned out not to apply
+to EOB3's camp UI.
 
 Goal: drop the dependency on the original `CHARGEN/CHGEN.EXE`, run all
 character generation natively.

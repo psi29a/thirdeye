@@ -989,3 +989,41 @@ So EOB3 is provably untouched, and DH's UI has been see-through everywhere:
 "Stone Frame" alone has 15546 painted-black pixels, plus the banners, Overlay,
 Textbar and the Customize Screen. The camp panel now renders solid with all
 eleven options legible and the selection highlight visible.
+
+### Camp options work — my "not selectable" call was wrong (2026-08-11)
+
+I reported that Dungeon Hack's camp menu could be opened but not used: the menu
+toggles (`SEND 523`) and one accelerator gets delivered (`SEND 531`), but
+`camp option selected` (525) never fired, so Rest / Save / Exit looked
+unreachable. That conclusion was wrong, and it was wrong because I only tried
+the keyboard.
+
+`SEND 525` fires on a **mouse click**, and the option handlers run. Proven
+twice by driving it headlessly: clicking one row rendered the **Hall of Fame**
+screen (high-score table with real entries), and one row lower opened DH's
+**save-slot picker** — twelve `<empty>` slots plus CANCEL SAVE, drawn
+correctly. Nothing needed fixing.
+
+The keyboard path behaves differently, which is what misled me.
+`camp accelerators` (531) maps ASCII letters — `r` Rest, `p` Pray, `m`
+Memorize, `s` Save, `b`, `e`/`x` Exit — but its handler only does
+`SEND "show"`, i.e. it *highlights* the row. Activation is a separate step, so
+an accelerator alone never produces a 525. Highlighting without activating is
+exactly what "one 531 and no 525" looks like from the trace, and I read it as
+"input isn't reaching the object."
+
+`camp option selected` dispatches an 11-entry CASE, in menu order: 0 Rest,
+1 Pray for Spells, 2 Memorize Spells, 3 Show Creature Totals, 4 Show Hall of
+Fame, 5 Exit Game, 6 Save Game, 7 Restore Game, 8 Turn Sounds Off, 9 Show
+Numbers, 10 Break Camp. Case 5 sends `decision` (msg 530) with string 864,
+*"Are you sure you wish to quit the current game?"* — so Exit Game is
+confirm-gated, which is also why a repeating autowalk click kept dismissing it.
+
+For the harness: CAMP button at native `(17,190)`; the menu registers one
+region covering `(138,13)-(313,132)` and derives the row from the mouse y in
+`menu`'s `PROCEDURE_70` (class 2944). Row 4 is at about y=81, row 6 at about
+y=90.
+
+**The useful consequence:** the DH save UI is already live. When we get to DH
+save/load, the picker, slot list and cancel path are all working — the missing
+piece is purely our side of `explode_save`.
