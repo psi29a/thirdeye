@@ -45,11 +45,22 @@ bool uiScreenActive(VM::ObjectSystem &objects) {
 	if (kn >= 0)
 		if (uint8_t *p = objects.classStaticPtr(kn, kKernelCls, 265, 2))
 			if ((p[0] | (p[1] << 8)) != 0) return true;
-	int camp = objects.firstObjectOfClass(kCampCls);
-	if (camp >= 0) {
+	// Dungeon Hack has its own camp object (class 1975) with the same static
+	// layout as EOB3's. Without it the host kept translating WASDQE into
+	// movement and treating M as the automap toggle while DH's camp menu was
+	// open -- exactly the bug this gate was added for on the EOB3 side, and it
+	// would eat characters in DH's save-game name entry.
+	//
+	// Checking both classes unconditionally is safe: firstObjectOfClass returns
+	// < 0 for a class the loaded .RES doesn't have, so EOB3 never sees 1975 and
+	// DH never sees 1385.
+	constexpr uint16_t kCampClsDH = 1975;
+	for (uint16_t cls : {kCampCls, kCampClsDH}) {
+		int camp = objects.firstObjectOfClass(cls);
+		if (camp < 0) continue;
 		// camp class-local statics: B:active@0, B:outtake@1, B:selecting@5
 		for (uint32_t off : {0u, 1u, 5u})
-			if (uint8_t *p = objects.classStaticPtr(camp, kCampCls, off, 1))
+			if (uint8_t *p = objects.classStaticPtr(camp, cls, off, 1))
 				if (*p != 0) return true;
 	}
 	return false;
