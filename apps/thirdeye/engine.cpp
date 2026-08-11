@@ -1215,30 +1215,47 @@ void THIRDEYE::Engine::bootObject(RESOURCES::Resource &resource,
 				// and quit the game just as it was about to start.
 				const VM::Value destroyRc = objects.send(objIndex, MSG_DESTROY, {});
 				result = destroyRc;
-				// HACK.BAT flow control by errorlevel. NOTE batch semantics:
-				// `if ERRORLEVEL n` matches n AND ABOVE, and the checks run
-				// high-to-low, so the real routing is:
-				//     rc >= 3  -> :CONTINUE   re-run phase-one
-				//     rc == 2  -> :CHECKDEMO  re-run the intro, then phase-one
-				//     rc == 1  -> :EXIT
-				//     rc == 0  -> fall through: run MAZE, then phase-two
-				// We land 2 and 3+ on the same target because the cross-.RES
-				// hop back to OPEN.RES for the intro isn't wired up yet; the
-				// range test still has to be >= 3 rather than == 3 so a
-				// higher code doesn't fall through to "quit".
+				// HACK.BAT flow control by errorlevel. Batch `if ERRORLEVEL n`
+				// matches n AND ABOVE and the checks run high-to-low, so each
+				// phase routes differently:
+				//
+				//   phase-one:  >= 3 -> :CONTINUE   re-run phase-one
+				//               == 2 -> :CHECKDEMO  intro, then phase-one
+				//               == 1 -> :EXIT
+				//               == 0 -> run MAZE, then phase-two
+				//   phase-two:  >= 1 -> :EXIT
+				//               == 0 -> :CONTINUE   back to phase-one
+				//
+				// Note phase-two's sense is inverted from phase-one's: a clean
+				// return to the title menu is 0, and anything else quits.
+				// We land phase-one's 2 and 3+ on the same target because the
+				// cross-.RES hop back to OPEN.RES for the intro isn't wired up
+				// yet; the range test still has to be >= 3 rather than == 3 so
+				// a higher code doesn't fall through to "quit".
 				const int32_t rc = result;
 				std::string nextBoot;
-				if (rc >= 2) nextBoot = "phase-one";
-				else if (rc == 0 && currentBoot == "phase-one") {
-					// This is HACK.BAT's `cd savegame & ..\maze` step. MAZE
-					// overwrites unconditionally, so force a rewrite: the
-					// player just chose their settings on the Customization
-					// screen and phase-one wrote them to SETTINGS.DAT, and a
-					// new game must get a new dungeon from them.
-					THIRDEYE::runtime::dh::ensureSavegameFiles(
-					    resource.resourcePath().parent_path(),
-					    /*regenerate=*/true);
-					nextBoot = "phase-two";
+				if (currentBoot == "phase-two") {
+					if (rc == 0) nextBoot = "phase-one";
+				} else if (rc >= 2) {
+					nextBoot = "phase-one";
+				} else if (rc == 0) {
+					// HACK.BAT's `cd savegame & ..\maze` step. MAZE overwrites
+					// unconditionally, so force a rewrite: the player just
+					// chose their settings on the Customization screen and
+					// phase-one wrote them to SETTINGS.DAT, and a new game must
+					// get a new dungeon from them.
+					//
+					// The batch checks MAZE's own errorlevel here and quits on
+					// failure rather than starting a game on a half-written
+					// dungeon; do the same.
+					if (THIRDEYE::runtime::dh::ensureSavegameFiles(
+					        resource.resourcePath().parent_path(),
+					        /*regenerate=*/true)) {
+						nextBoot = "phase-two";
+					} else {
+						std::cout << "DH dungeon generation failed -- quitting."
+						          << std::endl;
+					}
 				}
 				if (!nextBoot.empty()) {
 					uint16_t nextClass = 0;
@@ -1599,11 +1616,13 @@ void THIRDEYE::Engine::go() {
 		    (resName == "open.res" || resName == "hack.res");
 		// Debug hook: force any boot object by name (e.g. THIRDEYE_BOOT=phase-two).
 		if (const char *b = std::getenv("THIRDEYE_BOOT")) bootName = b;
-		// DH-only: seed structurally-valid empty savegame/LEVELS.DAT etc. if
-		// they don't exist so phase-two can read zero-content dungeons without
-		// a MAZE.EXE (real or bootstrapped) run. Idempotent.
+		// DH-only: make sure a dungeon exists before we boot, so that jumping
+		// straight to phase-two (THIRDEYE_BOOT=phase-two) has something to
+		// read. The real new-game path regenerates on the phase-one ->
+		// phase-two hop instead. Failure is not fatal here -- phase-one does
+		// not need a dungeon, and the hop checks for itself.
 		if (resName == "hack.res")
-			THIRDEYE::runtime::dh::ensureSavegameFiles(resFile.parent_path());
+			(void)THIRDEYE::runtime::dh::ensureSavegameFiles(resFile.parent_path());
 		bootObject(resource, bootName);
 		return;
 	}

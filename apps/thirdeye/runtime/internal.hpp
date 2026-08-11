@@ -183,7 +183,10 @@ namespace dh       { bool tryHandle(Context&, const std::string &fn,
                      // phase-two, and MAZE always overwrites -- that is
                      // what makes each new game a new dungeon, from
                      // whatever SETTINGS.DAT phase-one just wrote.
-                     void ensureSavegameFiles(
+                     // Returns false if the dungeon could not be written; on
+                     // failure nothing on disk is modified, so the caller must
+                     // not start phase-two.
+                     bool ensureSavegameFiles(
                          const std::filesystem::path &dhRoot,
                          bool regenerate = false);
 

@@ -304,7 +304,7 @@ goto CONTINUE
 `select character`, `get palette`, `main screen`, `create`, `destroy`.
 Its `create` handler is short:
 
-```
+```text
 init_sound / init_graphics / init_interface / wipe_window
 create_program(2005, 2922)
 create_program(2003, 2929)
@@ -339,7 +339,7 @@ the errorlevel at all.
 value.** AESOP creates the boot object, runs it, **destroys it**, and
 exits with a code — and `phase-one`'s `destroy` handler ends:
 
-```
+```text
 1116: LSB  "B:staticVar0"
 1119: END
 ```
@@ -378,7 +378,7 @@ returns 0, regenerates the dungeon with a freshly rolled seed, boots
 
 Traced live (all with zero stubs since the writers landed):
 
-```
+```text
 create_file("SAVEGAME\PC.DAT")
   write_array_to_file(ptr, 20)      ; name, NUL-padded
   write_array_to_file(ptr, 13)      ; race/class/stats
