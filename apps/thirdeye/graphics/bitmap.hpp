@@ -52,6 +52,11 @@ public:
 	// `mask` gets 1 byte per pixel: 1 = painted (opaque, even if value 0),
 	// 0 = skipped (transparent). Callers that colorkey index 0 instead lose
 	// every painted-black pixel -- the spell-book arrows/checker bug.
+	// Decode any shape with a coverage mask: 1 = painted (opaque even when the
+	// value is 0), 0 = never covered by a run (transparent). Dispatches to the
+	// VFX decoder for "1.10" tables. See the comment on the definition.
+	std::vector<uint8_t> decodeScanlineMasked(uint16_t index,
+	                                          std::vector<uint8_t> &mask);
 	std::vector<uint8_t> decodeVFXShapeMasked(uint16_t index,
 	                                          std::vector<uint8_t> &mask);
 private:

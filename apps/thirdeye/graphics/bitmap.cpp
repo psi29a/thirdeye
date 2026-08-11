@@ -215,19 +215,39 @@ std::vector<uint8_t> GRAPHICS::Bitmap::decodeVFXShapeMasked(
 }
 
 std::vector<uint8_t> GRAPHICS::Bitmap::operator[](uint16_t index) {
+	std::vector<uint8_t> ignored;
+	return decodeScanlineMasked(index, ignored);
+}
+
+// The older (non-VFX) AESOP bitmap is a SPARSE SCANLINE format: each row names
+// its y, then a series of runs at explicit x positions. Pixels no run covers
+// are simply never written -- that omission IS the transparency, exactly as
+// the VFX format's skip token is. A run may legitimately paint palette index
+// 0, and the original draws those as solid black.
+//
+// So the decode has to report coverage, not just pixels: `mask` gets 1 per
+// painted pixel, 0 per uncovered one. Callers that instead colorkey index 0
+// lose every painted-black pixel -- which is what turned Dungeon Hack's camp
+// panel into a window onto the dungeon behind it. Same failure the VFX path
+// had before decodeVFXShapeMasked; this is that fix for the older format.
+std::vector<uint8_t> GRAPHICS::Bitmap::decodeScanlineMasked(
+    uint16_t index, std::vector<uint8_t> &mask) {
 	if (!inRange(index, mNumSubBitmaps))
 		throw std::out_of_range("Bitmap::operator[]: shape index " +
 		                        std::to_string(index) + " >= count " +
 		                        std::to_string(mNumSubBitmaps));
 	if (mIsVFXShape)
-		return decodeVFXShape(index);
+		return decodeVFXShapeMasked(index, mask);
 
 	// CHARPICS portraits use the SAME RLE scanline format as the older
 	// non-VFX bitmaps, with a 4-byte (width-1, height) sub-header. The
 	// scanline loop below handles both.
 	uint32_t pos = mBitmapOffets.at(index) + 4;	// skip over width and height
-	std::vector<uint8_t> bitmap(static_cast<size_t>(getWidth(index)) * getHeight(index));
-	memset(&bitmap[0], 0, static_cast<size_t>(getWidth(index)) * getHeight(index));
+	const size_t total =
+	    static_cast<size_t>(getWidth(index)) * getHeight(index);
+	std::vector<uint8_t> bitmap(total);
+	memset(&bitmap[0], 0, total);
+	mask.assign(total, 0);
 
 	while (true) {
 		int32_t y = mBitmapData[pos];
@@ -254,16 +274,20 @@ std::vector<uint8_t> GRAPHICS::Bitmap::operator[](uint16_t index) {
 				int32_t amount = (mBitmapData[pos] >> 1) + 1;
 				pos++;
 
+				const size_t at =
+				    static_cast<size_t>(x) + static_cast<size_t>(y) * getWidth(index);
 				if (mode == 0) {		// Copy
-					memcpy(&bitmap[0] + x + y * getWidth(index),
-							&mBitmapData[0] + pos, amount);
+					memcpy(&bitmap[0] + at, &mBitmapData[0] + pos, amount);
 					pos += amount;
 				} else if (mode == 1)	// Fill
 						{
 					int value = mBitmapData[pos];
 					pos++;
-					memset(&bitmap[0] + x + y * getWidth(index), value, amount);
+					memset(&bitmap[0] + at, value, amount);
 				}
+				// Either way these pixels were painted -- including any 0s.
+				if (at + static_cast<size_t>(amount) <= mask.size())
+					memset(&mask[at], 1, static_cast<size_t>(amount));
 				x += amount;
 				rle_width -= amount;
 			}

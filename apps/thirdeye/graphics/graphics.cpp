@@ -202,13 +202,15 @@ void GRAPHICS::Graphics::drawImage(std::vector<uint8_t> &bmp, uint16_t index,
 		Bitmap image(bmp);
 		s.w = image.getWidth(index);
 		s.h = image.getHeight(index);
-		// VFX shapes carry a per-pixel opacity mask (skip = transparent,
-		// painted = opaque even when black); other formats keep the legacy
-		// colorkey-0 convention and leave the mask empty.
-		if (image.isVFXShape())
-			s.pixels = image.decodeVFXShapeMasked(index, s.mask);
-		else
-			s.pixels = image[index];
+		// Both AESOP bitmap formats encode transparency structurally, not by
+		// colour: the VFX RLE has an explicit skip token, and the older
+		// scanline format simply omits the pixels it does not paint. Either
+		// way a run may legitimately paint palette index 0, and the original
+		// draws that as solid black. So always decode with a coverage mask and
+		// never colorkey -- keying index 0 punched a hole through every
+		// painted-black pixel (DH's camp panel showed the dungeon through it;
+		// the same class of bug the VFX path had before it was masked).
+		s.pixels = image.decodeScanlineMasked(index, s.mask);
 	};
 	if (cacheId != 0) {
 		ShapeKey key{cacheId, index};

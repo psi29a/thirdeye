@@ -948,3 +948,44 @@ ticks. Zero stubs, zero errors, 121 tests, EOB3 unaffected.
 The lesson worth keeping: when a return value looks wrong, check *which* return
 value the caller is actually supposed to read. We had the right contract and the
 wrong source for three sessions.
+
+### DH's UI panels were see-through (2026-08-11)
+
+The camp menu rendered with the dungeon showing through it and scattered
+coloured specks over the rest. It looked like a decode bug. It wasn't.
+
+Resource 53 ("Camp display") decodes perfectly — 177x127, landing exactly in
+its subwindow. The problem was one line in `draw_bitmap`: every draw passes
+`transparency = true`, and for non-VFX bitmaps that meant "colour-key palette
+index 0". But the older AESOP bitmap format is a **sparse scanline** format —
+each row names its y, then runs at explicit x positions, and pixels no run
+covers are simply never written. That omission *is* the transparency, exactly
+as the VFX format's skip token is. A run may legitimately paint index 0, and
+the original draws it as solid black.
+
+We memset the buffer to 0 and then keyed 0 away, so painted black and never-
+painted became indistinguishable. The camp panel is **25% painted black over
+99.4% coverage**, so a quarter of it turned into a window onto the dungeon.
+
+This is the same bug the VFX path had before `decodeVFXShapeMasked` (the
+0.89.0 "spell-book text renders solid" fix) — it just survived on the older
+format. `decodeScanlineMasked` now reports coverage for both formats and
+`drawImage` never colour-keys.
+
+**Measuring the blast radius properly mattered here.** Frame diffing said 39 of
+63 EOB3 frames changed, which looked alarming — until a control run of the
+*same build against itself* differed in the same proportion. The harness is
+nondeterministic (a damage splat lands on a different portrait run to run), so
+frame diffs can't answer this; that trap is already recorded in this file from
+the draw_walls work. The deterministic answer is to ask the decoder directly:
+sweep every bitmap resource and count painted-black pixels.
+
+| | bitmaps | affected |
+|---|---|---|
+| EOB3 | 312 | **0** — every one is a VFX shape, already masked |
+| Dungeon Hack | 632 | **454** contain painted black |
+
+So EOB3 is provably untouched, and DH's UI has been see-through everywhere:
+"Stone Frame" alone has 15546 painted-black pixels, plus the banners, Overlay,
+Textbar and the Customize Screen. The camp panel now renders solid with all
+eleven options legible and the selection highlight visible.
