@@ -1063,9 +1063,33 @@ clears it back, so the plane can only ever under-claim. Page compositing copies
 the source page's plane across so text composited from a page still animates.
 
 Verified against a recorded play session (`THIRDEYE_RECORD`): the highlight now
-steps through nine distinct rows and moves in both directions, where before it
-only ever sat at two. EOB3 unaffected — 2503 frames in 30 s against a 2493–2517
-baseline, and its HUD, portraits, HP bars and text all render identically.
+steps through ten distinct rows and moves in both directions, where before it
+only ever sat at two.
+
+**The first cut of this was wrong and shipped a visible regression** — magenta
+speckle over the dungeon view — and it is worth recording why, because the
+mistake was structural rather than a slip. The plane recorded which index drew
+each pixel, and I tried to keep it honest by clearing it wherever something
+else drew: `drawImage`, the fill sites, page compositing. That is unmaintainable.
+`mScreen` has roughly *thirty* writers, and every one I missed left a stale
+index that the next palette swap happily repainted in a text colour. Two
+successive theories (a per-surface plane map dereferencing destroyed pages; the
+sentinel entries) were both wrong, and each "fix" left the speckle exactly where
+it was.
+
+The design that works does not track invalidation at all — it **verifies**. Each
+DAC change carries the colour the entry held before, and a pixel is only
+recoloured if it *still holds that colour*. Anything that overdrew it leaves
+something different there, so the pixel is skipped and forgotten. Missed
+writers stop being a correctness problem: the worst case is a pixel that does
+not animate, never one painted wrongly. All the invalidation hooks came back
+out.
+
+Measured on the identical recorded walk: magenta went 748 px → 16 px, and those
+16 are a 4×4 block at (119,17) that is present with the palette path disabled
+too — pre-existing, not ours. EOB3 unchanged: 2522 frames in 30 s against a
+2493–2517 baseline, 0 errors, 0 stubs, and its own magenta count identical
+before and after (7 px).
 
 Scope, honestly: this covers **text** only. A palette-animated *bitmap* would
 need the same recording inside `drawImage`; nothing we run appears to use it,

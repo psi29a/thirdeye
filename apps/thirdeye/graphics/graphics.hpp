@@ -123,13 +123,24 @@ private:
 	//
 	// ponytail: text only for now. Palette-animated *bitmaps* would need the
 	// same recording inside drawImage; nothing we run appears to use it.
+	// Tracked for the VISIBLE SCREEN ONLY. An earlier cut kept a plane per
+	// surface in a map keyed by SDL_Surface*, but pages are destroyed and
+	// recreated freely, so the map accumulated dangling pointers and the
+	// repaint walked freed memory -- which showed up as magenta speckle over
+	// the dungeon view. One plane, one surface, no lifetime problem.
 	static constexpr uint16_t kNoIndex = 0xFFFF;
-	std::map<SDL_Surface *, std::vector<uint16_t>> mIndexPlanes;
+	std::vector<uint16_t> mScreenIndex;
+	SDL_Surface *realScreen() const {
+		return mScreenSaved != nullptr ? mScreenSaved : mScreen;
+	}
 	std::vector<uint16_t> *indexPlaneFor(SDL_Surface *s);
-	// Forget recorded indices under `r` (something opaque was drawn there).
-	void clearIndexRect(SDL_Surface *s, const SDL_Rect &r);
-	// Repaint every recorded pixel whose index falls in [first, first+count).
-	void repaintPaletteRange(int first, int count);
+	// One DAC entry that changed: which index, and the colour it held before.
+	struct PaletteShift { uint16_t index; SDL_Color from, to; };
+	// Recolour recorded pixels for these indices. Self-validating: a pixel is
+	// only touched if it STILL holds `from`. Anything that overdrew it -- and
+	// roughly thirty call sites can -- leaves a different colour there, so the
+	// pixel is skipped and forgotten instead of being repainted wrongly.
+	void repaintPaletteShifts(const std::vector<PaletteShift> &shifts);
 	uint8_t mState;
 	int16_t mAlpha;
 	uint16_t mFrames;
