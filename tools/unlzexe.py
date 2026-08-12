@@ -16,10 +16,14 @@ import sys, struct
 
 def unpack_lzexe(packed: bytes) -> bytes:
     ihead = list(struct.unpack('<14H', packed[:28]))
-    assert ihead[0] in (0x5A4D, 0x4D5A)
-    assert ihead[0x0D] == 0
-    assert ihead[0x0C] == 0x1C
-    assert packed[0x1C:0x20] == b'LZ91', 'not LZEXE v0.91'
+    if ihead[0] not in (0x5A4D, 0x4D5A):
+        raise AssertionError
+    if ihead[0x0D] != 0:
+        raise AssertionError
+    if ihead[0x0C] != 0x1C:
+        raise AssertionError
+    if packed[0x1C:0x20] != b'LZ91':
+        raise AssertionError('not LZEXE v0.91')
 
     # Info block at e_cs:0
     info_off = (ihead[0x0B] + ihead[4]) << 4
