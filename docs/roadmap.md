@@ -666,6 +666,13 @@ Still open (nice-to-have): a file-picker UI instead of the env var.
   (`SEND "show"`), so activation needs the click. Exit Game (case 5) is
   confirm-gated behind `decision` (msg 530). Row mapping and harness
   coordinates in [progress.md](progress.md).
+- ✅ **VGA palette animation.** DH highlights a menu row by swapping a DAC
+  entry (`illuminate choice` → `set_palette`), not by redrawing. Our ARGB
+  surfaces resolved indices at draw time, so nothing already on screen could
+  change — arrow keys and hover appeared dead while clicking worked. Graphics
+  now keeps a shadow index plane per surface and `setPaletteRange` repaints the
+  affected pixels. Text only for now; palette-animated bitmaps would need the
+  same in `drawImage`. See [progress.md](progress.md).
 - ✅ **MAZE.EXE feature tail — the dungeon is populated.** The fifteen
   per-level passes plus `26f6` (pits) and `36a2` (quest objects) are
   ported: regions (`2081`), stairs (`10a6`), illusionary walls, arches,

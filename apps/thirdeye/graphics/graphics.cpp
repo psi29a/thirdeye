@@ -145,6 +145,8 @@ bool GRAPHICS::Graphics::beginPage(int32_t handle, int w, int h) {
 	if (it != mPages.end()) page = it->second;
 	if (page == nullptr) {
 		page = SDL_CreateSurface(w, h, SDL_PIXELFORMAT_ARGB8888);
+		// A recycled address must not inherit the previous page's indices.
+		if (page != nullptr) mIndexPlanes.erase(page);
 		if (page == nullptr) return false;   // table untouched on failure
 		// Start transparent-black so a page that only gets a partial draw
 		// composites without a surprise opaque border.
@@ -182,6 +184,23 @@ bool GRAPHICS::Graphics::blitPage(int32_t src, int32_t dstPage, int dstX,
 	SDL_SetSurfaceClipRect(to, nullptr);
 	bool ok = SDL_BlitSurface(from, nullptr, to, &dst);
 	if (hadClip) SDL_SetSurfaceClipRect(to, &saved);
+	// The page's pixels now own this rect. Carry the page's recorded indices
+	// across so text composited from a page still recolours on a palette swap,
+	// and so stale indices underneath cannot.
+	if (std::vector<uint16_t> *dstPlane = indexPlaneFor(to)) {
+		std::vector<uint16_t> *srcPlane = indexPlaneFor(from);
+		for (int y = 0; y < from->h; ++y) {
+			const int ty = dst.y + y;
+			if (ty < 0 || ty >= to->h) continue;
+			for (int x = 0; x < from->w; ++x) {
+				const int tx = dst.x + x;
+				if (tx < 0 || tx >= to->w) continue;
+				(*dstPlane)[static_cast<size_t>(ty) * to->w + tx] =
+				    srcPlane ? (*srcPlane)[static_cast<size_t>(y) * from->w + x]
+				             : kNoIndex;
+			}
+		}
+	}
 	return ok;
 }
 
@@ -370,6 +389,11 @@ void GRAPHICS::Graphics::drawImage(std::vector<uint8_t> &bmp, uint16_t index,
 		SDL_BlitSurfaceScaled(surface, NULL, mScreen, &dest,
 		                      SDL_SCALEMODE_NEAREST);
 	SDL_DestroySurface(surface);
+	// Art drawn over text invalidates whatever indices we recorded there, so a
+	// later palette swap can't resurrect the old glyph colours. Conservative:
+	// a transparent sprite clears more than it covers, which only ever means
+	// we repaint less.
+	clearIndexRect(mScreen, dest);
 
 	// Keep the backdrop snapshot in sync with the bitmap art (used to restore a
 	// text box's background so in-game text overlays the panel art). Text never
@@ -565,6 +589,7 @@ void GRAPHICS::Graphics::fillRect(int x0, int y0, int x1, int y1, uint8_t color)
 	SDL_Color c = mPalette->colors[color];
 	Uint32 px = SDL_MapSurfaceRGB(mScreen, c.r, c.g, c.b);
 	SDL_FillSurfaceRect(mScreen, &r, px);
+	clearIndexRect(mScreen, r);
 	// Keep the text-free backdrop snapshot in sync so a later text_window restore of
 	// this box shows the cleared colour, not the art the clear replaced.
 	if (mBackdrop != nullptr && !mSuspendBackdrop)
@@ -578,6 +603,7 @@ void GRAPHICS::Graphics::fillRectRGB(int x0, int y0, int x1, int y1,
 	SDL_Rect rc = { x0, y0, x1 - x0 + 1, y1 - y0 + 1 };
 	Uint32 px = SDL_MapSurfaceRGB(mScreen, r, g, b);
 	SDL_FillSurfaceRect(mScreen, &rc, px);
+	clearIndexRect(mScreen, rc);
 }
 
 uint32_t GRAPHICS::Graphics::peekPixel(int x, int y) const {
@@ -661,6 +687,8 @@ void GRAPHICS::Graphics::drawLine(int x0, int y0, int x1, int y1,
 	for (;;) {
 		SDL_Rect r = { x0, y0, 1, 1 };
 		SDL_FillSurfaceRect(mScreen, &r, px);
+	clearIndexRect(mScreen, r);
+		clearIndexRect(mScreen, r);
 		if (mBackdrop != nullptr && !mSuspendBackdrop)
 			SDL_FillSurfaceRect(mBackdrop, &r, px);
 		if (x0 == x1 && y0 == y1) break;
@@ -680,6 +708,9 @@ void GRAPHICS::Graphics::hashRect(int x0, int y0, int x1, int y1,
 		for (int x = x0 + ((x0 ^ y) & 1); x <= x1; x += 2) {
 			SDL_Rect r = { x, y, 1, 1 };
 			SDL_FillSurfaceRect(mScreen, &r, px);
+			clearIndexRect(mScreen, r);
+	clearIndexRect(mScreen, r);
+		clearIndexRect(mScreen, r);
 			if (mBackdrop != nullptr && !mSuspendBackdrop)
 				SDL_FillSurfaceRect(mBackdrop, &r, px);
 		}
@@ -1364,6 +1395,48 @@ void GRAPHICS::Graphics::loadPalette(std::vector<uint8_t> &basePal,
 	}
 }
 
+std::vector<uint16_t> *GRAPHICS::Graphics::indexPlaneFor(SDL_Surface *s) {
+	if (s == nullptr) return nullptr;
+	auto it = mIndexPlanes.find(s);
+	if (it == mIndexPlanes.end()) {
+		const size_t n = static_cast<size_t>(s->w) * s->h;
+		it = mIndexPlanes.emplace(s, std::vector<uint16_t>(n, kNoIndex)).first;
+	}
+	return &it->second;
+}
+
+void GRAPHICS::Graphics::clearIndexRect(SDL_Surface *s, const SDL_Rect &r) {
+	std::vector<uint16_t> *plane = indexPlaneFor(s);
+	if (plane == nullptr) return;
+	const int x0 = std::max(0, r.x), y0 = std::max(0, r.y);
+	const int x1 = std::min(s->w, r.x + r.w), y1 = std::min(s->h, r.y + r.h);
+	for (int y = y0; y < y1; ++y)
+		for (int x = x0; x < x1; ++x)
+			(*plane)[static_cast<size_t>(y) * s->w + x] = kNoIndex;
+}
+
+// The DAC change. Walk every tracked surface and rewrite the pixels we know
+// came from an index in the range that just moved.
+void GRAPHICS::Graphics::repaintPaletteRange(int first, int count) {
+	if (count <= 0) return;
+	const int last = first + count;
+	for (auto &[surf, plane] : mIndexPlanes) {
+		if (surf == nullptr || surf->format != SDL_PIXELFORMAT_ARGB8888)
+			continue;
+		if (plane.size() != static_cast<size_t>(surf->w) * surf->h) continue;
+		auto *px = static_cast<uint32_t *>(surf->pixels);
+		const int stride = surf->pitch / 4;
+		for (int y = 0; y < surf->h; ++y)
+			for (int x = 0; x < surf->w; ++x) {
+				const uint16_t idx = plane[static_cast<size_t>(y) * surf->w + x];
+				if (idx == kNoIndex || idx < first || idx >= last) continue;
+				const SDL_Color c = mPalette->colors[idx];
+				px[y * stride + x] =
+				    0xFF000000u | (c.r << 16) | (c.g << 8) | c.b;
+			}
+	}
+}
+
 void GRAPHICS::Graphics::setPaletteRange(std::vector<uint8_t> &palRes,
 		uint16_t firstColor, bool skipMarker) {
 	Palette pal(palRes);
@@ -1376,6 +1449,9 @@ void GRAPHICS::Graphics::setPaletteRange(std::vector<uint8_t> &palRes,
 			continue;
 		mPalette->colors[firstColor + i] = c;
 	}
+	// Now that the DAC holds the new colours, recolour anything already drawn
+	// from those indices -- the whole point of a palette swap on real VGA.
+	repaintPaletteRange(firstColor, pal.getNumOfColours());
 }
 
 void GRAPHICS::Graphics::setTextFont(int wndnum, int fontId,
@@ -1450,6 +1526,7 @@ void GRAPHICS::Graphics::wipeTextBox(int x0, int y0, int x1, int y1) {
 		int sy = (y0 + 1 < HEIGHT) ? y0 + 1 : y0;
 		Uint32 bg = pixels[sy * pitch + sx];
 		SDL_FillSurfaceRect(mScreen, &r, bg);
+		clearIndexRect(mScreen, r);
 	}
 }
 
@@ -1591,6 +1668,26 @@ void GRAPHICS::Graphics::printText(int wndnum, const std::string &text) {
 			SDL_Rect dst = { tw.htab, tw.vtab, glyph->w, glyph->h };
 			SDL_BlitSurface(glyph, NULL, mScreen, &dst);
 			SDL_SetSurfaceClipRect(mScreen, &prevClip);
+			// Remember that these pixels came from palette index tw.fg, so a
+			// later set_palette can recolour them (see mIndexPlanes). Glyphs
+			// are ARGB with a black colour key, so a pixel is painted iff its
+			// RGB is non-zero. Mirror the blit's own clip exactly.
+			if (std::vector<uint16_t> *plane = indexPlaneFor(mScreen)) {
+				const auto *gp = static_cast<const uint32_t *>(glyph->pixels);
+				const int gstride = glyph->pitch / 4;
+				for (int gy = 0; gy < glyph->h; ++gy)
+					for (int gx = 0; gx < glyph->w; ++gx) {
+						if ((gp[gy * gstride + gx] & 0x00FFFFFFu) == 0) continue;
+						const int sx = dst.x + gx, sy = dst.y + gy;
+						if (sx < clip.x || sy < clip.y ||
+						    sx >= clip.x + clip.w || sy >= clip.y + clip.h)
+							continue;
+						if (sx < 0 || sy < 0 || sx >= mScreen->w ||
+						    sy >= mScreen->h) continue;
+						(*plane)[static_cast<size_t>(sy) * mScreen->w + sx] =
+						    tw.fg;
+					}
+			}
 		}
 		tw.htab += glyph->w; // advances even past the edge, like the original
 	};

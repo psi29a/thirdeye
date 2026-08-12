@@ -1027,3 +1027,54 @@ y=90.
 **The useful consequence:** the DH save UI is already live. When we get to DH
 save/load, the picker, slot list and cancel path are all working — the missing
 piece is purely our side of `explode_save`.
+
+### VGA palette animation — DH's menu highlight (2026-08-12)
+
+The camp menu's selection highlight never moved: arrow keys did nothing, and
+neither did hovering. Only *clicking* an option highlighted it. That last
+detail is what cracked it — it ruled out the keyboard entirely and pointed at
+the one thing hover and arrows share.
+
+`menu`'s `illuminate choice` (msg 593) does not redraw anything. It calls
+**`set_palette(1, table14[select])`**. Comparing two of those palettes shows
+the trick:
+
+```text
+pal38[26..37]:  3f 3f 3f | 3c 12 11 | 37 0c 0b | 33 07 06
+pal39[26..37]:  3c 12 11 | 3f 3f 3f | 37 0c 0b | 33 07 06
+                ^^^^^^^^   ^^^^^^^^
+```
+
+`3f 3f 3f` is max-intensity white in 6-bit VGA, and it moves down one slot per
+palette. Each menu row is drawn in its own palette index; the highlight is a
+**DAC swap**, not a redraw. Eleven palettes, eleven rows.
+
+Our surfaces are `ARGB8888`, so palette indices are resolved *when we draw* and
+a later `set_palette` cannot reach pixels already on screen. Hence: arrows and
+hover inert, clicking fine (because `camp option selected` redraws the menu, so
+the new palette is applied at draw time).
+
+The fix is a shadow index plane. Each surface gets a parallel `uint16_t` buffer
+recording which palette index produced each text pixel; `setPaletteRange` then
+repaints the pixels whose index falls in the range that just changed, exactly
+as the DAC would. `kNoIndex` means "not from a palette index, leave alone", and
+anything drawn over a recorded pixel — a bitmap, a fill, a page composite —
+clears it back, so the plane can only ever under-claim. Page compositing copies
+the source page's plane across so text composited from a page still animates.
+
+Verified against a recorded play session (`THIRDEYE_RECORD`): the highlight now
+steps through nine distinct rows and moves in both directions, where before it
+only ever sat at two. EOB3 unaffected — 2503 frames in 30 s against a 2493–2517
+baseline, and its HUD, portraits, HP bars and text all render identically.
+
+Scope, honestly: this covers **text** only. A palette-animated *bitmap* would
+need the same recording inside `drawImage`; nothing we run appears to use it,
+and the plane's clear-on-overdraw rule means such a case fails safe (no
+highlight) rather than wrong.
+
+Three wrong turns worth remembering. I claimed the menu objects leaked (they
+don't — handles are recycled); I claimed `nchoices` was unset (it's 11); and I
+"measured" `SEND 593` firing zero times, which was meaningless because 593 is a
+direct bytecode SEND and never appears in the notify trace I was grepping. The
+thing that actually settled it was the user's observation that the *mouse*
+didn't highlight either.

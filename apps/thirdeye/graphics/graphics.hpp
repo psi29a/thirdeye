@@ -105,6 +105,31 @@ private:
 	SDL_Texture *mPresentTex = nullptr;
 	SDL_Cursor *mCursor;
 	SDL_Palette *mPalette;
+
+	// --- VGA palette-animation shadow ------------------------------------
+	// Dungeon Hack highlights a menu row without redrawing anything: its
+	// `illuminate choice` loads one of eleven palettes that differ only in
+	// which slot holds white (3f/3f/3f), and the DAC change recolours the
+	// pixels already on screen. Our surfaces are ARGB8888, so palette indices
+	// are resolved when we draw and a later set_palette cannot reach them --
+	// which is why arrow keys and hover did nothing while clicking (a full
+	// redraw) worked.
+	//
+	// So remember which palette index produced each text pixel; setPaletteRange
+	// then repaints the affected ones, as the DAC would. kNoIndex means "not
+	// drawn from a palette index" -- leave that pixel alone. Anything drawn
+	// over a recorded pixel clears it back to kNoIndex, so the plane can only
+	// ever under-claim, never repaint something it shouldn't.
+	//
+	// ponytail: text only for now. Palette-animated *bitmaps* would need the
+	// same recording inside drawImage; nothing we run appears to use it.
+	static constexpr uint16_t kNoIndex = 0xFFFF;
+	std::map<SDL_Surface *, std::vector<uint16_t>> mIndexPlanes;
+	std::vector<uint16_t> *indexPlaneFor(SDL_Surface *s);
+	// Forget recorded indices under `r` (something opaque was drawn there).
+	void clearIndexRect(SDL_Surface *s, const SDL_Rect &r);
+	// Repaint every recorded pixel whose index falls in [first, first+count).
+	void repaintPaletteRange(int first, int count);
 	uint8_t mState;
 	int16_t mAlpha;
 	uint16_t mFrames;
