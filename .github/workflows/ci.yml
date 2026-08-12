@@ -111,7 +111,7 @@ jobs:
       # via $GITHUB_PATH, which — unlike choco — propagates across steps.)
       - name: Set up Ninja (Windows)
         if: runner.os == 'Windows'
-        uses: seanmiddleditch/gha-setup-ninja@master
+        uses: seanmiddleditch/gha-setup-ninja@7e868db0f3406270dd46e1dac26c65f621456723 # master
 
       # NSIS is not preinstalled on windows-latest; choco has it and adds it
       # to PATH via GITHUB_PATH so cpack -G NSIS finds makensis later.
@@ -128,7 +128,7 @@ jobs:
       # runtime staging before cpack.
       - name: Install Qt6 (Windows)
         if: runner.os == 'Windows'
-        uses: jurplel/install-qt-action@v4
+        uses: jurplel/install-qt-action@48d3ad6db93f3627c8ee7a0454bc6f3744f7e730 # v4.3.1
         with:
           version: '6.8.*'
           host: 'windows'
@@ -140,7 +140,7 @@ jobs:
       # developer environment to be activated.
       - name: Set up MSVC environment (Windows)
         if: runner.os == 'Windows'
-        uses: ilammy/msvc-dev-cmd@v1
+        uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 # v1
 
       # Compiler caching: ccache hashes preprocessor output + flags, returns the
       # cached .o on a hit. After one warm run, an unchanged TU compiles in
@@ -148,7 +148,7 @@ jobs:
       # platforms. The action handles install + GHA cache wiring; we just point
       # CMake at it via CMAKE_*_COMPILER_LAUNCHER below.
       - name: Set up ccache
-        uses: hendrikmuhs/ccache-action@v1.2
+        uses: hendrikmuhs/ccache-action@5ebbd400eff9e74630f759d94ddd7b6c26299639 # v1.2
         with:
           key: ${{ matrix.os }}-${{ matrix.config }}
           max-size: 500M
@@ -251,7 +251,7 @@ jobs:
       # attest-build-provenance below signs it, so no sidecar .sha256 needed.
       - name: Attach to Release (on tag)
         if: startsWith(github.ref, 'refs/tags/')
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.6.2
         with:
           files: |
             build/Thirdeye-*.dmg
