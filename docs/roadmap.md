@@ -673,6 +673,10 @@ Still open (nice-to-have): a file-picker UI instead of the env var.
   now keeps a shadow index plane per surface and `setPaletteRange` repaints the
   affected pixels. Text only for now; palette-animated bitmaps would need the
   same in `drawImage`. See [progress.md](progress.md).
+- ✅ **DH floor/ceiling.** The backdrop page is drawn before the level palette
+  loads, so it baked black. Palette animation now covers pages (keyed by
+  handle) and bitmap draws, not just screen text. Floor 56% → 4% black on the
+  dungeon that reproduced it. See [progress.md](progress.md).
 - ✅ **MAZE.EXE feature tail — the dungeon is populated.** The fifteen
   per-level passes plus `26f6` (pits) and `36a2` (quest objects) are
   ported: regions (`2081`), stairs (`10a6`), illusionary walls, arches,

@@ -370,6 +370,10 @@ void GRAPHICS::Graphics::drawImage(std::vector<uint8_t> &bmp, uint16_t index,
 		SDL_BlitSurfaceScaled(surface, NULL, mScreen, &dest,
 		                      SDL_SCALEMODE_NEAREST);
 	SDL_DestroySurface(surface);
+	// Remember the palette index behind each pixel we just painted, so a later
+	// set_palette can recolour it. This is what lets DH's floor/ceiling pages
+	// -- rendered before the level palette loads -- come out right.
+	recordShapeIndices(*src, *msk, iw, ih, dest, transparency);
 
 	// Keep the backdrop snapshot in sync with the bitmap art (used to restore a
 	// text box's background so in-game text overlays the panel art). Text never
@@ -1365,11 +1369,46 @@ void GRAPHICS::Graphics::loadPalette(std::vector<uint8_t> &basePal,
 }
 
 std::vector<uint16_t> *GRAPHICS::Graphics::indexPlaneFor(SDL_Surface *s) {
-	SDL_Surface *screen = realScreen();
-	if (s == nullptr || s != screen) return nullptr;   // pages are not tracked
-	const size_t n = static_cast<size_t>(screen->w) * screen->h;
-	if (mScreenIndex.size() != n) mScreenIndex.assign(n, kNoIndex);
-	return &mScreenIndex;
+	if (s == nullptr) return nullptr;
+	auto fit = [&](std::vector<uint16_t> &v) -> std::vector<uint16_t> * {
+		const size_t n = static_cast<size_t>(s->w) * s->h;
+		if (v.size() != n) v.assign(n, kNoIndex);
+		return &v;
+	};
+	if (s == realScreen()) return fit(mScreenIndex);
+	// A page: find it by handle so the plane can never outlive its surface.
+	for (const auto &[handle, surf] : mPages)
+		if (surf == s) return fit(mPagePlanes[handle]);
+	return nullptr;
+}
+
+// Record what an UNSCALED shape just painted. Scaled draws (depth-tiered
+// sprites) are skipped: SDL does that resampling and reproducing it here would
+// be guesswork. Backdrops -- the things that actually need palette animation --
+// are always drawn at native size.
+void GRAPHICS::Graphics::recordShapeIndices(const std::vector<uint8_t> &src,
+                                            const std::vector<uint8_t> &msk,
+                                            int iw, int ih,
+                                            const SDL_Rect &dest,
+                                            bool transparency) {
+	if (dest.w != iw || dest.h != ih) return;
+	std::vector<uint16_t> *plane = indexPlaneFor(mScreen);
+	if (plane == nullptr) return;
+	const bool haveMask =
+	    msk.size() == static_cast<size_t>(iw) * ih;
+	SDL_Rect clip;
+	SDL_GetSurfaceClipRect(mScreen, &clip);
+	for (int y = 0; y < ih; ++y)
+		for (int x = 0; x < iw; ++x) {
+			const size_t at = static_cast<size_t>(y) * iw + x;
+			if (transparency && haveMask && !msk[at]) continue;
+			const int sx = dest.x + x, sy = dest.y + y;
+			if (sx < clip.x || sy < clip.y || sx >= clip.x + clip.w ||
+			    sy >= clip.y + clip.h) continue;
+			if (sx < 0 || sy < 0 || sx >= mScreen->w || sy >= mScreen->h)
+				continue;
+			(*plane)[static_cast<size_t>(sy) * mScreen->w + sx] = src[at];
+		}
 }
 
 // The DAC change. Walk every tracked surface and rewrite the pixels we know
@@ -1380,21 +1419,32 @@ void GRAPHICS::Graphics::repaintPaletteShifts(
 	const PaletteShift *by[256] = {};
 	for (const PaletteShift &sh : shifts)
 		if (sh.index < 256) by[sh.index] = &sh;
-	SDL_Surface *surf = realScreen();
+	repaintSurface(realScreen(), mScreenIndex, by);
+	// ...and every live page. Looked up through mPages, so a plane whose page
+	// has been destroyed is simply never visited.
+	for (const auto &[handle, surf] : mPages) {
+		auto it = mPagePlanes.find(handle);
+		if (it != mPagePlanes.end()) repaintSurface(surf, it->second, by);
+	}
+}
+
+void GRAPHICS::Graphics::repaintSurface(SDL_Surface *surf,
+                                        std::vector<uint16_t> &plane,
+                                        const PaletteShift *const *by) {
 	if (surf == nullptr || surf->format != SDL_PIXELFORMAT_ARGB8888) return;
-	if (mScreenIndex.size() != static_cast<size_t>(surf->w) * surf->h) return;
+	if (plane.size() != static_cast<size_t>(surf->w) * surf->h) return;
 	auto *px = static_cast<uint32_t *>(surf->pixels);
 	const int stride = surf->pitch / 4;
 	for (int y = 0; y < surf->h; ++y)
 		for (int x = 0; x < surf->w; ++x) {
 			const size_t at = static_cast<size_t>(y) * surf->w + x;
-			const uint16_t idx = mScreenIndex[at];
+			const uint16_t idx = plane[at];
 			if (idx == kNoIndex || idx >= 256 || by[idx] == nullptr) continue;
 			const PaletteShift &sh = *by[idx];
 			const uint32_t cur = px[y * stride + x] & 0x00FFFFFFu;
 			const uint32_t was = (static_cast<uint32_t>(sh.from.r) << 16) |
 			                     (sh.from.g << 8) | sh.from.b;
-			if (cur != was) { mScreenIndex[at] = kNoIndex; continue; }
+			if (cur != was) { plane[at] = kNoIndex; continue; }
 			px[y * stride + x] = 0xFF000000u | (sh.to.r << 16) |
 			                     (sh.to.g << 8) | sh.to.b;
 		}

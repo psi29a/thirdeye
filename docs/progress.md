@@ -1102,3 +1102,54 @@ don't — handles are recycled); I claimed `nchoices` was unset (it's 11); and I
 direct bytecode SEND and never appears in the notify trace I was grepping. The
 thing that actually settled it was the user's observation that the *mouse*
 didn't highlight either.
+
+### DH's floor and ceiling were black (2026-08-13)
+
+Same root cause as the camp-menu highlight, one level deeper — and my first fix
+only covered half of it.
+
+DH renders the floor/ceiling backdrop once into an offscreen page and
+composites it every frame:
+
+```text
+40653: draw_bitmap(16, 159)   <- "Floor-6", 176x120, into the floor page
+40678: draw_bitmap(17, 159)   <- same art mirrored, into the ceiling page
+40691: set_palette(1, 181)    <- the level's palettes load AFTER
+40703: set_palette(2, 175)
+     : copy_window(16, 9)     <- composited into the view, every frame
+```
+
+The page is drawn **before its palette arrives**. On VGA that is fine: the page
+holds indices and the later DAC load colours it. We resolve indices to RGB at
+draw time, so the page baked in whatever the palette held then — black — and it
+is never redrawn. Floor-6's pixels live in indices 0xC0-0xCF and 0xE0-0xEF,
+exactly the ranges `set_palette(2, …)` fills a moment later.
+
+The palette-animation shadow already existed but covered only the screen, and
+only text. Two extensions:
+
+* **Pages are tracked too**, keyed by page *handle* rather than surface
+  pointer. Pointer-keyed was the mistake that produced the magenta speckle:
+  pages are destroyed and recreated, and the repaint walked freed memory.
+  Going through `mPages` means a plane whose page is gone is simply never
+  visited.
+* **`drawImage` records indices**, not just `printText` — the floor is a
+  bitmap. Only for unscaled draws; SDL does the resampling for depth-tiered
+  sprites and reproducing it here would be guesswork. Backdrops, the things
+  that need this, are always native size.
+
+The verify-before-repaint rule carries over unchanged and is what makes this
+safe: a pixel is only recoloured if it still holds the colour it was recorded
+with, so anything overdrawn is skipped and forgotten.
+
+Measured on the dungeon that reproduced it (seed `0x0ae411d5`): floor 56% →
+**4%** black, ceiling 25% → **12%**. Magenta 4 px, below the pre-existing 16-px
+block. EOB3 untouched: 2551 frames, 0 errors, 0 stubs, magenta 7 px — identical
+to baseline.
+
+Worth noting how long this took to see. The symptom looked like a MAZE-port
+regression (it only appeared on newly generated dungeons), then like a mask
+regression, then like my own palette work. It was none of those: bisecting
+onto builds without each change, on a *seed-pinned* dungeon, showed the black
+view identical every time. Only then did tracing the draw order make the
+ordering problem obvious.

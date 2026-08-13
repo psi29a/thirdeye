@@ -130,6 +130,13 @@ private:
 	// the dungeon view. One plane, one surface, no lifetime problem.
 	static constexpr uint16_t kNoIndex = 0xFFFF;
 	std::vector<uint16_t> mScreenIndex;
+	// Pages need the same treatment: DH renders the floor/ceiling backdrop
+	// into a page BEFORE the level's palette is loaded, then composites it
+	// every frame. On VGA the later DAC load colours it; we baked black in and
+	// never redrew, so floors and ceilings came out black. Keyed by page
+	// HANDLE, not surface pointer -- pages are destroyed and recreated, and a
+	// pointer-keyed map dangles (that is what produced the magenta speckle).
+	std::map<int32_t, std::vector<uint16_t>> mPagePlanes;
 	SDL_Surface *realScreen() const {
 		return mScreenSaved != nullptr ? mScreenSaved : mScreen;
 	}
@@ -141,6 +148,13 @@ private:
 	// roughly thirty call sites can -- leaves a different colour there, so the
 	// pixel is skipped and forgotten instead of being repainted wrongly.
 	void repaintPaletteShifts(const std::vector<PaletteShift> &shifts);
+	// Apply one surface's worth of the repaint.
+	void repaintSurface(SDL_Surface *surf, std::vector<uint16_t> &plane,
+	                    const PaletteShift *const *by);
+	// Record the palette indices an unscaled shape just painted.
+	void recordShapeIndices(const std::vector<uint8_t> &src,
+	                        const std::vector<uint8_t> &msk, int iw, int ih,
+	                        const SDL_Rect &dest, bool transparency);
 	uint8_t mState;
 	int16_t mAlpha;
 	uint16_t mFrames;
