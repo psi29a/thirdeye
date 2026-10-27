@@ -72,6 +72,24 @@ Windows (vcpkg):
 
 Configure and build
 -------------------
+Nix (x86_64-linux / aarch64-linux):
+
+    nix build                 # builds the launcher, engine and tools; runs tests
+    nix run                   # starts the launcher
+    nix develop               # development shell with build dependencies
+
+The flake builds this checkout and pins dependencies in `flake.lock`.
+
+To build and launch without cloning:
+
+    nix run github:psi29a/thirdeye
+
+Inside `nix develop`, pass the shell's CMake flags to use the locked dependency
+sources:
+
+    cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release $cmakeFlags
+    cmake --build build
+
 Linux / macOS:
 
     cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release

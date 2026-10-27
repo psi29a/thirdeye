@@ -1,0 +1,81 @@
+{
+  "nodes": {
+    "cli11": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1772116982,
+        "narHash": "sha256-TcOmx/qUK/w3mO0bDHX+TRxxMwJpaDFQBcpkQj3hz8A=",
+        "owner": "CLIUtils",
+        "repo": "CLI11",
+        "rev": "37bb6edc5317e99af72ef48405e65d9ca5218861",
+        "type": "github"
+      },
+      "original": {
+        "owner": "CLIUtils",
+        "ref": "v2.6.2",
+        "repo": "CLI11",
+        "type": "github"
+      }
+    },
+    "googletest": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1722432886,
+        "narHash": "sha256-1OJ2SeSscRBNr7zZ/a8bJGIqAnhkg45re0j3DtPfcXM=",
+        "owner": "google",
+        "repo": "googletest",
+        "rev": "b514bdc898e2951020cbdca1304b75f5950d1f59",
+        "type": "github"
+      },
+      "original": {
+        "owner": "google",
+        "ref": "v1.15.2",
+        "repo": "googletest",
+        "type": "github"
+      }
+    },
+    "nixpkgs": {
+      "locked": {
+        "lastModified": 1792773339,
+        "narHash": "sha256-rZLrzrC6i+jnTAlvPZHogKDulY7WWDEv9hJeHieO7Zw=",
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "rev": "3ec636362e1816bc2f0888fa0fa2c69f1bc9e504",
+        "type": "github"
+      },
+      "original": {
+        "owner": "NixOS",
+        "ref": "nixos-unstable",
+        "repo": "nixpkgs",
+        "type": "github"
+      }
+    },
+    "root": {
+      "inputs": {
+        "cli11": "cli11",
+        "googletest": "googletest",
+        "nixpkgs": "nixpkgs",
+        "wildmidi": "wildmidi"
+      }
+    },
+    "wildmidi": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1783864129,
+        "narHash": "sha256-HR/EJN9WGAVmJvjn62fHOSAKOyH/MdPgknA5yzCG1IQ=",
+        "owner": "Mindwerks",
+        "repo": "wildmidi",
+        "rev": "0a888289ea4d1d1934559dbce38695fcef48eb75",
+        "type": "github"
+      },
+      "original": {
+        "owner": "Mindwerks",
+        "repo": "wildmidi",
+        "rev": "0a888289ea4d1d1934559dbce38695fcef48eb75",
+        "type": "github"
+      }
+    }
+  },
+  "root": "root",
+  "version": 7
+}
